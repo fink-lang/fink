@@ -1,0 +1,71 @@
+{test, expect, equals, cps_module_ctx} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+thread_ctx — strangler-pipeline pass that threads ·ƒctx as 0th value
+---
+
+# Helper: cps_module_ctx runs `lower → thread_ctx → fmt`. Compare the
+# blessed output to the same source under cps_module to see the shape
+# the threader introduces.
+
+
+test 'tctx — literal', fn:
+  expect cps_module_ctx ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
+
+
+test 'tctx — fn one param', fn:
+  expect cps_module_ctx ƒink:
+    fn a: a
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
+      ·fn
+        fn ·ƒctx_11, ·ƒret_3, ·a_0: ·ƒret_3 ·ƒctx_11, ·a_0
+        fn ·v_2: ·ƒret_1 ·v_2
+    # sm:GAABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcIABAAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKABABCwcKAAQBAAcAAQAHFAEABw
+
+
+test 'tctx — identity bind', fn:
+  expect cps_module_ctx ƒink:
+    foo = 42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
+      ·let (i8 42), fn ·foo_0:
+        ·ƒpub ·ƒctx_12, ·foo_0, fn ·ƒctx_14:
+          ·ƒret_1 ·ƒctx_14, ·foo_0
+    # sm:HQABAAgAAQAIJAEACBgBAAgSAAIABgEIAQABAAEOAQQCAAEAAgYBAAIGAAoBCwMOAAIACgEAAwABAAMQABQABAEAAw4ACgAUAAIADgEAAwABAAMUABQABAEAAw
+
+
+test 'tctx — bind fn one param', fn:
+  expect cps_module_ctx ƒink:
+    inc = fn x: x + 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_20, ·ƒret_2:
+      ·fn
+        fn ·ƒctx_22, ·ƒret_4, ·x_1: ·op_plus ·ƒctx_22, ·x_1, (i8 1), ·ƒret_4
+        fn ·v_3:
+          ·let ·v_3, fn ·inc_0:
+            ·ƒpub ·ƒctx_25, ·inc_0, fn ·ƒctx_27:
+              ·ƒret_2 ·ƒctx_27, ·inc_0
+    # sm:MQABABEAAQARJAEAERgBABESAAIABgEMCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQABQABAEAAw4ACgAUAAIAFgEAAwABAAMUABQABAEAAw
+
+
+test 'tctx — apply user fn', fn:
+  expect cps_module_ctx ƒink:
+    inc = fn x: x + 1
+    inc 5
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_22, ·ƒret_2:
+      ·fn
+        fn ·ƒctx_24, ·ƒret_4, ·x_1: ·op_plus ·ƒctx_24, ·x_1, (i8 1), ·ƒret_4
+        fn ·v_3:
+          ·let ·v_3, fn ·inc_0:
+            ·ƒpub ·ƒctx_27, ·inc_0, fn ·ƒctx_29:
+              ·inc_0 ·ƒctx_29, ·ƒret_2, (i8 5)
+    # sm:NQABABcAAQAXJAEAFxgBJAUSAAIABgEXCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQABQABAEAAw4ACgAUAAIAFgEkBQABAAMQABQABAEABRIABgEIAQABAAEGAQAB

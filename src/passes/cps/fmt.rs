@@ -457,6 +457,14 @@ fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
 /// - `Cont::Expr { body, .. }` → render `body`.
 /// - `Cont::Ref(cont_id)` → render as `·ƒret_{cont_id} {name}` — a tail call to the cont.
+///
+/// TODO: For `Cont::Ref`, drop the fake `fn <name>: <cont> <name>` wrapper
+/// the LetFn/LetVal renderers build around this body. There's no real
+/// lambda in the IR — Cont::Ref is a tail-call to an outer cont, fully
+/// described by the cont id alone. Rendering as bare `·ƒret_k` (no
+/// synthesised param, no apply wrapper) would be more truthful and is
+/// load-bearing once ctx-threading lands: the current fake-lambda hides
+/// the ctx that codegen will pass at the Cont::Ref invocation site.
 fn build_cont_body(b: &mut AstBuilder<'static>, cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> AstId {
   match cont {
     Cont::Expr { body, .. } => build_expr(b, body, ctx),
