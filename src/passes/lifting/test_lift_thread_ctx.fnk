@@ -1,0 +1,138 @@
+{test, expect, equals, lift_ctx} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+lifting through ctx-threaded CPS — strangler-pipeline parity check
+---
+
+# Helper: lift_ctx runs `lower → thread_ctx → lift → fmt`. Mirrors the
+# regular `lift` test helper but feeds the threaded CPS through the
+# unmodified lifting pass. Goal: prove lifting handles Bind::Ctx
+# params uniformly with no code change.
+
+
+test 'lctx — literal', fn:
+  expect lift_ctx ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAAWABIAAgAGAQACAAEAAhQAEgAGAQACAAEAAgYBAAI
+
+
+test 'lctx — fn one param', fn:
+  expect lift_ctx ƒink:
+    fn a: a
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
+      ·v_2 = fn [·ƒctx_11, ·ƒret_3, ·a_0]:
+        ·ƒret_3 ·ƒctx_11, ·a_0
+      ·ƒret_1 ·v_2
+    # sm:HgABAAcAAQAHJAAWABIAAgAGAQAHAAEABwwABAEABwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgEAAQABFAAUAAQBAAEKAAYAAAAUAA
+
+
+test 'lctx — identity bind', fn:
+  expect lift_ctx ƒink:
+    foo = 42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
+      ·foo_0 = i8 42
+      ·ƒpub ·ƒctx_12, ·foo_0
+      ·ƒret_1 ·ƒctx_14, ·foo_0
+    # sm:GAABAAgAAQAIJAAYABIAAgAGAQAIAAEAAxAABAEMAgABAAIGAQACBAAGAQsDAAEAAxAAFAAEAQADDgAGAQADAAEAAxQAFAAEAQAD
+
+
+test 'lctx — bind fn one param', fn:
+  expect lift_ctx ƒink:
+    inc = fn x: x + 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_20, ·ƒret_2:
+      ·v_3 = fn [·ƒctx_22, ·ƒret_4, ·x_1]:
+        ·op_plus ·ƒctx_22, ·x_1, (i8 1), ·ƒret_4
+      ·inc_0 = ·v_3
+      ·ƒpub ·ƒctx_25, ·inc_0
+      ·ƒret_2 ·ƒctx_27, ·inc_0
+    # sm:MQABABEAAQARJAAYABIAAgAGAQwLAAEACwwABAEACwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAASAAYBHxEAAQADEAAEAQwLCgAGAQsDAAEAAxAAFAAEAQADDgAGAQADAAEAAxQAFAAEAQAD
+
+
+test 'lctx — apply user fn', fn:
+  expect lift_ctx ƒink:
+    inc = fn x: x + 1
+    inc 5
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_22, ·ƒret_2:
+      ·v_3 = fn [·ƒctx_24, ·ƒret_4, ·x_1]:
+        ·op_plus ·ƒctx_24, ·x_1, (i8 1), ·ƒret_4
+      ·inc_0 = ·v_3
+      ·ƒpub ·ƒctx_27, ·inc_0
+      ·inc_0 ·ƒctx_29, ·ƒret_2, (i8 5)
+    # sm:NQABABcAAQAXJAAYABIAAgAGAQwLAAEACwwABAEACwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAASAAYBHxEAAQADEAAEAQwLCgAGAQsDAAEAAxAAFAAEAQADDgAGASQFAAEAAxAAFAAEABIABgEIAQABAAEGAQAB
+
+
+---
+captures — verify ctx interacts cleanly with closure-lifting captures
+---
+
+
+test 'lctx — closure over outer var', fn:
+  expect lift_ctx ƒink:
+    foo = fn a:
+      ni = fn b:
+        a + b
+      ni
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_31, ·ƒret_4:
+      ·v_45 = fn {·a_46}, [·ƒctx_34, ·ƒret_8, ·b_2]:
+        ·op_plus ·ƒctx_34, ·a_46, ·b_2, ·ƒret_8
+      ·v_5 = fn [·ƒctx_33, ·ƒret_6, ·a_1]:
+        ·v_48 = ·closure ·v_45, ·a_1
+        ·ni_3 = ·v_48
+        ·ƒret_6 ·ƒctx_37, ·ni_3
+      ·foo_0 = ·v_5
+      ·ƒpub ·ƒctx_40, ·foo_0
+      ·ƒret_4 ·ƒctx_42, ·foo_0
+    # sm:VwABACcAAQAnJAAYABIAAgAGASYPAAEADw4ABAEADwYAAAACARMBDAAAAAYAAAACABQABAASAAQBGgEKAAAAAgACAAoBDgUAAQAFFAAUAAQBAAEMAAQBCAEKAAQAEgAGATUhAAEAIQwABAEAIQYAAAACABQABAASAAQBBgEKAAAAAgACAAoBFA8AAA4ABAEADwABAA8UAQAPDAAEARMBCgAKAQoUAAEAAg4ABAEKDwwACgEkAgABAAIUABQABAEAAgwABgFJJwABAAMQAAQBDCEKAAYBCwMAAQADEAAUAAQBAAMOAAYBAAMAAQADFAAUAAQBAAM
+
+
+test 'lctx — depth 2 closure', fn:
+  expect lift_ctx ƒink:
+    f = fn a:
+      fn b:
+        fn c:
+          a + b + c
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_35, ·ƒret_4:
+      ·v_70 = fn {·c_71, ·ƒret_73}, [·ƒctx_41, ·v_13]:
+        ·op_plus ·ƒctx_41, ·v_13, ·c_71, ·ƒret_73
+      ·v_58 = fn {·a_59, ·b_61}, [·ƒctx_39, ·ƒret_10, ·c_3]:
+        ·v_77 = ·closure ·v_70, ·c_3, ·ƒret_10
+        ·op_plus ·ƒctx_39, ·a_59, ·b_61, ·v_77
+      ·v_49 = fn {·a_50}, [·ƒctx_38, ·ƒret_8, ·b_2]:
+        ·closure ·v_58, ·a_50, ·b_2, ·ƒret_8
+      ·v_5 = fn [·ƒctx_37, ·ƒret_6, ·a_1]:
+        ·closure ·v_49, ·a_1, ·ƒret_6
+      ·f_0 = ·v_5
+      ·ƒpub ·ƒctx_44, ·f_0
+      ·ƒret_4 ·ƒctx_46, ·f_0
+    # sm:lAEAAQArAAEAKyQAGAASAAIABgFEBQABAAUOAAQBAAUGAAAAAgERAQwABAAUAAAABgAAAAIAFAAEAAwAAAACAAIACgESCQABAAkUABQABAEABQwABAEQAQwABAAUAAYBJxUAAQAVDgAEAQAVBgAAAAIBHQEMAAQBEAEMAAAABgAAAAIAFAAEABQABAEUAQoAAAACAAIACgESBQAADgAEAQAFAAEABRQBAAUMAAQBEQEKAAQBEgkUAAoBAAUAAQAFFAAUAAQBAAEMAAQBCAEMAAQADAAGATMfAAEAHw4ABAEAHwYAAAACAQkBDAAAAAYAAAACABQABAASAAQBEAEKAAAAAgACAAoBDhUAAQAVFAEAFQwABAEdAQwABAEQAQoABAASAAYBFScAAQAnDAAEAQAnBgAAAAIAFAAEABIABAEGAQoAAAACAAIACgEKHwABAB8UAQAfDAAEAQkBCgAEABIABgENKwABAAEMAAQBCCcKAAYBBwEAAQABEAAUAAQBAAEKAAYBAAEAAQABFAAUAAQBAAE
+
+
+test 'lctx — multi-fn module captures across', fn:
+  expect lift_ctx ƒink:
+    add = fn a, b:
+      a + b
+    main = fn:
+      add 3, 4
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_37, ·ƒret_4:
+      ·v_5 = fn [·ƒctx_39, ·ƒret_6, ·a_2, ·b_3]:
+        ·op_plus ·ƒctx_39, ·a_2, ·b_3, ·ƒret_6
+      ·add_0 = ·v_5
+      ·ƒpub ·ƒctx_42, ·add_0
+      ·v_13 = fn [·ƒctx_45, ·ƒret_14]:
+        ·add_0 ·ƒctx_45, ·ƒret_14, (i8 3), (i8 4)
+      ·main_1 = ·v_13
+      ·ƒpub ·ƒctx_48, ·main_1
+      ·ƒret_4 ·ƒctx_50, ·main_1
+    # sm:VwABACwAAQAsJAAYABIAAgAGAQwQAAEAEAwABAEAEAYAAAACABQABAASAAQBBgEKAAQBBgEKAAAAAgACAAoBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQAEgAGASkWAAEAAxAABAEMEAoABgELAwABAAMQABQABAEAAw4ABgE8DgABAA4OAAQBAA4GAAAAAgAUAAQAFAAAAAIAAgAKAQwIAAEAAxAAFAAEABQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEAAYBJxUAAQAEEgAEAQ4ODAAGAQ0EAAEABBAAFAAEAQAEEAAGAQAEAAEABBQAFAAEAQAE
