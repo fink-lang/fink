@@ -469,7 +469,9 @@ impl<'a, 'src> Ctx<'a, 'src> {
             NodeKind::Block { name, params, sep, body } => {
                 self.block_node(name, params, sep, &body, at)
             }
-            NodeKind::With { .. } => panic!("With not yet supported in fmt::layout::node"),
+            NodeKind::With { handlers, sep, body } => {
+                self.with_node(&handlers, sep, &body, at)
+            }
         }
     }
 
@@ -1094,6 +1096,60 @@ impl<'a, 'src> Ctx<'a, 'src> {
     // -----------------------------------------------------------------------
     // Match
     // -----------------------------------------------------------------------
+
+    fn with_node(
+        &mut self,
+        handlers: &Exprs<'src>,
+        sep: Token<'src>,
+        body: &Exprs<'src>,
+        at: Pos,
+    ) -> AstId {
+        let kw_end = advance_pos(at, "with");
+        let mut prev_pos = if handlers.items.is_empty() {
+            kw_end
+        } else {
+            space_after(kw_end)
+        };
+        let mut new_h_items = Vec::new();
+        for (i, &h) in handlers.items.iter().enumerate() {
+            if i > 0 {
+                prev_pos = advance_pos(prev_pos, ", ");
+            }
+            let new_h = self.node(h, prev_pos);
+            prev_pos = self.builder.read(new_h).loc.end;
+            new_h_items.push(new_h);
+        }
+        let new_handlers = Exprs {
+            items: new_h_items.into_boxed_slice(),
+            seps: handlers.seps.clone(),
+        };
+        let sep_at = prev_pos;
+        let new_sep = place_tok(&sep, sep_at);
+        let sep_end = advance_pos(sep_at, sep.src);
+        let child_col = self.block_col + self.indent_width();
+        let mut prev = sep_end;
+        let mut new_body_items = Vec::new();
+        for &stmt in body.items.iter() {
+            let stmt_at = newline_pos(prev, prev.line + 1, child_col);
+            let new_stmt = self.with_block_col(child_col, |ctx| ctx.node(stmt, stmt_at));
+            prev = self.builder.read(new_stmt).loc.end;
+            new_body_items.push(new_stmt);
+        }
+        let end = new_body_items.last()
+            .map(|&n| self.builder.read(n).loc.end)
+            .unwrap_or(sep_at);
+        self.append(
+            NodeKind::With {
+                handlers: new_handlers,
+                sep: new_sep,
+                body: Exprs {
+                    items: new_body_items.into_boxed_slice(),
+                    seps: vec![],
+                },
+            },
+            Loc { start: at, end },
+        )
+    }
 
     fn match_node(
         &mut self,

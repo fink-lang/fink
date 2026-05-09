@@ -529,6 +529,97 @@ test 'str templ pattern in match', fn:
 
 
 ---
+with
+---
+
+test 'with no handlers and expression body', fn:
+  expect scope ƒink:
+    with:
+      x
+  | equals ƒink:
+    scope 3, 'module',
+
+      scope 2, 'with',
+        unresolved 'x'
+
+
+test 'with single handler resolves and body refs scope', fn:
+  expect scope ƒink:
+    foo = 1
+    with foo:
+      foo
+  | equals ƒink:
+    scope 8, 'module',
+      bind 0, 'foo'
+      ref 'foo', 0
+
+      scope 7, 'with',
+        ref 'foo', 0, depth 1
+
+
+test 'with multiple handlers all resolve', fn:
+  expect scope ƒink:
+    foo = 1
+    bar = 2
+    with foo, bar:
+      foo + bar
+  | equals ƒink:
+    scope 15, 'module',
+      bind 0, 'foo'
+      bind 3, 'bar'
+      ref 'foo', 0
+      ref 'bar', 3
+
+      scope 14, 'with',
+        ref 'foo', 0, depth 1
+        ref 'bar', 3, depth 1
+
+
+test 'with body bindings live in with scope', fn:
+  expect scope ƒink:
+    with:
+      x = 1
+      x
+  | equals ƒink:
+    scope 6, 'module',
+
+      scope 5, 'with',
+        bind 1, 'x'
+        ref 'x', 1
+
+
+test 'with body bindings do not leak out', fn:
+  expect scope ƒink:
+    with:
+      x = 1
+    x
+  | equals ƒink:
+    scope 6, 'module',
+
+      scope 4, 'with',
+        bind 1, 'x'
+      unresolved 'x'
+
+
+test 'with body shadows outer binding', fn:
+  expect scope ƒink:
+    x = 1
+    with:
+      x = 2
+      x
+    x
+  | equals ƒink:
+    scope 10, 'module',
+      bind 0, 'x'
+
+      scope 8, 'with',
+        bind 4, 'x'
+        ref 'x', 4
+      ref 'x', 0
+
+
+
+---
 prelude
 ---
 
