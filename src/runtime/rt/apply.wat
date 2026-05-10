@@ -193,7 +193,10 @@
   (elem declare func $_thunk_fn)
 
   ;; Thunk body. Captures: [cont, value]. When applied: apply([value], cont).
-  (func $_thunk_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $_thunk_fn (type $Fn3)
+      (param $caps (ref null any))
+      (param $_ctx (ref null any))
+      (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
     (local $value (ref any))
