@@ -153,17 +153,24 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
 /// empty `fqn_prefix`, matching the pre-wrapper convention so
 /// existing runners keep working). When called by a host, it:
 ///
-/// 1. Unpacks `[cont, key]` from `:params` — `key` may be a fink
-///    `$Str` (for "give me one named export") or null (for "give me
-///    the whole exports rec").
+/// 1. Takes `:cont` as its sole param — a host-provided anyref
+///    continuation that init_module will fire with
+///    `(last_expr, exports_rec)`.
 /// 2. Builds a no-capture `$Closure` over the module's `fink_module`
 ///    funcref (funcrefs aren't anyref-compatible; the closure
 ///    bridges).
 /// 3. Materialises the canonical URL as a `$Str` constant — used by
 ///    `init_module` to key the runtime registry.
-/// 4. Tail-calls `std/modules.fnk:init_module(url, mod_clos, key,
-///    cont)` which handles run-once init plus optional key
-///    extraction, then tail-applies cont with `(last_expr, val)`.
+/// 4. Tail-calls `std/modules.fnk:init_module(url, mod_clos, cont)`
+///    which handles run-once init, then tail-applies cont with
+///    `(last_expr, exports_rec)`. Hosts pull named exports out of
+///    the rec via `interop/rust.wat:rec_get_by_bytes` (or its JS
+///    equivalent).
+///
+/// The module body itself is Fn3 — init_module's `_apply` shim
+/// synthesises a placeholder ctx (ref.i31 42) and tail-calls the
+/// body's Fn3 entry. Once the substrate lands, host-provided ctx
+/// flows in through the same channel.
 fn synth_host_wrapper(
   lcx: &mut LowerCtx<'_>,
   fink_module: FuncSym,
