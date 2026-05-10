@@ -357,7 +357,39 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Patterns(_) => panic!("Patterns node lowered via fn/match"),
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
-    NodeKind::With { .. } => panic!("With not yet supported in passes::cps::transform"),
+    // ---- with: `with handlers: body` ----
+    //
+    // Slice 2c-pass-through: lower handlers + body as a flat sequence
+    // (handlers evaluated for side-effects, body items run normally,
+    // result is the last body item's value). No substrate dispatch
+    // yet — the real semantics (handler.with(ctx, body_fn, k_outer))
+    // lands once `push_frame`/`pop_frame`/`get_ctx` runtime primitives
+    // are wired up. Today this lets `with` syntax flow end-to-end
+    // without panicking, and matches a no-op handler stack.
+    NodeKind::With { handlers, body, .. } => {
+      let mut items: Vec<AstId> = handlers.items.iter().copied().collect();
+      items.extend(body.items.iter().copied());
+      if items.is_empty() {
+        // `with:` with no handlers and empty body — produce a unit-ish
+        // value via a dummy nil int literal, same as a literal `0` would.
+        let v = g.val(ValKind::Lit(Lit::Int { value: 0, width: IntWidth::I64 }), o);
+        (v, vec![])
+      } else if items.len() == 1 {
+        lower(g, items[0])
+      } else {
+        // Build a synthetic Module-like sequence: lower each in sequence,
+        // returning the last as the result.
+        let last = items.pop().unwrap();
+        let mut accum_pending: Vec<Pending> = Vec::new();
+        for it in items {
+          let (_v, mut p) = lower(g, it);
+          accum_pending.append(&mut p);
+        }
+        let (last_v, mut last_p) = lower(g, last);
+        accum_pending.append(&mut last_p);
+        (last_v, accum_pending)
+      }
+    }
   }
 }
 
