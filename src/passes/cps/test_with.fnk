@@ -1,0 +1,54 @@
+{test, expect, equals, cps_module} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+`with` syntax — pass-through CPS lowering
+---
+
+# `with` is currently a flat sequence: handlers evaluated for side
+# effects, body items run as if there were no `with`. Once substrate
+# primitives land (push_frame/pop_frame/get_ctx), this changes to
+# `handler.with(ctx, body_fn, k_outer)` protocol dispatch.
+
+
+test 'with-cps — empty body', fn:
+  expect cps_module ƒink:
+    with:
+      42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 (i8 42)
+    # sm:CwABAAoAAQAKJAEAChYBAAoSAAIABgEACgABAAoWARACAAEAAgYBAAI
+
+
+test 'with-cps — single handler with body', fn:
+  expect cps_module ƒink:
+    with foo:
+      42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
+      ·ƒret_0 (i8 42)
+    # sm:CwABAA4AAQAOJAEADhYBAA4SAAIABgEADgABAA4WARgCAAEAAgYBAAI
+
+
+test 'with-cps — body with binding', fn:
+  expect cps_module ƒink:
+    with foo:
+      x = 5
+      x
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_7, ·ƒret_1:
+      ·let (i8 5), fn ·x_0:
+        ·ƒret_1 ·x_0
+    # sm:EgABABUAAQAVJAEAFRYBABUSAAIABgEcAQABAAEOAQQBAAEAAQYBAAEEAAoBBwEKAAIACgEXFQABABUUARgB
+
+
+test 'with-cps — multiple handlers', fn:
+  expect cps_module ƒink:
+    with foo, bar:
+      42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
+      ·ƒret_0 (i8 42)
+    # sm:CwABABMAAQATJAEAExYBABMSAAIABgEAEwABABMWASICAAEAAgYBAAI

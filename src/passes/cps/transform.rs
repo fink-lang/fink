@@ -3308,4 +3308,5 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_thread_ctx.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_with.fnk");
 }
