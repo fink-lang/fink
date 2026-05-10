@@ -150,7 +150,7 @@ test 'pipe with lambda — literal head', fn:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_1:
       ·fn
         fn ·ƒctx_18, ·ƒret_4, ·a_0: ·op_plus ·a_0, (i8 2), ·ƒret_4
-        fn ·v_3: ·v_3 ·ƒctx_19, ·ƒret_1, (i8 3)
+        fn ·v_3: ·v_3 ·ƒctx_16, ·ƒret_1, (i8 3)
     # sm:IgABAA8AAQAPJAEADxgBAA8SAAIABgEICwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQMBAAEECwwAFAAEAQcPEgAGAQABAAEAAQYBAAE
 
 
@@ -161,7 +161,7 @@ test 'pipe with lambda — ident head', fn:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_1:
       ·fn
         fn ·ƒctx_18, ·ƒret_4, ·a_0: ·op_plus ·a_0, (i8 2), ·ƒret_4
-        fn ·v_3: ·v_3 ·ƒctx_19, ·ƒret_1, ·∅x
+        fn ·v_3: ·v_3 ·ƒctx_16, ·ƒret_1, ·∅x
     # sm:IAABAA8AAQAPJAEADxgBAA8SAAIABgEICwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQMBAAEECwwAFAAEAQcPEgAEAQAB
 
 
@@ -172,7 +172,7 @@ test 'pipe with partial', fn:
     ·ƒink_module fn ·ƒctx_17, ·ƒret_1:
       ·fn
         fn ·ƒctx_19, ·ƒret_4, ·v_0: ·∅add ·ƒctx_19, ·ƒret_4, (i8 2), ·v_0
-        fn ·v_3: ·v_3 ·ƒctx_21, ·ƒret_1, (i8 3)
+        fn ·v_3: ·v_3 ·ƒctx_17, ·ƒret_1, (i8 3)
     # sm:JAABAAwAAQAMJAEADBgBAAwSAAIABgEICAABAAgIABAAGAEACBYBAAgKAAQBAAgAAQADEgAUAAQBAAgSAAYBCAEAAQABBgEAAQQABAEGAQoAEAENCAoABAEDAQABBAgMABQABAEHDBIABgEAAQABAAEGAQAB
 
 
@@ -183,7 +183,7 @@ test 'pipe with partial — ident head', fn:
     ·ƒink_module fn ·ƒctx_17, ·ƒret_1:
       ·fn
         fn ·ƒctx_19, ·ƒret_4, ·v_0: ·∅add ·ƒctx_19, ·ƒret_4, (i8 2), ·v_0
-        fn ·v_3: ·v_3 ·ƒctx_21, ·ƒret_1, ·∅x
+        fn ·v_3: ·v_3 ·ƒctx_17, ·ƒret_1, ·∅x
     # sm:IgABAAwAAQAMJAEADBgBAAwSAAIABgEICAABAAgIABAAGAEACBYBAAgKAAQBAAgAAQADEgAUAAQBAAgSAAYBCAEAAQABBgEAAQQABAEGAQoAEAENCAoABAEDAQABBAgMABQABAEHDBIABAEAAQ
 
 

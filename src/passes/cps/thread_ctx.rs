@@ -90,7 +90,10 @@ impl Threader<'_> {
     let Expr { id, kind } = expr;
     let new_kind = match kind {
       ExprKind::LetVal { name, val, cont } => {
-        let new_cont = self.thread_cont(cont);
+        // The cont is inlined into the surrounding scope (no remote
+        // caller pushes ctx); inherit the enclosing ctx without
+        // prepending a fresh ctx param to the cont's args.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
         ExprKind::LetVal { name, val, cont: new_cont }
       }
       ExprKind::LetFn { name, mut params, fn_kind, fn_body, cont } => {
@@ -100,9 +103,9 @@ impl Threader<'_> {
         self.ctx_stack.push(ctx_bind.id);
         let new_body = self.thread_expr(*fn_body);
         self.ctx_stack.pop();
-        // The continuation that consumes the LetFn's name lives in the
-        // outer scope — walk it with the outer ctx still on top.
-        let new_cont = self.thread_cont(cont);
+        // The continuation that consumes the LetFn's name is inlined
+        // into the surrounding scope; ctx is inherited, not prepended.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
         ExprKind::LetFn {
           name,
           params,
@@ -128,17 +131,31 @@ impl Threader<'_> {
     Expr { id, kind: new_kind }
   }
 
-  fn thread_cont(&mut self, cont: Cont) -> Cont {
+  /// Thread ctx through a Cont::Expr.
+  ///
+  /// `prepend_ctx` controls whether to insert a fresh `Bind::Ctx` as
+  /// the cont's leading arg. Set to `true` when the cont is invoked by
+  /// a ctx-aware Apply (the caller will pass ctx as the 0th value);
+  /// set to `false` when the cont is inlined into the surrounding
+  /// scope (LetVal/LetFn cont, builtin Apply result-cont) — those
+  /// inherit the enclosing ctx and never receive one from a caller.
+  fn thread_cont(&mut self, cont: Cont, prepend_ctx: bool) -> Cont {
     match cont {
       Cont::Ref(_) => cont,
       Cont::Expr { mut args, body } => {
-        let body_origin = self.origin.try_get(body.id).and_then(|o| *o);
-        let ctx_bind = self.fresh_ctx_bind(body_origin);
-        args.insert(0, ctx_bind.clone());
-        self.ctx_stack.push(ctx_bind.id);
-        let new_body = self.thread_expr(*body);
-        self.ctx_stack.pop();
-        Cont::Expr { args, body: Box::new(new_body) }
+        if prepend_ctx {
+          let body_origin = self.origin.try_get(body.id).and_then(|o| *o);
+          let ctx_bind = self.fresh_ctx_bind(body_origin);
+          args.insert(0, ctx_bind.clone());
+          self.ctx_stack.push(ctx_bind.id);
+          let new_body = self.thread_expr(*body);
+          self.ctx_stack.pop();
+          Cont::Expr { args, body: Box::new(new_body) }
+        } else {
+          // Inlined cont — inherits enclosing ctx, no stack push needed.
+          let new_body = self.thread_expr(*body);
+          Cont::Expr { args, body: Box::new(new_body) }
+        }
       }
     }
   }
@@ -151,8 +168,13 @@ impl Threader<'_> {
     // args list with no ctx slot. When the substrate is wired up and
     // runtime ops become ctx-aware (so `with mx: 3 * m` can dispatch
     // through ctx), this guard goes away.
-    let prepend_ctx = matches!(func, Callable::Val(_));
-    if prepend_ctx
+    //
+    // Result-conts of builtin Applies are NOT threaded either: the
+    // runtime builtin invokes its cont with `(value)` not `(ctx, value)`.
+    // The cont inherits ctx from the enclosing scope, just like a
+    // LetVal/LetFn inline cont.
+    let call_is_ctx_aware = matches!(func, Callable::Val(_));
+    if call_is_ctx_aware
       && let Some(ctx_id) = self.current_ctx() {
       let ctx_val = self.make_ctx_ref(ctx_id);
       new_args.push(Arg::Val(ctx_val));
@@ -160,7 +182,7 @@ impl Threader<'_> {
     for arg in args {
       let new_arg = match arg {
         Arg::Val(_) | Arg::Spread(_) => arg,
-        Arg::Cont(c) => Arg::Cont(self.thread_cont(c)),
+        Arg::Cont(c) => Arg::Cont(self.thread_cont(c, call_is_ctx_aware)),
         Arg::Expr(e) => Arg::Expr(Box::new(self.thread_expr(*e))),
       };
       new_args.push(new_arg);

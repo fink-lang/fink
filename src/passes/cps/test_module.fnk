@@ -40,9 +40,9 @@ test 'single binding export', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
       ·let (i8 1), fn ·foo_0:
-        ·ƒpub ·foo_0, fn ·ƒctx_13:
-          ·ƒret_1 ·ƒctx_13, ·foo_0
-    # sm:GwABAAcAAQAHJAEABxgBAAcSAAIABgEIAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIACgEAAwABAAMQAQADDgAKABQAAgAOAQADAAEAAxQAFAAEAQAD
+        ·ƒpub ·foo_0, fn:
+          ·ƒret_1 ·ƒctx_10, ·foo_0
+    # sm:GgABAAcAAQAHJAEABxgBAAcSAAIABgEIAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIACgEAAwABAAMQAQADDgAIAAIADgEAAwABAAMUABQABAEAAw
 
 
 test 'single binding export with trailing expr', fn:
@@ -52,9 +52,9 @@ test 'single binding export with trailing expr', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
       ·let (i8 1), fn ·foo_0:
-        ·ƒpub ·foo_0, fn ·ƒctx_12:
-          ·ƒret_1 ·ƒctx_12, (i8 42)
-    # sm:HQABAAoAAQAKJAEAChYBEAISAAIABgEHAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIACgEAAwABAAMQAQADDgAKABQAAgAOARACAAEAAhQAFAAGAQACAAEAAgYBAAI
+        ·ƒpub ·foo_0, fn:
+          ·ƒret_1 ·ƒctx_9, (i8 42)
+    # sm:HAABAAoAAQAKJAEAChYBEAISAAIABgEHAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIACgEAAwABAAMQAQADDgAIAAIADgEQAgABAAIUABIABgEAAgABAAIGAQAC
 
 
 ---
@@ -68,11 +68,11 @@ test 'two bindings export', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_2:
       ·let (i8 1), fn ·foo_0:
-        ·ƒpub ·foo_0, fn ·ƒctx_19:
+        ·ƒpub ·foo_0, fn:
           ·let (i8 2), fn ·bar_1:
-            ·ƒpub ·bar_1, fn ·ƒctx_21:
-              ·ƒret_2 ·ƒctx_21, ·bar_1
-    # sm:KwABAA8AAQAPJAEADxgBEAcSAAIABgEHAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIACgEAAwABAAMQAQADDgAKABQAAgAOARgBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgASAQADAAEAAxABAAMOAAoAFAACABYBAAMAAQADFAAUAAQBAAM
+            ·ƒpub ·bar_1, fn:
+              ·ƒret_2 ·ƒctx_16, ·bar_1
+    # sm:KQABAA8AAQAPJAEADxgBEAcSAAIABgEHAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIACgEAAwABAAMQAQADDgAIAAIADgEYAQABAAEOAQQBAAEAAQYBAAEEAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEAAwABAAMUABQABAEAAw
 
 
 test 'two fns export', fn:
@@ -88,14 +88,14 @@ test 'two fns export', fn:
         fn ·ƒctx_39, ·ƒret_6, ·a_2, ·b_3: ·op_plus ·a_2, ·b_3, ·ƒret_6
         fn ·v_5:
           ·let ·v_5, fn ·add_0:
-            ·ƒpub ·add_0, fn ·ƒctx_42:
+            ·ƒpub ·add_0, fn:
               ·fn
-                fn ·ƒctx_43, ·ƒret_14: ·add_0 ·ƒctx_43, ·ƒret_14, (i8 3), (i8 4)
+                fn ·ƒctx_40, ·ƒret_14: ·add_0 ·ƒctx_40, ·ƒret_14, (i8 3), (i8 4)
                 fn ·v_13:
                   ·let ·v_13, fn ·main_1:
-                    ·ƒpub ·main_1, fn ·ƒctx_47:
-                      ·ƒret_4 ·ƒctx_47, ·main_1
-    # sm:UQABAC0AAQAtJAEALRgBMBUSAAIABgEjEAABABAIABAAGAEWBRYBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUSABABFRAKAAIADgEDAQABAAEMAQQQCgAKAQsDDgACABIBAAMAAQADEAEAAw4ACgAUAAIAFgE-DgABAA4IACAAGAEMCBQABAEACAABAAMQABQABAEACBQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEACABGQ4MAAIAHgEDAQABAAEMAQQODAAKAQ0EEAACACIBAAQAAQAEEAEABBAACgAUAAIAJgEABAABAAQUABQABAEABA
+                    ·ƒpub ·main_1, fn:
+                      ·ƒret_4 ·ƒctx_37, ·main_1
+    # sm:TwABAC0AAQAtJAEALRgBMBUSAAIABgEjEAABABAIABAAGAEWBRYBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUSABABFRAKAAIADgEDAQABAAEMAQQQCgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBPg4AAQAOCAAgABgBDAgUAAQBAAgAAQADEAAUAAQBAAgUAAYBCAEAAQABBgEAAQQABgEGAQABAAEGAQABBAAgARkODAACAB4BAwEAAQABDAEEDgwACgENBBAAAgAiAQAEAAEABBABAAQQAAgAAgAmAQAEAAEABBQAFAAEAQAE
 
 
 ---
@@ -108,26 +108,26 @@ test 'import not in exports', fn:
     main = fn: foo 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_57, ·ƒret_3:
-      ·import './bar.fnk', fn ·ƒctx_59, ·v_6:
+      ·import './bar.fnk', fn ·v_6:
         ·fn
-          fn ·ƒctx_60, ·v_11:
+          fn ·ƒctx_59, ·v_11:
             ·let ·v_11, fn ·foo_0:
               ·fn
-                fn ·ƒctx_62, ·ƒret_29: ·foo_0 ·ƒctx_62, ·ƒret_29, (i8 1)
+                fn ·ƒctx_60, ·ƒret_29: ·foo_0 ·ƒctx_60, ·ƒret_29, (i8 1)
                 fn ·v_28:
                   ·let ·v_28, fn ·main_1:
-                    ·ƒpub ·main_1, fn ·ƒctx_66:
-                      ·ƒret_3 ·ƒctx_66, ·main_1
+                    ·ƒpub ·main_1, fn:
+                      ·ƒret_3 ·ƒctx_59, ·main_1
           fn ·v_43:
             ·fn
-              fn ·ƒctx_69, ·ƒsucc_9, ·ƒfail_10, ·v_8:
+              fn ·ƒctx_63, ·ƒsucc_9, ·ƒfail_10, ·v_8:
                 ·is_rec_like ·v_8,
-                  fn ·ƒctx_70, ·v_16:
-                    ·rec_pop ·v_16, 'foo', ·ƒfail_10, fn ·ƒctx_71, ·v_11, ·v_15:
-                      ·ƒsucc_9 ·ƒctx_71, ·v_11
-                  fn ·ƒctx_73: ·ƒfail_10 ·ƒctx_73
-              fn ·v_25: ·v_25 ·ƒctx_75, ·v_43, ·panic, ·v_6
-    # sm:ggEAAQArAAEAKyQBACsYATYQEgACAAYBJRIAAQASEgEOCwABAAsCAQALEgEACwIACgAYAQ0SCgACAAoBDxoAAQAaCAAUABgBABoMAAIAEgECAwABAAMMAQEaDAAKAQIDDgACABYBQgkAAQAJCAAgABgBCAUUAAQBAAUAAQADEAAUAAQBAAUUAAYBCAEAAQABBgEAAQQAIAEPCQwAAgAeAQMBAAEAAQwBBAkMAAoBDQQQAAIAIgEABAABAAQQAQAEEAAKABQAAgAmAQAEAAEABBQAFAAEAQAEEAAUATUaDAACABIBABoAAQAaCAAcABgAGAAaAQAaCgACABoBABoAAQAaHAEAGgoAAgAkABgBABoMAAIAIgEAGgABABoUAQAaDAAEAQAaAAEAGgIBABoGAQAaAgAEAQAaFgAKABgBABoQAQAaDAACACYBABoAAQAaFgAUAAQBABoMACQAFAAEAQAaAAEAGhgAFAAcAQAaDAAEAQAaAAEAGg4AFAAEAQAaDAAEAQAaDgAEARAS
+                  fn ·v_16:
+                    ·rec_pop ·v_16, 'foo', ·ƒfail_10, fn ·v_11, ·v_15:
+                      ·ƒsucc_9 ·ƒctx_63, ·v_11
+                  fn: ·ƒfail_10 ·ƒctx_63
+              fn ·v_25: ·v_25 ·ƒctx_57, ·v_43, ·panic, ·v_6
+    # sm:fQABACsAAQArJAEAKxgBNhASAAIABgElEgABABISAQ4LAAEACwIBAAsSAQALAgAKAQ0SCgACAAoBDxoAAQAaCAAUABgBABoMAAIAEgECAwABAAMMAQEaDAAKAQIDDgACABYBQgkAAQAJCAAgABgBCAUUAAQBAAUAAQADEAAUAAQBAAUUAAYBCAEAAQABBgEAAQQAIAEPCQwAAgAeAQMBAAEAAQwBBAkMAAoBDQQQAAIAIgEABAABAAQQAQAEEAAIAAIAJgEABAABAAQUABQABAEABBAAFAE1GgwAAgASAQAaAAEAGggAHAAYABgAGgEAGgoAAgAaAQAaAAEAGhwBABoKAAIAJAEAGgwAAgAiAQAaAAEAGhQBABoMAAQBABoAAQAaAgEAGgYBABoCAAQBABoWAAoBABoQAQAaDAACACYBABoAAQAaFgAUAAQBABoMACIABAEAGgABABoYABQAHAEAGgwABAEAGgABABoOABQABAEAGgwABAEAGg4ABAEQEg
 
 
 ---
@@ -140,32 +140,32 @@ test 'destructure not in exports', fn:
     foo = fn: a
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_75, ·ƒret_3:
-      ·seq_prepend (i8 2), [], fn ·ƒctx_77, ·v_6:
-        ·seq_prepend (i8 1), ·v_6, fn ·ƒctx_78, ·v_9:
+      ·seq_prepend (i8 2), [], fn ·v_6:
+        ·seq_prepend (i8 1), ·v_6, fn ·v_9:
           ·fn
-            fn ·ƒctx_79, ·v_14, ·v_15:
+            fn ·ƒctx_77, ·v_14, ·v_15:
               ·let ·v_14, fn ·a_0:
                 ·let ·v_15, fn ·b_1:
                   ·fn
-                    fn ·ƒctx_82, ·ƒret_45: ·ƒret_45 ·ƒctx_82, ·a_0
+                    fn ·ƒctx_78, ·ƒret_45: ·ƒret_45 ·ƒctx_78, ·a_0
                     fn ·v_44:
                       ·let ·v_44, fn ·foo_2:
-                        ·ƒpub ·foo_2, fn ·ƒctx_86:
-                          ·ƒret_3 ·ƒctx_86, ·foo_2
+                        ·ƒpub ·foo_2, fn:
+                          ·ƒret_3 ·ƒctx_77, ·foo_2
             fn ·v_59:
               ·fn
-                fn ·ƒctx_89, ·ƒsucc_12, ·ƒfail_13, ·v_11:
+                fn ·ƒctx_81, ·ƒsucc_12, ·ƒfail_13, ·v_11:
                   ·is_seq_like ·v_11,
-                    fn ·ƒctx_90, ·v_28:
-                      ·seq_pop ·v_28, ·ƒfail_13, fn ·ƒctx_91, ·v_14, ·v_29:
-                        ·seq_pop ·v_29, ·ƒfail_13, fn ·ƒctx_92, ·v_15, ·v_20:
-                          ·empty ·v_20, fn ·ƒctx_93, ·v_23:
+                    fn ·v_28:
+                      ·seq_pop ·v_28, ·ƒfail_13, fn ·v_14, ·v_29:
+                        ·seq_pop ·v_29, ·ƒfail_13, fn ·v_15, ·v_20:
+                          ·empty ·v_20, fn ·v_23:
                             ·if ·v_23,
-                              fn: ·ƒsucc_12 ·ƒctx_93, ·v_14, ·v_15
-                              fn: ·ƒfail_13 ·ƒctx_93
-                    fn ·ƒctx_96: ·ƒfail_13 ·ƒctx_96
-                fn ·v_40: ·v_40 ·ƒctx_98, ·v_59, ·panic, ·v_9
-    # sm:sAEAAQAbAAEAGyQBABsYASALEgACAAYBBQEAAQABHgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoAGAEIAQoAAgAKAQUBAAEAAR4BAAEAAQABBgEAAQQABAEGAQoACgAYAQUBCgACAA4BEw8AAQAPCAAYABgBAA8QAQAPDAACABYBAgEAAQABDAEBDwwACgECAQoAAgAaAQYBAAEAAQwBBw8MAAoBCAEKAAIAHgEkBQABAAUIACgAGAEIARQABAEAAQABAAEWABQABAEAAQoAKAEHBQwAAgAmAQMBAAEAAQwBBAUMAAoBCwMOAAIAKgEAAwABAAMQAQADDgAKABQAAgAuAQADAAEAAxQAFAAEAQADDgAYAR8PDAACABYBAA8AAQAPCAAgABgAGgAaAQAPDAACAB4BAA8AAQAPHAEADwwAAgAoABgBAA8MAAIAJgEADwABAA8UAQAPDAAEAQAPFgAKABgBAA8QAQAPDAACACoBAA8AAQAPFAEADwwABAEADxYACgAYAQAPEAEADwwAAgAuAQAPAAEADxABAA8MAAoAGAEADwwAAgAyAQAPAAEADwoBAA8MAAIAOgAEAQAPAAEADxgAFAAEAQAPDAAEAQAPDAA6AAQBAA8AAQAPGAAUACgAFAAEAQAPAAEADxgAFAAgAQAPDAAEAQAPAAEADw4AFAAEAQAPDAAEAQAPDgAEARQB
+                              fn: ·ƒsucc_12 ·ƒctx_81, ·v_14, ·v_15
+                              fn: ·ƒfail_13 ·ƒctx_81
+                    fn: ·ƒfail_13 ·ƒctx_81
+                fn ·v_40: ·v_40 ·ƒctx_75, ·v_59, ·panic, ·v_9
+    # sm:qAEAAQAbAAEAGyQBABsYASALEgACAAYBBQEAAQABHgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoBCAEKAAIACgEFAQABAAEeAQABAAEAAQYBAAEEAAQBBgEKAAoBBQEKAAIADgETDwABAA8IABgAGAEADxABAA8MAAIAFgECAQABAAEMAQEPDAAKAQIBCgACABoBBgEAAQABDAEHDwwACgEIAQoAAgAeASQFAAEABQgAKAAYAQgBFAAEAQABAAEAARYAFAAEAQABCgAoAQcFDAACACYBAwEAAQABDAEEBQwACgELAw4AAgAqAQADAAEAAxABAAMOAAgAAgAuAQADAAEAAxQAFAAEAQADDgAYAR8PDAACABYBAA8AAQAPCAAgABgAGgAaAQAPDAACAB4BAA8AAQAPHAEADwwAAgAoAQAPDAACACYBAA8AAQAPFAEADwwABAEADxYACgEADxABAA8MAAIAKgEADwABAA8UAQAPDAAEAQAPFgAKAQAPEAEADwwAAgAuAQAPAAEADxABAA8MAAoBAA8MAAIAMgEADwABAA8KAQAPDAACADoABAEADwABAA8YABQABAEADwwABAEADwwAOgAEAQAPAAEADxgAFAAmAAQBAA8AAQAPGAAUACABAA8MAAQBAA8AAQAPDgAUAAQBAA8MAAQBAA8OAAQBFAE
 
 
 ---
@@ -180,27 +180,27 @@ test 'standalone top-level seq destructure with literal rhs', fn:
     [a, b] = [1, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_59, ·ƒret_2:
-      ·seq_prepend (i8 2), [], fn ·ƒctx_61, ·v_5:
-        ·seq_prepend (i8 1), ·v_5, fn ·ƒctx_62, ·v_8:
+      ·seq_prepend (i8 2), [], fn ·v_5:
+        ·seq_prepend (i8 1), ·v_5, fn ·v_8:
           ·fn
-            fn ·ƒctx_63, ·v_13, ·v_14:
+            fn ·ƒctx_61, ·v_13, ·v_14:
               ·let ·v_13, fn ·a_0:
                 ·let ·v_14, fn ·b_1:
                   ·ƒret_2 ·b_1
             fn ·v_48:
               ·fn
-                fn ·ƒctx_66, ·ƒsucc_11, ·ƒfail_12, ·v_10:
+                fn ·ƒctx_62, ·ƒsucc_11, ·ƒfail_12, ·v_10:
                   ·is_seq_like ·v_10,
-                    fn ·ƒctx_67, ·v_27:
-                      ·seq_pop ·v_27, ·ƒfail_12, fn ·ƒctx_68, ·v_13, ·v_28:
-                        ·seq_pop ·v_28, ·ƒfail_12, fn ·ƒctx_69, ·v_14, ·v_19:
-                          ·empty ·v_19, fn ·ƒctx_70, ·v_22:
+                    fn ·v_27:
+                      ·seq_pop ·v_27, ·ƒfail_12, fn ·v_13, ·v_28:
+                        ·seq_pop ·v_28, ·ƒfail_12, fn ·v_14, ·v_19:
+                          ·empty ·v_19, fn ·v_22:
                             ·if ·v_22,
-                              fn: ·ƒsucc_11 ·ƒctx_70, ·v_13, ·v_14
-                              fn: ·ƒfail_12 ·ƒctx_70
-                    fn ·ƒctx_73: ·ƒfail_12 ·ƒctx_73
-                fn ·v_39: ·v_39 ·ƒctx_75, ·v_48, ·panic, ·v_8
-    # sm:kQEAAQAPAAEADyQBAA8YAQAPEgACAAYBGgEAAQABHgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoAGAEIAQoAAgAKAQUBAAEAAR4BAAEAAQABBgEAAQQABAEGAQoACgAYAQUBCgACAA4BEw8AAQAPCAAYABgBAA8QAQAPDAACABYBAgEAAQABDAEBDwwACgECAQoAAgAaAQYBAAEAAQwBBw8MAAoBCAEKAAIAHgEHDwABAA8UAQgBCgAYAQcPDAACABYBAA8AAQAPCAAgABgAGgAaAQAPDAACAB4BAA8AAQAPHAEADwwAAgAoABgBAA8MAAIAJgEADwABAA8UAQAPDAAEAQAPFgAKABgBAA8QAQAPDAACACoBAA8AAQAPFAEADwwABAEADxYACgAYAQAPEAEADwwAAgAuAQAPAAEADxABAA8MAAoAGAEADwwAAgAyAQAPAAEADwoBAA8MAAIAOgAEAQAPAAEADxgAFAAEAQAPDAAEAQAPDAA6AAQBAA8AAQAPGAAUACgAFAAEAQAPAAEADxgAFAAgAQAPDAAEAQAPAAEADw4AFAAEAQAPDAAEAQAPDgAEARQB
+                              fn: ·ƒsucc_11 ·ƒctx_62, ·v_13, ·v_14
+                              fn: ·ƒfail_12 ·ƒctx_62
+                    fn: ·ƒfail_12 ·ƒctx_62
+                fn ·v_39: ·v_39 ·ƒctx_59, ·v_48, ·panic, ·v_8
+    # sm:igEAAQAPAAEADyQBAA8YAQAPEgACAAYBGgEAAQABHgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoBCAEKAAIACgEFAQABAAEeAQABAAEAAQYBAAEEAAQBBgEKAAoBBQEKAAIADgETDwABAA8IABgAGAEADxABAA8MAAIAFgECAQABAAEMAQEPDAAKAQIBCgACABoBBgEAAQABDAEHDwwACgEIAQoAAgAeAQcPAAEADxQBCAEKABgBBw8MAAIAFgEADwABAA8IACAAGAAaABoBAA8MAAIAHgEADwABAA8cAQAPDAACACgBAA8MAAIAJgEADwABAA8UAQAPDAAEAQAPFgAKAQAPEAEADwwAAgAqAQAPAAEADxQBAA8MAAQBAA8WAAoBAA8QAQAPDAACAC4BAA8AAQAPEAEADwwACgEADwwAAgAyAQAPAAEADwoBAA8MAAIAOgAEAQAPAAEADxgAFAAEAQAPDAAEAQAPDAA6AAQBAA8AAQAPGAAUACYABAEADwABAA8YABQAIAEADwwABAEADwABAA8OABQABAEADwwABAEADw4ABAEUAQ
 
 
 test 'standalone top-level rec destructure with literal rhs', fn:
@@ -208,21 +208,21 @@ test 'standalone top-level rec destructure with literal rhs', fn:
     {x} = {x: 1}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_39, ·ƒret_1:
-      ·rec_put {}, 'x', (i8 1), fn ·ƒctx_41, ·v_5:
+      ·rec_put {}, 'x', (i8 1), fn ·v_5:
         ·fn
-          fn ·ƒctx_42, ·v_10:
+          fn ·ƒctx_41, ·v_10:
             ·let ·v_10, fn ·x_0:
               ·ƒret_1 ·x_0
           fn ·v_30:
             ·fn
-              fn ·ƒctx_44, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+              fn ·ƒctx_42, ·ƒsucc_8, ·ƒfail_9, ·v_7:
                 ·is_rec_like ·v_7,
-                  fn ·ƒctx_45, ·v_15:
-                    ·rec_pop ·v_15, 'x', ·ƒfail_9, fn ·ƒctx_46, ·v_10, ·v_14:
-                      ·ƒsucc_8 ·ƒctx_46, ·v_10
-                  fn ·ƒctx_48: ·ƒfail_9 ·ƒctx_48
-              fn ·v_24: ·v_24 ·ƒctx_50, ·v_30, ·panic, ·v_5
-    # sm:ZwABAAwAAQAMJAEADBgBAAwSAAIABgEOBAABAAQUAQEGAAEABgIBAAYCAAQBAgEAAQABAgEAAQIBAAECAAYBBgEAAQABBgEAAQQACgAYAQUECgACAAoBDQwAAQAMCAAUABgBAAwMAAIAEgECAQABAAEMAQEMDAAKAQIBCgACABYBAQwAAQAMFAECAQoAFAEBDAwAAgASAQAMAAEADAgAHAAYABgAGAEADAoAAgAaAQAMAAEADBwBAAwKAAIAJAAYAQAMDAACACIBAAwAAQAMFAEADAwABAEADAABAAwCAQAMAgEADAIABAEADBQACgAYAQAMEAEADAwAAgAmAQAMAAEADBYAFAAEAQAMDAAkABQABAEADAABAAwWABQAHAEADAwABAEADAABAAwOABQABAEADAwABAEADA4ABAEOBA
+                  fn ·v_15:
+                    ·rec_pop ·v_15, 'x', ·ƒfail_9, fn ·v_10, ·v_14:
+                      ·ƒsucc_8 ·ƒctx_42, ·v_10
+                  fn: ·ƒfail_9 ·ƒctx_42
+              fn ·v_24: ·v_24 ·ƒctx_39, ·v_30, ·panic, ·v_5
+    # sm:YwABAAwAAQAMJAEADBgBAAwSAAIABgEOBAABAAQUAQEGAAEABgIBAAYCAAQBAgEAAQABAgEAAQIBAAECAAYBBgEAAQABBgEAAQQACgEFBAoAAgAKAQ0MAAEADAgAFAAYAQAMDAACABIBAgEAAQABDAEBDAwACgECAQoAAgAWAQEMAAEADBQBAgEKABQBAQwMAAIAEgEADAABAAwIABwAGAAYABgBAAwKAAIAGgEADAABAAwcAQAMCgACACQBAAwMAAIAIgEADAABAAwUAQAMDAAEAQAMAAEADAIBAAwCAQAMAgAEAQAMFAAKAQAMEAEADAwAAgAmAQAMAAEADBYAFAAEAQAMDAAiAAQBAAwAAQAMFgAUABwBAAwMAAQBAAwAAQAMDgAUAAQBAAwMAAQBAAwOAAQBDgQ
 
 
 test 'standalone top-level destructure with call rhs', fn:
@@ -240,19 +240,19 @@ test 'standalone top-level destructure with call rhs', fn:
                   ·ƒret_2 ·b_1
             fn ·v_45:
               ·fn
-                fn ·ƒctx_61, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                fn ·ƒctx_59, ·ƒsucc_8, ·ƒfail_9, ·v_7:
                   ·is_seq_like ·v_7,
-                    fn ·ƒctx_62, ·v_24:
-                      ·seq_pop ·v_24, ·ƒfail_9, fn ·ƒctx_63, ·v_10, ·v_25:
-                        ·seq_pop ·v_25, ·ƒfail_9, fn ·ƒctx_64, ·v_11, ·v_16:
-                          ·empty ·v_16, fn ·ƒctx_65, ·v_19:
+                    fn ·v_24:
+                      ·seq_pop ·v_24, ·ƒfail_9, fn ·v_10, ·v_25:
+                        ·seq_pop ·v_25, ·ƒfail_9, fn ·v_11, ·v_16:
+                          ·empty ·v_16, fn ·v_19:
                             ·if ·v_19,
-                              fn: ·ƒsucc_8 ·ƒctx_65, ·v_10, ·v_11
-                              fn: ·ƒfail_9 ·ƒctx_65
-                    fn ·ƒctx_68: ·ƒfail_9 ·ƒctx_68
-                fn ·v_36: ·v_36 ·ƒctx_70, ·v_45, ·panic, ·v_5
+                              fn: ·ƒsucc_8 ·ƒctx_59, ·v_10, ·v_11
+                              fn: ·ƒfail_9 ·ƒctx_59
+                    fn: ·ƒfail_9 ·ƒctx_59
+                fn ·v_36: ·v_36 ·ƒctx_57, ·v_45, ·panic, ·v_5
         ·∅x
-    # sm:fwABABQAAQAUJAEAFBgBABQSAAIABgESCwABAAkmACQAGAEACwoAAgAOAREUAAEAFAgAGAAYAQAUEAEAFAwAAgAWAQIBAAEAAQwBARQMAAoBAgEKAAIAGgEGAQABAAEMAQcUDAAKAQgBCgACAB4BBxQAAQAUFAEIAQoAGAEHFAwAAgAWAQAUAAEAFAgAIAAYABgAGAEAFAoAAgAeAQAUAAEAFBwBABQKAAIAKAAYAQAUDAACACYBABQAAQAUFAEAFAwABAEAFBQACgAYAQAUEAEAFAwAAgAqAQAUAAEAFBQBABQMAAQBABQUAAoAGAEAFBABABQMAAIALgEAFAABABQQAQAUDAAKABgBABQMAAIAMgEAFAABABQKAQAUDAACADoABAEAFAABABQWABQABAEAFAwABAEAFAwAOgAEAQAUAAEAFBYAFAAoABQABAEAFAABABQWABQAIAEAFAwABAEAFAABABQOABQABAEAFAwABAEAFA4ABAESCxQBFAE
+    # sm:egABABQAAQAUJAEAFBgBABQSAAIABgESCwABAAkmACQAGAEACwoAAgAOAREUAAEAFAgAGAAYAQAUEAEAFAwAAgAWAQIBAAEAAQwBARQMAAoBAgEKAAIAGgEGAQABAAEMAQcUDAAKAQgBCgACAB4BBxQAAQAUFAEIAQoAGAEHFAwAAgAWAQAUAAEAFAgAIAAYABgAGAEAFAoAAgAeAQAUAAEAFBwBABQKAAIAKAEAFAwAAgAmAQAUAAEAFBQBABQMAAQBABQUAAoBABQQAQAUDAACACoBABQAAQAUFAEAFAwABAEAFBQACgEAFBABABQMAAIALgEAFAABABQQAQAUDAAKAQAUDAACADIBABQAAQAUCgEAFAwAAgA6AAQBABQAAQAUFgAUAAQBABQMAAQBABQMADoABAEAFAABABQWABQAJgAEAQAUAAEAFBYAFAAgAQAUDAAEAQAUAAEAFA4AFAAEAQAUDAAEAQAUDgAEARILFAEUAQ
 
 
 test 'standalone top-level destructure with import rhs', fn:
@@ -260,21 +260,21 @@ test 'standalone top-level destructure with import rhs', fn:
     {foo} = import './bar.fnk'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_39, ·ƒret_2:
-      ·import './bar.fnk', fn ·ƒctx_41, ·v_5:
+      ·import './bar.fnk', fn ·v_5:
         ·fn
-          fn ·ƒctx_42, ·v_10:
+          fn ·ƒctx_41, ·v_10:
             ·let ·v_10, fn ·foo_0:
               ·ƒret_2 ·foo_0
           fn ·v_30:
             ·fn
-              fn ·ƒctx_44, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+              fn ·ƒctx_42, ·ƒsucc_8, ·ƒfail_9, ·v_7:
                 ·is_rec_like ·v_7,
-                  fn ·ƒctx_45, ·v_15:
-                    ·rec_pop ·v_15, 'foo', ·ƒfail_9, fn ·ƒctx_46, ·v_10, ·v_14:
-                      ·ƒsucc_8 ·ƒctx_46, ·v_10
-                  fn ·ƒctx_48: ·ƒfail_9 ·ƒctx_48
-              fn ·v_24: ·v_24 ·ƒctx_50, ·v_30, ·panic, ·v_5
-    # sm:XwABABoAAQAaJAEAGhgBABoSAAIABgEQEgABABISAQ4LAAEACwIBAAsSAQALAgAKABgBDRIKAAIACgEPGgABABoIABQAGAEAGgwAAgASAQIDAAEAAwwBARoMAAoBAgMOAAIAFgEBGgABABoUAQIDDgAUAQEaDAACABIBABoAAQAaCAAcABgAGAAYAQAaCgACABoBABoAAQAaHAEAGgoAAgAkABgBABoMAAIAIgEAGgABABoUAQAaDAAEAQAaAAEAGgIBABoGAQAaAgAEAQAaFAAKABgBABoQAQAaDAACACYBABoAAQAaFgAUAAQBABoMACQAFAAEAQAaAAEAGhYAFAAcAQAaDAAEAQAaAAEAGg4AFAAEAQAaDAAEAQAaDgAEARAS
+                  fn ·v_15:
+                    ·rec_pop ·v_15, 'foo', ·ƒfail_9, fn ·v_10, ·v_14:
+                      ·ƒsucc_8 ·ƒctx_42, ·v_10
+                  fn: ·ƒfail_9 ·ƒctx_42
+              fn ·v_24: ·v_24 ·ƒctx_39, ·v_30, ·panic, ·v_5
+    # sm:WwABABoAAQAaJAEAGhgBABoSAAIABgEQEgABABISAQ4LAAEACwIBAAsSAQALAgAKAQ0SCgACAAoBDxoAAQAaCAAUABgBABoMAAIAEgECAwABAAMMAQEaDAAKAQIDDgACABYBARoAAQAaFAECAw4AFAEBGgwAAgASAQAaAAEAGggAHAAYABgAGAEAGgoAAgAaAQAaAAEAGhwBABoKAAIAJAEAGgwAAgAiAQAaAAEAGhQBABoMAAQBABoAAQAaAgEAGgYBABoCAAQBABoUAAoBABoQAQAaDAACACYBABoAAQAaFgAUAAQBABoMACIABAEAGgABABoWABQAHAEAGgwABAEAGgABABoOABQABAEAGgwABAEAGg4ABAEQEg
 
 
 ---
@@ -303,30 +303,30 @@ test 'export args do not leak call args', fn:
         fn ·ƒctx_70, ·ƒret_11, ·a_4, ·b_5: ·op_plus ·a_4, ·b_5, ·ƒret_11
         fn ·v_10:
           ·let ·v_10, fn ·add_0:
-            ·ƒpub ·add_0, fn ·ƒctx_73:
+            ·ƒpub ·add_0, fn:
               ·add_0
-                ·ƒctx_73
-                fn ·ƒctx_75, ·v_21:
+                ·ƒctx_68
+                fn ·ƒctx_72, ·v_21:
                   ·let ·v_21, fn ·s_1:
-                    ·ƒpub ·s_1, fn ·ƒctx_77:
+                    ·ƒpub ·s_1, fn:
                       ·fn
-                        fn ·ƒctx_78, ·ƒret_24, ·a_6, ·b_7:
-                          ·op_mul ·a_6, ·b_7, fn ·ƒctx_79, ·v_27:
+                        fn ·ƒctx_73, ·ƒret_24, ·a_6, ·b_7:
+                          ·op_mul ·a_6, ·b_7, fn ·v_27:
                             ·let ·v_27, fn ·ni_8:
-                              ·ƒret_24 ·ƒctx_80, ·ni_8
+                              ·ƒret_24 ·ƒctx_73, ·ni_8
                         fn ·v_23:
                           ·let ·v_23, fn ·mul_2:
-                            ·ƒpub ·mul_2, fn ·ƒctx_84:
+                            ·ƒpub ·mul_2, fn:
                               ·mul_2
-                                ·ƒctx_84
-                                fn ·ƒctx_86, ·v_39:
+                                ·ƒctx_72
+                                fn ·ƒctx_76, ·v_39:
                                   ·let ·v_39, fn ·p_3:
-                                    ·ƒpub ·p_3, fn ·ƒctx_88:
-                                      ·ƒret_9 ·ƒctx_88, ·p_3
+                                    ·ƒpub ·p_3, fn:
+                                      ·ƒret_9 ·ƒctx_76, ·p_3
                                 ·s_1
                                 i8 3
                 i8 1
                 i8 2
-    # sm:kQEAAQBUAAEAVCQBAFQYAZABDBIAAgAGAYMBEAABABAIABAAGAEWBRgBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUUABABFRAMAAIADgEDAQABAAEMAQQQDAAKAQsDDgACABIBAAMAAQADEAEAAw4ACgAUAAIAFgE4CAABAAMoADQAGAEACAwAAgAeAQMBAAEAAQwBBAgMAAoBBwEKAAIAIgEAAQABAAEQAQABCgAKABQAAgAmASgaAAEAGggAMAAYATACGAEpAQ4BBgEKAAIALgEUBQABAAUSAQABCgAEAQgBCgAKABgBBwUMAAIAMgEDAQABAAEMAQQFDAAKAQkCDAACADYBGgIAAQACFgAUAAQBAAIMADABLxoMAAIALgEDAQABAAEMAQQaDAAKAQsDDgACADIBAAMAAQADEAEAAw4ACgAUAAIANgFMCAABAANIAFQAGAEACAwAAgA-AQMBAAEAAQwBBAgMAAoBBwEKAAIAQgEAAQABAAEQAQABCgAKABQAAgBGAQABAAEAARQAFAAEAQABRAEQAUQBBgEAAQABBgEAARwBZQEAAQABBgEAARwBBgEAAQABBgEAAQ
+    # sm:jAEAAQBUAAEAVCQBAFQYAZABDBIAAgAGAYMBEAABABAIABAAGAEWBRgBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUUABABFRAMAAIADgEDAQABAAEMAQQQDAAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBOAgAAQADKAA0ABgBAAgMAAIAHgEDAQABAAEMAQQIDAAKAQcBCgACACIBAAEAAQABEAEAAQoACAACACYBKBoAAQAaCAAwABgBMAIYASkBDgEGAQoAAgAuARQFAAEABRIBAAEKAAQBCAEKAAoBBwUMAAIAMgEDAQABAAEMAQQFDAAKAQkCDAACADYBGgIAAQACFgAUAAQBAAIMADABLxoMAAIALgEDAQABAAEMAQQaDAAKAQsDDgACADIBAAMAAQADEAEAAw4ACAACADYBTAgAAQADSABUABgBAAgMAAIAPgEDAQABAAEMAQQIDAAKAQcBCgACAEIBAAEAAQABEAEAAQoACAACAEYBAAEAAQABFAAUAAQBAAFEARABRAEGAQABAAEGAQABHAFlAQABAAEGAQABHAEGAQABAAEGAQAB
 
 
