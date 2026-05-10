@@ -201,11 +201,13 @@ pub fn run(
     .ok_or_else(|| format!("no '{entry_wrapper_name}' export"))?;
 
   // Host-side: turn the wrapper-done cont id into a fink anyref via
-  // `wrap_host_cont`. The per-module wrapper signature is host-
+  // `wrap_host_cont_3`. The per-module wrapper signature is host-
   // neutral (`(ref null any) -> ()`); host-bridge mechanics
-  // (i32 -> anyref) live on the host side of the boundary.
-  let wrap_host_cont = instance.get_func(&mut store, "wrap_host_cont")
-    .ok_or_else(|| "no wrap_host_cont export".to_string())?;
+  // (i32 -> anyref) live on the host side of the boundary. Fn3
+  // adapter is required because the apply shim now dispatches all
+  // closures as Fn3.
+  let wrap_host_cont = instance.get_func(&mut store, "wrap_host_cont_3")
+    .ok_or_else(|| "no wrap_host_cont_3 export".to_string())?;
   let mut entry_cont_out = [Val::AnyRef(None)];
   wrap_host_cont.call(&mut store, &[Val::I32(CONT_WRAPPER_DONE)], &mut entry_cont_out)
     .map_err(|e| e.to_string())?;
@@ -273,9 +275,11 @@ fn apply_main(
   main_clo: Rooted<AnyRef>,
   argv: &[Vec<u8>],
 ) -> Result<(), Error> {
-  let wrap_host_cont = caller.get_export("wrap_host_cont")
+  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with placeholder ctx
+  // (ref.i31 42) — same shape as the per-module wrapper's entry call.
+  let wrap_host_cont = caller.get_export("wrap_host_cont_3")
     .and_then(|e| e.into_func())
-    .ok_or_else(|| Error::msg("no wrap_host_cont export"))?;
+    .ok_or_else(|| Error::msg("no wrap_host_cont_3 export"))?;
   let args_empty = caller.get_export("args_empty")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no args_empty export"))?;
@@ -285,9 +289,9 @@ fn apply_main(
   let str_wrap = caller.get_export("str_wrap_bytes")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no str_wrap_bytes export"))?;
-  let apply_fn = caller.get_export("apply")
+  let apply_fn = caller.get_export("apply_3")
     .and_then(|e| e.into_func())
-    .ok_or_else(|| Error::msg("no apply export"))?;
+    .ok_or_else(|| Error::msg("no apply_3 export"))?;
 
   // done_cont = wrap_host_cont(CONT_MAIN_DONE).
   let mut done_out = [Val::AnyRef(None)];
@@ -320,7 +324,10 @@ fn apply_main(
     acc = next[0];
   }
 
-  apply_fn.call(&mut *caller, &[acc, Val::AnyRef(Some(main_clo))], &mut [])?;
+  let ctx_arg = AnyRef::from_i31(&mut *caller, I31::wrapping_i32(42));
+  apply_fn.call(&mut *caller,
+    &[acc, Val::AnyRef(Some(ctx_arg)), Val::AnyRef(Some(main_clo))],
+    &mut [])?;
   Ok(())
 }
 

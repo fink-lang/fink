@@ -58,6 +58,11 @@
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
   (import "rt/apply.wat"    "apply"
     (func $apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "rt/apply.wat"    "apply_3"
+    (func $apply_3
+      (param $args (ref null any))
+      (param $ctx (ref null any))
+      (param $callee (ref null any))))
 
   (import "std/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
@@ -464,6 +469,10 @@
   (func (export "env:apply")
     (param $args (ref null any)) (param $callee (ref null any))
     (return_call $apply (local.get $args) (local.get $callee)))
+
+  (func (export "env:apply_3")
+    (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
+    (return_call $apply_3 (local.get $args) (local.get $ctx) (local.get $callee)))
 
   (func (export "env:args_empty") (result (ref any))
     (return_call $args_empty))

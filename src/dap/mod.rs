@@ -96,13 +96,14 @@ async fn run_module(
     .ok_or_else(|| format!("no '{entry_wrapper_name}' export"))?;
 
   // Host-side i32 -> anyref wrap (host-bridge bookkeeping, not part
-  // of the per-module wrapper ABI).
-  let wrap_host_cont = instance.get_func(&mut *store, "wrap_host_cont")
-    .ok_or_else(|| "no wrap_host_cont export".to_string())?;
+  // of the per-module wrapper ABI). Fn3: the apply shim casts every
+  // closure's funcref to $Fn3, so the host adapter must be Fn3-typed.
+  let wrap_host_cont = instance.get_func(&mut *store, "wrap_host_cont_3")
+    .ok_or_else(|| "no wrap_host_cont_3 export".to_string())?;
   let mut entry_cont_out = [wasmtime::Val::AnyRef(None)];
   wrap_host_cont.call_async(&mut *store,
     &[wasmtime::Val::I32(CONT_WRAPPER_DONE)], &mut entry_cont_out).await
-    .map_err(|e| format!("wrap_host_cont: {e}"))?;
+    .map_err(|e| format!("wrap_host_cont_3: {e}"))?;
   let entry_cont = entry_cont_out[0];
 
   entry_wrapper
@@ -202,9 +203,11 @@ async fn apply_main_dap(
   main_clo: wasmtime::Rooted<wasmtime::AnyRef>,
   argv: &[Vec<u8>],
 ) -> Result<(), wasmtime::Error> {
-  let wrap_host_cont = caller.get_export("wrap_host_cont")
+  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with placeholder ctx
+  // (ref.i31 42) — same shape as the per-module wrapper's entry call.
+  let wrap_host_cont = caller.get_export("wrap_host_cont_3")
     .and_then(|e| e.into_func())
-    .ok_or_else(|| wasmtime::Error::msg("no wrap_host_cont export"))?;
+    .ok_or_else(|| wasmtime::Error::msg("no wrap_host_cont_3 export"))?;
   let args_empty = caller.get_export("args_empty")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no args_empty export"))?;
@@ -214,9 +217,9 @@ async fn apply_main_dap(
   let str_wrap = caller.get_export("str_wrap_bytes")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no str_wrap_bytes export"))?;
-  let apply_fn = caller.get_export("apply")
+  let apply_fn = caller.get_export("apply_3")
     .and_then(|e| e.into_func())
-    .ok_or_else(|| wasmtime::Error::msg("no apply export"))?;
+    .ok_or_else(|| wasmtime::Error::msg("no apply_3 export"))?;
 
   let mut done_out = [wasmtime::Val::AnyRef(None)];
   wrap_host_cont
@@ -254,8 +257,12 @@ async fn apply_main_dap(
     acc = next[0];
   }
 
+  let ctx_arg = wasmtime::AnyRef::from_i31(
+    &mut *caller, wasmtime::I31::wrapping_i32(42));
   apply_fn
-    .call_async(&mut *caller, &[acc, wasmtime::Val::AnyRef(Some(main_clo))], &mut [])
+    .call_async(&mut *caller,
+      &[acc, wasmtime::Val::AnyRef(Some(ctx_arg)), wasmtime::Val::AnyRef(Some(main_clo))],
+      &mut [])
     .await?;
   Ok(())
 }
