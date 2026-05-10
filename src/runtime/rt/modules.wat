@@ -41,6 +41,7 @@
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat"  "Fn2"      (type $Fn2      (sub any)))
+  (import "rt/apply.wat"  "Fn3"      (type $Fn3      (sub any)))
 
   ;; Func imports
   (import "rt/apply.wat"  "apply"
@@ -333,8 +334,9 @@
   ;; tail-applies cont with (last_expr, exports_rec).
   (elem declare func $_init_module_step)
 
-  (func $_init_module_step (type $Fn2)
+  (func $_init_module_step (type $Fn3)
     (param $caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $cap_arr (ref $Captures))
@@ -373,8 +375,9 @@
   ;; Declared with `elem declare` so `ref.func` is valid.
   (elem declare func $_import_wrap_step)
 
-  (func $_import_wrap_step (type $Fn2)
+  (func $_import_wrap_step (type $Fn3)
     (param $caps (ref null any))
+    (param $_ctx (ref null any))
     (param $_args (ref null any))
 
     (local $cap_arr (ref $Captures))
