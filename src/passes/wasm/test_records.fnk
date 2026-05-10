@@ -242,7 +242,7 @@ test 'rec destructure', fn:
         (local.set $v_90_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_90) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_90_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_90_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_90_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -259,7 +259,7 @@ test 'rec destructure', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:YewHALoBAL4BAJQBAJoBAJQBAQIBTgEMAU4BJAWeBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvAEAvgEApAkAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBMRiMAQEAGPoIALoBAMABAMABAMABAJQBAP4BANABAQAYjAEBABi6CACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAGJoLALoBAL4BAL4BAJQBALABAMwBAHoA0gEAegDyAQBuALwBAMoBALwBANQIALoBAL4BAL4BAJIBANQBAMwBASYBigEBBgGCAQEFBIAGAJQBAQ0MWgECAYoBAQYBggEBBQT-BwCSAQDeAQDUAQB6ANIBAG4AxAEAtgUAegDmAQBmAG4AvgEA
+    ;; sm:YewHALoBAL4BAJQBAJoBAJQBAQIBTgEMAU4BJAWeBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvAEAvgEApAkAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBMRiMAQEAGPoIALoBAMABAMABAMABAJQBAP4BANABAQAYjAEBABi6CACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAGJoLALoBAL4BAL4BAJQBALABAMwBAHoA0gEAegDyAQBuALwBAMoBALwBANQIALoBAL4BAL4BAJIBANQBAMwBASYBigEBBgGCAQEFBIAGAJQBAQ0MWgECAYoBAQYBggEBBQT-BwCSAQDeAQDUAQB6ANIBAG4AxAEA6gUAegDmAQBmAG4AvgEA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -347,7 +347,7 @@ test 'rec spread', fn:
         (local.set $v_50_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_50) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_50_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_50_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_50_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -368,7 +368,7 @@ test 'rec spread', fn:
       (data $d_3 "b")
       (data $d_4 "a")
     )
-    ;; sm:La4HALoBAL4BAJQBAS4BjAEBBgGEAQEFBLwJALoBAL4BAJIBAS0BTABUAJQBAJYBALwBALABAMwBASILXAECA4IIALoBAL4BAJIBALABAMwBAQ0BigEBBgGCAQEFBIAGAJQBAQ0MWgECAYoBAQYBggEBBQT-BwCSAQCuAQDUAQB6ANIBAG4AxAEAtgUAegDmAQBmAG4AvgEA
+    ;; sm:La4HALoBAL4BAJQBAS4BjAEBBgGEAQEFBLwJALoBAL4BAJIBAS0BTABUAJQBAJYBALwBALABAMwBASILXAECA4IIALoBAL4BAJIBALABAMwBAQ0BigEBBgGCAQEFBIAGAJQBAQ0MWgECAYoBAQYBggEBBQT-BwCSAQCuAQDUAQB6ANIBAG4AxAEA6gUAegDmAQBmAG4AvgEA
 
 test 'rec empty literal', fn:
   expect wat ƒink:
@@ -691,7 +691,7 @@ test 'rec nested destructure', fn:
         (local.set $v_114_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_114) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_114_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_114_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_114_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -708,7 +708,7 @@ test 'rec nested destructure', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:gwGoBwC6AQDAAQCUAQEoAU4AbgC6AQCoBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBAQeMAQEAB7oIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAHngsAugEAwAEAlAEBIwFOALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAKwGALoBAMABAMABAG4AogcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDiCAC6AQDAAQDAAQDAAQCUAQDYAQDQAQEBEowBAQASuggAlAEAmgEAlAEAmgEAlAEA4AEA0AEAhAIA0AEBABKiCwC6AQDAAQDAAQCUAQCyAQDQAQB6ANIBAHoA8gEAbgC8AQDKAQC-AQDYCAC6AQC-AQC-AQCSAQDUAQDQAQEMDFoBAgGKAQEACoQGAJQBAQYHWgECAYoBAQYChAEBBQWCCACSAQDeAQDWAQB6ANYBAG4AxgEAuAUAegDmAQBmAG4AvgEA
+    ;; sm:gwGoBwC6AQDAAQCUAQEoAU4AbgC6AQCoBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBAQeMAQEAB7oIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAHngsAugEAwAEAlAEBIwFOALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAKwGALoBAMABAMABAG4AogcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDiCAC6AQDAAQDAAQDAAQCUAQDYAQDQAQEBEowBAQASuggAlAEAmgEAlAEAmgEAlAEA4AEA0AEAhAIA0AEBABKiCwC6AQDAAQDAAQCUAQCyAQDQAQB6ANIBAHoA8gEAbgC8AQDKAQC-AQDYCAC6AQC-AQC-AQCSAQDUAQDQAQEMDFoBAgGKAQEACoQGAJQBAQYHWgECAYoBAQYChAEBBQWCCACSAQDeAQDWAQB6ANYBAG4AxgEA7AUAegDmAQBmAG4AvgEA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:
@@ -792,7 +792,7 @@ test 'rec spread merge two', fn:
         (local.set $v_62_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_62) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_62_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_62_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_62_fn))
       )
       (func $test:v_57 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_42 (ref null any))
@@ -819,7 +819,7 @@ test 'rec spread merge two', fn:
         (local.set $v_57_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_57) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_57_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_57_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_57_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -841,7 +841,7 @@ test 'rec spread merge two', fn:
       (data $d_3 "r1")
       (data $d_4 "a")
     )
-    ;; sm:Oe4GALoBAMABAL4BAJQBAT4E5gkAugEAwAEAvgEAlAEBJQJQAFgAlAEAlgEAvgEA1AEAzAEBGAxcAQIE6gUAlAEBDwZaAQIBigEBBgGEAQEFBPQKALoBAL4BAJIBASMCTgBYAJQBAJYBAL4BANQBANQBAHoA0gEAbgDEAQDMBQCUAQEKBloBAgGKAQEGAYIBAQUE_gcAkgEArgEA1AEAegDSAQBuAMQBALYFAHoA5gEAZgBuAL4BAA
+    ;; sm:Oe4GALoBAMABAL4BAJQBAT4E5gkAugEAwAEAvgEAlAEBJQJQAFgAlAEAlgEAvgEA1AEAzAEBGAxcAQIE6gUAlAEBDwZaAQIBigEBBgGEAQEFBPQKALoBAL4BAJIBASMCTgBYAJQBAJYBAL4BANQBANQBAHoA0gEAbgDEAQCABgCUAQEKBloBAgGKAQEGAYIBAQUE_gcAkgEArgEA1AEAegDSAQBuAMQBAOoFAHoA5gEAZgBuAL4BAA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:

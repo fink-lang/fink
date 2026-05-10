@@ -244,7 +244,7 @@ test 'str tagged template', fn:
         (local.set $v_44_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_44) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_44_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_44_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_44_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -263,7 +263,7 @@ test 'str tagged template', fn:
       (data $d_1 "foo")
       (data $d_2 "1\\n2")
     )
-    ;; sm:J4IFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBALYFAJQBATgEjAEBBwlsAQAJtAoAkgEAegEvA8wBAFwAlAEAlgEAwAEAhAIA1AEAegDSAQBuAMQBALYFAHoA5gEAZgBuAL4BAA
+    ;; sm:J4IFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBALYFAJQBATgEjAEBBwlsAQAJtAoAkgEAegEvA8wBAFwAlAEAlgEAwAEAhAIA1AEAegDSAQBuAMQBAOoFAHoA5gEAZgBuAL4BAA
 
 
 test 'str tagged template escape handling', fn:
@@ -381,7 +381,7 @@ test 'str tagged template escape handling', fn:
         (local.set $v_62_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_62) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_62_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_62_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_62_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -403,7 +403,7 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "foo")
       (data $d_4 "bar")
     )
-    ;; sm:PoIFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBANwIALoBAMIBAL4BAL4BAJQBAPwBAMwBAUgIjAEBBy7YCAC6AQDCAQDCAQC-AQC-AQCUAQD8AQDMAQEALrIFAJQBASQbjgEBIy5sAQAujgwAkgEAegE_A8wBAFwAlAEAlgEAwAEBMAOGAQBcAJQBAJYBAMABAKoCANQBAHoA0gEAbgDEAQC2BQB6AOYBAGYAbgC-AQA
+    ;; sm:PoIFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBANwIALoBAMIBAL4BAL4BAJQBAPwBAMwBAUgIjAEBBy7YCAC6AQDCAQDCAQC-AQC-AQCUAQD8AQDMAQEALrIFAJQBASQbjgEBIy5sAQAujgwAkgEAegE_A8wBAFwAlAEAlgEAwAEBMAOGAQBcAJQBAJYBAMABAKoCANQBAHoA0gEAbgDEAQDqBQB6AOYBAGYAbgC-AQA
 
 
 test 'str implicit formatting handling', fn:

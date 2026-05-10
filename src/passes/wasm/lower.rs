@@ -838,8 +838,9 @@ fn lower_expr(
           let i_cons = push_call(lcx.frag, lcx.rt.args_prepend(),
             vec![op_local(clo_local), op_local(l_args)], Some(l_args));
           ctx.instrs.push(i_cons);
-          let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
-            vec![op_local(l_args), op_local(callee)]);
+          let l_ctx = ctx.ctx_local.expect("FnClosure Cont::Ref tail: enclosing fn must have :ctx_param");
+          let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
+            vec![op_local(l_args), op_local(l_ctx), op_local(callee)]);
           ctx.instrs.push(i_app);
         }
       }
@@ -955,14 +956,16 @@ fn lower_cont(
       lower_expr(lcx, ctx, body);
     }
     Cont::Ref(id) => {
-      // Tail-call the named cont with an empty args list.
+      // Tail-call the named cont with an empty args list, threading the
+      // surrounding fn's ctx as a native wasm arg via apply_3.
       let callee = ctx.lookup(*id);
       let l_args_list = ctx.alloc_local_typed(":args",
         val_ref_abs(AbsHeap::Any, /*nullable*/ false));
       let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
-      let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
-        vec![op_local(l_args_list), op_local(callee)]);
+      let l_ctx = ctx.ctx_local.expect("Cont::Ref tail-call: enclosing fn must have :ctx_param");
+      let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
+        vec![op_local(l_args_list), op_local(l_ctx), op_local(callee)]);
       ctx.instrs.push(i_app);
     }
   }
@@ -1174,8 +1177,9 @@ fn lower_import_virtual_stdlib(
   let i_cons = push_call(lcx.frag, lcx.rt.args_prepend(),
     vec![op_local(l_rec), op_local(l_args)], Some(l_args));
   ctx.instrs.push(i_cons);
-  let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
-    vec![op_local(l_args), op_local(cont_local)]);
+  let l_ctx = ctx.ctx_local.expect("Import wrap-cont tail: enclosing fn must have :ctx_param");
+  let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
+    vec![op_local(l_args), op_local(l_ctx), op_local(cont_local)]);
   ctx.instrs.push(i_app);
 }
 

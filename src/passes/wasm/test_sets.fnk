@@ -143,7 +143,7 @@ test 'set import + construction', fn:
         (local.set $:imp_rec (call $std/rec.fnk:_set_field (local.get $:imp_rec) (local.get $:imp_key_set) (local.get $:imp_val_set)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:imp_rec) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_61))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_61))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
@@ -159,7 +159,7 @@ test 'set import + construction', fn:
         (local.set $v_72_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_72) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_72_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_72_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_72_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -175,7 +175,7 @@ test 'set import + construction', fn:
       )
       (data $d_0 "set")
     )
-    ;; sm:U-4IALoBAL4BAJQBAQIDUgFAAYQBAQYBhAEBBgGEAQBuALwBALwBALwBALwBAKIGALoBAL4BAL4BAG4AngcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDeCAC6AQC-AQDAAQDAAQCUAQDYAQDQAQFNHIwBAQAcsAgAkgEAmgEAkgEAmgEAkgEA3gEAzAEAgAIAzgEBAByUCwC6AQC-AQC-AQCSAQCwAQDMAQB6ANIBAHoA8gEAbgC6AQDKAQC8AQCKCACUAQBkAGwAnAEAhgIAbgDEAQDEBwCSAQDeAQDUAQB6ANIBAG4AxAEAtgUAegDmAQBmAG4AvgEA
+    ;; sm:U-4IALoBAL4BAJQBAQIDUgFAAYQBAQYBhAEBBgGEAQBuALwBALwBALwBALwBAKIGALoBAL4BAL4BAG4AngcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDeCAC6AQC-AQDAAQDAAQCUAQDYAQDQAQFNHIwBAQAcsAgAkgEAmgEAkgEAmgEAkgEA3gEAzAEAgAIAzgEBAByUCwC6AQC-AQC-AQCSAQCwAQDMAQB6ANIBAHoA8gEAbgC6AQDKAQC8AQCKCACUAQBkAGwAnAEAhgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEA6gUAegDmAQBmAG4AvgEA
 
 
 test 'set spread', fn:
@@ -368,7 +368,7 @@ test 'set spread', fn:
         (local.set $:imp_rec (call $std/rec.fnk:_set_field (local.get $:imp_rec) (local.get $:imp_key_set) (local.get $:imp_val_set)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:imp_rec) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_74))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_74))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
@@ -384,7 +384,7 @@ test 'set spread', fn:
         (local.set $v_85_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_85) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_85_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_85_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_85_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -400,7 +400,7 @@ test 'set spread', fn:
       )
       (data $d_0 "set")
     )
-    ;; sm:avQHALoBAMQBAMABAMABAJQBAG4AugEAvgEA6ggAugEAxAEAwAEAwAEAlAEAggIA0AEBSAGEAQEAAdgIALoBAMIBAL4BAL4BAJQBAPwBANABAQYBhAEBAAHWCAC6AQC-AQCUAQFLA1IAhgIAzgEBUgGEAQENCWwBDgGYBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBUxyMAQEAHLQIAJIBAJoBAJIBAJoBAJIBAN4BANABAIACANABAQAclgsAugEAvgEAvgEAkgEAsAEAzAEAegDSAQB6APIBAG4AugEAygEAvAEAiggAlAEAZABsAJwBAIYCAG4AxAEAxAcAkgEA3gEA1AEAegDSAQBuAMQBALYFAHoA5gEAZgBuAL4BAA
+    ;; sm:avQHALoBAMQBAMABAMABAJQBAG4AugEAvgEA6ggAugEAxAEAwAEAwAEAlAEAggIA0AEBSAGEAQEAAdgIALoBAMIBAL4BAL4BAJQBAPwBANABAQYBhAEBAAHWCAC6AQC-AQCUAQFLA1IAhgIAzgEBUgGEAQENCWwBDgGYBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBUxyMAQEAHLQIAJIBAJoBAJIBAJoBAJIBAN4BANABAIACANABAQAclgsAugEAvgEAvgEAkgEAsAEAzAEAegDSAQB6APIBAG4AugEAygEAvAEAiggAlAEAZABsAJwBAIYCAG4AxAEA-AcAkgEA3gEA1AEAegDSAQBuAMQBAOoFAHoA5gEAZgBuAL4BAA
 
 
 test 'set destructure empty', fn:
@@ -765,7 +765,7 @@ test 'set destructure empty', fn:
         (local.set $:imp_rec (call $std/rec.fnk:_set_field (local.get $:imp_rec) (local.get $:imp_key_set) (local.get $:imp_val_set)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:imp_rec) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_169))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_169))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -781,7 +781,7 @@ test 'set destructure empty', fn:
         (local.set $v_180_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_180) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_180_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_180_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_180_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -800,7 +800,7 @@ test 'set destructure empty', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:vwH6BQCUAQFsAYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQE_AU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEApggAugEAwAEAlAEBNwNSALIBANABAG4AvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAQEcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAMoHAJIBAN4BANgBAHoA1gEAbgDGAQC4BQB6AOYBAGYAbgC-AQA
+    ;; sm:vwH6BQCUAQFsAYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQE_AU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEApggAugEAwAEAlAEBNwNSALIBANABAG4AvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAQEcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQDsBQB6AOYBAGYAbgC-AQA
 
 
 test 'set destructure non-empty', fn:
@@ -1174,7 +1174,7 @@ test 'set destructure non-empty', fn:
         (local.set $:imp_rec (call $std/rec.fnk:_set_field (local.get $:imp_rec) (local.get $:imp_key_set) (local.get $:imp_val_set)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:imp_rec) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_172))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_172))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -1190,7 +1190,7 @@ test 'set destructure non-empty', fn:
         (local.set $v_183_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_183) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_183_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_183_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_183_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -1209,7 +1209,7 @@ test 'set destructure non-empty', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:xQH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQFLAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAMoHAJIBAN4BANgBAHoA1gEAbgDGAQC4BQB6AOYBAGYAbgC-AQA
+    ;; sm:xQH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQFLAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQDsBQB6AOYBAGYAbgC-AQA
 
 
 test 'set destructure peel one', fn:
@@ -1694,7 +1694,7 @@ test 'set destructure peel one', fn:
         (local.set $:imp_rec (call $std/rec.fnk:_set_field (local.get $:imp_rec) (local.get $:imp_key_set) (local.get $:imp_val_set)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:imp_rec) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_212))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_212))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_4 (ref null any))
@@ -1710,7 +1710,7 @@ test 'set destructure peel one', fn:
         (local.set $v_223_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_223) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_223_clo) (local.get $:args)))
-        (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_223_fn))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_223_fn))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -1729,5 +1729,5 @@ test 'set destructure peel one', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:_gH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQDIBQCWAQCaAQCSAQEqA4oBAQcHnggAugEAwAEAlAEBDwFOAHoA1gEAbgC8AQC-AQCuBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvgEA4ggAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBAQeUCAC6AQDAAQDAAQDAAQCUAQD-AQDQAQEAB5gIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAH9AgAlAEAmgEAlAEAmgEAlAEAsAEA0AEAegDWAQBuALwBALwBAL4BAIIEAPQHALoBAMABAMABAHoA1gEAegDWAQBuAL4BAMQBAL4BALQIAJYBAJoBAJYBANgBANABAHoA0gEAbgC-AQC-AQC-AQC8CQC6AQDAAQCUAQFFAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy4CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAMoHAJIBAN4BANgBAHoA1gEAbgDGAQC4BQB6AOYBAGYAbgC-AQA
+    ;; sm:_gH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQDIBQCWAQCaAQCSAQEqA4oBAQcHnggAugEAwAEAlAEBDwFOAHoA1gEAbgC8AQC-AQCuBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvgEA4ggAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBAQeUCAC6AQDAAQDAAQDAAQCUAQD-AQDQAQEAB5gIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAH9AgAlAEAmgEAlAEAmgEAlAEAsAEA0AEAegDWAQBuALwBALwBAL4BAIIEAPQHALoBAMABAMABAHoA1gEAegDWAQBuAL4BAMQBAL4BALQIAJYBAJoBAJYBANgBANABAHoA0gEAbgC-AQC-AQC-AQC8CQC6AQDAAQCUAQFFAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy4CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQDsBQB6AOYBAGYAbgC-AQA
 
