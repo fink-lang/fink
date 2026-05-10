@@ -64,13 +64,20 @@ fn origin_of(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> Option<ByteRange> {
 /// body to the `import_module` init-guard shape lands in 4D.
 pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let mut usage = runtime_contract::scan(cps);
-  // Per-module wrapper synthesised below uses init_module and the
-  // closure/captures/str/args primitives. Mark them so declare()
-  // returns Runtime handles for them even if the source code
+  // Fn3 / ctx-aware lowering routes user-fn calls through `apply_3`
+  // instead of `apply`. Mark the Apply3 runtime symbol so `declare()`
+  // sets up the import. The scan already marks Apply (Fn2) — that's
+  // harmless here; lower_ctx never emits a call to it.
+  usage.mark(runtime_contract::Sym::Apply3);
+  usage.mark(runtime_contract::Sym::Fn3);
+  // Per-module wrapper synthesised below uses the closure/captures/
+  // args primitives (apply_3 + args list construction). Mark them so
+  // declare() returns Runtime handles for them even if the source code
   // doesn't otherwise need them (e.g. a module with no `pub` calls).
-  usage.mark(runtime_contract::Sym::ModulesInitModule);
   usage.mark(runtime_contract::Sym::Closure);
   usage.mark(runtime_contract::Sym::Captures);
+  usage.mark(runtime_contract::Sym::ArgsEmpty);
+  usage.mark(runtime_contract::Sym::ArgsPrepend);
   usage.mark(runtime_contract::Sym::StrFromData);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
@@ -193,10 +200,7 @@ fn synth_host_wrapper(
   let mut ctx = FnCtx::new(HashMap::new());
   let l_cont_p = ctx.alloc_param(":cont");
 
-  // URL constant — the registry key.
-  let l_url = emit_str_const(lcx, &mut ctx, canonical_url.as_bytes(), ":url");
-
-  // Build no-capture closure over fink_module funcref.
+  // Build no-capture Fn3-typed closure over fink_module funcref.
   let l_caps_arg = ctx.alloc_local_typed(
     ":caps_arg",
     val_ref(lcx.rt.captures(), /*nullable*/ true),
@@ -212,10 +216,29 @@ fn synth_host_wrapper(
   );
   ctx.instrs.push(i_clos);
 
-  // Tail-call init_module(url, mod_clos, cont).
-  let i_init = push_return_call(lcx.frag, lcx.rt.modules_init_module(),
-    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_cont_p)]);
-  ctx.instrs.push(i_init);
+  // Mint a placeholder universe context — i31 42 — until the host
+  // takes over ctx production. Slice 2c-B sidesteps init_module +
+  // the registry; calls apply_3 directly so the simple end-to-end
+  // path doesn't depend on the std/modules.fnk plumbing.
+  let l_ctx_arg = ctx.alloc_local(":ctx_arg");
+  let i_ctx = push_ref_i31(lcx.frag, lit_i32(42), l_ctx_arg);
+  ctx.instrs.push(i_ctx);
+
+  // Build args list = [cont]. apply_3 takes (args, ctx, callee).
+  let l_args = ctx.alloc_local_typed(":args",
+    val_ref_abs(AbsHeap::Any, /*nullable*/ false));
+  let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
+  ctx.instrs.push(i_nil);
+  let i_prepend = push_call(lcx.frag, lcx.rt.args_prepend(),
+    vec![op_local(l_cont_p), op_local(l_args)], Some(l_args));
+  ctx.instrs.push(i_prepend);
+
+  let i_apply = push_return_call(lcx.frag, lcx.rt.apply_3(),
+    vec![op_local(l_args), op_local(l_ctx_arg), op_local(l_mod_clos)]);
+  ctx.instrs.push(i_apply);
+
+  // Suppress unused-warning for the now-unused url constant path.
+  let _ = canonical_url.as_bytes();
 
   let sym = func(lcx.frag, sig, ctx.params, ctx.locals, ctx.instrs, &display);
   let FuncSym::Local(i) = sym else { panic!("synth_host_wrapper: func must be Local") };
@@ -284,11 +307,17 @@ fn lower_fn(
   // resolution order in `App(FnClosure)`. Keep the clone literal.
   let mut ctx = FnCtx::new(fn_syms.clone());
 
-  // WASM-level params (always just `$:caps_param` and `$:params` —
-  // the $Fn2 shape). Colon-prefix is lexer-rejected in Fink source,
-  // so these synth names can never collide with user bindings.
+  // WASM-level params: `$:caps_param`, `$:ctx_param`, `$:params` —
+  // the $Fn3 shape. Ctx is a native wasm value, NOT peeled from the
+  // args list. The first user_param whose Bind::Ctx is bound directly
+  // to the ctx native param; all other user_params are unpacked from
+  // $:params via head/tail as in the Fn2 shape. Colon-prefix is
+  // lexer-rejected in Fink source, so these synth names cannot
+  // collide with user bindings.
   let l_caps_p = ctx.alloc_param(":caps_param");
+  let l_ctx_p = ctx.alloc_param(":ctx_param");
   let l_args_p = ctx.alloc_param(":params");
+  ctx.ctx_local = Some(l_ctx_p);
 
   // Unpack captures from $:caps_param into locals. Emits once:
   //   local.set $:caps_cast (ref.cast (ref $Captures) $:caps_param)
@@ -316,33 +345,40 @@ fn lower_fn(
     }
   }
 
-  // Unpack user params from $:params by walking `args_head` / `args_tail`.
-  //
-  // We use $:params itself as the cursor: each peel does
-  //   <local> = args_head($:params)
-  //   $:params = args_tail($:params)        (skipped after the last peel)
-  // overwriting the param slot in place. This mirrors the old emitter's
-  // approach (see `emit.rs:1428-1446`) and avoids needing a separate
-  // cursor local.
-  //
-  // A trailing `Spread` param consumes the remaining tail directly: no
-  // `args_head`/`args_tail` for it — we just bind its local to the
-  // current $:params cursor.
-  let n = user_params.len();
-  for (j, &(pid, is_spread)) in user_params.iter().enumerate() {
+  // Bind any Bind::Ctx user_param directly to the native $:ctx_param
+  // wasm slot — no head/tail peel from the args list. All other
+  // user_params come out of $:params via the standard Fn2-style
+  // head/tail walk. There is at most one Bind::Ctx in user_params
+  // (slice-2a invariant), and by convention it is the 0th entry.
+  use crate::passes::cps::ir::Bind;
+  let non_ctx_params: Vec<(CpsId, bool)> = user_params.iter()
+    .filter_map(|&(pid, is_spread)| {
+      let kind = lcx.bind_kinds.try_get(pid).and_then(|o| *o);
+      if matches!(kind, Some(Bind::Ctx)) {
+        // Bind ctx CpsId directly to the native ctx param wasm local.
+        // Param keeps its synth name `:ctx_param` in the WAT for now;
+        // a future pass can rename for display fidelity if needed.
+        ctx.bind(pid, l_ctx_p);
+        None
+      } else {
+        Some((pid, is_spread))
+      }
+    })
+    .collect();
+
+  // Unpack non-ctx user params from $:params by walking `args_head`
+  // / `args_tail`. Same shape as the Fn2 lowering.
+  let n = non_ctx_params.len();
+  for (j, &(pid, is_spread)) in non_ctx_params.iter().enumerate() {
     let name = cps_ident_kinded(lcx.cps, lcx.ast, lcx.bind_kinds, pid);
     let local = ctx.alloc_local(&name);
     ctx.bind(pid, local);
     if is_spread {
-      // Spread takes whatever's left in $:params as-is. No `args_head` —
-      // the spread local *is* the residual list. (Spread must be last,
-      // enforced by the parser/CPS, so no further peeling follows.)
       let i = push_local_set(lcx.frag, local, op_local(l_args_p));
       ctx.instrs.push(i);
     } else {
       let i = push_call(lcx.frag, lcx.rt.args_head(), vec![op_local(l_args_p)], Some(local));
       ctx.instrs.push(i);
-      // Advance the cursor unless this is the last entry (no more peels).
       if j + 1 < n {
         let i = push_call(lcx.frag, lcx.rt.args_tail(), vec![op_local(l_args_p)], Some(l_args_p));
         ctx.instrs.push(i);
@@ -353,8 +389,12 @@ fn lower_fn(
   // Walk the body.
   lower_expr(lcx, &mut ctx, body);
 
-  // Build the function.
-  func(lcx.frag, lcx.rt.fn2(),
+  // Build the function. Sig is the runtime-imported `$Fn3` type so
+  // every Fn3-shaped funcref structurally equates to the same nominal
+  // type at apply-3-time (the cast wouldn't trap across compile units
+  // with locally-declared duplicates, but importing keeps the rendered
+  // WAT closer to the runtime ABI).
+  func(lcx.frag, lcx.rt.fn3(),
     ctx.params,
     ctx.locals,
     ctx.instrs,
@@ -383,6 +423,13 @@ struct FnCtx {
   /// LetFns, so by the time a child is lowered, all enclosing /
   /// preceding-sibling LetFn FuncSyms are already known.
   fn_syms: HashMap<CpsId, FuncSym>,
+  /// Native ctx wasm param of this fn (Fn3 calling convention).
+  /// Set by `lower_fn` after allocating `:ctx_param`. Used by
+  /// `lower_cont` to bind any Bind::Ctx in a Cont::Expr.args list
+  /// directly to this slot — ctx is invariant within a fn body, so
+  /// every "fresh" ctx CpsId at thread_ctx time aliases to the same
+  /// wasm value at runtime.
+  ctx_local: Option<LocalIdx>,
 }
 
 impl FnCtx {
@@ -394,6 +441,7 @@ impl FnCtx {
       binds: HashMap::new(),
       next_local_idx: 0,
       fn_syms,
+      ctx_local: None,
     }
   }
 
@@ -798,16 +846,14 @@ fn lower_expr(
     }
 
     // Apply-path: callable is a ContRef — tail-call the named cont
-    // via `_apply`. Args are pure values (no cont prefix, since the
-    // callee IS the cont). Supports 0..N args; reverse-prepends so
-    // args[0] lands at the head of the list.
+    // via the Fn3-aware `apply_3` runtime dispatcher.
+    // Convention after thread_ctx: args[0] is the ctx Val, the rest
+    // (if any) are the cont's result values. Pull ctx out as a native
+    // wasm arg; the rest goes through the args list as before.
     ExprKind::App { func: Callable::Val(v), args }
       if matches!(v.kind, ValKind::ContRef(_)) =>
     {
       let cont_id = if let ValKind::ContRef(id) = &v.kind { *id } else { unreachable!() };
-      // Spill via resolver so cross-fn ContRefs (very rare — usually
-      // a `Pub`'d cont, doesn't normally happen, but cheap to support)
-      // resolve correctly. Apply expects a local-shaped operand.
       let callee_op = resolve_id_as_operand(lcx, ctx, cont_id);
       let callee = match callee_op {
         Operand::Local(l) => l,
@@ -819,23 +865,21 @@ fn lower_expr(
         }
       };
 
-      let l_args_list = build_args_list(lcx, ctx, args);
-      let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
-        vec![op_local(l_args_list), op_local(callee)]);
+      let (ctx_op, rest_args) = split_ctx_arg(lcx, ctx, args);
+      let l_args_list = build_args_list(lcx, ctx, rest_args);
+      let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
+        vec![op_local(l_args_list), ctx_op, op_local(callee)]);
       set_cps_id(lcx.frag, i_app, expr.id);
       ctx.instrs.push(i_app);
     }
 
-    // Apply-path via a bound ref (e.g. a closure local). The CPS
-    // convention for user-fn calls is `args[0] = cont`, `args[1..] =
-    // values` (cont-first). We build the args list with the cont at
-    // the head by walking args in reverse and `args_prepend`-ing each
-    // onto an initially-empty list.
+    // Apply-path via a bound ref (e.g. a closure local). After
+    // thread_ctx the CPS convention for user-fn calls is
+    // `args[0] = ctx, args[1] = cont, args[2..] = values`. ctx is
+    // pulled out as a native wasm arg; cont + values go through the
+    // args list (cont-first) as before.
     ExprKind::App { func: Callable::Val(v), args } => {
       let callee_id = cps_id_of_ref(v);
-      // Resolve callee. May be a local, a pub'd global, or a sibling
-      // lifted fn (materialised as a no-capture `$Closure`). Apply
-      // expects a local-shaped operand, so spill non-local results.
       let callee_op = resolve_id_as_operand(lcx, ctx, callee_id);
       let callee = match callee_op {
         Operand::Local(l) => l,
@@ -847,9 +891,10 @@ fn lower_expr(
         }
       };
 
-      let l_args_list = build_args_list(lcx, ctx, args);
-      let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
-        vec![op_local(l_args_list), op_local(callee)]);
+      let (ctx_op, rest_args) = split_ctx_arg(lcx, ctx, args);
+      let l_args_list = build_args_list(lcx, ctx, rest_args);
+      let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
+        vec![op_local(l_args_list), ctx_op, op_local(callee)]);
       set_cps_id(lcx.frag, i_app, expr.id);
       ctx.instrs.push(i_app);
     }
@@ -896,7 +941,17 @@ fn lower_cont(
   cont: &Cont,
 ) {
   match cont {
-    Cont::Expr { body, .. } => {
+    Cont::Expr { args, body } => {
+      // After thread_ctx, Cont::Expr.args may begin with a Bind::Ctx.
+      // Inline cont bodies share the surrounding fn's runtime ctx, so
+      // alias the fresh CpsId to the fn's `:ctx_param` local. This keeps
+      // any ref to that ctx CpsId resolvable in the body.
+      use crate::passes::cps::ir::Bind;
+      if let (Some(b), Some(ctx_local)) = (args.first(), ctx.ctx_local)
+        && matches!(b.kind, Bind::Ctx)
+      {
+        ctx.bind(b.id, ctx_local);
+      }
       lower_expr(lcx, ctx, body);
     }
     Cont::Ref(id) => {
@@ -944,6 +999,22 @@ fn unbox_anyref(
 /// Build the `_apply` args list from a heterogeneous arg sequence.
 ///
 /// Two-phase to keep the locals/instr order stable across changes:
+/// Pull out the leading ctx argument from a thread_ctx-augmented args
+/// list. After thread_ctx, every Apply with `Callable::Val` has its
+/// 0th arg as `Arg::Val(Ref::Synth(ctx_id))`. Returns the materialised
+/// ctx operand and the remaining args (cont + user values). Panics if
+/// the 0th arg isn't a plain Val — a thread_ctx invariant violation.
+fn split_ctx_arg<'a>(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  args: &'a [Arg],
+) -> (Operand, &'a [Arg]) {
+  match args.first() {
+    Some(Arg::Val(v)) => (val_as_operand(lcx, ctx, v), &args[1..]),
+    _ => panic!("split_ctx_arg: expected Arg::Val(ctx) at args[0], got {:?}", args.first()),
+  }
+}
+
 /// 1. **Materialise** every arg into a leaf operand in source order
 ///    (so any boxing/closure-construction locals appear in their
 ///    natural declaration position).
