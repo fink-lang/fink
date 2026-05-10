@@ -69,6 +69,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // sets up the import. The scan already marks Apply (Fn2) — that's
   // harmless here; lower_ctx never emits a call to it.
   usage.mark(runtime_contract::Sym::Apply3);
+  usage.mark(runtime_contract::Sym::Fn3);
   // Per-module wrapper synthesised below uses init_module and the
   // closure/captures/str/args primitives. Mark them so declare()
   // returns Runtime handles for them even if the source code
@@ -387,17 +388,12 @@ fn lower_fn(
   // Walk the body.
   lower_expr(lcx, &mut ctx, body);
 
-  // Build the function. Sig is locally-declared `Fn3 (caps, ctx, args) -> ()`
-  // — the new ctx-aware calling convention. Each fragment declares its own
-  // copy; structural-equivalence at link time matches all Fn3-shaped fns.
-  let anyref_n = val_anyref(true);
-  let fn3_sig = ty_func(
-    lcx.frag,
-    vec![anyref_n.clone(), anyref_n.clone(), anyref_n],
-    vec![],
-    &format!("{}:Fn3", lcx.fqn_prefix.trim_end_matches(':')),
-  );
-  func(lcx.frag, fn3_sig,
+  // Build the function. Sig is the runtime-imported `$Fn3` type so
+  // every Fn3-shaped funcref structurally equates to the same nominal
+  // type at apply-3-time (the cast wouldn't trap across compile units
+  // with locally-declared duplicates, but importing keeps the rendered
+  // WAT closer to the runtime ABI).
+  func(lcx.frag, lcx.rt.fn3(),
     ctx.params,
     ctx.locals,
     ctx.instrs,

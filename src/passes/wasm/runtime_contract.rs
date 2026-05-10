@@ -80,6 +80,7 @@ pub enum Sym {
   F64,
   Decimal,
   Fn2,
+  Fn3,
   Closure,
   Captures,
   VarArgs,
@@ -309,6 +310,7 @@ pub struct Runtime {
   f64_: Option<TypeSym>,
   decimal_: Option<TypeSym>,
   fn2: Option<TypeSym>,
+  fn3: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
   varargs: Option<TypeSym>,
@@ -428,6 +430,7 @@ impl Runtime {
   pub fn receive(&self)      -> FuncSym { self.receive.expect("rt: receive not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
   pub fn apply_3(&self)      -> FuncSym { self.apply_3.expect("rt: apply_3 not declared") }
+  pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
   /// if the Sym wasn't declared — lowering should scan → declare
@@ -508,6 +511,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Panic           => "std/interop.fnk:panic",
 
     Sym::Fn2             => "rt/apply.wat:Fn2",
+    Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
@@ -626,6 +630,9 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   }
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
     rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
+  }
+  if needed.contains(&Sym::Fn3) || needed.contains(&Sym::Apply3) {
+    rt.fn3 = Some(TypeSym::Runtime(Sym::Fn3));
   }
   if needed.contains(&Sym::Captures) {
     rt.captures = Some(TypeSym::Runtime(Sym::Captures));

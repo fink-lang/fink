@@ -14,14 +14,20 @@ WAT lowering through ctx-threaded CPS — strangler-pipeline
 # param and the head/tail dance disappears.
 
 
+test 'wasmctx — literal int validates', fn:
+  expect wasm_ctx ƒink:
+    42
+  | equals wat":
+    host_invoke_cont fired
+
+
 test 'wctx — literal int', fn:
   expect wat_ctx ƒink:
     42
   | equals wat":
     (module
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
-      (func $test::fink_module (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref any))
@@ -44,7 +50,7 @@ test 'wctx — literal int', fn:
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
       )
     )
-    ;; sm:C5IGAJIBAQAChAEAbgC6AQDiBQB6AOYBAGYAbgC-AQA
+    ;; sm:C4QFAJIBAQAChAEAbgC6AQDiBQB6AOYBAGYAbgC-AQA
 
 
 test 'wctx — fn one param', fn:
@@ -52,10 +58,8 @@ test 'wctx — fn one param', fn:
     fn a: a
   | equals wat":
     (module
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
-      (func $test:v_2 (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test:v_2 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $a_3 (ref null any))
         (local $a_0 (ref null any))
         (local $:args (ref any))
@@ -66,7 +70,7 @@ test 'wctx — fn one param', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $a_0) (local.get $:args)))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $a_3))
       )
-      (func $test::fink_module (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_1 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -86,7 +90,7 @@ test 'wctx — fn one param', fn:
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
       )
     )
-    ;; sm:D54HAJIBAJoBAJIBAG4AugEA8AQAkgEAbgCuBQB6AOYBAGYAbgC-AQA
+    ;; sm:D_IEAJIBAJoBAJIBAG4AugEAgAUAkgEAbgCuBQB6AOYBAGYAbgC-AQA
 
 
 test 'wctx — bind fn one param', fn:
@@ -94,10 +98,8 @@ test 'wctx — bind fn one param', fn:
     inc = fn x: x + 1
   | equals wat":
     (module
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
-      (func $test:v_3 (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test:v_3 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_4 (ref null any))
         (local $x_1 (ref null any))
         (local $v_6 (ref null any))
@@ -107,7 +109,7 @@ test 'wctx — bind fn one param', fn:
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 1)))
         (return_call $std/operators.fnk:op_plus (local.get $x_1) (local.get $v_6) (local.get $v_4))
       )
-      (func $test::fink_module (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $inc_0 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -141,7 +143,7 @@ test 'wctx — bind fn one param', fn:
       (data $d_0 "test")
       (data $d_1 "inc")
     )
-    ;; sm:FaQHAJIBAJoBAJIBASABggEBBwW0BwCSAQB6ARcDzAEAXACUAQCWAQDAAQBuAL4BAOIFAHoA5gEAZgBuAL4BAA
+    ;; sm:FfgEAJIBAJoBAJIBASABggEBBwXEBwCSAQB6ARcDzAEAXACUAQCWAQDAAQBuAL4BAOIFAHoA5gEAZgBuAL4BAA
 
 
 test 'wctx — apply user fn', fn:
@@ -150,10 +152,8 @@ test 'wctx — apply user fn', fn:
     inc 5
   | equals wat":
     (module
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
-      (type $test:Fn3 (func (param (ref null any) (ref null any) (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
-      (func $test:v_3 (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test:v_3 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_4 (ref null any))
         (local $x_1 (ref null any))
         (local $v_6 (ref null any))
@@ -163,7 +163,7 @@ test 'wctx — apply user fn', fn:
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 1)))
         (return_call $std/operators.fnk:op_plus (local.get $x_1) (local.get $v_6) (local.get $v_4))
       )
-      (func $test::fink_module (type $test:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $inc_0 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -200,4 +200,4 @@ test 'wctx — apply user fn', fn:
       (data $d_0 "test")
       (data $d_1 "inc")
     )
-    ;; sm:F6QHAJIBAJoBAJIBASABggEBBwX2BwCSAQB6ARcDzAEAXACUAQCWAQDAAQEsAYQBAG4AvAEAugEA5gUAegDmAQBmAG4AvgEA
+    ;; sm:F_gEAJIBAJoBAJIBASABggEBBwWGCACSAQB6ARcDzAEAXACUAQCWAQDAAQEsAYQBAG4AvAEAugEA5gUAegDmAQBmAG4AvgEA

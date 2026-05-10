@@ -252,6 +252,102 @@ mod tests {
     format!("{}\n;; sm:{b64}", wat.trim())
   }
 
+  /// Emit the `wat_ctx` fragment to a wasm binary (with the runtime
+  /// spliced in) and validate it. Returns `OK` on successful module
+  /// instantiation in wasmtime, or an error string. Used as a sanity
+  /// probe that the Fn3 WAT shape is structurally well-formed.
+  #[allow(dead_code)]
+  fn wasm_ctx(src: &str) -> String {
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wasm_ctx_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() { (*s).to_string() }
+          else if let Some(s) = e.downcast_ref::<String>() { s.clone() }
+          else { "<unknown panic>".to_string() };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  fn wasm_ctx_inner(src: &str) -> String {
+    let desugared = crate::to_desugared(src, "test").unwrap_or_else(|e| panic!("{e}"));
+    let cps = crate::passes::lower(&desugared);
+    let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+    let cps_threaded = crate::passes::Cps { result };
+    let lifted = crate::passes::lift(cps_threaded, &desugared);
+    let user_frag = super::lower_ctx::lower(&lifted.result, &desugared.ast, "test:");
+    let linked = super::link::link(&[user_frag]);
+    let bytes = super::emit::emit(&linked, super::emit::Interop::Rust);
+
+    use std::sync::{Arc, Mutex};
+    use wasmtime::{Engine, Module, Config, Store, Linker, FuncType, ValType, Val};
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_tail_call(true);
+    config.wasm_function_references(true);
+    let engine = match Engine::new(&config) { Ok(e) => e, Err(e) => return format!("engine: {e}") };
+    let module = match Module::new(&engine, &bytes) {
+      Ok(m) => m,
+      Err(e) => return crate::passes::wasm::annotate_func_indices(
+        &format!("MODULE: {e:#}"), &bytes),
+    };
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    // Capture the value the module body returns through its cont.
+    // The host_invoke_cont import gets called with (id, args); the
+    // first arg is the value (boxed I64 / I31 / etc.). For the
+    // simplest probe, dump the wasm-level type tag.
+    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+
+    for imp in module.imports() {
+      if imp.module() == "env"
+        && let wasmtime::ExternType::Func(ft) = imp.ty() {
+        let name = imp.name().to_string();
+        let cap = captured.clone();
+        let name_for_closure = name.clone();
+        linker.func_new("env", &name, ft.clone(), move |_caller, params, _results| {
+          if name_for_closure == "host_invoke_cont" && params.len() == 2 {
+            let mut g = cap.lock().unwrap();
+            *g = Some("host_invoke_cont fired".to_string());
+          }
+          Ok(())
+        }).ok();
+      }
+    }
+
+    let instance = match linker.instantiate(&mut store, &module) {
+      Ok(i) => i,
+      Err(e) => return format!("INST: {e:#}"),
+    };
+
+    // Get the entry wrapper export under the canonical URL `test`.
+    let entry = match instance.get_func(&mut store, "test") {
+      Some(f) => f,
+      None => return "no `test` export".to_string(),
+    };
+
+    // Get wrap_host_cont_3 to mint a host cont anyref.
+    let wrap = match instance.get_func(&mut store, "wrap_host_cont_3") {
+      Some(f) => f,
+      None => return "no wrap_host_cont_3 export".to_string(),
+    };
+    let mut wrap_out = [Val::AnyRef(None)];
+    if let Err(e) = wrap.call(&mut store, &[Val::I32(7)], &mut wrap_out) {
+      return format!("WRAP: {e:#}");
+    }
+    let host_cont = wrap_out[0].clone();
+
+    if let Err(e) = entry.call(&mut store, &[host_cont], &mut []) {
+      return format!("RUN: {}", crate::passes::wasm::annotate_func_indices(
+        &format!("{e:#}"), &bytes));
+    }
+
+    captured.lock().unwrap().clone().unwrap_or_else(|| "no cont fired".to_string())
+  }
+
 
   /// Multi-module variant of `wat` for the new package-compile
   /// pipeline. Lowers `src` as the entry module under a fixed test
