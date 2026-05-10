@@ -54,3 +54,31 @@ test 'with — nested with', fn:
         42
   | equals ƒink:
     42
+
+
+test 'with — body with fn def + call', fn:
+  expect run ƒink:
+    with foo:
+      double = fn x: x * 2
+      double 21
+  | equals ƒink:
+    42
+
+
+test 'with — body uses outer binding', fn:
+  expect run ƒink:
+    n = 7
+    with foo:
+      n + 35
+  | equals ƒink:
+    42
+
+
+test 'with — bind survives after with', fn:
+  expect run ƒink:
+    with foo:
+      x = 30
+      x
+    12
+  | equals ƒink:
+    12
