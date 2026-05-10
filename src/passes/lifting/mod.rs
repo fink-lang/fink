@@ -1335,51 +1335,5 @@ mod tests {
     }
   }
 
-  /// Strangler-pipeline helper: lower → thread_ctx → lift → fmt.
-  /// Mirrors `lift` but inserts the ctx-threading pass between lower
-  /// and lift. Used by `test_lift_thread_ctx.fnk` to validate that
-  /// lifting handles `Bind::Ctx` params uniformly without code change.
-  #[allow(unused)]
-  fn lift_ctx(src: &str) -> String {
-    let src_owned = src.to_string();
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || lift_ctx_inner(&src_owned))) {
-      Ok(s) => s,
-      Err(e) => {
-        let msg = if let Some(s) = e.downcast_ref::<&str>() {
-          (*s).to_string()
-        } else if let Some(s) = e.downcast_ref::<String>() {
-          s.clone()
-        } else {
-          "<unknown panic>".to_string()
-        };
-        format!("PANIC: {msg}")
-      }
-    }
-  }
-
-  fn lift_ctx_inner(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared);
-        let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
-        let cps_threaded = crate::passes::Cps { result };
-        let lifted = crate::passes::lift(cps_threaded, &desugared);
-        let bk = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);
-        let ctx = Ctx {
-          origin: &lifted.result.origin,
-          ast: &desugared.ast,
-          captures: None,
-          param_info: Some(&lifted.result.param_info),
-          bind_kinds: Some(&bk),
-        };
-        let (output, srcmap) = fmt_flat_mapped_native(&lifted.result.root, &ctx);
-        let b64 = srcmap.encode_base64url();
-        format!("{output}\n# sm:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
   include_fink_tests!("src/passes/lifting/test_lifting.fnk");
-  include_fink_tests!("src/passes/lifting/test_lift_thread_ctx.fnk");
 }
