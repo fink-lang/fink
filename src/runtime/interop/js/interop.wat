@@ -26,6 +26,7 @@
 (module
 
   (import "rt/apply.wat"    "Fn2"      (type $Fn2      (sub any)))
+  (import "rt/apply.wat"    "Fn3"      (type $Fn3      (sub any)))
   (import "rt/apply.wat"    "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"    "Captures" (type $Captures (sub any)))
 
@@ -77,6 +78,11 @@
   (import "rt/apply.wat" "apply"
     (func $apply_inner
       (param $args (ref null any)) (param $callee (ref null any))))
+  (import "rt/apply.wat" "apply_3"
+    (func $apply_3_inner
+      (param $args (ref null any))
+      (param $ctx (ref null any))
+      (param $callee (ref null any))))
 
   ;; std/dict.wat:get is typed for the concrete $RecImpl subtype; JS only
   ;; ever holds opaque (ref any), so we wrap with a JS-friendly shim
@@ -370,6 +376,17 @@
     (param $args (ref null any)) (param $callee (ref null any))
     (return_call $apply_inner (local.get $args) (local.get $callee)))
 
+  (func $apply_3 (@pub) (export "env:apply_3")
+    (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
+    (return_call $apply_3_inner (local.get $args) (local.get $ctx) (local.get $callee)))
+
+  ;; Host-side helper: mint a placeholder universe ctx (ref.i31 42)
+  ;; as an anyref the JS side can pass to apply_3. Once the host
+  ;; injects a real ctx (substrate landing), this becomes redundant.
+  (func $placeholder_ctx (export "env:placeholder_ctx")
+    (result (ref null any))
+    (ref.i31 (i32.const 42)))
+
 
   ;; -- Runtime-contract stubs (all `unreachable`) ------------------------
   ;;
@@ -402,8 +419,9 @@
 
   (elem declare func $host_cont_adapter $panic_apply $write_apply)
 
-  (func $host_cont_adapter (type $Fn2)
+  (func $host_cont_adapter (type $Fn3)
     (param $caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $captures (ref $Captures))
@@ -418,7 +436,19 @@
     (call $host_invoke_cont (local.get $handle) (local.get $args))
   )
 
+  ;; Fn3-typed host cont — same wrap as the Rust interop. JS hosts use
+  ;; the unified wrap_host_cont_3 export name so the apply shim's
+  ;; cast to $Fn3 succeeds when fink fires the cont.
   (func $wrap_host_cont (export "env:wrap_host_cont")
+    (param $handle externref) (result (ref null any))
+
+    (struct.new $Closure
+      (ref.func $host_cont_adapter)
+      (array.new_fixed $Captures 1
+        (struct.new $ExternBox (local.get $handle))))
+  )
+
+  (func $wrap_host_cont_3 (export "env:wrap_host_cont_3")
     (param $handle externref) (result (ref null any))
 
     (struct.new $Closure
@@ -568,8 +598,9 @@
 
     (return_call $resume))
 
-  (func $write_apply (type $Fn2)
+  (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
