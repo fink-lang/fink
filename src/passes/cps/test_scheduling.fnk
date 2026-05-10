@@ -51,11 +51,11 @@ test 'spawn bound to name', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_2:
-      ·spawn ·∅task, fn ·v_5:
+      ·spawn ·∅task, fn ·ƒctx_18, ·v_5:
         ·let ·v_5, fn ·future_0:
-          ·ƒpub ·future_0, fn:
-            ·ƒret_2 ·future_0
-    # sm:HQABABMAAQATJAEAExgBABMSAAIABgESCgABAAoQAQwEEgAKAQsKCgACAAoBAwEAAQABDAEECgoACgERBhQAAgAOAQAGAAEABhABAAYUAAgAAgASAQAGAAEABhQBAAY
+          ·ƒpub ·future_0, fn ·ƒctx_20:
+            ·ƒret_2 ·ƒctx_20, ·future_0
+    # sm:IQABABMAAQATJAEAExgBABMSAAIABgESCgABAAoQAQwEEgAKABgBCwoKAAIACgEDAQABAAEMAQQKCgAKAREGFAACAA4BAAYAAQAGEAEABhQACgAUAAIAEgEABgABAAYUABQABAEABg
 
 
 test 'await bound to name', fn:
@@ -64,11 +64,11 @@ test 'await bound to name', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_2:
-      ·await ·∅fut, fn ·v_5:
+      ·await ·∅fut, fn ·ƒctx_18, ·v_5:
         ·let ·v_5, fn ·result_0:
-          ·ƒpub ·result_0, fn:
-            ·ƒret_2 ·result_0
-    # sm:HQABABIAAQASJAEAEhgBABISAAIABgESCQABAAkQAQwDEAAKAQsJCgACAAoBAwEAAQABDAEECQoACgERBhQAAgAOAQAGAAEABhABAAYUAAgAAgASAQAGAAEABhQBAAY
+          ·ƒpub ·result_0, fn ·ƒctx_20:
+            ·ƒret_2 ·ƒctx_20, ·result_0
+    # sm:IQABABIAAQASJAEAEhgBABISAAIABgESCQABAAkQAQwDEAAKABgBCwkKAAIACgEDAQABAAEMAQQJCgAKAREGFAACAA4BAAYAAQAGEAEABhQACgAUAAIAEgEABgABAAYUABQABAEABg
 
 
 test 'channel creation', fn:
@@ -98,11 +98,11 @@ test 'channel bound to name', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_2:
-      ·channel (i8 0), fn ·v_5:
+      ·channel (i8 0), fn ·ƒctx_18, ·v_5:
         ·let ·v_5, fn ·ch_0:
-          ·ƒpub ·ch_0, fn:
-            ·ƒret_2 ·ch_0
-    # sm:HwABAA4AAQAOJAEADhgBAA4SAAIABgEKCQABAAkWARABAAEAAQYBAAEEAAoBDwkKAAIACgEDAQABAAEMAQQJCgAKAQkCDAACAA4BAAIAAQACEAEAAgwACAACABIBAAIAAQACFAEAAg
+          ·ƒpub ·ch_0, fn ·ƒctx_20:
+            ·ƒret_2 ·ƒctx_20, ·ch_0
+    # sm:IwABAA4AAQAOJAEADhgBAA4SAAIABgEKCQABAAkWARABAAEAAQYBAAEEAAoAGAEPCQoAAgAKAQMBAAEAAQwBBAkKAAoBCQIMAAIADgEAAgABAAIQAQACDAAKABQAAgASAQACAAEAAhQAFAAEAQAC
 
 
 test 'receive bound to name', fn:
@@ -111,9 +111,9 @@ test 'receive bound to name', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_2:
-      ·receive ·∅ch, fn ·v_5:
+      ·receive ·∅ch, fn ·ƒctx_18, ·v_5:
         ·let ·v_5, fn ·msg_0:
-          ·ƒpub ·msg_0, fn:
-            ·ƒret_2 ·msg_0
-    # sm:HQABABAAAQAQJAEAEBgBABASAAIABgEMCgABAAoUARACDgAKAQ8KCgACAAoBAwEAAQABDAEECgoACgELAw4AAgAOAQADAAEAAxABAAMOAAgAAgASAQADAAEAAxQBAAM
+          ·ƒpub ·msg_0, fn ·ƒctx_20:
+            ·ƒret_2 ·ƒctx_20, ·msg_0
+    # sm:IQABABAAAQAQJAEAEBgBABASAAIABgEMCgABAAoUARACDgAKABgBDwoKAAIACgEDAQABAAEMAQQKCgAKAQsDDgACAA4BAAMAAQADEAEAAw4ACgAUAAIAEgEAAwABAAMUABQABAEAAw
 

@@ -3259,26 +3259,6 @@ mod module_tests {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
-        let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);
-        let ctx = Ctx { origin: &cps.result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&cps.result.root, &ctx);
-        let _ = src;
-        let b64 = srcmap.encode_base64url();
-        format!("{output}\n# sm:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  /// Strangler-pipeline helper: lower → thread_ctx → fmt. Used by the
-  /// `cps_module_ctx` test fixtures to validate the IR shape produced
-  /// by the new ctx-threading pass while leaving the default pipeline
-  /// (and all existing snapshot tests) untouched. Lifting / WAT / runner
-  /// tests are not exercised by this helper.
-  fn cps_module_ctx(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared);
         let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
         let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
@@ -3307,6 +3287,5 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_thread_ctx.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_with.fnk");
 }

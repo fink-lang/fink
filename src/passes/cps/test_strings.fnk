@@ -29,9 +29,9 @@ test 'str tagged template', fn:
       3'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
-      ·seq_prepend '1⧵n2␊3', [], fn ·v_4:
-        ·∅foo ·ƒret_0, ..·v_4
-    # sm:GwABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0cAQgIAAEACAIBAAgUAQAIAgAEAQcNAAEADQIBAA0CAAoBAA0KAAIACgEADQABAAMSAQANEgAEAQANAAEADQQBAA0
+      ·seq_prepend '1⧵n2␊3', [], fn ·ƒctx_13, ·v_4:
+        ·∅foo ·ƒctx_13, ·ƒret_0, ..·v_4
+    # sm:HgABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0cAQgIAAEACAIBAAgUAQAIAgAEAQcNAAEADQIBAA0CAAoAGAEADQoAAgAKAQANAAEAAxIAFAAEAQANEgAEAQANAAEADQQBAA0
 
 
 test 'str tagged template escape handling', fn:
@@ -39,11 +39,11 @@ test 'str tagged template escape handling', fn:
     foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_21, ·ƒret_0:
-      ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·v_4:
-        ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
-          ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
-            ·∅foo ·ƒret_0, ..·v_10
-    # sm:MAABAC4AAQAuJAEALhgBAC4SAAIABgEALgABAC4cASQbAAEAGwIBABtiAQAbAgAEASMuAAEALgIBAC4CAAoBAC4KAAIACgEALgABAC4cARwDEAAEARsuCgAKAQAuCgACAA4BAC4AAQAuHAEICAABAAgCAQAIIAEACAIABAEHLgoACgEALgwAAgASAQAuAAEAAxIBAC4SAAQBAC4AAQAuBAEALg
+      ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·ƒctx_23, ·v_4:
+        ·seq_prepend ·∅bar, ·v_4, fn ·ƒctx_24, ·v_7:
+          ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·ƒctx_25, ·v_10:
+            ·∅foo ·ƒctx_25, ·ƒret_0, ..·v_10
+    # sm:NQABAC4AAQAuJAEALhgBAC4SAAIABgEALgABAC4cASQbAAEAGwIBABtiAQAbAgAEASMuAAEALgIBAC4CAAoAGAEALgoAAgAKAQAuAAEALhwBHAMQAAQBGy4KAAoAGAEALgoAAgAOAQAuAAEALhwBCAgAAQAIAgEACCABAAgCAAQBBy4KAAoAGAEALgwAAgASAQAuAAEAAxIAFAAEAQAuEgAEAQAuAAEALgQBAC4
 
 
 test 'str implicit formatting handling', fn:
@@ -52,8 +52,8 @@ test 'str implicit formatting handling', fn:
       3'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 '1␊2␊3'
-    # sm:DAABAAoAAQAKJAEAChYBAAoSAAIABgEACgABAAoUAQAKAAEACgIBAAoSAQAK
+      ·ƒret_0 ·ƒctx_4, '1␊2␊3'
+    # sm:DgABAAoAAQAKJAEAChYBAAoSAAIABgEACgABAAoUABIABAEACgABAAoCAQAKEgEACg
 
 
 test 'str implicit formatting escapes', fn:
@@ -61,8 +61,8 @@ test 'str implicit formatting escapes', fn:
     '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 '␊␍␉␌␈␋＄′⧵é語'
-    # sm:DAABACUAAQAlJAEAJRYBACUSAAIABgEAJQABACUUAQAlAAEAJQIBACVAAQAl
+      ·ƒret_0 ·ƒctx_4, '␊␍␉␌␈␋＄′⧵é語'
+    # sm:DgABACUAAQAlJAEAJRYBACUSAAIABgEAJQABACUUABIABAEAJQABACUCAQAlQAEAJQ
 
 
 test 'str templ escape handling', fn:

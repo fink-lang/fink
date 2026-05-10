@@ -32,72 +32,72 @@ test 'int literal', fn:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (i8 42)
-    # sm:CwABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIWAQACAAEAAgYBAAI
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
 
 test 'int literal with underscores', fn:
   expect cps_module ƒink:
     1_000_000
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (i32 1000000)
-    # sm:CwABAAkAAQAJJAEACRYBAAkSAAIABgEACQABAAkWAQAJAAEACQgBAAk
+      ·ƒret_0 ·ƒctx_4, (i32 1000000)
+    # sm:DQABAAkAAQAJJAEACRYBAAkSAAIABgEACQABAAkUABIABgEACQABAAkIAQAJ
 
 test 'negative int literal', fn:
   expect cps_module ƒink:
     -1_000
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (i16 -1000)
-    # sm:CwABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYWAQAGAAEABggBAAY
+      ·ƒret_0 ·ƒctx_4, (i16 -1000)
+    # sm:DQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYUABIABgEABgABAAYIAQAG
 
 test 'negative zero literal', fn:
   expect cps_module ƒink:
     -0
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (i8 0)
-    # sm:CwABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIWAQACAAEAAgYBAAI
+      ·ƒret_0 ·ƒctx_4, (i8 0)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
 
 test 'hex int literal', fn:
   expect cps_module ƒink:
     0xFF_FF
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (u16 65535)
-    # sm:CwABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcWAQAHAAEABwgBAAc
+      ·ƒret_0 ·ƒctx_4, (u16 65535)
+    # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABgEABwABAAcIAQAH
 
 test 'octal int literal', fn:
   expect cps_module ƒink:
     0o7_7
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (u8 63)
-    # sm:CwABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUWAQAFAAEABQYBAAU
+      ·ƒret_0 ·ƒctx_4, (u8 63)
+    # sm:DQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUABIABgEABQABAAUGAQAF
 
 test 'binary int literal', fn:
   expect cps_module ƒink:
     0b_1010_1111
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (u8 175)
-    # sm:CwABAAwAAQAMJAEADBYBAAwSAAIABgEADAABAAwWAQAMAAEADAYBAAw
+      ·ƒret_0 ·ƒctx_4, (u8 175)
+    # sm:DQABAAwAAQAMJAEADBYBAAwSAAIABgEADAABAAwUABIABgEADAABAAwGAQAM
 
 test 'float literal with exponent', fn:
   expect cps_module ƒink:
     1.5e1_0
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (f64 1.5e10)
-    # sm:CwABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcWAQAHAAEABwgBAAc
+      ·ƒret_0 ·ƒctx_4, (f64 1.5e10)
+    # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABgEABwABAAcIAQAH
 
 test 'decimal literal', fn:
   expect cps_module ƒink:
     1.5_0d
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 1.50d
-    # sm:CQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYUAQAG
+      ·ƒret_0 ·ƒctx_4, 1.50d
+    # sm:CwABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYUABIABAEABg
 
 
 test 'bool literal', fn:
@@ -105,8 +105,8 @@ test 'bool literal', fn:
     true
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 true
-    # sm:CQABAAQAAQAEJAEABBYBAAQSAAIABgEABAABAAQUAQAE
+      ·ƒret_0 ·ƒctx_4, true
+    # sm:CwABAAQAAQAEJAEABBYBAAQSAAIABgEABAABAAQUABIABAEABA
 
 
 test 'string literal', fn:
@@ -114,6 +114,6 @@ test 'string literal', fn:
     'hello'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 'hello'
-    # sm:DAABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUAQAHAAEABwIBAAcKAQAH
+      ·ƒret_0 ·ƒctx_4, 'hello'
+    # sm:DgABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABAEABwABAAcCAQAHCgEABw
 

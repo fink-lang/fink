@@ -18,8 +18,8 @@ test 'with-cps — empty body', fn:
       42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
-      ·ƒret_0 (i8 42)
-    # sm:CwABAAoAAQAKJAEAChYBAAoSAAIABgEACgABAAoWARACAAEAAgYBAAI
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAoAAQAKJAEAChYBAAoSAAIABgEACgABAAoUABIABgEQAgABAAIGAQAC
 
 
 test 'with-cps — single handler with body', fn:
@@ -28,8 +28,8 @@ test 'with-cps — single handler with body', fn:
       42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
-      ·ƒret_0 (i8 42)
-    # sm:CwABAA4AAQAOJAEADhYBAA4SAAIABgEADgABAA4WARgCAAEAAgYBAAI
+      ·ƒret_0 ·ƒctx_5, (i8 42)
+    # sm:DQABAA4AAQAOJAEADhYBAA4SAAIABgEADgABAA4UABIABgEYAgABAAIGAQAC
 
 
 test 'with-cps — body with binding', fn:
@@ -50,5 +50,5 @@ test 'with-cps — multiple handlers', fn:
       42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·ƒret_0 (i8 42)
-    # sm:CwABABMAAQATJAEAExYBABMSAAIABgEAEwABABMWASICAAEAAgYBAAI
+      ·ƒret_0 ·ƒctx_6, (i8 42)
+    # sm:DQABABMAAQATJAEAExYBABMSAAIABgEAEwABABMUABIABgEiAgABAAIGAQAC
