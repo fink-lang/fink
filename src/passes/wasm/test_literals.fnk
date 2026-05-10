@@ -21,17 +21,15 @@ test 'literal bool', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:C4QFAJIBAQAEWgBuALoBAOIFAHoA5gEAZgBuAL4BAA
+    ;; sm:CYQFAJIBAQAEWgBuALoBAKAFAHoA5gEAjAEA
 
 
 test 'literal bool false', fn:
@@ -53,17 +51,15 @@ test 'literal bool false', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:C4QFAJIBAQAFWgBuALoBAOIFAHoA5gEAZgBuAL4BAA
+    ;; sm:CYQFAJIBAQAFWgBuALoBAKAFAHoA5gEAjAEA
 
 
 test 'literal int', fn:
@@ -85,17 +81,15 @@ test 'literal int', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:C4QFAJIBAQAChAEAbgC6AQDiBQB6AOYBAGYAbgC-AQA
+    ;; sm:CYQFAJIBAQAChAEAbgC6AQCgBQB6AOYBAIwBAA
 
 
 test 'literal neg 0', fn:
@@ -117,17 +111,15 @@ test 'literal neg 0', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:C4QFAJIBAQACggEAbgC6AQDiBQB6AOYBAGYAbgC-AQA
+    ;; sm:CYQFAJIBAQACggEAbgC6AQCgBQB6AOYBAIwBAA
 
 
 
@@ -150,17 +142,15 @@ test 'literal float', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:C4QFAJIBAQAIkAEAbgC6AQDiBQB6AOYBAGYAbgC-AQA
+    ;; sm:CYQFAJIBAQAIkAEAbgC6AQCgBQB6AOYBAIwBAA
 
 
 test 'literal decimal', fn:
@@ -182,17 +172,15 @@ test 'literal decimal', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:C4QFAJIBAQAEsgEAbgC6AQDiBQB6AOYBAGYAbgC-AQA
+    ;; sm:CYQFAJIBAQAEsgEAbgC6AQCgBQB6AOYBAIwBAA
 
 
 

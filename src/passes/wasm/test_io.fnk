@@ -442,14 +442,11 @@ test 'std io import handling', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:ham (mut (ref null any)) (ref.null any))
       (data $d_0 "bar ")
@@ -462,4 +459,4 @@ test 'std io import handling', fn:
       (data $d_7 "stderr")
       (data $d_8 "stdout")
     )
-    ;; sm:4gHGCAC6AQDIAQDAAQDAAQDKAQCUAQBuALwBAMgBAL4BAPQKALoBAMQBAMgBAMABAMoBAJQBAaYBGlAAwAIA0AEBVASMAQDWAQEBDJwKALoBAMgBAMABAMQBAMABAMoBAMoBAJQBALoCANABAG4AvAEAyAEAvgEAoAcAugEAxAEAlgEBMwSMAQDWAQEBDKgMALoBAMgBAMABAMoBAMoBAJQBAUkDUgBcAJQBAJYBAMABALIBANABAJYDANgBAG4AxgEAkA0AugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBdQZYARAGWAEQBVYBDgRUAQwFVgC0AgDQAQFgBIoBAG4AvAEAwgEAvgEAqgYAugEAwAEAwAEAbgCyCQC6AQDAAQDAAQDAAQDAAQDAAQDAAQCUAQCaAQCUAQBuALwBAL4BAL4BAL4BAL4BAPAKALoBAMABAMABAMABAMABAMABAMABAJQBAJoBAJQBAO4CANABAZsBOowBAQA6xAoAugEAwAEAwAEAwAEAwAEAwAEAlAEAmgEAlAEA7gIA0AEBADqMAQEAOoAKALoBAMABAMABAMABAMABAJQBAJoBAJQBAMgCANABAQA6jAEBADq8CQC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDQAQEAOowBAQA6-ggAugEAwAEAwAEAwAEAlAEA_gEA0AEBADqMAQEAOroIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQA6ogsAugEAwAEAwAEAlAEAsgEA0AEAegDSAQB6APIBAG4AvAEAygEAvgEAnBMAlgEAZAB2AKIBAJICAHYAogEAkgIAcgCgAQCOAgBuAJ4BAIoCAHIAoAEAjgIAbgDEAQD-BwCSAQDeAQDYAQB6ANYBAG4AxgEA7AUAegDmAQBmAG4AvgEA
+    ;; sm:4AHGCAC6AQDIAQDAAQDAAQDKAQCUAQBuALwBAMgBAL4BAPQKALoBAMQBAMgBAMABAMoBAJQBAaYBGlAAwAIA0AEBVASMAQDWAQEBDJwKALoBAMgBAMABAMQBAMABAMoBAMoBAJQBALoCANABAG4AvAEAyAEAvgEAoAcAugEAxAEAlgEBMwSMAQDWAQEBDKgMALoBAMgBAMABAMoBAMoBAJQBAUkDUgBcAJQBAJYBAMABALIBANABAJYDANgBAG4AxgEAkA0AugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBdQZYARAGWAEQBVYBDgRUAQwFVgC0AgDQAQFgBIoBAG4AvAEAwgEAvgEAqgYAugEAwAEAwAEAbgCyCQC6AQDAAQDAAQDAAQDAAQDAAQDAAQCUAQCaAQCUAQBuALwBAL4BAL4BAL4BAL4BAPAKALoBAMABAMABAMABAMABAMABAMABAJQBAJoBAJQBAO4CANABAZsBOowBAQA6xAoAugEAwAEAwAEAwAEAwAEAwAEAlAEAmgEAlAEA7gIA0AEBADqMAQEAOoAKALoBAMABAMABAMABAMABAJQBAJoBAJQBAMgCANABAQA6jAEBADq8CQC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDQAQEAOowBAQA6-ggAugEAwAEAwAEAwAEAlAEA_gEA0AEBADqMAQEAOroIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQA6ogsAugEAwAEAwAEAlAEAsgEA0AEAegDSAQB6APIBAG4AvAEAygEAvgEAnBMAlgEAZAB2AKIBAJICAHYAogEAkgIAcgCgAQCOAgBuAJ4BAIoCAHIAoAEAjgIAbgDEAQD-BwCSAQDeAQDYAQB6ANYBAG4AxgEAqgUAegDmAQCMAQA

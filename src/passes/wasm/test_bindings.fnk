@@ -29,20 +29,17 @@ test 'single binding export', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:foo (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:D54GAJIBAQADhgEAXACUAQCWAQDAAQBuAL4BAOIFAHoA5gEAZgBuAL4BAA
+    ;; sm:DZ4GAJIBAQADhgEAXACUAQCWAQDAAQBuAL4BAKAFAHoA5gEAjAEA
 
 
 
@@ -72,20 +69,17 @@ test 'let binding', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:x (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:D5oGAJIBAQABhAEAVACUAQCWAQC8AQBuALoBAOIFAHoA5gEAZgBuAL4BAA
+    ;; sm:DZoGAJIBAQABhAEAVACUAQCWAQC8AQBuALoBAKAFAHoA5gEAjAEA
 
 
 
@@ -121,14 +115,11 @@ test 'multiple let bindings used', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:x (mut (ref null any)) (ref.null any))
       (global $test:y (mut (ref null any)) (ref.null any))
@@ -136,7 +127,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:ErYHAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBDAXaBQB6AOYBAGYAbgC-AQA
+    ;; sm:ELYHAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBDAWYBQB6AOYBAIwBAA
 
 
 
@@ -210,14 +201,11 @@ test 'binding rhs is a call', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:x (mut (ref null any)) (ref.null any))
       (global $test:add (mut (ref null any)) (ref.null any))
@@ -225,7 +213,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:J_gEAJIBAJoBAJIBAJoBAJIBAR4F7AcAugEAvgEAlAEBDAFOAFQAlAEAlgEAvAEAbgC6AQCGCgCSAQB6ASkDzAEAXACUAQCWAQDAAQCuAQDMAQE6AYQBAQYBhAEAbgC8AQC8AQC8AQDmBQB6AOYBAGYAbgC-AQA
+    ;; sm:JfgEAJIBAJoBAJIBAJoBAJIBAR4F7AcAugEAvgEAlAEBDAFOAFQAlAEAlgEAvAEAbgC6AQCGCgCSAQB6ASkDzAEAXACUAQCWAQDAAQCuAQDMAQE6AYQBAQYBhAEAbgC8AQC8AQC8AQCkBQB6AOYBAIwBAA
 
 
 
@@ -399,20 +387,17 @@ test 'top-level rec destructure then fn using binding', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:foo (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:V-oGALoBAL4BAJQBAJoBAJIBATQF6AkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAJQBAJYBAMABAG4AvgEApgYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABARsNjAEBAA24CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEADZYLALoBAL4BAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAPQFAJQBAQwHWgECAYoBAQYChAEBBQX-BwCSAQDeAQDUAQB6ANIBAG4AxAEA6gUAegDmAQBmAG4AvgEA
+    ;; sm:VeoGALoBAL4BAJQBAJoBAJIBATQF6AkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAJQBAJYBAMABAG4AvgEApgYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABARsNjAEBAA24CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEADZYLALoBAL4BAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAPQFAJQBAQwHWgECAYoBAQYChAEBBQX-BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
 
 

@@ -70,14 +70,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // harmless here; lower_ctx never emits a call to it.
   usage.mark(runtime_contract::Sym::Apply3);
   usage.mark(runtime_contract::Sym::Fn3);
-  // Per-module wrapper synthesised below uses the closure/captures/
-  // args primitives (apply_3 + args list construction). Mark them so
-  // declare() returns Runtime handles for them even if the source code
-  // doesn't otherwise need them (e.g. a module with no `pub` calls).
+  // Per-module wrapper synthesised below uses init_module and the
+  // closure/captures/str primitives.
+  usage.mark(runtime_contract::Sym::ModulesInitModule);
   usage.mark(runtime_contract::Sym::Closure);
   usage.mark(runtime_contract::Sym::Captures);
-  usage.mark(runtime_contract::Sym::ArgsEmpty);
-  usage.mark(runtime_contract::Sym::ArgsPrepend);
   usage.mark(runtime_contract::Sym::StrFromData);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
@@ -216,29 +213,16 @@ fn synth_host_wrapper(
   );
   ctx.instrs.push(i_clos);
 
-  // Mint a placeholder universe context — i31 42 — until the host
-  // takes over ctx production. Slice 2c-B sidesteps init_module +
-  // the registry; calls apply_3 directly so the simple end-to-end
-  // path doesn't depend on the std/modules.fnk plumbing.
-  let l_ctx_arg = ctx.alloc_local(":ctx_arg");
-  let i_ctx = push_ref_i31(lcx.frag, lit_i32(42), l_ctx_arg);
-  ctx.instrs.push(i_ctx);
+  // URL constant — the registry key.
+  let l_url = emit_str_const(lcx, &mut ctx, canonical_url.as_bytes(), ":url");
 
-  // Build args list = [cont]. apply_3 takes (args, ctx, callee).
-  let l_args = ctx.alloc_local_typed(":args",
-    val_ref_abs(AbsHeap::Any, /*nullable*/ false));
-  let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
-  ctx.instrs.push(i_nil);
-  let i_prepend = push_call(lcx.frag, lcx.rt.args_prepend(),
-    vec![op_local(l_cont_p), op_local(l_args)], Some(l_args));
-  ctx.instrs.push(i_prepend);
-
-  let i_apply = push_return_call(lcx.frag, lcx.rt.apply_3(),
-    vec![op_local(l_args), op_local(l_ctx_arg), op_local(l_mod_clos)]);
-  ctx.instrs.push(i_apply);
-
-  // Suppress unused-warning for the now-unused url constant path.
-  let _ = canonical_url.as_bytes();
+  // Tail-call init_module(url, mod_clos, cont). init_module runs the
+  // module body (Fn3 — apply shim threads placeholder ctx internally),
+  // populates the registry via the body's `pub` calls, then fires
+  // cont with `(last_expr, exports_rec)` via _apply_2_nullable → _apply.
+  let i_init = push_return_call(lcx.frag, lcx.rt.modules_init_module(),
+    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_cont_p)]);
+  ctx.instrs.push(i_init);
 
   let sym = func(lcx.frag, sig, ctx.params, ctx.locals, ctx.instrs, &display);
   let FuncSym::Local(i) = sym else { panic!("synth_host_wrapper: func must be Local") };

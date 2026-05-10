@@ -48,20 +48,17 @@ test 'user fn call', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:add (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "add")
     )
-    ;; sm:GvgEAJIBAJoBAJIBAJoBAJIBASIFyAgAkgEAegEhA8wBAFwAlAEAlgEAwAEBNgGEAQEGAYQBAG4AvAEAvAEAugEA5gUAegDmAQBmAG4AvgEA
+    ;; sm:GPgEAJIBAJoBAJIBAJoBAJIBASIFyAgAkgEAegEhA8wBAFwAlAEAlgEAwAEBNgGEAQEGAYQBAG4AvAEAvAEAugEApAUAegDmAQCMAQA
 
 
 test 'chained fn calls', fn:
@@ -157,14 +154,11 @@ test 'chained fn calls', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:x (mut (ref null any)) (ref.null any))
       (global $test:double (mut (ref null any)) (ref.null any))
@@ -174,7 +168,7 @@ test 'chained fn calls', fn:
       (data $d_2 "double")
       (data $d_3 "inc")
     )
-    ;; sm:MfgEAJIBAJoBAJIBASoBggEBBwWwBQCUAQCaAQCSAQEwAYQBAQcFtggAugEAwgEAvgEAlAEBDgFOAFQAlAEAlgEAvAEAbgC6AQC8AQCaDACSAQB6AVcG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQFAAYQBAG4AvAEAvAEA7AUAegDmAQBmAG4AvgEA
+    ;; sm:L_gEAJIBAJoBAJIBASoBggEBBwWwBQCUAQCaAQCSAQEwAYQBAQcFtggAugEAwgEAvgEAlAEBDgFOAFQAlAEAlgEAvAEAbgC6AQC8AQCaDACSAQB6AVcG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQFAAYQBAG4AvAEAvAEAqgUAegDmAQCMAQA
 
 
 test 'pipe unary', fn:
@@ -261,14 +255,11 @@ test 'pipe unary', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:double (mut (ref null any)) (ref.null any))
       (global $test:inc (mut (ref null any)) (ref.null any))
@@ -276,7 +267,7 @@ test 'pipe unary', fn:
       (data $d_1 "double")
       (data $d_2 "inc")
     )
-    ;; sm:LPgEAJIBAJoBAJIBASoBggEBBwWwBQCUAQCaAQCSAQEwAYQBAQcF4AYAugEAwgEAvgEAlAEAbgC8AQC8AQCaDACSAQB6AUkG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQEqAYQBAG4AvAEAvAEA7AUAegDmAQBmAG4AvgEA
+    ;; sm:KvgEAJIBAJoBAJIBASoBggEBBwWwBQCUAQCaAQCSAQEwAYQBAQcF4AYAugEAwgEAvgEAlAEAbgC8AQC8AQCaDACSAQB6AUkG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQEqAYQBAG4AvAEAvAEAqgUAegDmAQCMAQA
 
 
 test 'match literal first arm', fn:
@@ -472,17 +463,15 @@ test 'match literal first arm', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:YfgEAJQBARwChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACADACSAQCaAQCSAQCaAQCSAQCAAgDQAQEFAYQBAQAB2ggAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwFAJQBARYChgEAbgC8AQCyBwCUAQCaAQCUAQCaAQCUAQB6ANIBAG4AvAEAgAQA8gcAugEAwAEAwAEAegDSAQB6ANYBAG4AvgEAxAEAvgEArAgAlAEAmgEAlAEA1AEA0AEAegDSAQBuALwBAL4BALwBAIIHAJIBAHoA0gEBHwGCAQBuALoBALoBAOoFAHoA5gEAZgBuAL4BAA
+    ;; sm:X_gEAJQBARwChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACADACSAQCaAQCSAQCaAQCSAQCAAgDQAQEFAYQBAQAB2ggAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwFAJQBARYChgEAbgC8AQCyBwCUAQCaAQCUAQCaAQCUAQB6ANIBAG4AvAEAgAQA8gcAugEAwAEAwAEAegDSAQB6ANYBAG4AvgEAxAEAvgEArAgAlAEAmgEAlAEA1AEA0AEAegDSAQBuALwBAL4BALwBAIIHAJIBAHoA0gEBHwGCAQBuALoBALoBAKgFAHoA5gEAjAEA
 
 
 test 'match with binding', fn:
@@ -697,20 +686,17 @@ test 'match with binding', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:x (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:a_gEAJQBASgBhAEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACCDACSAQCaAQCUAQCaAQCSAQCCAgDQAQEFAYQBAQAB2ggAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALIGALoBAMABAJQBARwBhAEBBwWmBwC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAPwDAPwGALoBAMABAJYBAJoBAJYBAHoA1gEAbgC-AQDEAQC-AQCoCACUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEAugwAkgEBNQGCAQBUAJQBAJYBALwBAK4BANABALIBANABALIBANABAHoA0gEAbgC6AQC6AQDqBQB6AOYBAGYAbgC-AQA
+    ;; sm:afgEAJQBASgBhAEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACCDACSAQCaAQCUAQCaAQCSAQCCAgDQAQEFAYQBAQAB2ggAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALIGALoBAMABAJQBARwBhAEBBwWmBwC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAPwDAPwGALoBAMABAJYBAJoBAJYBAHoA1gEAbgC-AQDEAQC-AQCoCACUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEAugwAkgEBNQGCAQBUAJQBAJYBALwBAK4BANABALIBANABALIBANABAHoA0gEAbgC6AQC6AQCoBQB6AOYBAIwBAA
 
 
 test 'simple recursion', fn:
@@ -963,20 +949,17 @@ test 'simple recursion', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:recurse (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "recurse")
     )
-    ;; sm:fvgEAJQBAUQChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQAB3AgAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwHALoBAMABAMABAJQBAG4AbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQEyAYQBAQcFqgcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAmggAkgEAegFnB9QBAGwAlAEAlgEAyAEBhAEBhAEAbgC8AQC6AQDuBQB6AOYBAGYAbgC-AQA
+    ;; sm:fPgEAJQBAUQChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQAB3AgAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwHALoBAMABAMABAJQBAG4AbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQEyAYQBAQcFqgcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAmggAkgEAegFnB9QBAGwAlAEAlgEAyAEBhAEBhAEAbgC8AQC6AQCsBQB6AOYBAIwBAA
 
 
 test 'mutual recursion — ping pong', fn:
@@ -1049,14 +1032,11 @@ test 'mutual recursion — ping pong', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:ping (mut (ref null any)) (ref.null any))
       (global $test:pong (mut (ref null any)) (ref.null any))
@@ -1064,7 +1044,7 @@ test 'mutual recursion — ping pong', fn:
       (data $d_1 "ping")
       (data $d_2 "pong")
     )
-    ;; sm:KMAFAJIBAJoBAJIBAGgAbgC6AQC6AQCOBgCUAQCaAQCSAQBoAG4AugEAvAEA7AoAkgEAegEABM4BAGAAlAEAlgEAwgEAegEoBNABAGAAlAEAlgEAwgEBMgGEAQBuALwBALoBAOgFAHoA5gEAZgBuAL4BAA
+    ;; sm:JsAFAJIBAJoBAJIBAGgAbgC6AQC6AQCOBgCUAQCaAQCSAQBoAG4AugEAvAEA7AoAkgEAegEABM4BAGAAlAEAlgEAwgEAegEoBNABAGAAlAEAlgEAwgEBMgGEAQBuALwBALoBAKYFAHoA5gEAjAEA
 
 
 test 'mutual recursion — is_even / is_odd', fn:
@@ -1553,14 +1533,11 @@ test 'mutual recursion — is_even / is_odd', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:is_even (mut (ref null any)) (ref.null any))
       (global $test:is_odd (mut (ref null any)) (ref.null any))
@@ -1568,7 +1545,7 @@ test 'mutual recursion — is_even / is_odd', fn:
       (data $d_1 "is_even")
       (data $d_2 "is_odd")
     )
-    ;; sm:9AH4BACUAQFEBFwAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQAB3ggAkgEAmgEAlAEAmgEAkgEArgEA0AEAegDSAQBuALoBALwBAL4BALwHALoBAMABAMABAJQBAGwAbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQE0AYQBAQcFqgcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAvgUAlgEBTgVeAG4AvgEAoAcAugEAwAEAegDWAQBuAL4BAOgIALoBAMABAMABAMABAJYBAIYBAHwAjgwAlgEAmgEAlgEAmgEAlAEAiAIA0AEBBQGGAQEAAegIAJQBAJoBAJQBAJoBAJQBALABANABAHoA1gEAbgC8AQC8AQC-AQDCBwC6AQDMAQDAAQDAAQCWAQBuAL4BAL4BALoIALoBAMABAMwBAJYBAJQCANABATgBhgEBBwWyBwC6AQDAAQCWAQCaAQCWAQCaAQCWAQBuAL4BAPwDAPwGALoBAMABAMABAMABAHoA1gEAbgC-AQDEAQC-AQDeCQC6AQDAAQCWAQCaAQCWAQD-AQDQAQB6ANYBAG4AvgEAvgEAvgEAmgsAugEAzAEAlAEAmgEAkgEA4AEA0AEAsgEA0AEAsgEA0AEAbgC6AQC8AQCyCwCSAQB6AeEBB9QBAGwAlAEAlgEAyAEAugEA0AEBdgZaAGgAlAEAlgEAxgEBiAEBhgEAbgC-AQC6AQDuBQB6AOYBAGYAbgC-AQA
+    ;; sm:8gH4BACUAQFEBFwAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQAB3ggAkgEAmgEAlAEAmgEAkgEArgEA0AEAegDSAQBuALoBALwBAL4BALwHALoBAMABAMABAJQBAGwAbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQE0AYQBAQcFqgcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAvgUAlgEBTgVeAG4AvgEAoAcAugEAwAEAegDWAQBuAL4BAOgIALoBAMABAMABAMABAJYBAIYBAHwAjgwAlgEAmgEAlgEAmgEAlAEAiAIA0AEBBQGGAQEAAegIAJQBAJoBAJQBAJoBAJQBALABANABAHoA1gEAbgC8AQC8AQC-AQDCBwC6AQDMAQDAAQDAAQCWAQBuAL4BAL4BALoIALoBAMABAMwBAJYBAJQCANABATgBhgEBBwWyBwC6AQDAAQCWAQCaAQCWAQCaAQCWAQBuAL4BAPwDAPwGALoBAMABAMABAMABAHoA1gEAbgC-AQDEAQC-AQDeCQC6AQDAAQCWAQCaAQCWAQD-AQDQAQB6ANYBAG4AvgEAvgEAvgEAmgsAugEAzAEAlAEAmgEAkgEA4AEA0AEAsgEA0AEAsgEA0AEAbgC6AQC8AQCyCwCSAQB6AeEBB9QBAGwAlAEAlgEAyAEAugEA0AEBdgZaAGgAlAEAlgEAxgEBiAEBhgEAbgC-AQC6AQCsBQB6AOYBAIwBAA
 
 
 test 'closure construction and call', fn:
@@ -1658,14 +1635,11 @@ test 'closure construction and call', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:add1 (mut (ref null any)) (ref.null any))
       (global $test:add (mut (ref null any)) (ref.null any))
@@ -1673,7 +1647,7 @@ test 'closure construction and call', fn:
       (data $d_1 "add1")
       (data $d_2 "add")
     )
-    ;; sm:L-YFALoBAL4BAJIBAJoBAJIBASgF4gYAkgEAmgEAkgEArgEA0gEAbgDCAQC8CAC6AQC-AQCUAQEMBFQAYACUAQCWAQDCAQEkAYQBAG4AvAEAvAEAyAkAkgEAegFXA8wBAFwAlAEAlgEAwAEArgEAzAEBSgGEAQBuALwBALwBAOYFAHoA5gEAZgBuAL4BAA
+    ;; sm:LeYFALoBAL4BAJIBAJoBAJIBASgF4gYAkgEAmgEAkgEArgEA0gEAbgDCAQC8CAC6AQC-AQCUAQEMBFQAYACUAQCWAQDCAQEkAYQBAG4AvAEAvAEAyAkAkgEAegFXA8wBAFwAlAEAlgEAwAEArgEAzAEBSgGEAQBuALwBALwBAKQFAHoA5gEAjAEA
 
 
 # TODO, duplicate?
@@ -2170,20 +2144,17 @@ test 'recursive list sum', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:sum (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "sum")
     )
-    ;; sm:-gHmBQC6AQDAAQCUAQBuAL4BAKYGALoBAMABAMABAG4AvgEAqAYAugEAwAEAwAEAbgDWCAC6AQDAAQDAAQDAAQCUAQCEAQB8ALoNALoBAMABAMABAMABAJQBAUwCUAD-AQDQAQEAAoYIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQACngoAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEA0AEAegDSAQBuALoBALwBAL4BAIYIALoBAMABAMABAMYBAJQBAGYAbgC8AQDEAQC-AQCoCAC6AQDAAQCUAQCaAQCSAQCaAQCYAQCIAgDQAQFCBa4IALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQCoBgC6AQDAAQDAAQBuAOQHALoBAMABAMABAJQBAJoBAJQBAQsLUABuALwBALwBAKAIALoBAMABAMABAMABAJQBANgBANABAQALlggAlAEAmgEAlAEAmgEAlAEA4AEA0AEAhAIA0AEBAAugCgC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDQAQB6ANIBAG4AvAEAvAEAvgEAgAQA_AYAugEAwAEAwAEAwAEAegDWAQBuAL4BAMQBAL4BAOYIALoBAMABAMABAJYBAJoBAJYBAP4BANABAG4AvgEAvgEAvgEAiA0AkgEAmgEAmgEAmgEAkgEArgEA0AEAsgEA0AEArgEA0AEAsgEA0AEA2AEA0AEAbgDCAQC6AQD4BwC6AQDEAQDAAQDAAQCWAQFgAYYBAG4AvgEAvgEAvgEA7ggAugEAxAEAwAEAwAEAlgEAggIA0AEBGQGGAQEAAegIALoBAMQBAMABAMABAJYBAIICANABAQYBhgEBAAHoCAC6AQDEAQDAAQDAAQCWAQCCAgDQAQEGAYYBAQABvAUAlgEBBgGGAQETDG4BFAG-CgCSAQB6AbcBA8wBAFwAlAEAlgEAwAEAhAIA2AEAegDWAQBuAMYBAOwFAHoA5gEAZgBuAL4BAA
+    ;; sm:-AHmBQC6AQDAAQCUAQBuAL4BAKYGALoBAMABAMABAG4AvgEAqAYAugEAwAEAwAEAbgDWCAC6AQDAAQDAAQDAAQCUAQCEAQB8ALoNALoBAMABAMABAMABAJQBAUwCUAD-AQDQAQEAAoYIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQACngoAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEA0AEAegDSAQBuALoBALwBAL4BAIYIALoBAMABAMABAMYBAJQBAGYAbgC8AQDEAQC-AQCoCAC6AQDAAQCUAQCaAQCSAQCaAQCYAQCIAgDQAQFCBa4IALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQCoBgC6AQDAAQDAAQBuAOQHALoBAMABAMABAJQBAJoBAJQBAQsLUABuALwBALwBAKAIALoBAMABAMABAMABAJQBANgBANABAQALlggAlAEAmgEAlAEAmgEAlAEA4AEA0AEAhAIA0AEBAAugCgC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDQAQB6ANIBAG4AvAEAvAEAvgEAgAQA_AYAugEAwAEAwAEAwAEAegDWAQBuAL4BAMQBAL4BAOYIALoBAMABAMABAJYBAJoBAJYBAP4BANABAG4AvgEAvgEAvgEAiA0AkgEAmgEAmgEAmgEAkgEArgEA0AEAsgEA0AEArgEA0AEAsgEA0AEA2AEA0AEAbgDCAQC6AQD4BwC6AQDEAQDAAQDAAQCWAQFgAYYBAG4AvgEAvgEAvgEA7ggAugEAxAEAwAEAwAEAlgEAggIA0AEBGQGGAQEAAegIALoBAMQBAMABAMABAJYBAIICANABAQYBhgEBAAHoCAC6AQDEAQDAAQDAAQCWAQCCAgDQAQEGAYYBAQABvAUAlgEBBgGGAQETDG4BFAG-CgCSAQB6AbcBA8wBAFwAlAEAlgEAwAEAhAIA2AEAegDWAQBuAMYBAKoFAHoA5gEAjAEA
 
 
 
@@ -2228,17 +2199,14 @@ test 'main returns exit code', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:main (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:FfIEAJIBARoBggEAbgC6AQDOBwCSAQB6ARkEzgEAYACUAQCWAQDCAQBuAMABAOIFAHoA5gEAZgBuAL4BAA
+    ;; sm:E_IEAJIBARoBggEAbgC6AQDOBwCSAQB6ARkEzgEAYACUAQCWAQDCAQBuAMABAKAFAHoA5gEAjAEA

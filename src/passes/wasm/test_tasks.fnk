@@ -46,17 +46,15 @@ test 'yield suspends and resumes', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
+      (data $d_0 "test")
     )
-    ;; sm:FKIHALoBAL4BAL4BAJIBAQAHTAEQAoQBAG4AugEAsAYAkgEA3gEAzAEBAwGCAQELB64FAHoA5gEAZgBuAL4BAA
+    ;; sm:EqIHALoBAL4BAL4BAJIBAQAHTAEQAoQBAG4AugEAsAYAkgEA3gEAzAEBAwGCAQELB-wEAHoA5gEAjAEA
 
 
 test 'spawn and await', fn:
@@ -139,14 +137,11 @@ test 'spawn and await', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:result (mut (ref null any)) (ref.null any))
       (global $test:fut (mut (ref null any)) (ref.null any))
@@ -154,7 +149,7 @@ test 'spawn and await', fn:
       (data $d_1 "result")
       (data $d_2 "fut")
     )
-    ;; sm:KfIEAJIBASQChAEAbgC6AQDKCAC6AQDIAQC-AQCUAQEGBlgAaACUAQCWAQDGAQBuAMQBAL4JALoBAMgBAL4BAJQBASkDUgBcAJQBAJYBAMABAN4BAMwBATwJjAcAnAEA6AEAzAEAegDOAQEvDrQFAHoA5gEAZgBuAL4BAA
+    ;; sm:J_IEAJIBASQChAEAbgC6AQDKCAC6AQDIAQC-AQCUAQEGBlgAaACUAQCWAQDGAQBuAMQBAL4JALoBAMgBAL4BAJQBASkDUgBcAJQBAJYBAMABAN4BAMwBATwJjAcAnAEA6AEAzAEAegDOAQEvDvIEAHoA5gEAjAEA
 
 
 test 'channel send and receive', fn:
@@ -274,14 +269,11 @@ test 'channel send and receive', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:msg (mut (ref null any)) (ref.null any))
       (global $test:ch (mut (ref null any)) (ref.null any))
@@ -289,7 +281,7 @@ test 'channel send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:O4IIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4K_gUAugEAwAEAlAEBHQKEAQEACKYLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQDqBQB6AOYBAGYAbgC-AQA
+    ;; sm:OYIIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4K_gUAugEAwAEAlAEBHQKEAQEACKYLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
 
 
 test 'channel with spawned sender', fn:
@@ -407,14 +399,11 @@ test 'channel with spawned sender', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:msg (mut (ref null any)) (ref.null any))
       (global $test:ch (mut (ref null any)) (ref.null any))
@@ -422,7 +411,7 @@ test 'channel with spawned sender', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OewFALoBAMABAJQBATYChgEBAAi8CAC6AQDCAQC-AQCUAQESA1IAXACUAQCWAQDAAQBuAL4BAN4IALoBAMABAMIBAL4BAJQBASkUUADYAQDMAQE2CsAKALoBAMIBAL4BAJIBAVMCTgBYAJQBAJYBAL4BALABAMwBAPwBAMwBAR4UxgQAlAEBAwGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQDqBQB6AOYBAGYAbgC-AQA
+    ;; sm:N-wFALoBAMABAJQBATYChgEBAAi8CAC6AQDCAQC-AQCUAQESA1IAXACUAQCWAQDAAQBuAL4BAN4IALoBAMABAMIBAL4BAJQBASkUUADYAQDMAQE2CsAKALoBAMIBAL4BAJIBAVMCTgBYAJQBAJYBAL4BALABAMwBAPwBAMwBAR4UxgQAlAEBAwGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -564,14 +553,11 @@ test 'channel multiple messages FIFO', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:a (mut (ref null any)) (ref.null any))
       (global $test:ch (mut (ref null any)) (ref.null any))
@@ -579,7 +565,7 @@ test 'channel multiple messages FIFO', fn:
       (data $d_1 "a")
       (data $d_2 "ch")
     )
-    ;; sm:RYAIALoBAMABAMABAJQBAT4BTgBUAJQBAJYBALwBAG4AugEA3AgAugEAwAEAvgEAvgEAlAEBDwdQANQBANABARgK_AgAugEAwAEAvgEAvgEAlAEBJwdQAPoBAMwBARABhAEBAAekBgC6AQDAAQCUAQEPAYIBAQAHpgsAugEAvgEAvgEAkgEBHQJOAFgAlAEAlgEAvgEAsAEAzgEA-AEA1gEAbgDGAQD8BACUAQEaAYIBAQ8JygcAkgEA3gEA1AEAegDSAQBuAMQBAOoFAHoA5gEAZgBuAL4BAA
+    ;; sm:Q4AIALoBAMABAMABAJQBAT4BTgBUAJQBAJYBALwBAG4AugEA3AgAugEAwAEAvgEAvgEAlAEBDwdQANQBANABARgK_AgAugEAwAEAvgEAvgEAlAEBJwdQAPoBAMwBARABhAEBAAekBgC6AQDAAQCUAQEPAYIBAQAHpgsAugEAvgEAvgEAkgEBHQJOAFgAlAEAlgEAvgEAsAEAzgEA-AEA1gEAbgDGAQD8BACUAQEaAYIBAQ8JygcAkgEA3gEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'channel receiver waits for sender', fn:
@@ -723,14 +709,11 @@ test 'channel receiver waits for sender', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:result (mut (ref null any)) (ref.null any))
       (global $test:fut (mut (ref null any)) (ref.null any))
@@ -740,7 +723,7 @@ test 'channel receiver waits for sender', fn:
       (data $d_2 "fut")
       (data $d_3 "ch")
     )
-    ;; sm:RqoFALoBAMABAJQBAUIKqAgAugEAygEAwAEAlAEBKAZYAGgAlAEAlgEAxgEAbgDEAQD6CAC6AQDEAQDKAQDAAQCUAQERCFAA4gEA0AEBJAmcCgC6AQDAAQDIAQC-AQCUAQFdA1IAXACUAQCWAQDAAQCEAgDQAQE6AoYBAQAI8AoAugEAyAEAvgEAlAEBVwJQAFgAlAEAlgEAvgEAsAEAzAEAggIAzAEBKhbGBACUAQEPAYIBAQ8J1AcAnAEA6AEA1AEAegDSAQBuAMQBAOoFAHoA5gEAZgBuAL4BAA
+    ;; sm:RKoFALoBAMABAJQBAUIKqAgAugEAygEAwAEAlAEBKAZYAGgAlAEAlgEAxgEAbgDEAQD6CAC6AQDEAQDKAQDAAQCUAQERCFAA4gEA0AEBJAmcCgC6AQDAAQDIAQC-AQCUAQFdA1IAXACUAQCWAQDAAQCEAgDQAQE6AoYBAQAI8AoAugEAyAEAvgEAlAEBVwJQAFgAlAEAlgEAvgEAsAEAzAEAggIAzAEBKhbGBACUAQEPAYIBAQ8J1AcAnAEA6AEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'channel << send and receive', fn:
@@ -860,14 +843,11 @@ test 'channel << send and receive', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:msg (mut (ref null any)) (ref.null any))
       (global $test:ch (mut (ref null any)) (ref.null any))
@@ -875,4 +855,4 @@ test 'channel << send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:O4IIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4KgAYAugEAwAEAlAEBEQKGAQELCKgLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQDqBQB6AOYBAGYAbgC-AQA
+    ;; sm:OYIIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4KgAYAugEAwAEAlAEBEQKGAQELCKgLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA

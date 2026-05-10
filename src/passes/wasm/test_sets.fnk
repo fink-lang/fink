@@ -164,18 +164,16 @@ test 'set import + construction', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "set")
+      (data $d_1 "test")
     )
-    ;; sm:U-4IALoBAL4BAJQBAQIDUgFAAYQBAQYBhAEBBgGEAQBuALwBALwBALwBALwBAKIGALoBAL4BAL4BAG4AngcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDeCAC6AQC-AQDAAQDAAQCUAQDYAQDQAQFNHIwBAQAcsAgAkgEAmgEAkgEAmgEAkgEA3gEAzAEAgAIAzgEBAByUCwC6AQC-AQC-AQCSAQCwAQDMAQB6ANIBAHoA8gEAbgC6AQDKAQC8AQCKCACUAQBkAGwAnAEAhgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEA6gUAegDmAQBmAG4AvgEA
+    ;; sm:Ue4IALoBAL4BAJQBAQIDUgFAAYQBAQYBhAEBBgGEAQBuALwBALwBALwBALwBAKIGALoBAL4BAL4BAG4AngcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDeCAC6AQC-AQDAAQDAAQCUAQDYAQDQAQFNHIwBAQAcsAgAkgEAmgEAkgEAmgEAkgEA3gEAzAEAgAIAzgEBAByUCwC6AQC-AQC-AQCSAQCwAQDMAQB6ANIBAHoA8gEAbgC6AQDKAQC8AQCKCACUAQBkAGwAnAEAhgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
 
 
 test 'set spread', fn:
@@ -389,18 +387,16 @@ test 'set spread', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "set")
+      (data $d_1 "test")
     )
-    ;; sm:avQHALoBAMQBAMABAMABAJQBAG4AugEAvgEA6ggAugEAxAEAwAEAwAEAlAEAggIA0AEBSAGEAQEAAdgIALoBAMIBAL4BAL4BAJQBAPwBANABAQYBhAEBAAHWCAC6AQC-AQCUAQFLA1IAhgIAzgEBUgGEAQENCWwBDgGYBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBUxyMAQEAHLQIAJIBAJoBAJIBAJoBAJIBAN4BANABAIACANABAQAclgsAugEAvgEAvgEAkgEAsAEAzAEAegDSAQB6APIBAG4AugEAygEAvAEAiggAlAEAZABsAJwBAIYCAG4AxAEA-AcAkgEA3gEA1AEAegDSAQBuAMQBAOoFAHoA5gEAZgBuAL4BAA
+    ;; sm:aPQHALoBAMQBAMABAMABAJQBAG4AugEAvgEA6ggAugEAxAEAwAEAwAEAlAEAggIA0AEBSAGEAQEAAdgIALoBAMIBAL4BAL4BAJQBAPwBANABAQYBhAEBAAHWCAC6AQC-AQCUAQFLA1IAhgIAzgEBUgGEAQENCWwBDgGYBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBUxyMAQEAHLQIAJIBAJoBAJIBAJoBAJIBAN4BANABAIACANABAQAclgsAugEAvgEAvgEAkgEAsAEAzAEAegDSAQB6APIBAG4AugEAygEAvAEAiggAlAEAZABsAJwBAIYCAG4AxAEA-AcAkgEA3gEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'set destructure empty', fn:
@@ -786,21 +782,18 @@ test 'set destructure empty', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:s (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:vwH6BQCUAQFsAYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQE_AU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEApggAugEAwAEAlAEBNwNSALIBANABAG4AvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAQEcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQDsBQB6AOYBAGYAbgC-AQA
+    ;; sm:vQH6BQCUAQFsAYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQE_AU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEApggAugEAwAEAlAEBNwNSALIBANABAG4AvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAQEcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
 
 
 test 'set destructure non-empty', fn:
@@ -1195,21 +1188,18 @@ test 'set destructure non-empty', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:s (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:xQH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQFLAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQDsBQB6AOYBAGYAbgC-AQA
+    ;; sm:wwH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQFLAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
 
 
 test 'set destructure peel one', fn:
@@ -1715,19 +1705,16 @@ test 'set destructure peel one', fn:
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
-        (local $:ctx_arg (ref null any))
-        (local $:args (ref any))
+        (local $:url (ref null any))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
-        (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (global $test:s (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:_gH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQDIBQCWAQCaAQCSAQEqA4oBAQcHnggAugEAwAEAlAEBDwFOAHoA1gEAbgC8AQC-AQCuBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvgEA4ggAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBAQeUCAC6AQDAAQDAAQDAAQCUAQD-AQDQAQEAB5gIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAH9AgAlAEAmgEAlAEAmgEAlAEAsAEA0AEAegDWAQBuALwBALwBAL4BAIIEAPQHALoBAMABAMABAHoA1gEAegDWAQBuAL4BAMQBAL4BALQIAJYBAJoBAJYBANgBANABAHoA0gEAbgC-AQC-AQC-AQC8CQC6AQDAAQCUAQFFAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy4CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQDsBQB6AOYBAGYAbgC-AQA
+    ;; sm:_AH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQDIBQCWAQCaAQCSAQEqA4oBAQcHnggAugEAwAEAlAEBDwFOAHoA1gEAbgC8AQC-AQCuBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvgEA4ggAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBAQeUCAC6AQDAAQDAAQDAAQCUAQD-AQDQAQEAB5gIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAH9AgAlAEAmgEAlAEAmgEAlAEAsAEA0AEAegDWAQBuALwBALwBAL4BAIIEAPQHALoBAMABAMABAHoA1gEAegDWAQBuAL4BAMQBAL4BALQIAJYBAJoBAJYBANgBANABAHoA0gEAbgC-AQC-AQC-AQC8CQC6AQDAAQCUAQFFAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy4CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
 
