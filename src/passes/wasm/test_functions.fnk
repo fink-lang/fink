@@ -2188,3 +2188,57 @@ test 'recursive list sum', fn:
 
 
 
+
+
+test 'main returns exit code', fn:
+  expect wat ƒink:
+    main = fn:
+      0
+  | equals wat":
+    (module
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
+      (func $test:v_2 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+        (local $v_3 (ref null any))
+        (local $v_4 (ref null any))
+        (local $:args (ref any))
+        (local.set $v_3 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $v_4 (struct.new $std/int.wat:I64 (i64.const 0)))
+        (local.set $:args (call $rt/apply.wat:args_empty))
+        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_4) (local.get $:args)))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_3))
+      )
+      (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+        (local $v_1 (ref null any))
+        (local $main_0 (ref null any))
+        (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:pub_url (ref null any))
+        (local $:pub_name (ref null any))
+        (local $:args (ref any))
+        (local.set $v_1 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $main_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_2) (local.get $:caps_arg)))
+        (global.set $test:main (local.get $main_0))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $main_0))
+        (local.set $:args (call $rt/apply.wat:args_empty))
+        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $main_0) (local.get $:args)))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_1))
+      )
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
+        (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:mod_clos (ref null any))
+        (local $:ctx_arg (ref null any))
+        (local $:args (ref any))
+        (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
+        (local.set $:ctx_arg (ref.i31 (i32.const 42)))
+        (local.set $:args (call $rt/apply.wat:args_empty))
+        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:cont) (local.get $:args)))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_arg) (local.get $:mod_clos))
+      )
+      (global $test:main (mut (ref null any)) (ref.null any))
+      (data $d_0 "test")
+      (data $d_1 "main")
+    )
+    ;; sm:FfIEAJIBARoBggEAbgC6AQDOBwCSAQB6ARkEzgEAYACUAQCWAQDCAQBuAMABAOIFAHoA5gEAZgBuAL4BAA
