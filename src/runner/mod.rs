@@ -91,7 +91,7 @@ mod tests {
   use std::sync::{Arc, Mutex};
   use wasmtime::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, Config, Engine, Error, ExternType,
-    FieldType, Linker, Module, Mutability, Rooted, Store, StorageType, Val,
+    FieldType, I31, Linker, Module, Mutability, Rooted, Store, StorageType, Val,
   };
 
   /// Hardcoded cli args passed to `main` when the source defines it.
@@ -465,11 +465,14 @@ mod tests {
     // Entry compiles under `./test.fnk:`, so the wrapper is exported
     // as `"./test.fnk"`.
     let entry_wrapper  = get_func(&instance, &mut store, "./test.fnk")?;
-    let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont")?;
+    // Fn3 / ctx-aware lowering: the entry cont is invoked via apply_3,
+    // which casts the closure's func to $Fn3. Use wrap_host_cont_3 so
+    // the host adapter funcref is Fn3-typed and the cast succeeds.
+    let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont_3")?;
 
     // Host-side: turn cont id 1 into a fink anyref before invoking
     // the wrapper. Host-bridge mechanics (i32 -> anyref via
-    // `wrap_host_cont`) live on the host side of the boundary.
+    // `wrap_host_cont_3`) live on the host side of the boundary.
     let mut entry_cont_out = [Val::AnyRef(None)];
     wrap_host_cont.call(&mut store, &[Val::I32(1)], &mut entry_cont_out)
       .map_err(|e| e.to_string())?;
@@ -630,9 +633,12 @@ mod tests {
     caller: &mut wasmtime::Caller<'_, ()>,
     main_clo: Rooted<AnyRef>,
   ) -> Result<(), Error> {
-    let wrap_host_cont = caller.get_export("wrap_host_cont")
+    // Fn3 / ctx-aware pipeline: use wrap_host_cont_3 so done_cont's
+    // adapter funcref is Fn3-typed; apply via apply_3 so the callee's
+    // Fn3 funcref cast succeeds.
+    let wrap_host_cont = caller.get_export("wrap_host_cont_3")
       .and_then(|e| e.into_func())
-      .ok_or_else(|| Error::msg("no wrap_host_cont export"))?;
+      .ok_or_else(|| Error::msg("no wrap_host_cont_3 export"))?;
     let args_empty = caller.get_export("args_empty")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no args_empty export"))?;
@@ -642,11 +648,11 @@ mod tests {
     let str_wrap = caller.get_export("str_wrap_bytes")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
-    let apply_fn = caller.get_export("apply")
+    let apply_fn = caller.get_export("apply_3")
       .and_then(|e| e.into_func())
-      .ok_or_else(|| Error::msg("no apply export"))?;
+      .ok_or_else(|| Error::msg("no apply_3 export"))?;
 
-    // done_cont = wrap_host_cont(2) — id 2 routes back here for main's result.
+    // done_cont = wrap_host_cont_3(2) — id 2 routes back here for main's result.
     let mut done_out = [Val::AnyRef(None)];
     wrap_host_cont.call(&mut *caller, &[Val::I32(2)], &mut done_out)?;
     let done_cont = done_out[0];
@@ -678,8 +684,13 @@ mod tests {
     }
     let main_args = acc;
 
-    // apply(main_args, main_clo).
-    apply_fn.call(&mut *caller, &[main_args, Val::AnyRef(Some(main_clo))], &mut [])?;
+    // apply_3(main_args, ctx, main_clo). Placeholder ctx (i31 42) — same
+    // shape the per-module wrapper uses; once the substrate lands, the
+    // host-supplied ctx replaces this.
+    let ctx_arg = AnyRef::from_i31(&mut *caller, I31::wrapping_i32(42));
+    apply_fn.call(&mut *caller,
+      &[main_args, Val::AnyRef(Some(ctx_arg)), Val::AnyRef(Some(main_clo))],
+      &mut [])?;
     Ok(())
   }
 
