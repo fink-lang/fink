@@ -19,6 +19,7 @@ pub mod fmt;
 pub mod ir;
 pub mod link;
 pub mod lower;
+pub mod lower_ctx;
 pub mod runtime_contract;
 pub mod sourcemap;
 
@@ -214,6 +215,43 @@ mod tests {
     format!("{}\n;; sm:{b64}", wat.trim())
   }
 
+  /// Strangler-pipeline WAT helper: lower → thread_ctx → lift → lower_ctx → fmt.
+  /// Mirrors `wat` but routes through the ctx-threaded CPS path and the
+  /// duplicated `lower_ctx` emitter that will (gradually) emit Fn3
+  /// closures. Today `lower_ctx` is byte-identical to `lower`, so the
+  /// only output diff comes from thread_ctx; as Fn3 changes land in
+  /// lower_ctx, the diff widens.
+  #[allow(dead_code)]
+  fn wat_ctx(src: &str) -> String {
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wat_ctx_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  fn wat_ctx_inner(src: &str) -> String {
+    let desugared = crate::to_desugared(src, "test").unwrap_or_else(|e| panic!("{e}"));
+    let cps = crate::passes::lower(&desugared);
+    let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+    let cps_threaded = crate::passes::Cps { result };
+    let lifted = crate::passes::lift(cps_threaded, &desugared);
+    let user_frag = super::lower_ctx::lower(&lifted.result, &desugared.ast, "test:");
+    let linked = super::link::link(&[user_frag]);
+    let (wat, sm) = super::fmt::fmt_fragment_with_sm(&linked);
+    let b64 = sm.encode_base64url();
+    format!("{}\n;; sm:{b64}", wat.trim())
+  }
+
 
   /// Multi-module variant of `wat` for the new package-compile
   /// pipeline. Lowers `src` as the entry module under a fixed test
@@ -360,5 +398,6 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_linking.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_io.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_wat_thread_ctx.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_sets.fnk", skip-ir);
 }

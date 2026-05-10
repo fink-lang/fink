@@ -38,9 +38,9 @@ test 'lctx — identity bind', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
       ·foo_0 = i8 42
-      ·ƒpub ·ƒctx_12, ·foo_0
-      ·ƒret_1 ·ƒctx_14, ·foo_0
-    # sm:GAABAAgAAQAIJAAYABIAAgAGAQAIAAEAAxAABAEMAgABAAIGAQACBAAGAQsDAAEAAxAAFAAEAQADDgAGAQADAAEAAxQAFAAEAQAD
+      ·ƒpub ·foo_0
+      ·ƒret_1 ·ƒctx_13, ·foo_0
+    # sm:FgABAAgAAQAIJAAYABIAAgAGAQAIAAEAAxAABAEMAgABAAIGAQACBAAGAQsDAAEAAxABAAMOAAYBAAMAAQADFAAUAAQBAAM
 
 
 test 'lctx — bind fn one param', fn:
@@ -49,11 +49,11 @@ test 'lctx — bind fn one param', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_20, ·ƒret_2:
       ·v_3 = fn [·ƒctx_22, ·ƒret_4, ·x_1]:
-        ·op_plus ·ƒctx_22, ·x_1, (i8 1), ·ƒret_4
+        ·op_plus ·x_1, (i8 1), ·ƒret_4
       ·inc_0 = ·v_3
-      ·ƒpub ·ƒctx_25, ·inc_0
-      ·ƒret_2 ·ƒctx_27, ·inc_0
-    # sm:MQABABEAAQARJAAYABIAAgAGAQwLAAEACwwABAEACwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAASAAYBHxEAAQADEAAEAQwLCgAGAQsDAAEAAxAAFAAEAQADDgAGAQADAAEAAxQAFAAEAQAD
+      ·ƒpub ·inc_0
+      ·ƒret_2 ·ƒctx_25, ·inc_0
+    # sm:LQABABEAAQARJAAYABIAAgAGAQwLAAEACwwABAEACwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEABIABgEfEQABAAMQAAQBDAsKAAYBCwMAAQADEAEAAw4ABgEAAwABAAMUABQABAEAAw
 
 
 test 'lctx — apply user fn', fn:
@@ -63,11 +63,11 @@ test 'lctx — apply user fn', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_22, ·ƒret_2:
       ·v_3 = fn [·ƒctx_24, ·ƒret_4, ·x_1]:
-        ·op_plus ·ƒctx_24, ·x_1, (i8 1), ·ƒret_4
+        ·op_plus ·x_1, (i8 1), ·ƒret_4
       ·inc_0 = ·v_3
-      ·ƒpub ·ƒctx_27, ·inc_0
-      ·inc_0 ·ƒctx_29, ·ƒret_2, (i8 5)
-    # sm:NQABABcAAQAXJAAYABIAAgAGAQwLAAEACwwABAEACwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAASAAYBHxEAAQADEAAEAQwLCgAGAQsDAAEAAxAAFAAEAQADDgAGASQFAAEAAxAAFAAEABIABgEIAQABAAEGAQAB
+      ·ƒpub ·inc_0
+      ·inc_0 ·ƒctx_27, ·ƒret_2, (i8 5)
+    # sm:MQABABcAAQAXJAAYABIAAgAGAQwLAAEACwwABAEACwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEABIABgEfEQABAAMQAAQBDAsKAAYBCwMAAQADEAEAAw4ABgEkBQABAAMQABQABAASAAYBCAEAAQABBgEAAQ
 
 
 ---
@@ -83,16 +83,16 @@ test 'lctx — closure over outer var', fn:
       ni
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_31, ·ƒret_4:
-      ·v_45 = fn {·a_46}, [·ƒctx_34, ·ƒret_8, ·b_2]:
-        ·op_plus ·ƒctx_34, ·a_46, ·b_2, ·ƒret_8
+      ·v_43 = fn {·a_44}, [·ƒctx_34, ·ƒret_8, ·b_2]:
+        ·op_plus ·a_44, ·b_2, ·ƒret_8
       ·v_5 = fn [·ƒctx_33, ·ƒret_6, ·a_1]:
-        ·v_48 = ·closure ·v_45, ·a_1
-        ·ni_3 = ·v_48
-        ·ƒret_6 ·ƒctx_37, ·ni_3
+        ·v_46 = ·closure ·v_43, ·a_1
+        ·ni_3 = ·v_46
+        ·ƒret_6 ·ƒctx_36, ·ni_3
       ·foo_0 = ·v_5
-      ·ƒpub ·ƒctx_40, ·foo_0
-      ·ƒret_4 ·ƒctx_42, ·foo_0
-    # sm:VwABACcAAQAnJAAYABIAAgAGASYPAAEADw4ABAEADwYAAAACARMBDAAAAAYAAAACABQABAASAAQBGgEKAAAAAgACAAoBDgUAAQAFFAAUAAQBAAEMAAQBCAEKAAQAEgAGATUhAAEAIQwABAEAIQYAAAACABQABAASAAQBBgEKAAAAAgACAAoBFA8AAA4ABAEADwABAA8UAQAPDAAEARMBCgAKAQoUAAEAAg4ABAEKDwwACgEkAgABAAIUABQABAEAAgwABgFJJwABAAMQAAQBDCEKAAYBCwMAAQADEAAUAAQBAAMOAAYBAAMAAQADFAAUAAQBAAM
+      ·ƒpub ·foo_0
+      ·ƒret_4 ·ƒctx_40, ·foo_0
+    # sm:UwABACcAAQAnJAAYABIAAgAGASYPAAEADw4ABAEADwYAAAACARMBDAAAAAYAAAACABQABAASAAQBGgEKAAAAAgACAAoBDgUAAQAFFAEAAQwABAEIAQoABAASAAYBNSEAAQAhDAAEAQAhBgAAAAIAFAAEABIABAEGAQoAAAACAAIACgEUDwAADgAEAQAPAAEADxQBAA8MAAQBEwEKAAoBChQAAQACDgAEAQoPDAAKASQCAAEAAhQAFAAEAQACDAAGAUknAAEAAxAABAEMIQoABgELAwABAAMQAQADDgAGAQADAAEAAxQAFAAEAQAD
 
 
 test 'lctx — depth 2 closure', fn:
@@ -103,19 +103,19 @@ test 'lctx — depth 2 closure', fn:
           a + b + c
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_35, ·ƒret_4:
-      ·v_70 = fn {·c_71, ·ƒret_73}, [·ƒctx_41, ·v_13]:
-        ·op_plus ·ƒctx_41, ·v_13, ·c_71, ·ƒret_73
-      ·v_58 = fn {·a_59, ·b_61}, [·ƒctx_39, ·ƒret_10, ·c_3]:
-        ·v_77 = ·closure ·v_70, ·c_3, ·ƒret_10
-        ·op_plus ·ƒctx_39, ·a_59, ·b_61, ·v_77
-      ·v_49 = fn {·a_50}, [·ƒctx_38, ·ƒret_8, ·b_2]:
-        ·closure ·v_58, ·a_50, ·b_2, ·ƒret_8
+      ·v_67 = fn {·c_68, ·ƒret_70}, [·ƒctx_40, ·v_13]:
+        ·op_plus ·v_13, ·c_68, ·ƒret_70
+      ·v_55 = fn {·a_56, ·b_58}, [·ƒctx_39, ·ƒret_10, ·c_3]:
+        ·v_74 = ·closure ·v_67, ·c_3, ·ƒret_10
+        ·op_plus ·a_56, ·b_58, ·v_74
+      ·v_46 = fn {·a_47}, [·ƒctx_38, ·ƒret_8, ·b_2]:
+        ·closure ·v_55, ·a_47, ·b_2, ·ƒret_8
       ·v_5 = fn [·ƒctx_37, ·ƒret_6, ·a_1]:
-        ·closure ·v_49, ·a_1, ·ƒret_6
+        ·closure ·v_46, ·a_1, ·ƒret_6
       ·f_0 = ·v_5
-      ·ƒpub ·ƒctx_44, ·f_0
-      ·ƒret_4 ·ƒctx_46, ·f_0
-    # sm:lAEAAQArAAEAKyQAGAASAAIABgFEBQABAAUOAAQBAAUGAAAAAgERAQwABAAUAAAABgAAAAIAFAAEAAwAAAACAAIACgESCQABAAkUABQABAEABQwABAEQAQwABAAUAAYBJxUAAQAVDgAEAQAVBgAAAAIBHQEMAAQBEAEMAAAABgAAAAIAFAAEABQABAEUAQoAAAACAAIACgESBQAADgAEAQAFAAEABRQBAAUMAAQBEQEKAAQBEgkUAAoBAAUAAQAFFAAUAAQBAAEMAAQBCAEMAAQADAAGATMfAAEAHw4ABAEAHwYAAAACAQkBDAAAAAYAAAACABQABAASAAQBEAEKAAAAAgACAAoBDhUAAQAVFAEAFQwABAEdAQwABAEQAQoABAASAAYBFScAAQAnDAAEAQAnBgAAAAIAFAAEABIABAEGAQoAAAACAAIACgEKHwABAB8UAQAfDAAEAQkBCgAEABIABgENKwABAAEMAAQBCCcKAAYBBwEAAQABEAAUAAQBAAEKAAYBAAEAAQABFAAUAAQBAAE
+      ·ƒpub ·f_0
+      ·ƒret_4 ·ƒctx_43, ·f_0
+    # sm:jgEAAQArAAEAKyQAGAASAAIABgFEBQABAAUOAAQBAAUGAAAAAgERAQwABAAUAAAABgAAAAIAFAAEAAwAAAACAAIACgESCQABAAkUAQAFDAAEARABDAAEABQABgEnFQABABUOAAQBABUGAAAAAgEdAQwABAEQAQwAAAAGAAAAAgAUAAQAFAAEARQBCgAAAAIAAgAKARIFAAAOAAQBAAUAAQAFFAEABQwABAERAQoABAESCRQACgEABQABAAUUAQABDAAEAQgBDAAEAAwABgEzHwABAB8OAAQBAB8GAAAAAgEJAQwAAAAGAAAAAgAUAAQAEgAEARABCgAAAAIAAgAKAQ4VAAEAFRQBABUMAAQBHQEMAAQBEAEKAAQAEgAGARUnAAEAJwwABAEAJwYAAAACABQABAASAAQBBgEKAAAAAgACAAoBCh8AAQAfFAEAHwwABAEJAQoABAASAAYBDSsAAQABDAAEAQgnCgAGAQcBAAEAARABAAEKAAYBAAEAAQABFAAUAAQBAAE
 
 
 test 'lctx — multi-fn module captures across', fn:
@@ -127,12 +127,12 @@ test 'lctx — multi-fn module captures across', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_37, ·ƒret_4:
       ·v_5 = fn [·ƒctx_39, ·ƒret_6, ·a_2, ·b_3]:
-        ·op_plus ·ƒctx_39, ·a_2, ·b_3, ·ƒret_6
+        ·op_plus ·a_2, ·b_3, ·ƒret_6
       ·add_0 = ·v_5
-      ·ƒpub ·ƒctx_42, ·add_0
-      ·v_13 = fn [·ƒctx_45, ·ƒret_14]:
-        ·add_0 ·ƒctx_45, ·ƒret_14, (i8 3), (i8 4)
+      ·ƒpub ·add_0
+      ·v_13 = fn [·ƒctx_43, ·ƒret_14]:
+        ·add_0 ·ƒctx_43, ·ƒret_14, (i8 3), (i8 4)
       ·main_1 = ·v_13
-      ·ƒpub ·ƒctx_48, ·main_1
-      ·ƒret_4 ·ƒctx_50, ·main_1
-    # sm:VwABACwAAQAsJAAYABIAAgAGAQwQAAEAEAwABAEAEAYAAAACABQABAASAAQBBgEKAAQBBgEKAAAAAgACAAoBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQAEgAGASkWAAEAAxAABAEMEAoABgELAwABAAMQABQABAEAAw4ABgE8DgABAA4OAAQBAA4GAAAAAgAUAAQAFAAAAAIAAgAKAQwIAAEAAxAAFAAEABQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEAAYBJxUAAQAEEgAEAQ4ODAAGAQ0EAAEABBAAFAAEAQAEEAAGAQAEAAEABBQAFAAEAQAE
+      ·ƒpub ·main_1
+      ·ƒret_4 ·ƒctx_47, ·main_1
+    # sm:UQABACwAAQAsJAAYABIAAgAGAQwQAAEAEAwABAEAEAYAAAACABQABAASAAQBBgEKAAQBBgEKAAAAAgACAAoBCgUAAQAFFAEAAQoABAEIAQoABAASAAYBKRYAAQADEAAEAQwQCgAGAQsDAAEAAxABAAMOAAYBPA4AAQAODgAEAQAOBgAAAAIAFAAEABQAAAACAAIACgEMCAABAAMQABQABAAUAAYBCAEAAQABBgEAAQQABgEGAQABAAEGAQABBAAGAScVAAEABBIABAEODgwABgENBAABAAQQAQAEEAAGAQAEAAEABBQAFAAEAQAE

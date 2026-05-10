@@ -42,6 +42,12 @@
   ;; $Fn2(captures, args) — all functions (conts are in captures or args).
   (type $Fn2 (@pub) (func (param (ref null any) (ref null any))))
 
+  ;; Ctx-aware calling convention. $Fn3(captures, ctx, args) — caller
+  ;; passes the universe context as a native wasm value, sidestepping
+  ;; the args-list head/tail dance. Compiler emits Fn3 closures for
+  ;; user-defined fns + continuations; the runtime side migrates fn-by-fn.
+  (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
+
 
   ;; $SpreadArgs — wrapper for spread arguments at call sites.
   ;; Contains a $List of the spread values. Used to distinguish a spread
@@ -72,6 +78,26 @@
       (struct.get $Closure $captures (local.get $clos))
       (local.get $args)
       (ref.cast (ref $Fn2) (struct.get $Closure $func (local.get $clos))))
+  )
+
+  ;; Ctx-aware closure dispatcher. Mirrors $apply but threads the
+  ;; universe context as a native wasm arg so Fn3-typed callees don't
+  ;; need to peel ctx off the args list. Compiler-emitted user fns
+  ;; route through here; existing Fn2 std/runtime helpers stay on
+  ;; $apply until they are migrated to Fn3.
+  (func $apply_3 (@pub)
+    (param $args (ref null any))
+    (param $ctx (ref null any))
+    (param $callee (ref null any))
+
+    (local $clos (ref $Closure))
+    (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
+
+    (return_call_ref $Fn3
+      (struct.get $Closure $captures (local.get $clos))
+      (local.get $ctx)
+      (local.get $args)
+      (ref.cast (ref $Fn3) (struct.get $Closure $func (local.get $clos))))
   )
 
 

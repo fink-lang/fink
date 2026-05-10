@@ -143,15 +143,17 @@ impl Threader<'_> {
     }
   }
 
-  fn thread_args(&mut self, args: Vec<Arg>, _func: &Callable) -> Vec<Arg> {
+  fn thread_args(&mut self, args: Vec<Arg>, func: &Callable) -> Vec<Arg> {
     let mut new_args: Vec<Arg> = Vec::with_capacity(args.len() + 1);
-    // Every Apply gets ctx as its 0th arg — `Callable::Val` (user fn /
-    // continuation) and `Callable::BuiltIn` alike. Builtins like `op_plus`
-    // are protocol-keyed operations that may be overridden inside a `with`
-    // block (e.g. `with mx: 3 * m`), so they must see the active ctx to
-    // dispatch through the right impl. The runtime decides what to do with
-    // ctx; truly external host imports just ignore it.
-    if let Some(ctx_id) = self.current_ctx() {
+    // Phase 2c: only `Callable::Val` calls (user fn / continuation
+    // invocation) get ctx prepended. Builtins are not ctx-aware yet —
+    // their runtime signatures (op_plus, etc.) take a fixed-arity
+    // args list with no ctx slot. When the substrate is wired up and
+    // runtime ops become ctx-aware (so `with mx: 3 * m` can dispatch
+    // through ctx), this guard goes away.
+    let prepend_ctx = matches!(func, Callable::Val(_));
+    if prepend_ctx
+      && let Some(ctx_id) = self.current_ctx() {
       let ctx_val = self.make_ctx_ref(ctx_id);
       new_args.push(Arg::Val(ctx_val));
     }

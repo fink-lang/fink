@@ -93,6 +93,11 @@ pub enum Sym {
 
   // ── application (rt/apply.wat) ────────────────────────────────
   Apply,
+  // Apply3 is the Fn3 / ctx-aware dispatcher. Signature
+  // `(args, ctx, callee) -> ()`. Defined in rt/apply.wat at slice
+  // 2c-B; until then, references are emitted as imports that will
+  // remain unresolved (Phase A is shape-only, not runnable).
+  Apply3,
 
   // ── polymorphic protocol operators (rt/protocols.wat) ─────────
   // All binary operators share the shape (anyref, anyref, anyref)
@@ -320,6 +325,7 @@ pub struct Runtime {
   args_prepend: Option<FuncSym>,
   args_concat:  Option<FuncSym>,
   apply:        Option<FuncSym>,
+  apply_3:      Option<FuncSym>,
   // polymorphic protocol operators
   op_plus:    Option<FuncSym>,
   op_minus:   Option<FuncSym>,
@@ -421,6 +427,7 @@ impl Runtime {
   pub fn channel(&self)      -> FuncSym { self.channel.expect("rt: channel not declared") }
   pub fn receive(&self)      -> FuncSym { self.receive.expect("rt: receive not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
+  pub fn apply_3(&self)      -> FuncSym { self.apply_3.expect("rt: apply_3 not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
   /// if the Sym wasn't declared — lowering should scan → declare
@@ -505,6 +512,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
     Sym::Apply           => "rt/apply.wat:apply",
+    Sym::Apply3          => "rt/apply.wat:apply_3",
 
     Sym::ArgsHead        => "rt/apply.wat:args_head",
     Sym::ArgsTail        => "rt/apply.wat:args_tail",
@@ -659,6 +667,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::ArgsPrepend) { rt.args_prepend = Some(FuncSym::Runtime(Sym::ArgsPrepend)); }
   if needed.contains(&Sym::ArgsConcat)  { rt.args_concat  = Some(FuncSym::Runtime(Sym::ArgsConcat)); }
   if needed.contains(&Sym::Apply)       { rt.apply        = Some(FuncSym::Runtime(Sym::Apply)); }
+  if needed.contains(&Sym::Apply3)      { rt.apply_3      = Some(FuncSym::Runtime(Sym::Apply3)); }
 
   for sym in BINARY_OPS {
     if needed.contains(sym) {

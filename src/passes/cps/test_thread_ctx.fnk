@@ -37,9 +37,9 @@ test 'tctx — identity bind', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
       ·let (i8 42), fn ·foo_0:
-        ·ƒpub ·ƒctx_12, ·foo_0, fn ·ƒctx_14:
-          ·ƒret_1 ·ƒctx_14, ·foo_0
-    # sm:HQABAAgAAQAIJAEACBgBAAgSAAIABgEIAQABAAEOAQQCAAEAAgYBAAIGAAoBCwMOAAIACgEAAwABAAMQABQABAEAAw4ACgAUAAIADgEAAwABAAMUABQABAEAAw
+        ·ƒpub ·foo_0, fn ·ƒctx_13:
+          ·ƒret_1 ·ƒctx_13, ·foo_0
+    # sm:GwABAAgAAQAIJAEACBgBAAgSAAIABgEIAQABAAEOAQQCAAEAAgYBAAIGAAoBCwMOAAIACgEAAwABAAMQAQADDgAKABQAAgAOAQADAAEAAxQAFAAEAQAD
 
 
 test 'tctx — bind fn one param', fn:
@@ -48,12 +48,12 @@ test 'tctx — bind fn one param', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_20, ·ƒret_2:
       ·fn
-        fn ·ƒctx_22, ·ƒret_4, ·x_1: ·op_plus ·ƒctx_22, ·x_1, (i8 1), ·ƒret_4
+        fn ·ƒctx_22, ·ƒret_4, ·x_1: ·op_plus ·x_1, (i8 1), ·ƒret_4
         fn ·v_3:
           ·let ·v_3, fn ·inc_0:
-            ·ƒpub ·ƒctx_25, ·inc_0, fn ·ƒctx_27:
-              ·ƒret_2 ·ƒctx_27, ·inc_0
-    # sm:MQABABEAAQARJAEAERgBABESAAIABgEMCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQABQABAEAAw4ACgAUAAIAFgEAAwABAAMUABQABAEAAw
+            ·ƒpub ·inc_0, fn ·ƒctx_25:
+              ·ƒret_2 ·ƒctx_25, ·inc_0
+    # sm:LQABABEAAQARJAEAERgBABESAAIABgEMCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAoAFAACABYBAAMAAQADFAAUAAQBAAM
 
 
 test 'tctx — apply user fn', fn:
@@ -63,9 +63,9 @@ test 'tctx — apply user fn', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_22, ·ƒret_2:
       ·fn
-        fn ·ƒctx_24, ·ƒret_4, ·x_1: ·op_plus ·ƒctx_24, ·x_1, (i8 1), ·ƒret_4
+        fn ·ƒctx_24, ·ƒret_4, ·x_1: ·op_plus ·x_1, (i8 1), ·ƒret_4
         fn ·v_3:
           ·let ·v_3, fn ·inc_0:
-            ·ƒpub ·ƒctx_27, ·inc_0, fn ·ƒctx_29:
-              ·inc_0 ·ƒctx_29, ·ƒret_2, (i8 5)
-    # sm:NQABABcAAQAXJAEAFxgBJAUSAAIABgEXCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQABQABAEAAw4ACgAUAAIAFgEkBQABAAMQABQABAEABRIABgEIAQABAAEGAQAB
+            ·ƒpub ·inc_0, fn ·ƒctx_27:
+              ·inc_0 ·ƒctx_27, ·ƒret_2, (i8 5)
+    # sm:MQABABcAAQAXJAEAFxgBJAUSAAIABgEXCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAoAFAACABYBJAUAAQADEAAUAAQBAAUSAAYBCAEAAQABBgEAAQ
