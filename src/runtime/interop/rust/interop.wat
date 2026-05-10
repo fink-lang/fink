@@ -352,8 +352,9 @@
   ;; Singleton — same closure instance every access; captures null
   ;; (nothing per-instance).
 
-  (func $read_apply (type $Fn2)
+  (func $read_apply (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -420,8 +421,9 @@
     (return_call $resume)
   )
 
-  (func $write_apply (type $Fn2)
+  (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
