@@ -324,6 +324,7 @@ fn apply_main(
     acc = next[0];
   }
 
+  // TODO: fake ctx
   let ctx_arg = AnyRef::from_i31(&mut *caller, I31::wrapping_i32(42));
   apply_fn.call(&mut *caller,
     &[acc, Val::AnyRef(Some(ctx_arg)), Val::AnyRef(Some(main_clo))],

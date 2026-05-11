@@ -385,6 +385,7 @@
   ;; injects a real ctx (substrate landing), this becomes redundant.
   (func $placeholder_ctx (export "env:placeholder_ctx")
     (result (ref null any))
+    ;; TODO fake ctx
     (ref.i31 (i32.const 42)))
 
 
