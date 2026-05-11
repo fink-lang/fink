@@ -396,7 +396,16 @@ impl<'src> Parser<'src> {
       let result = self.collect_apply_or_block(func, false)?;
       // If no args were collected (bare ident returned), allow infix operators to continue.
       if matches!(self.get(result).kind, NodeKind::Ident(_)) {
-        return self.parse_infix_from(result, 0);
+        let after_infix = self.parse_infix_from(result, 0)?;
+        // Member access followed by args: `ctx.h 42` -> Apply(Member, 42).
+        // After parse_infix consumed the `.h` chain, fall back into args
+        // collection so that subsequent tokens parse as call arguments.
+        if matches!(self.get(after_infix).kind, NodeKind::Member { .. })
+          && self.is_arg_start()
+        {
+          return self.collect_apply_or_block(after_infix, false);
+        }
+        return Ok(after_infix);
       }
       return Ok(result);
     }
@@ -2069,4 +2078,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_block_modes.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_with.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_member_apply.fnk");
 }
