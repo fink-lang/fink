@@ -170,7 +170,7 @@ const make_fn_proxy = (exports, {wrap, args_from_js}) => (ref) => {
         const cont = (result) => resolve(wrap(exports.list_head(result)));
         const cont_ref = exports.wrap_host_cont_3(cont);
         const fink_args = exports.args_prepend(cont_ref, args_from_js(args));
-        exports.apply_3(fink_args, exports.placeholder_ctx(), ref);
+        exports.apply_3(fink_args, exports.empty_ctx(), ref);
       });
     },
   });

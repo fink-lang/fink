@@ -275,8 +275,9 @@ fn apply_main(
   main_clo: Rooted<AnyRef>,
   argv: &[Vec<u8>],
 ) -> Result<(), Error> {
-  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with placeholder ctx
-  // (ref.i31 42) — same shape as the per-module wrapper's entry call.
+  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with an empty ctx minted
+  // by the wasm-side `env:empty_ctx` — same shape as the per-module
+  // wrapper's entry call.
   let wrap_host_cont = caller.get_export("wrap_host_cont_3")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no wrap_host_cont_3 export"))?;
@@ -292,6 +293,9 @@ fn apply_main(
   let apply_fn = caller.get_export("apply_3")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no apply_3 export"))?;
+  let empty_ctx_fn = caller.get_export("empty_ctx")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| Error::msg("no empty_ctx export"))?;
 
   // done_cont = wrap_host_cont(CONT_MAIN_DONE).
   let mut done_out = [Val::AnyRef(None)];
@@ -324,10 +328,10 @@ fn apply_main(
     acc = next[0];
   }
 
-  // TODO: fake ctx
-  let ctx_arg = AnyRef::from_i31(&mut *caller, I31::wrapping_i32(42));
+  let mut ctx_out = [Val::AnyRef(None)];
+  empty_ctx_fn.call(&mut *caller, &[], &mut ctx_out)?;
   apply_fn.call(&mut *caller,
-    &[acc, Val::AnyRef(Some(ctx_arg)), Val::AnyRef(Some(main_clo))],
+    &[acc, ctx_out[0], Val::AnyRef(Some(main_clo))],
     &mut [])?;
   Ok(())
 }

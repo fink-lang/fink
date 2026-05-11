@@ -48,6 +48,22 @@
   ;; user-defined fns + continuations; the runtime side migrates fn-by-fn.
   (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
 
+  ;; $Ctx — universe context threaded through every Fn3 call. Frames
+  ;; field is the per-provider handler stack; null until a `with` block
+  ;; pushes its first frame. Hosts call $empty_ctx at module entry to
+  ;; mint the initial ctx; substrate primitives (register_ctx, etc.)
+  ;; land in a later increment.
+  (type $Ctx (@pub) (struct
+    (field $frames (mut (ref null any)))
+  ))
+
+  ;; Mint an empty $Ctx. Host runners call this once per module-wrapper
+  ;; entry to seed the ctx arg of $apply_3, replacing the placeholder
+  ;; ref.i31 42 that lived at the host boundary during the Fn3 flip.
+  (func $empty_ctx (@pub) (result (ref $Ctx))
+    (struct.new $Ctx (ref.null any))
+  )
+
 
   ;; $SpreadArgs — wrapper for spread arguments at call sites.
   ;; Contains a $List of the spread values. Used to distinguish a spread

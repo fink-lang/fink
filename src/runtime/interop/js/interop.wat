@@ -83,6 +83,12 @@
       (param $args (ref null any))
       (param $ctx (ref null any))
       (param $callee (ref null any))))
+  (import "rt/apply.wat" "empty_ctx"
+    (func $empty_ctx_inner (result (ref any))))
+  (import "std/effects.wat" "set_ctx"
+    (func $set_ctx_inner (result (ref any))))
+  (import "std/effects.wat" "get_ctx"
+    (func $get_ctx_inner (result (ref any))))
 
   ;; std/dict.wat:get is typed for the concrete $RecImpl subtype; JS only
   ;; ever holds opaque (ref any), so we wrap with a JS-friendly shim
@@ -380,13 +386,11 @@
     (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
     (return_call $apply_3_inner (local.get $args) (local.get $ctx) (local.get $callee)))
 
-  ;; Host-side helper: mint a placeholder universe ctx (ref.i31 42)
-  ;; as an anyref the JS side can pass to apply_3. Once the host
-  ;; injects a real ctx (substrate landing), this becomes redundant.
-  (func $placeholder_ctx (export "env:placeholder_ctx")
-    (result (ref null any))
-    ;; TODO fake ctx
-    (ref.i31 (i32.const 42)))
+  ;; Host-side helper: mint an empty universe ctx the JS side passes
+  ;; into apply_3 at module-wrapper entry. Delegates to rt/apply.wat's
+  ;; canonical $empty_ctx.
+  (func (export "env:empty_ctx") (result (ref any))
+    (return_call $empty_ctx_inner))
 
 
   ;; -- Runtime-contract stubs (all `unreachable`) ------------------------

@@ -1,0 +1,42 @@
+{test, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'set_ctx threads new universe forward', fn:
+  expect run ƒink:
+    {set_ctx} = import 'std/effects.fnk'
+    set_ctx 'first'
+    set_ctx 'second'
+  | equals ":
+    first
+
+
+test 'set_ctx survives a builtin op in between', fn:
+  expect run ƒink:
+    {set_ctx} = import 'std/effects.fnk'
+    set_ctx 'foo'
+    x = 1 + 2
+    set_ctx 'bar ${x}'
+  | equals ":
+    foo
+
+
+test 'ctx set in outer scope reads in nested fn', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    # we don't know what the starting point is, 42?
+    set_ctx 1
+
+    ni = set_ctx 1
+
+    inner = fn foo:
+      x = set_ctx foo + 1
+      x
+
+    inner ni
+    get_ctx _
+  | equals ƒink:
+    2
+
+

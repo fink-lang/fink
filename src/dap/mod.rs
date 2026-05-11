@@ -203,8 +203,9 @@ async fn apply_main_dap(
   main_clo: wasmtime::Rooted<wasmtime::AnyRef>,
   argv: &[Vec<u8>],
 ) -> Result<(), wasmtime::Error> {
-  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with placeholder ctx
-  // (ref.i31 42) — same shape as the per-module wrapper's entry call.
+  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with an empty ctx minted
+  // by the wasm-side `env:empty_ctx` — same shape as the per-module
+  // wrapper's entry call.
   let wrap_host_cont = caller.get_export("wrap_host_cont_3")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no wrap_host_cont_3 export"))?;
@@ -220,6 +221,9 @@ async fn apply_main_dap(
   let apply_fn = caller.get_export("apply_3")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no apply_3 export"))?;
+  let empty_ctx_fn = caller.get_export("empty_ctx")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no empty_ctx export"))?;
 
   let mut done_out = [wasmtime::Val::AnyRef(None)];
   wrap_host_cont
@@ -257,11 +261,11 @@ async fn apply_main_dap(
     acc = next[0];
   }
 
-  let ctx_arg = wasmtime::AnyRef::from_i31(
-    &mut *caller, wasmtime::I31::wrapping_i32(42));
+  let mut ctx_out = [wasmtime::Val::AnyRef(None)];
+  empty_ctx_fn.call_async(&mut *caller, &[], &mut ctx_out).await?;
   apply_fn
     .call_async(&mut *caller,
-      &[acc, wasmtime::Val::AnyRef(Some(ctx_arg)), wasmtime::Val::AnyRef(Some(main_clo))],
+      &[acc, ctx_out[0], wasmtime::Val::AnyRef(Some(main_clo))],
       &mut [])
     .await?;
   Ok(())

@@ -63,6 +63,12 @@
       (param $args (ref null any))
       (param $ctx (ref null any))
       (param $callee (ref null any))))
+  (import "rt/apply.wat"    "empty_ctx"
+    (func $empty_ctx (result (ref any))))
+  (import "std/effects.wat" "set_ctx"
+    (func $set_ctx (result (ref any))))
+  (import "std/effects.wat" "get_ctx"
+    (func $get_ctx (result (ref any))))
 
   (import "std/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
@@ -473,6 +479,9 @@
   (func (export "env:apply_3")
     (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
     (return_call $apply_3 (local.get $args) (local.get $ctx) (local.get $callee)))
+
+  (func (export "env:empty_ctx") (result (ref any))
+    (return_call $empty_ctx))
 
   (func (export "env:args_empty") (result (ref any))
     (return_call $args_empty))
