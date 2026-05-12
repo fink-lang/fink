@@ -2650,7 +2650,6 @@ fn emit_rec_pattern<'src>(
             }
           }
         });
-        break;
       }
       NodeKind::Ident(name) => {
         regular.push(RecField { key: RecKey::Ident(name), pat: field_id, origin: Some(field_id) });

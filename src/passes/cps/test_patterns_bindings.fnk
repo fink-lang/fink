@@ -235,6 +235,29 @@ test 'rec pattern with bound rest', fn:
     # sm:YgABABMAAQATJAEAExgBABMSAAIABgEAEwABABMIABAAGAEAEw4BABMKAAIADgECAwABAAMMAQETCgAKAQIDDgACABIBGgEAAQABDAEbEwoACgEQBBAAAgAWAQ8TAAEAExQBEAQQABABDxMMAAIADgEAEwABABMIABgAGAAYABgBABMKAAIAFgEAEwABABMcAQATCgACACABABMMAAIAHgEAEwABABMUAQATDAAEAQATAAEAEwIBABMGAQATAgAEAQATFAAKAQATDgEAEwwAAgAiARwBAAEAAQwBGxMMAAoBABMKAAIAJgEAEwABABMWABQABAEAEwoABAEAEwoAHgAEAQATAAEAExYAFAAYAQATDAAEAQATAAEAEw4AFAAEAQATDAAEAQATDgAEASAD
 
 
+test 'rec pattern with bound rest — rest first', fn:
+  expect cps_module ƒink:
+    {..rest, bar} = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_41, ·ƒret_2:
+      ·fn
+        fn ·ƒctx_43, ·v_7, ·v_8:
+          ·let ·v_7, fn ·bar_1:
+            ·let ·v_8, fn ·rest_0:
+              ·ƒret_2 ·rest_0
+        fn ·v_34:
+          ·fn
+            fn ·ƒctx_44, ·ƒsucc_5, ·ƒfail_6, ·v_4:
+              ·is_rec_like ·v_4,
+                fn ·v_16:
+                  ·rec_pop ·v_16, 'bar', ·ƒfail_6, fn ·v_7, ·v_13:
+                    ·let ·v_13, fn ·v_8:
+                      ·ƒsucc_5 ·ƒctx_44, ·v_7, ·v_8
+                fn: ·ƒfail_6 ·ƒctx_44
+            fn ·v_25: ·v_25 ·ƒctx_41, ·v_34, ·panic, ·∅foo
+    # sm:YgABABMAAQATJAEAExgBABMSAAIABgEAEwABABMIABAAGAEAEw4BABMKAAIADgESAwABAAMMARETCgAKARIDDgACABIBCgEAAQABDAEbEwoACgEGBBAAAgAWAQUTAAEAExQBBgQQABABBRMMAAIADgEAEwABABMIABgAGAAYABgBABMKAAIAFgEAEwABABMcAQATCgACACABABMMAAIAHgEAEwABABMUAQATDAAEAQATAAEAEwIBABMGAQATAgAEAQATFAAKAQATDgEAEwwAAgAiARwBAAEAAQwBGxMMAAoBABMKAAIAJgEAEwABABMWABQABAEAEwoABAEAEwoAHgAEAQATAAEAExYAFAAYAQATDAAEAQATAAEAEw4AFAAEAQATDAAEAQATDgAEASAD
+
+
 test 'rec — expr key destructure', fn:
   expect cps_module ƒink:
     {(4): foo} = rec

@@ -269,3 +269,11 @@ test 'rec dot access dynamic key', fn:
   | equals ƒink:
     42
 
+test 'rec destructure rest before field', fn:
+  expect run ƒink:
+    r = {a: 1, b: 2}
+    {..rest, a} = r
+    a
+  | equals ƒink:
+    1
+
