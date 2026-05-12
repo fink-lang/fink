@@ -367,7 +367,7 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     // are wired up. Today this lets `with` syntax flow end-to-end
     // without panicking, and matches a no-op handler stack.
     NodeKind::With { handlers, body, .. } => {
-      let mut items: Vec<AstId> = handlers.items.iter().copied().collect();
+      let mut items: Vec<AstId> = handlers.items.to_vec();
       items.extend(body.items.iter().copied());
       if items.is_empty() {
         // `with:` with no handlers and empty body — produce a unit-ish
