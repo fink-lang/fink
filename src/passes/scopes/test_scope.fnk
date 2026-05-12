@@ -620,6 +620,23 @@ test 'with body shadows outer binding', fn:
 
 
 ---
+member access
+---
+
+test 'member dynamic key resolves rhs binding', fn:
+  expect scope ƒink:
+    r = {a: 42}
+    k = 'a'
+    r.(k)
+  | equals ƒink:
+    scope 15, 'module',
+      bind 0, 'r'
+      bind 6, 'k'
+      ref 'r', 0
+      ref 'k', 6
+
+
+---
 prelude
 ---
 

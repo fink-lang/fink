@@ -646,7 +646,14 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
 
     NodeKind::Group { inner, .. } => walk_node(ast, inner, scope, ctx),
     NodeKind::Try(inner) => walk_node(ast, inner, scope, ctx),
-    NodeKind::Member { lhs, .. } => walk_node(ast, lhs, scope, ctx),
+    NodeKind::Member { lhs, rhs, .. } => {
+      walk_node(ast, lhs, scope, ctx);
+      // Only walk rhs when it is not a plain Ident — an Ident rhs is a literal
+      // field name key, not a binding reference.
+      if !matches!(ast.nodes.get(rhs).kind, NodeKind::Ident(_)) {
+        walk_node(ast, rhs, scope, ctx);
+      }
+    }
     NodeKind::Spread { inner: Some(inner_id), .. } => walk_node(ast, inner_id, scope, ctx),
     NodeKind::Spread { inner: None, .. } => {}
     NodeKind::ChainedCmp(parts) => {

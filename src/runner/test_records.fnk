@@ -260,3 +260,12 @@ test 'rec dot access string key short', fn:
     r.'foo bar'
   | equals ƒink:
     42
+
+test 'rec dot access dynamic key', fn:
+  expect run ƒink:
+    r = {a: 42}
+    k = 'a'
+    r.(k)
+  | equals ƒink:
+    42
+
