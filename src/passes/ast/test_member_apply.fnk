@@ -1,0 +1,49 @@
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+Member access followed by application.
+
+Today `ctx.h 42` parses as two statements (a Member then a LitInt).
+The expected shape is `Apply(Member(ctx, h), 42)` so that method-style
+calls work without intermediate bindings or pipes.
+---
+
+test 'member then apply', fn:
+  expect ast ƒink:
+    ctx.h 42
+  | equals ƒink:
+    Module
+      Apply
+        Member '.',
+          Ident 'ctx'
+          Ident 'h'
+        LitInt '42'
+
+
+test 'member then apply two args', fn:
+  expect ast ƒink:
+    ctx.h 1, 2
+  | equals ƒink:
+    Module
+      Apply
+        Member '.',
+          Ident 'ctx'
+          Ident 'h'
+        LitInt '1'
+        LitInt '2'
+
+
+test 'nested member then apply', fn:
+  expect ast ƒink:
+    ctx.w.foo 42
+  | equals ƒink:
+    Module
+      Apply
+        Member '.',
+          Member '.',
+            Ident 'ctx'
+            Ident 'w'
+          Ident 'foo'
+        LitInt '42'

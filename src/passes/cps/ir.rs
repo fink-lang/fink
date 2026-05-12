@@ -147,6 +147,7 @@ pub enum Bind {
   SynthName,       // source-level binding: pre-allocated CpsId, name via origin map
   Synth,           // compiler-generated temp: rendered as ·v_{cps_id}
   Cont(ContKind),  // continuation parameter with semantic role
+  Ctx,             // universe-context parameter: rendered as ·ƒctx_{cps_id}
 }
 
 /// Semantic role of a continuation parameter.

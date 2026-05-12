@@ -42,6 +42,28 @@
   ;; $Fn2(captures, args) — all functions (conts are in captures or args).
   (type $Fn2 (@pub) (func (param (ref null any) (ref null any))))
 
+  ;; Ctx-aware calling convention. $Fn3(captures, ctx, args) — caller
+  ;; passes the universe context as a native wasm value, sidestepping
+  ;; the args-list head/tail dance. Compiler emits Fn3 closures for
+  ;; user-defined fns + continuations; the runtime side migrates fn-by-fn.
+  (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
+
+  ;; $Ctx — universe context threaded through every Fn3 call. Frames
+  ;; field is the per-provider handler stack; null until a `with` block
+  ;; pushes its first frame. Hosts call $empty_ctx at module entry to
+  ;; mint the initial ctx; substrate primitives (register_ctx, etc.)
+  ;; land in a later increment.
+  (type $Ctx (@pub) (struct
+    (field $frames (mut (ref null any)))
+  ))
+
+  ;; Mint an empty $Ctx. Host runners call this once per module-wrapper
+  ;; entry to seed the ctx arg of $apply_3, replacing the placeholder
+  ;; ref.i31 42 that lived at the host boundary during the Fn3 flip.
+  (func $empty_ctx (@pub) (result (ref $Ctx))
+    (struct.new $Ctx (ref.null any))
+  )
+
 
   ;; $SpreadArgs — wrapper for spread arguments at call sites.
   ;; Contains a $List of the spread values. Used to distinguish a spread
@@ -61,6 +83,15 @@
 
   ;; Universal closure dispatcher. Tail-called from every CPS
   ;; continuation site.
+  ;;
+  ;; Fn3-aware shim: the compiler now emits every user closure as
+  ;; Fn3 (caps, ctx, args). Existing Fn2-shape callers (runtime
+  ;; builtins like op_plus that invoke their result-cont via $apply)
+  ;; continue to work — we synthesise a placeholder ctx (ref.i31 42)
+  ;; and tail-call the Fn3 underneath. Once the substrate lands and
+  ;; runtime ops thread real ctx, those callers migrate to $apply_3
+  ;; directly and this shim can shrink back to a pure Fn2 dispatch
+  ;; (for runtime-internal Fn2 closures, if any remain).
   (func $apply (@pub)
     (param $args (ref null any))
     (param $callee (ref null any))
@@ -68,10 +99,31 @@
     (local $clos (ref $Closure))
     (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
 
-    (return_call_ref $Fn2
+    (return_call_ref $Fn3
       (struct.get $Closure $captures (local.get $clos))
+      (ref.i31 (i32.const 42))
       (local.get $args)
-      (ref.cast (ref $Fn2) (struct.get $Closure $func (local.get $clos))))
+      (ref.cast (ref $Fn3) (struct.get $Closure $func (local.get $clos))))
+  )
+
+  ;; Ctx-aware closure dispatcher. Mirrors $apply but threads the
+  ;; universe context as a native wasm arg so Fn3-typed callees don't
+  ;; need to peel ctx off the args list. Compiler-emitted user fns
+  ;; route through here; existing Fn2 std/runtime helpers stay on
+  ;; $apply until they are migrated to Fn3.
+  (func $apply_3 (@pub)
+    (param $args (ref null any))
+    (param $ctx (ref null any))
+    (param $callee (ref null any))
+
+    (local $clos (ref $Closure))
+    (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
+
+    (return_call_ref $Fn3
+      (struct.get $Closure $captures (local.get $clos))
+      (local.get $ctx)
+      (local.get $args)
+      (ref.cast (ref $Fn3) (struct.get $Closure $func (local.get $clos))))
   )
 
 
@@ -157,7 +209,10 @@
   (elem declare func $_thunk_fn)
 
   ;; Thunk body. Captures: [cont, value]. When applied: apply([value], cont).
-  (func $_thunk_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $_thunk_fn (type $Fn3)
+      (param $caps (ref null any))
+      (param $_ctx (ref null any))
+      (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
     (local $value (ref any))

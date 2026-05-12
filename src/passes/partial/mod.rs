@@ -367,6 +367,10 @@ fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
         || body.items.iter().any(|&id| has_partial(ast, id))
     }
     NodeKind::Try(inner) => has_partial(ast, *inner),
+    NodeKind::With { handlers, body, .. } => {
+      handlers.items.iter().any(|&id| has_partial(ast, id))
+        || body.items.iter().any(|&id| has_partial(ast, id))
+    }
   }
 }
 
@@ -812,6 +816,10 @@ fn has_partial_builder(builder: &AstBuilder<'_>, id: AstId) -> bool {
         || body.items.iter().any(|&id| has_partial_builder(builder, id))
     }
     NodeKind::Try(inner) => has_partial_builder(builder, *inner),
+    NodeKind::With { handlers, body, .. } => {
+      handlers.items.iter().any(|&id| has_partial_builder(builder, id))
+        || body.items.iter().any(|&id| has_partial_builder(builder, id))
+    }
   }
 }
 

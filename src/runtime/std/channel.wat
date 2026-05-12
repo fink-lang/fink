@@ -19,6 +19,7 @@
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat"  "Fn2"      (type $Fn2      (sub any)))
+  (import "rt/apply.wat"  "Fn3"      (type $Fn3      (sub any)))
   (import "std/list.wat"  "List"     (type $List     (sub any)))
 
   ;; Func imports
@@ -191,8 +192,9 @@
   ;;   4. if both lists still non-empty → push self to task queue
   ;;   5. resume
 
-  (func $_process_msg_q_fn (type $Fn2)
+  (func $_process_msg_q_fn (type $Fn3)
     (param $caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $ch (ref $Channel))

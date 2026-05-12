@@ -1,0 +1,76 @@
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'with no handlers and expression body', fn:
+  expect ast ƒink:
+    with:
+      'hello'
+  | equals ƒink:
+    Module
+      With ':',
+        LitStr 'hello'
+
+
+test 'with single handler and expression body', fn:
+  expect ast ƒink:
+    with state:
+      1 + 2
+  | equals ƒink:
+    Module
+      With ':',
+        Ident 'state'
+        InfixOp '+',
+          LitInt '1'
+          LitInt '2'
+
+
+test 'with multiple handlers and expression body', fn:
+  expect ast ƒink:
+    with state, abort:
+      1 + 2
+  | equals ƒink:
+    Module
+      With ':',
+        Ident 'state'
+        Ident 'abort'
+        InfixOp '+',
+          LitInt '1'
+          LitInt '2'
+
+
+test 'with single handler and multiline body', fn:
+  expect ast ƒink:
+    with state:
+      x = 1 + 2
+      x * 2
+  | equals ƒink:
+    Module
+      With ':',
+        Ident 'state'
+        Bind '=',
+          Ident 'x'
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
+        InfixOp '*',
+          Ident 'x'
+          LitInt '2'
+
+
+test 'with handler registration using with as a protocol', fn:
+  expect ast ƒink:
+    with foo = fn body, done:
+      bar
+  | equals ƒink:
+    Module
+      Bind '=',
+        Apply
+          Ident 'with'
+          Ident 'foo'
+        Fn ':',
+          Patterns
+            Ident 'body'
+            Ident 'done'
+          Ident 'bar'
+

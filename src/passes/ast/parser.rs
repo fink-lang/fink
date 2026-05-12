@@ -381,6 +381,7 @@ impl<'src> Parser<'src> {
 
       if name == "fn" { return self.parse_fn(loc); }
       if name == "match" { return self.parse_match_expr(loc); }
+      if name == "with" { return self.parse_with_expr(loc); }
       if self.block_names.contains_key(name) { return self.parse_block(loc, name); }
 
       // Tagged template string: ident immediately adjacent to StrStart → raw template
@@ -395,7 +396,16 @@ impl<'src> Parser<'src> {
       let result = self.collect_apply_or_block(func, false)?;
       // If no args were collected (bare ident returned), allow infix operators to continue.
       if matches!(self.get(result).kind, NodeKind::Ident(_)) {
-        return self.parse_infix_from(result, 0);
+        let after_infix = self.parse_infix_from(result, 0)?;
+        // Member access followed by args: `ctx.h 42` -> Apply(Member, 42).
+        // After parse_infix consumed the `.h` chain, fall back into args
+        // collection so that subsequent tokens parse as call arguments.
+        if matches!(self.get(after_infix).kind, NodeKind::Member { .. })
+          && self.is_arg_start()
+        {
+          return self.collect_apply_or_block(after_infix, false);
+        }
+        return Ok(after_infix);
       }
       return Ok(result);
     }
@@ -428,6 +438,7 @@ impl<'src> Parser<'src> {
     if let NodeKind::Ident(name) = self.get(head).kind {
       if name == "fn" { return self.parse_fn(self.loc_of(head)); }
       if name == "match" { return self.parse_match_expr(self.loc_of(head)); }
+      if name == "with" { return self.parse_with_expr(self.loc_of(head)); }
       if self.block_names.contains_key(name) && name != "fn" && name != "match" {
         return self.parse_block(self.loc_of(head), name);
       }
@@ -747,6 +758,10 @@ impl<'src> Parser<'src> {
       if name_tok.src == "match" {
         self.bump();
         return self.parse_match_expr(name_tok.loc);
+      }
+      if name_tok.src == "with" {
+        self.bump();
+        return self.parse_with_expr(name_tok.loc);
       }
       if self.block_names.contains_key(name_tok.src) {
         self.bump();
@@ -1554,6 +1569,14 @@ impl<'src> Parser<'src> {
 
   // Parse comma-separated params until ":"
   fn parse_params(&mut self) -> Result<(AstId, Loc), ParseError> {
+    self.parse_params_with(true)
+  }
+
+  // Variant of parse_params that lets the caller disable default-arg
+  // (`name = expr`) consumption. With/registered-block dispatchers need this:
+  // they must let the outer `=` surface so the LHS can be reshaped as
+  // `Apply(name, args)` for protocol-impl binding (`with foo = ...`).
+  fn parse_params_with(&mut self, allow_default_args: bool) -> Result<(AstId, Loc), ParseError> {
     let start = self.peek().loc.start;
     let mut items: Vec<AstId> = vec![];
     let mut seps: Vec<Token<'src>> = vec![];
@@ -1573,7 +1596,7 @@ impl<'src> Parser<'src> {
         // Parse param without block detection (no `:` consumption).
         // Also support default args: name = 'default'.
         let param = self.parse_apply_no_block()?;
-        let param = if self.at(TokenKind::Sep) && self.peek().src == "=" {
+        let param = if allow_default_args && self.at(TokenKind::Sep) && self.peek().src == "=" {
           let op = self.bump();
           let rhs = self.parse_infix(0)?;
           let loc = Loc { start: self.loc_of(param).start, end: self.loc_of(rhs).end };
@@ -1693,6 +1716,32 @@ impl<'src> Parser<'src> {
     ))
   }
 
+  fn parse_with_expr(&mut self, with_loc: Loc) -> ParseResult {
+    let (params_node, params_loc) = self.parse_params_with(false)?;
+    // Extract handler expressions from Patterns wrapper — handlers are
+    // value-site, not patterns. Same shape as `match` subjects.
+    let handlers = match self.get(params_node).kind.clone() {
+      NodeKind::Patterns(exprs) => exprs,
+      _ => Exprs { items: Box::new([params_node]), seps: vec![] },
+    };
+    // If the params are followed by `=` instead of `:`, this is a protocol-impl
+    // binding (`with foo = fn body, done: ...`), not a `with`-block. Reconstruct
+    // the LHS as `Apply(with, args)` and let `parse_binding` consume the `=`.
+    if self.at(TokenKind::Sep) && self.peek().src == "=" {
+      let func = self.node(NodeKind::Ident("with"), with_loc);
+      return Ok(self.node(
+        NodeKind::Apply { func, args: handlers },
+        Loc { start: with_loc.start, end: params_loc.end },
+      ));
+    }
+    let (sep, body) = self.parse_colon_body()?;
+    let end = body.items.last().map(|&id| self.loc_of(id).end).unwrap_or(params_loc.end);
+    Ok(self.node(
+      NodeKind::With { handlers, sep, body },
+      Loc { start: with_loc.start, end },
+    ))
+  }
+
   fn parse_colon_arms(&mut self) -> Result<(Token<'src>, Exprs<'src>), ParseError> {
     let sep = self.expect(TokenKind::Colon)?;
     let arms = if self.at(TokenKind::BlockStart) {
@@ -1744,7 +1793,20 @@ impl<'src> Parser<'src> {
   fn parse_block(&mut self, name_loc: Loc, name: &'src str) -> ParseResult {
     let mode = self.block_names.get(name).copied().unwrap_or(BlockMode::Ast);
     let name_node = self.node(NodeKind::Ident(name), name_loc);
-    let (params, _) = self.parse_params()?;
+    let (params, params_loc) = self.parse_params_with(false)?;
+    // If the params are followed by `=` instead of `:`, this is a protocol-impl
+    // binding (`ƒink foo = fn ...`), not a custom-block use. Reconstruct the
+    // LHS as `Apply(name, args)` and let `parse_binding` consume the `=`.
+    if self.at(TokenKind::Sep) && self.peek().src == "=" {
+      let args = match self.get(params).kind.clone() {
+        NodeKind::Patterns(exprs) => exprs,
+        _ => Exprs { items: Box::new([params]), seps: vec![] },
+      };
+      return Ok(self.node(
+        NodeKind::Apply { func: name_node, args },
+        Loc { start: name_loc.start, end: params_loc.end },
+      ));
+    }
     let (sep, body) = match mode {
       BlockMode::Ast    => self.parse_colon_body_or_arms()?,
       BlockMode::Tokens => self.parse_colon_body_tokens()?,
@@ -2014,5 +2076,7 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_block_modes.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_with.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_member_apply.fnk");
 }

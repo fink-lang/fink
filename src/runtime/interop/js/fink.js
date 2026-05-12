@@ -168,9 +168,9 @@ const make_fn_proxy = (exports, {wrap, args_from_js}) => (ref) => {
         // CPS: the cont fires with a single-element args list whose
         // head is the function's result. Extract via list_head.
         const cont = (result) => resolve(wrap(exports.list_head(result)));
-        const cont_ref = exports.wrap_host_cont(cont);
+        const cont_ref = exports.wrap_host_cont_3(cont);
         const fink_args = exports.args_prepend(cont_ref, args_from_js(args));
-        exports.apply(fink_args, ref);
+        exports.apply_3(fink_args, exports.empty_ctx(), ref);
       });
     },
   });
@@ -213,7 +213,7 @@ const make_import = (exports, {wrap}) => (name) =>
       const rec       = exports.list_head(tail);
       resolve([wrap(last_expr), wrap(rec)]);
     };
-    const cont_ref = exports.wrap_host_cont(cont);
+    const cont_ref = exports.wrap_host_cont_3(cont);
     exports[name](cont_ref);
   });
 

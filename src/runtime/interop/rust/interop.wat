@@ -21,6 +21,7 @@
 (module
 
   (import "rt/apply.wat"     "Fn2"     (type $Fn2 (sub any)))
+  (import "rt/apply.wat"     "Fn3"     (type $Fn3 (sub any)))
   (import "rt/apply.wat"    "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"    "Captures" (type $Captures (sub any)))
 
@@ -57,6 +58,17 @@
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
   (import "rt/apply.wat"    "apply"
     (func $apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "rt/apply.wat"    "apply_3"
+    (func $apply_3
+      (param $args (ref null any))
+      (param $ctx (ref null any))
+      (param $callee (ref null any))))
+  (import "rt/apply.wat"    "empty_ctx"
+    (func $empty_ctx (result (ref any))))
+  (import "std/effects.wat" "set_ctx"
+    (func $set_ctx (result (ref any))))
+  (import "std/effects.wat" "get_ctx"
+    (func $get_ctx (result (ref any))))
 
   (import "std/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
@@ -89,7 +101,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter $read_apply $write_apply $panic_apply)
+  (elem declare func $host_cont_adapter $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -145,14 +157,51 @@
       (local.get $args))
   )
 
+  ;; $Fn3 adapter body — fires when WASM invokes a host-wrapped cont
+  ;; via the ctx-aware `apply_3` dispatcher. Same as $host_cont_adapter
+  ;; but accepts an extra ctx native param which we ignore (the host
+  ;; cont doesn't participate in the substrate).
+  (func $host_cont_adapter_3 (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $id_box (ref i31))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $id_box
+      (ref.cast (ref i31)
+        (array.get $Captures (local.get $captures) (i32.const 0))))
+
+    (call $host_invoke_cont
+      (i31.get_s (local.get $id_box))
+      (local.get $args))
+  )
+
   ;; Factory: host calls this with its callback id; gets back an
   ;; opaque (ref null any) fit for any CPS continuation slot.
+  ;; Fn2 variant — used by the existing default Fn2 pipeline.
   (func $wrap_host_cont (export "env:wrap_host_cont")
     (param $id i32)
     (result (ref null any))
 
     (struct.new $Closure
       (ref.func $host_cont_adapter)
+      (array.new_fixed $Captures 1
+        (ref.i31 (local.get $id))))
+  )
+
+  ;; Fn3 variant — used by the ctx-aware (lower_ctx) pipeline.
+  ;; The closure's funcref is Fn3-typed so `apply_3` can cast it
+  ;; without trapping. The runner uses this when invoking a
+  ;; ctx-aware module.
+  (func $wrap_host_cont_3 (export "env:wrap_host_cont_3")
+    (param $id i32)
+    (result (ref null any))
+
+    (struct.new $Closure
+      (ref.func $host_cont_adapter_3)
       (array.new_fixed $Captures 1
         (ref.i31 (local.get $id))))
   )
@@ -314,8 +363,9 @@
   ;; Singleton — same closure instance every access; captures null
   ;; (nothing per-instance).
 
-  (func $read_apply (type $Fn2)
+  (func $read_apply (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -382,8 +432,9 @@
     (return_call $resume)
   )
 
-  (func $write_apply (type $Fn2)
+  (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -424,6 +475,13 @@
   (func (export "env:apply")
     (param $args (ref null any)) (param $callee (ref null any))
     (return_call $apply (local.get $args) (local.get $callee)))
+
+  (func (export "env:apply_3")
+    (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
+    (return_call $apply_3 (local.get $args) (local.get $ctx) (local.get $callee)))
+
+  (func (export "env:empty_ctx") (result (ref any))
+    (return_call $empty_ctx))
 
   (func (export "env:args_empty") (result (ref any))
     (return_call $args_empty))

@@ -388,6 +388,15 @@ pub enum NodeKind<'src> {
   // Try — unwrap Ok or propagate Err from enclosing function
   Try(AstId),
 
+  // --- effects ---
+
+  // With — handler value(s) + sep (:) + body
+  // Handlers are value-site expressions evaluated against the surrounding
+  // scope; the body is the continuation in which those handlers are
+  // installed. Foundational construct for algebraic effects — cannot be
+  // modelled as user-level ƒink.
+  With { handlers: Exprs<'src>, sep: Token<'src>, body: Exprs<'src> },
+
   // --- custom blocks ---
 
   // Block — name (Ident) + params (Patterns) + sep (:) + body
@@ -482,6 +491,10 @@ pub fn walk<'src, 'a>(
     NodeKind::Block { name, params, body, .. } => {
       walk(ast, *name, f);
       walk(ast, *params, f);
+      for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
+    }
+    NodeKind::With { handlers, body, .. } => {
+      for &h_id in handlers.items.iter() { walk(ast, h_id, f); }
       for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
     }
   }
@@ -693,6 +706,17 @@ fn print_node(ast: &Ast, id: AstId, out: &mut crate::sourcemap::MappedWriter, de
       print_node(ast, *name, out, depth + 1);
       out.push('\n');
       print_node(ast, *params, out, depth + 1);
+      for &stmt_id in body.items.iter() {
+        out.push('\n');
+        print_node(ast, stmt_id, out, depth + 1);
+      }
+    }
+    NodeKind::With { handlers, sep, body } => {
+      out.push_str("With '"); out.push_str(sep.src); out.push_str("',");
+      for &h_id in handlers.items.iter() {
+        out.push('\n');
+        print_node(ast, h_id, out, depth + 1);
+      }
       for &stmt_id in body.items.iter() {
         out.push('\n');
         print_node(ast, stmt_id, out, depth + 1);

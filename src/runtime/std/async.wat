@@ -27,6 +27,7 @@
   (import "rt/apply.wat" "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat" "Fn2"      (type $Fn2      (sub any)))
+  (import "rt/apply.wat" "Fn3"      (type $Fn3      (sub any)))
   (import "std/list.wat" "List"     (type $List     (sub any)))
 
   ;; Func imports
@@ -153,7 +154,7 @@
 
   ;; The settle continuation — called when a spawned task produces a result.
   ;; Captures: [future]. Called via _apply with args list [result].
-  (func $_settle_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $_settle_fn (type $Fn3) (param $caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $future (ref $Future))
     (local $result (ref any))
     (local.set $future (ref.cast (ref $Future)
@@ -168,7 +169,7 @@
 
   ;; The spawned task body — calls task_fn with the settle continuation.
   ;; Captures: [task_fn, settle_cont]. Called via _apply.
-  (func $_spawn_task_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $_spawn_task_fn (type $Fn3) (param $caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $task_fn (ref any))
     (local $settle_cont (ref any))

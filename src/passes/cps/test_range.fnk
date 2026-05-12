@@ -10,24 +10,24 @@ test 'range excl', fn:
   expect cps_module ƒink:
     0..10
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_0:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
       ·op_rngex (i8 0), (i8 10), ·ƒret_0
-    # sm:EAABAAUAAQAFJAEABRIAAgAGAQAFAAEABRgBAAEAAQABBgEAAQQABgEGAgABAAIGAQACBgAEAQUF
+    # sm:EQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUYAQABAAEAAQYBAAEEAAYBBgIAAQACBgEAAgYABAEFBQ
 
 
 test 'range incl', fn:
   expect cps_module ƒink:
     0...10
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_0:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
       ·op_rngin (i8 0), (i8 10), ·ƒret_0
-    # sm:EAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhgBAAEAAQABBgEAAQQABgEIAgABAAIGAQACBgAEAQcG
+    # sm:EQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYYAQABAAEAAQYBAAEEAAYBCAIAAQACBgEAAgYABAEHBg
 
 
 test 'open range excl', fn:
   expect cps_module ƒink:
     0..
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_0:
+    ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
       ·op_rngfrom (i8 0), ·ƒret_0
-    # sm:DAABAAMAAQADJAEAAxIAAgAGAQADAAEAAxwBAAEAAQABBgEAAQQABAEAAw
+    # sm:DQABAAMAAQADJAEAAxYBAAMSAAIABgEAAwABAAMcAQABAAEAAQYBAAEEAAQBAAM

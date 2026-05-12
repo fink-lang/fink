@@ -1,0 +1,84 @@
+{test, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+`with` syntax flows through end-to-end (no substrate semantics yet)
+---
+
+# Today `with` is a pass-through at CPS-lowering: handlers evaluated
+# for side-effects (currently a no-op since they're just unresolved
+# refs / values), body items run as if there were no `with`. Once the
+# substrate primitives land (push_frame/pop_frame/get_ctx/...), `with`
+# will lower to handler.with(ctx, body_fn, k_outer) protocol dispatch.
+
+
+test 'with foo — body returns last expr', fn:
+  expect run ƒink:
+    with foo:
+      42
+  | equals ƒink:
+    42
+
+
+test 'with no handlers — empty handler list still runs body', fn:
+  expect run ƒink:
+    with:
+      42
+  | equals ƒink:
+    42
+
+
+test 'with — multiple body statements', fn:
+  expect run ƒink:
+    with foo:
+      x = 5
+      y = 10
+      x + y
+  | equals ƒink:
+    15
+
+
+test 'with — multiple handlers', fn:
+  expect run ƒink:
+    with foo, bar:
+      42
+  | equals ƒink:
+    42
+
+
+test 'with — nested with', fn:
+  expect run ƒink:
+    with foo:
+      with bar:
+        42
+  | equals ƒink:
+    42
+
+
+test 'with — body with fn def + call', fn:
+  expect run ƒink:
+    with foo:
+      double = fn x: x * 2
+      double 21
+  | equals ƒink:
+    42
+
+
+test 'with — body uses outer binding', fn:
+  expect run ƒink:
+    n = 7
+    with foo:
+      n + 35
+  | equals ƒink:
+    42
+
+
+test 'with — bind survives after with', fn:
+  expect run ƒink:
+    with foo:
+      x = 30
+      x
+    12
+  | equals ƒink:
+    12

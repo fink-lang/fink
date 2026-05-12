@@ -87,11 +87,17 @@ pub fn lower<'src>(
 }
 
 /// Lift closures in CPS IR — produces the result needed by codegen.
+///
+/// Threads the universe ctx through every Apply (`thread_ctx`) before
+/// lifting, so all downstream stages (lifting, lower, emit) see ctx as
+/// a first-class arg. The Fn3 calling convention in `lower` consumes
+/// the threaded shape directly.
 pub fn lift<'src>(
   cps: Cps,
   desugared: &'src DesugaredAst<'src>,
 ) -> LiftedCps {
-  let result = lifting::lift(cps.result, &desugared.ast);
+  let threaded = cps::thread_ctx::thread_ctx(cps.result);
+  let result = lifting::lift(threaded, &desugared.ast);
   LiftedCps { result }
 }
 

@@ -80,6 +80,7 @@ pub enum Sym {
   F64,
   Decimal,
   Fn2,
+  Fn3,
   Closure,
   Captures,
   VarArgs,
@@ -93,6 +94,11 @@ pub enum Sym {
 
   // ── application (rt/apply.wat) ────────────────────────────────
   Apply,
+  // Apply3 is the Fn3 / ctx-aware dispatcher. Signature
+  // `(args, ctx, callee) -> ()`. Defined in rt/apply.wat at slice
+  // 2c-B; until then, references are emitted as imports that will
+  // remain unresolved (Phase A is shape-only, not runnable).
+  Apply3,
 
   // ── polymorphic protocol operators (rt/protocols.wat) ─────────
   // All binary operators share the shape (anyref, anyref, anyref)
@@ -304,6 +310,7 @@ pub struct Runtime {
   f64_: Option<TypeSym>,
   decimal_: Option<TypeSym>,
   fn2: Option<TypeSym>,
+  fn3: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
   varargs: Option<TypeSym>,
@@ -320,6 +327,7 @@ pub struct Runtime {
   args_prepend: Option<FuncSym>,
   args_concat:  Option<FuncSym>,
   apply:        Option<FuncSym>,
+  apply_3:      Option<FuncSym>,
   // polymorphic protocol operators
   op_plus:    Option<FuncSym>,
   op_minus:   Option<FuncSym>,
@@ -421,6 +429,8 @@ impl Runtime {
   pub fn channel(&self)      -> FuncSym { self.channel.expect("rt: channel not declared") }
   pub fn receive(&self)      -> FuncSym { self.receive.expect("rt: receive not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
+  pub fn apply_3(&self)      -> FuncSym { self.apply_3.expect("rt: apply_3 not declared") }
+  pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
   /// if the Sym wasn't declared — lowering should scan → declare
@@ -501,10 +511,12 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Panic           => "std/interop.fnk:panic",
 
     Sym::Fn2             => "rt/apply.wat:Fn2",
+    Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
     Sym::Apply           => "rt/apply.wat:apply",
+    Sym::Apply3          => "rt/apply.wat:apply_3",
 
     Sym::ArgsHead        => "rt/apply.wat:args_head",
     Sym::ArgsTail        => "rt/apply.wat:args_tail",
@@ -619,6 +631,9 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
     rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
   }
+  if needed.contains(&Sym::Fn3) || needed.contains(&Sym::Apply3) {
+    rt.fn3 = Some(TypeSym::Runtime(Sym::Fn3));
+  }
   if needed.contains(&Sym::Captures) {
     rt.captures = Some(TypeSym::Runtime(Sym::Captures));
   }
@@ -659,6 +674,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::ArgsPrepend) { rt.args_prepend = Some(FuncSym::Runtime(Sym::ArgsPrepend)); }
   if needed.contains(&Sym::ArgsConcat)  { rt.args_concat  = Some(FuncSym::Runtime(Sym::ArgsConcat)); }
   if needed.contains(&Sym::Apply)       { rt.apply        = Some(FuncSym::Runtime(Sym::Apply)); }
+  if needed.contains(&Sym::Apply3)      { rt.apply_3      = Some(FuncSym::Runtime(Sym::Apply3)); }
 
   for sym in BINARY_OPS {
     if needed.contains(sym) {
@@ -850,8 +866,12 @@ pub fn scan(cps: &CpsResult) -> RuntimeUsage {
   // Every well-formed module is a `Fn2`-shaped `fink_module`, so
   // that type is always needed. `args_head` is always needed
   // because bring-up always pops `done` out of `_args`.
+  // `args_tail` is also always needed because fink_module's user
+  // params are now `[ƒctx, ƒret]` — two args means at least one peel
+  // (head + tail) to unpack them.
   usage.mark(Sym::Fn2);
   usage.mark(Sym::ArgsHead);
+  usage.mark(Sym::ArgsTail);
 
   // Bring-up further uses `_apply` (with `args_empty` + `args_prepend`)
   // only when the tail call is a user value or continuation — i.e.

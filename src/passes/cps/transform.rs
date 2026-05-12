@@ -357,6 +357,39 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Patterns(_) => panic!("Patterns node lowered via fn/match"),
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
+    // ---- with: `with handlers: body` ----
+    //
+    // Slice 2c-pass-through: lower handlers + body as a flat sequence
+    // (handlers evaluated for side-effects, body items run normally,
+    // result is the last body item's value). No substrate dispatch
+    // yet — the real semantics (handler.with(ctx, body_fn, k_outer))
+    // lands once `push_frame`/`pop_frame`/`get_ctx` runtime primitives
+    // are wired up. Today this lets `with` syntax flow end-to-end
+    // without panicking, and matches a no-op handler stack.
+    NodeKind::With { handlers, body, .. } => {
+      let mut items: Vec<AstId> = handlers.items.to_vec();
+      items.extend(body.items.iter().copied());
+      if items.is_empty() {
+        // `with:` with no handlers and empty body — produce a unit-ish
+        // value via a dummy nil int literal, same as a literal `0` would.
+        let v = g.val(ValKind::Lit(Lit::Int { value: 0, width: IntWidth::I64 }), o);
+        (v, vec![])
+      } else if items.len() == 1 {
+        lower(g, items[0])
+      } else {
+        // Build a synthetic Module-like sequence: lower each in sequence,
+        // returning the last as the result.
+        let last = items.pop().unwrap();
+        let mut accum_pending: Vec<Pending> = Vec::new();
+        for it in items {
+          let (_v, mut p) = lower(g, it);
+          accum_pending.append(&mut p);
+        }
+        let (last_v, mut last_p) = lower(g, last);
+        accum_pending.append(&mut last_p);
+        (last_v, accum_pending)
+      }
+    }
   }
 }
 
@@ -1905,12 +1938,18 @@ pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeRe
     if export_ids.is_empty() { body } else { inject_pub_calls(&mut g, body, &export_ids) }
   };
 
-  // Root: App(FinkModule, [Cont::Expr { args: [ƒret], body }])
-  // The CPS root is a call — every module starts with an action.
+  // Root: App(FinkModule, [Cont::Expr { args: [ƒctx, ƒret], body }])
+  // The CPS root is a call — every module starts with an action. The
+  // module body fn receives the universe context (`ƒctx`) as its 0th
+  // arg, threaded by the runtime; `ƒret` is the host-supplied return
+  // continuation. Ctx is currently unused inside fink code — the runtime
+  // mints a placeholder value and the module ignores it. This is
+  // pure-pass-through plumbing for the effect-handler substrate.
+  let ctx_bind = g.bind(Bind::Ctx, module_origin);
   let root = g.expr(ExprKind::App {
     func: Callable::BuiltIn(BuiltIn::FinkModule),
     args: vec![Arg::Cont(Cont::Expr {
-      args: vec![fret_bind],
+      args: vec![ctx_bind, fret_bind],
       body: Box::new(body),
     })],
   }, module_origin);
@@ -2611,7 +2650,6 @@ fn emit_rec_pattern<'src>(
             }
           }
         });
-        break;
       }
       NodeKind::Ident(name) => {
         regular.push(RecField { key: RecKey::Ident(name), pat: field_id, origin: Some(field_id) });
@@ -3220,9 +3258,10 @@ mod module_tests {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
-        let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);
-        let ctx = Ctx { origin: &cps.result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&cps.result.root, &ctx);
+        let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+        let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
+        let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
         let _ = src;
         let b64 = srcmap.encode_base64url();
         format!("{output}\n# sm:{b64}")
@@ -3247,4 +3286,5 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_with.fnk");
 }
