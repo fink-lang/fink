@@ -14,14 +14,15 @@
 ;; Protocol-based overloading (future) will replace these with dispatch
 ;; through user-defined protocol implementations.
 ;;
-;; ctx convention (2026-05-16): every op_* takes $ctx as the first param so
-;; lower.rs can thread it uniformly at every builtin call site. Today, every
-;; op_* in this file IGNORES $ctx — the inner num/set/int/float/list/dict
-;; impls are monomorphic kernels with no user-callbacks, so dropping ctx at
-;; this boundary is safe AND is the intended optimization. Each `(param $ctx ...)`
-;; below is marked `;; TODO ctx: unused` as a reminder: when user-defined
-;; protocol impls land, this is the boundary where dispatch must start
-;; consulting ctx (e.g. for ctx-scoped operator overrides).
+;; ctx convention (2026-05-16): every op_* takes $ctx as the first param.
+;; Every op_* in this file FORWARDS $ctx to its cont (via list_apply_N).
+;; What it does NOT do is consult $ctx for dispatch — type dispatch is
+;; purely by `ref.test` on $a, and the per-type kernels in num/set/int/
+;; float/list/dict are pure compute (no user-callbacks reachable), so we
+;; don't pass ctx down into them either. The (param $ctx ...) line in
+;; each op_* is marked `;; TODO ctx: not consulted` as a reminder: when
+;; user-defined protocol impls land, this is the boundary where dispatch
+;; must start consulting ctx (e.g. for ctx-scoped operator overrides).
 
 (module
 
@@ -126,7 +127,7 @@
   ;; =========================================================================
 
   (func $op_plus (@pub) (@impl "std/operators.fnk:op_plus")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -153,7 +154,7 @@
       (local.get $cont)))
 
   (func $op_minus (@pub) (@impl "std/operators.fnk:op_minus")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -180,7 +181,7 @@
       (local.get $cont)))
 
   (func $op_mul (@pub) (@impl "std/operators.fnk:op_mul")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -190,7 +191,7 @@
       (local.get $cont)))
 
   (func $op_div (@pub) (@impl "std/operators.fnk:op_div")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -204,7 +205,7 @@
   ;; =========================================================================
 
   (func $op_intdiv (@pub) (@impl "std/operators.fnk:op_intdiv")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -214,7 +215,7 @@
       (local.get $cont)))
 
   (func $op_rem (@pub) (@impl "std/operators.fnk:op_rem")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -224,7 +225,7 @@
       (local.get $cont)))
 
   (func $op_intmod (@pub) (@impl "std/operators.fnk:op_intmod")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -234,7 +235,7 @@
       (local.get $cont)))
 
   (func $op_pow (@pub) (@impl "std/operators.fnk:op_pow")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -244,7 +245,7 @@
       (local.get $cont)))
 
   (func $op_divmod (@pub) (@impl "std/operators.fnk:op_divmod")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -254,7 +255,7 @@
       (local.get $cont)))
 
   (func $op_rotl (@pub) (@impl "std/operators.fnk:op_rotl")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -264,7 +265,7 @@
       (local.get $cont)))
 
   (func $op_rotr (@pub) (@impl "std/operators.fnk:op_rotr")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -323,7 +324,7 @@
   ;;   $Str    → str_op_eq
   ;;   $Set    → set:op_eq
   (func $op_eq (@pub) (@impl "std/operators.fnk:op_eq")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_num (ref $Num))
     (local $a_str (ref $Str))
@@ -380,7 +381,7 @@
   ;;   $Str    → !str_op_eq
   ;;   $Set    → !set:op_eq
   (func $op_neq (@pub) (@impl "std/operators.fnk:op_neq")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_num (ref $Num))
     (local $a_str (ref $Str))
@@ -437,7 +438,7 @@
   ;; relations don't apply.
   ;;   $Set    → set:op_disjoint
   (func $op_disjoint (@pub) (@impl "std/operators.fnk:op_disjoint")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -458,7 +459,7 @@
     (unreachable))
 
   (func $op_lt (@pub) (@impl "std/operators.fnk:op_lt")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -484,7 +485,7 @@
       (local.get $cont)))
 
   (func $op_lte (@pub) (@impl "std/operators.fnk:op_lte")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -510,7 +511,7 @@
       (local.get $cont)))
 
   (func $op_gt (@pub) (@impl "std/operators.fnk:op_gt")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -536,7 +537,7 @@
       (local.get $cont)))
 
   (func $op_gte (@pub) (@impl "std/operators.fnk:op_gte")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -566,7 +567,7 @@
   ;; =========================================================================
 
   (func $op_not (@pub) (@impl "std/operators.fnk:op_not")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $cont (ref null any))
     (local $a_num (ref $Num))
 
@@ -589,7 +590,7 @@
       (local.get $cont)))
 
   (func $op_and (@pub) (@impl "std/operators.fnk:op_and")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_num (ref $Num))
     (local $a_set (ref $Set))
@@ -631,7 +632,7 @@
       (local.get $cont)))
 
   (func $op_or (@pub) (@impl "std/operators.fnk:op_or")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_num (ref $Num))
     (local $a_set (ref $Set))
@@ -673,7 +674,7 @@
       (local.get $cont)))
 
   (func $op_xor (@pub) (@impl "std/operators.fnk:op_xor")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $a_num (ref $Num))
     (local $a_set (ref $Set))
@@ -720,7 +721,7 @@
 
   ;; is_seq_like(val, succ, fail): succ(val) if $List or $Set, else fail()
   (func $is_seq_like (@pub) (@impl "std/operators.fnk:is_seq_like")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
 
     ;; $List
@@ -748,7 +749,7 @@
 
   ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
   (func $is_rec_like (@pub) (@impl "std/operators.fnk:is_rec_like")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
     (block $not_rec
       (block $is_rec (result (ref $Rec))
@@ -770,7 +771,7 @@
   ;;   $List    → list_op_empty
   ;;   $Rec     → rec_op_empty
   (func $op_empty (@pub) (@impl "std/operators.fnk:op_empty")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $cont (ref null any))
     (local $a_set (ref $Set))
 
@@ -831,7 +832,7 @@
   ;; If empty: tail-call fail() with no args.
   ;; Else: tail-call succ(head, tail) with two args.
   (func $seq_pop (@pub) (@impl "std/seq.fnk:pop")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     ;; $Set → set:seq_pop
@@ -852,7 +853,7 @@
   ;; container. Today $List only — sets and other seq types could
   ;; gain a typed impl in future.
   (func $seq_prepend (@pub) (@impl "std/seq.fnk:prepend")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $seq (ref null any)) (param $cont (ref null any))
     (return_call $list_seq_prepend
       (local.get $val) (local.get $seq) (local.get $cont)))
@@ -863,7 +864,7 @@
   ;; If empty: tail-call fail() with no args.
   ;; Else: tail-call succ(init, last) with two args.
   (func $seq_pop_back (@pub) (@impl "std/seq.fnk:pop_back")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (return_call $list_seq_pop_back
@@ -875,7 +876,7 @@
 
   ;; op_in(val, container, cont) → bool
   (func $op_in (@pub) (@impl "std/operators.fnk:op_in")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
@@ -927,7 +928,7 @@
 
   ;; op_notin(val, container, cont) → bool
   (func $op_notin (@pub) (@impl "std/operators.fnk:op_notin")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
@@ -986,7 +987,7 @@
   ;;   $Rec  → rec_op_dot
   ;;   $List → list_op_dot
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     ;; Try $Str
@@ -1037,7 +1038,7 @@
   ;;   otherwise         → int_op_shl(a, b)  [numeric shift]
   ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shl (@pub) (@impl "std/operators.fnk:op_shl")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel on a → host channel send
@@ -1082,7 +1083,7 @@
   ;;   otherwise         → int_op_shr(a, b)  [numeric shift]
   ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shr (@pub) (@impl "std/operators.fnk:op_shr")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel on b → host channel send

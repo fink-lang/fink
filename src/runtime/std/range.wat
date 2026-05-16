@@ -163,12 +163,12 @@
   ;; User-imported via `import 'std/range.fnk'`. Wrap direct-style ctors
   ;; in CPS so they fit the user calling convention.
   ;;
-  ;; ctx convention: each wrapper takes $ctx as the first param and drops it.
-  ;; Range construction is a pure $I64-typed kernel — no user-callbacks reachable,
-  ;; so the drop is the intended monomorphic-leaf optimization.
+  ;; ctx convention: each wrapper takes $ctx and forwards it to the cont.
+  ;; Range construction itself is a pure $I64-typed kernel — no
+  ;; user-callbacks reachable — so ctx is not consulted for dispatch.
 
   (func $cps_excl (@pub) (@impl "std/range.fnk:excl")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -178,7 +178,7 @@
       (local.get $cont)))
 
   (func $cps_incl (@pub) (@impl "std/range.fnk:incl")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)
@@ -188,7 +188,7 @@
       (local.get $cont)))
 
   (func $cps_from (@pub) (@impl "std/range.fnk:from")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (local.get $ctx)

@@ -1507,9 +1507,9 @@
   ;;   rec_pop: (ctx, rec, key, fail, succ) → if missing: _apply([], fail)
   ;;                                          else: _apply([val, rest], succ)
   ;;
-  ;; ctx convention: $ctx is the first param and is currently dropped.
-  ;; Rec primitives operate on the monomorphic $RecImpl kernel with no
-  ;; user-callbacks, so the drop is the intended monomorphic-leaf optimization.
+  ;; ctx convention: $ctx is the first param and is forwarded to the cont
+  ;; (via apply_N). Rec primitives operate on the monomorphic $RecImpl
+  ;; kernel with no user-callbacks, so ctx is not consulted for dispatch.
 
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
   ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
@@ -1523,7 +1523,7 @@
       (ref.cast (ref eq) (local.get $val))))
 
   (func $rec_put (@pub) (@impl "std/rec.fnk:put")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
@@ -1535,7 +1535,7 @@
       (local.get $cont)))
 
   (func $rec_merge (@pub) (@impl "std/rec.fnk:merge")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
     (return_call $list_apply_1
@@ -1546,7 +1546,7 @@
       (local.get $cont)))
 
   (func $rec_pop (@pub) (@impl "std/rec.fnk:pop")
-      (param $ctx (ref null any))  ;; TODO ctx: unused
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))
