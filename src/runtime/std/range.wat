@@ -165,9 +165,13 @@
   ;;
   ;; User-imported via `import 'std/range.fnk'`. Wrap direct-style ctors
   ;; in CPS so they fit the user calling convention.
+  ;;
+  ;; ctx convention: each wrapper takes $ctx as the first param and drops it.
+  ;; Range construction is a pure $I64-typed kernel — no user-callbacks reachable,
+  ;; so the drop is the intended monomorphic-leaf optimization.
 
   (func $cps_excl (@pub) (@impl "std/range.fnk:excl")
-      (param $ctx (ref null any))
+      (param $ctx (ref null any))  ;; TODO ctx: unused
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $excl
@@ -176,7 +180,7 @@
       (local.get $cont)))
 
   (func $cps_incl (@pub) (@impl "std/range.fnk:incl")
-      (param $ctx (ref null any))
+      (param $ctx (ref null any))  ;; TODO ctx: unused
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $incl
@@ -185,7 +189,7 @@
       (local.get $cont)))
 
   (func $cps_from (@pub) (@impl "std/range.fnk:from")
-      (param $ctx (ref null any))
+      (param $ctx (ref null any))  ;; TODO ctx: unused
     (param $a (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $from

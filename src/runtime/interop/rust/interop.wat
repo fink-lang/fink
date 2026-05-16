@@ -163,7 +163,7 @@
   ;; cont doesn't participate in the substrate).
   (func $host_cont_adapter_3 (type $Fn3)
     (param $caps (ref null any))
-    (param $ctx (ref null any))
+    (param $ctx (ref null any))  ;; TODO ctx: unused
     (param $args (ref null any))
 
     (local $captures (ref $Captures))

@@ -93,8 +93,12 @@
   ;;   2. push thunk(cont, channel) to task queue
   ;;   3. resume
 
+  ;; TODO ctx: $ctx received but dropped. The thunk built below resumes
+  ;; the caller via apply_3 with whatever ctx the scheduler hands in
+  ;; (today: empty_ctx). To preserve the caller's ctx across the
+  ;; scheduler boundary, $ctx must be captured in the thunk's closure.
   (func $channel (@pub) (@impl "std/channel.fnk:channel")
-      (param $ctx (ref null any))
+    (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
     (param $tag (ref null any))
     (param $cont (ref null any))
 
@@ -120,6 +124,10 @@
   ;;   3. push unit_thunk(cont) to task queue
   ;;   4. resume
 
+  ;; TODO ctx: this is a typed @impl and currently takes no $ctx param,
+  ;; so the sender's ctx is lost before reaching this body. To preserve
+  ;; the sender's ctx across resume, $ctx must be added as a leading param
+  ;; AND captured in the unit_thunk built below.
   (func $op_shr (@impl "std/operators.fnk:op_shr" $Channel)
     (param $ch_val (ref null any))
     (param $msg    (ref null any))
@@ -154,8 +162,14 @@
   ;;   2. if ch.$messages non-empty, push process_msg_q(ch) to task queue
   ;;   3. resume
 
+  ;; TODO ctx: $ctx received but dropped. The cont is parked on
+  ;; ch.$receivers as a bare value; when _process_msg_q_fn later builds
+  ;; a thunk(receiver, msg) the receiver resumes under the scheduler's
+  ;; ctx, not the one it had when it called receive. To preserve ctx,
+  ;; ch.$receivers must store (ctx, cont) pairs, and _process_msg_q_fn
+  ;; must build the thunk's closure with the captured ctx.
   (func $receive (@pub) (@impl "std/channel.fnk:receive")
-      (param $ctx (ref null any))
+      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 
@@ -194,6 +208,12 @@
   ;;   4. if both lists still non-empty → push self to task queue
   ;;   5. resume
 
+  ;; TODO ctx: $_ctx is the scheduler's ctx (whatever was active when
+  ;; the scheduler popped this task). It is NOT the receiver's original
+  ;; ctx — the receiver was parked under its own ctx in receive(). To
+  ;; restore the receiver's ctx at resume, the thunk built below must
+  ;; capture the receiver's ctx (currently lost because $receivers stores
+  ;; bare conts, not (ctx, cont) pairs).
   (func $_process_msg_q_fn (type $Fn3)
     (param $caps (ref null any))
     (param $_ctx (ref null any))

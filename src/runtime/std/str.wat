@@ -1696,8 +1696,12 @@
   ;; concatenates all results into a single $StrBytesImpl, and passes the
   ;; result to the continuation via _apply.
   ;; TODO might need a proper wrapper to be fink importable?
+  ;; TODO ctx: $ctx dropped. Per-type fmt impls are monomorphic kernels
+  ;; today, but the moment a user-defined `fmt` impl exists (e.g. for a
+  ;; user type), this is the boundary where ctx-scoped fmt dispatch must
+  ;; thread ctx into the per-element fmt call.
   (func $fmt (@pub) (@impl "std/str.fnk:fmt")
-      (param $ctx (ref null any))
+      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
     (local $segments (ref $VarArgs))
@@ -1940,8 +1944,14 @@
   ;; CPS string template pattern matching.
   ;; Checks subj starts with prefix and ends with suffix (non-overlapping).
   ;; On match: calls succ(middle_slice). On mismatch: calls fail().
+  ;; TODO ctx: $ctx dropped. The fail/succ conts are invoked via _apply
+  ;; which carries ctx — but the ctx that reaches them is whatever the
+  ;; current resume frame holds, not the one $match was called under.
+  ;; Safe today (str_match is a pure byte-level kernel), but if fail/succ
+  ;; ever need to observe the caller's ctx, it must be threaded into the
+  ;; _apply call site rather than discarded here.
   (func $match (@impl "std/str.fnk:match")
-      (param $ctx (ref null any))
+      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
     (param $subj (ref null any))
     (param $prefix (ref null any))
     (param $suffix (ref null any))
