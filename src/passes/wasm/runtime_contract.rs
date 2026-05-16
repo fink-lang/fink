@@ -151,7 +151,7 @@ pub enum Sym {
   // the BuiltIn::Import handler to build the import rec at module-load
   // time without going through the CPS-style rec_set chain.
   RecSetField,
-  // `panic` runtime function — `Fn2` shape. Used when `BuiltIn::Panic`
+  // `panic` runtime function — `Fn3` shape. Used when `BuiltIn::Panic`
   // appears in value position (passed as fail continuation in
   // pattern-match dispatch). Wrapped in a no-capture `$Closure` at
   // the call site.
@@ -597,7 +597,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   let mut rt = Runtime::default();
   let needed = &usage.used;
 
-  // Value-type imports — `std/num.wat:Num` / `rt/apply.wat:Fn2` / etc.
+  // Value-type imports — `std/num.wat:Num` / `rt/apply.wat:Fn3` / etc.
   // Shared identity across the ABI: user struct.new instances must
   // match runtime's concrete type indices. Emit resolves them against
   // `types-ir.wasm` at emit time.
@@ -847,7 +847,7 @@ fn always_need_fn3(usage: &RuntimeUsage) -> bool {
 ///
 /// The logic has two parts:
 /// 1. **Structural requirements.** Any program that reaches the
-///    fink-module bring-up path uses `Apply`, `Fn2`, and the list
+///    fink-module bring-up path uses `Apply3`, `Fn3`, and the list
 ///    helpers. These are unconditional today; revisit when lowering
 ///    grows to handle fragments that don't emit `fink_module`.
 /// 2. **BuiltIn-driven requirements.** For each `Callable::BuiltIn`
@@ -1088,7 +1088,7 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }
       // When a builtin appears in *value* position (e.g. `panic` as a
       // fail-cont arg), the lowering also needs the runtime symbol
-      // for the underlying `Fn2`, plus the Closure/Captures types to
+      // for the underlying `Fn3`, plus the Closure/Captures types to
       // wrap it.
       if matches!(b, BuiltIn::Panic) {
         usage.mark(Sym::Panic);

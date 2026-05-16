@@ -17,7 +17,7 @@
 //!   visible while child mutations don't leak back.
 //!
 //! ## Current coverage:
-//! * `main = fn: <lit>` — apply-path via `_apply` (Lit ∈ {Int, Float,
+//! * `main = fn: <lit>` — apply-path via `apply_3` (Lit ∈ {Int, Float,
 //!   Decimal, Bool}).
 //! * Binary + unary protocol operators (Add..Shr, Rngex/Rngin, In,
 //!   NotIn, Get, Not).
@@ -27,7 +27,7 @@
 //!   (`struct.new $Closure (funcref + captures array)`).
 //! * `App(Pub, [val, cont])` — no-op: val ignored, cont body emitted.
 //! * `App(Callable::Val(Ref), [..., Cont::Ref(_)])` — closure
-//!   dispatch via `_apply`.
+//!   dispatch via `apply_3`.
 //! * Capture reads: when a cap-param is referenced, emit
 //!   `array.get $Captures $_caps <i>`.
 
@@ -66,7 +66,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let mut usage = runtime_contract::scan(cps);
   // Fn3 / ctx-aware lowering routes user-fn calls through `apply_3`
   // instead of `apply`. Mark the Apply3 runtime symbol so `declare()`
-  // sets up the import. The scan already marks Apply (Fn2) — that's
+  // sets up the import. The scan already marks Apply (Fn3) — that's
   // harmless here; lower_ctx never emits a call to it.
   usage.mark(runtime_contract::Sym::Apply3);
   usage.mark(runtime_contract::Sym::Fn3);
@@ -148,7 +148,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
 
 /// Synthesise the per-module host-facing wrapper export.
 ///
-/// Each module's wrapper is a Fn2-shaped function exported under the
+/// Each module's wrapper is a Fn3-shaped function exported under the
 /// module's canonical FQN (or `"fink_module"` for a fragment with
 /// empty `fqn_prefix`, matching the pre-wrapper convention so
 /// existing runners keep working). When called by a host, it:
@@ -167,7 +167,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
 ///    the rec via `interop/rust.wat:rec_get_by_bytes` (or its JS
 ///    equivalent).
 ///
-/// The module body itself is Fn3 — init_module's `_apply` shim
+/// The module body itself is Fn3 — init_module's `apply_3` shim
 /// synthesises a placeholder ctx (ref.i31 42) and tail-calls the
 /// body's Fn3 entry. Once the substrate lands, host-provided ctx
 /// flows in through the same channel.
@@ -186,7 +186,7 @@ fn synth_host_wrapper(
   let display = format!("{canonical_url}::host_wrapper");
 
   // Host-friendly signature: `(cont: anyref) -> ()`. Cont is a fink
-  // continuation (`$Closure` over `$Fn2`); init_module fires it with
+  // continuation (`$Closure` over `$Fn3`); init_module fires it with
   // `(last_expr, exports_rec)`. Hosts that want a specific named
   // export do their own lookup against the exports rec via
   // `interop/rust.wat:rec_get_by_bytes`. Host-bridge mechanics
@@ -226,7 +226,7 @@ fn synth_host_wrapper(
   // Tail-call init_module(url, mod_clos, cont). init_module runs the
   // module body (Fn3 — apply shim threads placeholder ctx internally),
   // populates the registry via the body's `pub` calls, then fires
-  // cont with `(last_expr, exports_rec)` via _apply_2_nullable → _apply.
+  // cont with `(last_expr, exports_rec)` via apply_3_2_nullable → apply_3.
   let i_init = push_return_call(lcx.frag, lcx.rt.modules_init_module(),
     vec![op_local(l_url), op_local(l_mod_clos), op_local(l_cont_p)]);
   ctx.instrs.push(i_init);
@@ -302,7 +302,7 @@ fn lower_fn(
   // the $Fn3 shape. Ctx is a native wasm value, NOT peeled from the
   // args list. The first user_param whose Bind::Ctx is bound directly
   // to the ctx native param; all other user_params are unpacked from
-  // $:params via head/tail as in the Fn2 shape. Colon-prefix is
+  // $:params via head/tail as in the Fn3 shape. Colon-prefix is
   // lexer-rejected in Fink source, so these synth names cannot
   // collide with user bindings.
   let l_caps_p = ctx.alloc_param(":caps_param");
@@ -338,7 +338,7 @@ fn lower_fn(
 
   // Bind any Bind::Ctx user_param directly to the native $:ctx_param
   // wasm slot — no head/tail peel from the args list. All other
-  // user_params come out of $:params via the standard Fn2-style
+  // user_params come out of $:params via the standard Fn3-style
   // head/tail walk. There is at most one Bind::Ctx in user_params
   // (slice-2a invariant), and by convention it is the 0th entry.
   use crate::passes::cps::ir::Bind;
@@ -358,7 +358,7 @@ fn lower_fn(
     .collect();
 
   // Unpack non-ctx user params from $:params by walking `args_head`
-  // / `args_tail`. Same shape as the Fn2 lowering.
+  // / `args_tail`. Same shape as the Fn3 lowering.
   let n = non_ctx_params.len();
   for (j, &(pid, is_spread)) in non_ctx_params.iter().enumerate() {
     let name = cps_ident_kinded(lcx.cps, lcx.ast, lcx.bind_kinds, pid);
@@ -550,7 +550,7 @@ fn lower_expr(
           None => user_ids.push((pid, is_spread)),  // ungilded params treated as user
         }
       }
-      // Lift the fn body to a separate Fn2. Display name carries the
+      // Lift the fn body to a separate Fn3. Display name carries the
       // module's FQN prefix so cross-fragment merges stay collision-free.
       let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
       let display = format!("{}{}", lcx.fqn_prefix, raw_display);
@@ -796,7 +796,7 @@ fn lower_expr(
       //   is bound to a local in the parent scope and execution
       //   continues into `body`.
       // * `Cont::Ref(id)` — tail-apply the cont with the closure as a
-      //   single arg (`_apply([closure], cont_local)`).
+      //   single arg (`apply_3([closure], cont_local)`).
       match cont {
         Cont::Expr { args: cont_args, body } => {
           let bind = cont_args.first().expect("FnClosure cont has no bind");
@@ -990,7 +990,7 @@ fn unbox_anyref(
 /// `done`) or a Cont::Expr (lifted into a closure — not handled here
 /// since the lifting pass already produces that as App(FnClosure)
 /// ahead of the tail call).
-/// Build the `_apply` args list from a heterogeneous arg sequence.
+/// Build the `apply_3` args list from a heterogeneous arg sequence.
 ///
 /// Two-phase to keep the locals/instr order stable across changes:
 /// Pull out the leading ctx argument from a thread_ctx-augmented args
