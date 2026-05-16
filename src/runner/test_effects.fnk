@@ -68,7 +68,7 @@ test 'ctx survives channel receive', fn:
       'msg' >> ch
 
     set_ctx 'receiver-ctx'
-    _ = receive ch
+    receive ch
     get_ctx _
   | equals ":
     receiver-ctx
@@ -82,7 +82,7 @@ test 'ctx survives await of spawned task', fn:
       42
 
     set_ctx 'awaiter-ctx'
-    _ = await fut
+    await fut
     get_ctx _
   | equals ":
     awaiter-ctx
@@ -136,7 +136,7 @@ test 'ctx survives match', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'match-ctx'
-    _ = match 'x':
+    match 'x':
       'x': 1
       _: 0
     get_ctx _
@@ -166,7 +166,7 @@ test 'ctx survives sqrt', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'math-fn-ctx'
-    _ = sqrt 16.0
+    sqrt 16.0
     get_ctx _
   | equals ":
     math-fn-ctx
@@ -187,7 +187,7 @@ test 'ctx survives repr', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'repr-ctx'
-    _ = repr 42
+    repr 42
     get_ctx _
   | equals ":
     repr-ctx
@@ -201,9 +201,36 @@ test 'ctx survives fmt as imported fn', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'fmt-ctx'
-    _ = fmt 42
+    fmt 42
     get_ctx _
   | equals ":
     fmt-ctx
+
+
+# -- substrate primitives (stubs) -------------------------------------
+#
+# `abort` and `register` import end-to-end. Real handler-stack semantics
+# don't exist yet -- the stub `abort v` just returns v to the current
+# cont, and `register op, handler` returns handler unchanged.
+
+test 'abort imports and returns value to current cont (stub)', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+    abort 42
+  | equals ƒink:
+    42
+
+
+test 'register imports and returns value bound to result (stub)', fn:
+  expect run ƒink:
+    {register} = import 'std/effects.fnk'
+    op = fn v:
+      v
+    handler = fn _:
+      'foobar'
+    register op, handler
+    'done'
+  | equals ":
+    done
 
 
