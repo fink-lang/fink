@@ -20,7 +20,6 @@
 
 (module
 
-  (import "rt/apply.wat"     "Fn2"     (type $Fn2 (sub any)))
   (import "rt/apply.wat"     "Fn3"     (type $Fn3 (sub any)))
   (import "rt/apply.wat"    "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"    "Captures" (type $Captures (sub any)))
@@ -37,6 +36,7 @@
   (import "std/channel.wat" "Channel"   (type $Channel  (sub any)))
   (import "std/list.wat"    "List"      (type $List     (sub any)))
   (import "std/async.wat"   "Future"    (type $Future   (sub any)))
+  (import "std/async.wat"   "Waiter"    (type $Waiter   (sub any)))
   (import "std/int.wat"     "Int"       (type $Int      (sub $Num (struct))))
   (import "std/int.wat"     "I64"       (type $I64      (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "U64"       (type $U64      (sub $Int (struct (field $ival i64)))))
@@ -56,8 +56,6 @@
     (func $args_empty (result (ref any))))
   (import "rt/apply.wat"    "args_prepend"
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
-  (import "rt/apply.wat"    "apply"
-    (func $apply (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat"    "apply_3"
     (func $apply_3
       (param $args (ref null any))
@@ -80,10 +78,8 @@
     (func $str_bytes (param $s (ref $Str)) (result (ref $ByteArray))))
   (import "std/async.wat"   "queue_push"
     (func $queue_push (param $task (ref any))))
-  (import "rt/apply.wat"    "make_thunk"
-    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat"    "make_unit_thunk"
-    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
   (import "std/async.wat"   "resume"
     (func $resume))
 
@@ -101,7 +97,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
+  (elem declare func $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -121,49 +117,30 @@
   ;; -- Host callable (inbound contract) --------------------------------------
   ;;
   ;; The host cannot hand WASM a raw funcref and have it pass as a
-  ;; fink $Fn2: a host-built funcref carries a structural function
-  ;; type distinct from the runtime's nominal $Fn2, so
-  ;; `ref.cast (ref $Fn2)` inside `_apply` would always trap.
+  ;; fink $Fn3: a host-built funcref carries a structural function
+  ;; type distinct from the runtime's nominal $Fn3, so
+  ;; `ref.cast (ref $Fn3)` inside `apply_3` would always trap.
   ;;
   ;; Instead, the host registers its callback under an i32 id on its
-  ;; side, calls `wrap_host_cont(id)` to get an opaque (ref null any),
+  ;; side, calls `wrap_host_cont_3(id)` to get an opaque (ref null any),
   ;; and hands that anyref to WASM wherever a continuation is
   ;; expected (done, await cont, scheduler trampolines, etc.).
   ;;
   ;; When fink-side code eventually fires the continuation via
-  ;; `_apply`, `_apply` casts it to $Closure, pulls the funcref (which
-  ;; is `$host_cont_adapter` by construction — correct nominal type)
-  ;; and tail-calls it. The adapter reads `id` out of the captures
+  ;; `apply_3`, it casts the value to $Closure, pulls the funcref
+  ;; (which is `$host_cont_adapter_3` by construction — correct nominal
+  ;; type) and tail-calls it. The adapter reads `id` out of the captures
   ;; array and forwards to `env.host_invoke_cont(id, args)`.
   ;;
   ;; Net: host sees only an opaque anyref; never touches $Closure /
-  ;; $Fn2 / funcref directly. Internals are interop's business.
-
-  ;; $Fn2 adapter body — fires when WASM invokes a host-wrapped cont.
-  (func $host_cont_adapter (type $Fn2)
-    (param $caps (ref null any))
-    (param $args (ref null any))
-
-    (local $captures (ref $Captures))
-    (local $id_box (ref i31))
-
-    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
-    (local.set $id_box
-      (ref.cast (ref i31)
-        (array.get $Captures (local.get $captures) (i32.const 0))))
-
-    (call $host_invoke_cont
-      (i31.get_s (local.get $id_box))
-      (local.get $args))
-  )
+  ;; $Fn3 / funcref directly. Internals are interop's business.
 
   ;; $Fn3 adapter body — fires when WASM invokes a host-wrapped cont
-  ;; via the ctx-aware `apply_3` dispatcher. Same as $host_cont_adapter
-  ;; but accepts an extra ctx native param which we ignore (the host
-  ;; cont doesn't participate in the substrate).
+  ;; via the ctx-aware `apply_3` dispatcher. The host cont doesn't
+  ;; participate in the substrate, so $ctx is ignored.
   (func $host_cont_adapter_3 (type $Fn3)
     (param $caps (ref null any))
-    (param $ctx (ref null any))
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $captures (ref $Captures))
@@ -179,20 +156,7 @@
       (local.get $args))
   )
 
-  ;; Factory: host calls this with its callback id; gets back an
-  ;; opaque (ref null any) fit for any CPS continuation slot.
-  ;; Fn2 variant — used by the existing default Fn2 pipeline.
-  (func $wrap_host_cont (export "env:wrap_host_cont")
-    (param $id i32)
-    (result (ref null any))
-
-    (struct.new $Closure
-      (ref.func $host_cont_adapter)
-      (array.new_fixed $Captures 1
-        (ref.i31 (local.get $id))))
-  )
-
-  ;; Fn3 variant — used by the ctx-aware (lower_ctx) pipeline.
+  ;; Fn3 variant — used by the ctx-aware pipeline (the only one now).
   ;; The closure's funcref is Fn3-typed so `apply_3` can cast it
   ;; without trapping. The runner uses this when invoking a
   ;; ctx-aware module.
@@ -209,14 +173,15 @@
 
   ;; -- host_channel_send -----------------------------------------------------
   ;;
-  ;; host_channel_send(ch, msg, cont):
+  ;; host_channel_send(ctx, ch, msg, cont):
   ;;   1. Write msg to the host via the appropriate host_write import
-  ;;   2. Queue unit_thunk(cont) to resume the sender
+  ;;   2. Queue unit_thunk(cont) to resume the sender under its ctx
   ;;   3. Resume scheduler
   ;;
   ;; Dispatches stdout vs stderr by channel tag (i31ref: 1=stdout, 2=stderr).
 
   (func $channel_send (@pub)
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -237,9 +202,10 @@
     ;; Send to host — host reads bytes directly from the GC array.
     (call $host_channel_send (local.get $tag) (local.get $bytes))
 
-    ;; Sender continues with unit.
+    ;; Sender continues with unit, under its captured ctx.
     (call $queue_push
-      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+      (call $make_unit_thunk
+        (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
     (return_call $resume)
   )
@@ -255,17 +221,21 @@
   ;; The host settles the future during host_resume when data arrives.
 
   (func $op_read (@pub)
+    (param $ctx (ref null any))
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
 
     (local $future (ref $Future))
 
-    ;; Create pending future with cont as waiter.
+    ;; Create pending future with (ctx, cont) parked as a $Waiter so
+    ;; the reader resumes under its caller's universe once data arrives.
     (local.set $future (struct.new $Future
       (ref.null any)
       (call $list_prepend
-        (ref.as_non_null (local.get $cont))
+        (struct.new $Waiter
+          (local.get $ctx)
+          (ref.as_non_null (local.get $cont)))
         (call $list_empty))))
 
     ;; Tell host to start async read. Host captures the future ref.
@@ -290,18 +260,19 @@
   )
 
 
-  ;; -- $Fn2-shaped panic for CPS dispatch ------------------------------------
+  ;; -- $Fn3-shaped panic for CPS dispatch ------------------------------------
   ;;
   ;; CPS-side panic — used as a $Closure value passed as a fail continuation
   ;; to pattern matchers, and as a direct tail-call at the terminal of a
-  ;; fail chain. Signature matches the universal $Fn2 calling convention so
-  ;; `_apply` can dispatch to it like any other continuation.
+  ;; fail chain. Signature matches the ctx-aware $Fn3 calling convention so
+  ;; `apply_3` can dispatch to it like any other continuation.
   ;;
   ;; Delegates to `$panic`, which traps the instance via host_panic. Today
   ;; panic carries no payload; future work will pass a reason / source
   ;; location for better diagnostics.
-  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
+  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx  (ref null any))
     (param $_args (ref null any))
     (return_call $panic))
 
@@ -365,7 +336,7 @@
 
   (func $read_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -382,6 +353,7 @@
     (local.set $size (call $list_head_any (local.get $cursor)))
 
     (return_call $op_read
+      (local.get $ctx)
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))
@@ -406,6 +378,7 @@
   ;; the stream value (via `make_thunk`) instead of unit.
 
   (func $channel_send_stream
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -423,9 +396,10 @@
 
     (call $host_channel_send (local.get $tag) (local.get $bytes))
 
-    ;; Sender continues with the stream itself.
+    ;; Sender continues with the stream itself, under its captured ctx.
     (call $queue_push
       (call $make_thunk
+        (local.get $ctx)
         (ref.as_non_null (local.get $cont))
         (ref.as_non_null (local.get $ch))))
 
@@ -434,7 +408,7 @@
 
   (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -450,6 +424,7 @@
     (local.set $value (call $list_head_any (local.get $cursor)))
 
     (return_call $channel_send_stream
+      (local.get $ctx)
       (local.get $stream)
       (local.get $value)
       (local.get $cont)))
@@ -471,10 +446,6 @@
   ;;
   ;; TODO: move the apply_main bootstrap inside the wasm module behind
   ;; one entry point, then drop these.
-
-  (func (export "env:apply")
-    (param $args (ref null any)) (param $callee (ref null any))
-    (return_call $apply (local.get $args) (local.get $callee)))
 
   (func (export "env:apply_3")
     (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))

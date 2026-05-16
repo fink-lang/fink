@@ -1,13 +1,14 @@
-# Calling Convention — `$Fn2(captures, args)`
+# Calling Convention — `$Fn3(captures, ctx, args)`
 
 Every ƒink function — user-defined, compiler-synthesised, match wrappers, pattern matchers, success/fail continuations — has the same WASM signature:
 
 ```wat
-(type $Fn2 (func (param (ref null any) (ref null any))))
+(type $Fn3 (func (param (ref null any) (ref null any) (ref null any))))
 ```
 
 - **captures** (local 0) — the lexical environment. `null` for functions that capture nothing; otherwise an instance of a per-function `$Captures` array whose layout the emitter pins at compile time.
-- **args** (local 1) — a ƒink cons-list. Holds the call's positional arguments followed by the continuation as the last element (for CPS-function calls), or just the arguments (for CPS-closure calls that receive their continuation some other way).
+- **ctx** (local 1) — the universe context (an opaque `$Ctx`). Threaded as a native wasm param so callees don't have to peel it off the args list. See [`../../../docs/execution-model.md`](../../../docs/execution-model.md) for the language-level model.
+- **args** (local 2) — a ƒink cons-list. Holds the call's positional arguments followed by the continuation as the last element (for CPS-function calls), or just the arguments (for CPS-closure calls that receive their continuation some other way).
 
 One signature, one dispatch helper, one closure struct. No arity-specialised types.
 
@@ -23,46 +24,59 @@ Per-function `$Captures` types are emitted on demand, one per distinct capture c
 
 ## Single dispatch helper
 
-All indirect calls go through `_apply` in the runtime (not emitted by the compiler — lives in the runtime WAT under `dispatch.wat`):
+All indirect calls go through `apply_3` in the runtime (defined in `rt/apply.wat`):
 
 ```text
-_apply(args: ref null any, callee: ref null any)
+apply_3(args: ref null any, ctx: ref null any, callee: ref null any)
 ```
 
-`callee` is cast to `$Closure` at dispatch time; `_apply` extracts the funcref and captures and tail-calls the funcref with `$Fn2(captures, args)`.
+`callee` is cast to `$Closure` at dispatch time; `apply_3` extracts the funcref and captures and tail-calls the funcref with `$Fn3(captures, ctx, args)`.
 
-There is no `$Fn3` and no `_apply_cont`. An earlier design kept continuations as a dedicated WASM param (so `_apply` had to know whether the callee expected a cont in its args list or as a separate param); collapsing to a single signature removed the dispatch branch. Continuations ride in the args list when the callee is a CPS function; CPS closures receive them as ordinary captures.
+There is no `$Fn2` and no `_apply_cont`. Earlier designs went through several iterations:
+
+- An arity-specialised set of `$Fn1`/`$Fn2`/... types with a per-arity dispatch helper.
+- A single `$Fn2(captures, args)` shape with a single `_apply` helper (continuations rode in the args list).
+- The current `$Fn3(captures, ctx, args)` shape, which adds the universe context as a native wasm param so callees don't pay the args-list head/tail dance to peel ctx off.
+
+Continuations ride in the args list when the callee is a CPS function; CPS closures receive them as ordinary captures.
 
 ## Function entry
 
 The emitter knows each function's `$Captures` layout and its positional param count. Entry unpacks both:
 
+The compiler-emitted param names follow a `$:NAME` convention so they don't collide with user identifiers:
+
 ```wat
 ;; fn {k, x}, [a, b]:
-(func $foo (type $Fn2)
-  (param $caps (ref null any))
-  (param $args (ref null any))
+(func $foo (type $Fn3)
+  (param $:caps_param (ref null any))
+  (param $:ctx_param (ref null any))
+  (param $:params (ref null any))
 
-  ;; Unpack captures from the $Captures array at local 0.
+  ;; Unpack captures from the $Captures array.
   (local.set $k
     (array.get $foo_caps
-      (ref.cast (ref $foo_caps) (local.get $caps))
+      (ref.cast (ref $foo_caps) (local.get $:caps_param))
       (i32.const 0)))
   (local.set $x
     (array.get $foo_caps
-      (ref.cast (ref $foo_caps) (local.get $caps))
+      (ref.cast (ref $foo_caps) (local.get $:caps_param))
       (i32.const 1)))
 
   ;; Unpack positional params from the args list.
-  (local.set $a (call $list_head (local.get $args)))
-  (local.set $args (call $list_tail (local.get $args)))
-  (local.set $b (call $list_head (local.get $args)))
+  (local.set $a (call $args_head (local.get $:params)))
+  (local.set $:params (call $args_tail (local.get $:params)))
+  (local.set $b (call $args_head (local.get $:params)))
   ...)
 ```
 
+`$:ctx_param` is just a local — callees that need ctx read it via `(local.get $:ctx_param)` and pass it forward at every tail-call site.
+
 ## Call sites
 
-Args are built right-to-left via `list_prepend`. The continuation (when present) is the **tail** of the list the callee receives — the call site prepends every positional arg and lastly the continuation. Callees that need a cont pop it off the args list at the position their static arity implies.
+Args are built right-to-left via `args_prepend`. The continuation (when present) is the **tail** of the list the callee receives — the call site prepends every positional arg and lastly the continuation. Callees that need a cont pop it off the args list at the position their static arity implies.
+
+ctx is passed as the second positional wasm arg to `apply_3` (not via the args list).
 
 ## Spread
 
@@ -70,7 +84,16 @@ Args are built right-to-left via `list_prepend`. The continuation (when present)
 
 ## Builtins
 
-Fixed-arity builtins (`op_add`, `seq_prepend`, `str_fmt`, etc.) keep their direct WASM signatures and are called without going through `_apply`. They dispatch their result to the caller's continuation via `_apply` at the end.
+Fixed-arity builtins (`op_plus`, `seq_prepend`, `str_fmt`, etc.) keep their direct WASM signatures and are called without going through `apply_3`. Each takes ctx as its first param, followed by its value args and the continuation; it dispatches its result to the caller's continuation via `apply_1` (which threads the same ctx). See [`rt/protocols.wat`](../../runtime/rt/protocols.wat) for the dispatch pattern.
+
+## Apply helpers
+
+`apply_0` / `apply_1` / `apply_2_vals` are the wrappers used by builtins to dispatch a result (of arity 0/1/2) to a continuation. They take ctx as their first param and route through `apply_3` internally:
+
+```text
+apply_1(ctx, value, cont)
+  → apply_3(args=[value], ctx, cont)
+```
 
 ## CPS-side shape
 
@@ -86,8 +109,13 @@ enum CpsFnKind {
 }
 ```
 
-Both compile to the same `$Fn2`. The distinction only affects how continuations are routed at emit time: `CpsFunction` callees expect a continuation appended to their args list; `CpsClosure` callees don't.
+Both compile to the same `$Fn3`. The distinction only affects how continuations are routed at emit time: `CpsFunction` callees expect a continuation appended to their args list; `CpsClosure` callees don't.
+
+## Thunks and async resumption
+
+Suspended continuations (channel receivers, future awaiters, `yield`) are parked as `$Closure` thunks whose captures hold `[cont, value, ctx]`. When the scheduler later pops a thunk, the thunk's body calls `apply_3` with the **captured ctx** — restoring the suspender's universe rather than running under the scheduler's. See [`rt/apply.wat`](../../runtime/rt/apply.wat) `$_thunk_fn` and the `$Waiter` types in `std/channel.wat` and `std/async.wat`.
 
 ## See also
 
 - [../../../docs/execution-model.md](../../../docs/execution-model.md) — why every function takes implicit context and continuation arguments (the language-level model this convention realises).
+- [`rt/apply.wat`](../../runtime/rt/apply.wat) — `apply_3`, `apply_0/1/2_vals`, `make_thunk`, `_thunk_fn`.

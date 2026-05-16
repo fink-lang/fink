@@ -24,8 +24,6 @@
 ;;   Other = 0
 
 (module
-
-  (import "rt/apply.wat"    "Fn2"      (type $Fn2      (sub any)))
   (import "rt/apply.wat"    "Fn3"      (type $Fn3      (sub any)))
   (import "rt/apply.wat"    "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"    "Captures" (type $Captures (sub any)))
@@ -75,9 +73,6 @@
   (import "rt/apply.wat" "args_prepend"
     (func $args_prepend_inner
       (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
-  (import "rt/apply.wat" "apply"
-    (func $apply_inner
-      (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat" "apply_3"
     (func $apply_3_inner
       (param $args (ref null any))
@@ -100,10 +95,8 @@
 
   ;; Async/scheduler — needed by channel_send to queue cont resumption
   ;; and yield back to the scheduler.
-  (import "rt/apply.wat" "make_unit_thunk"
-    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat" "make_thunk"
-    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
   (import "std/async.wat" "queue_push"
     (func $queue_push (param $task (ref any))))
   (import "std/async.wat" "resume"
@@ -121,7 +114,6 @@
   ;; gives JS a TextDecoder-friendly window.
   (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
   (import "env" "host_read"         (func $host_read         (param (ref any) (ref any) (ref any))))
-  (import "env" "host_panic"        (func $host_panic))
   ;; host_invoke_cont: dispatch a JS-side cont. The first arg is the
   ;; opaque externref the host originally handed to wrap_host_cont — JS
   ;; uses it directly (call it, look it up, whatever) to find the
@@ -378,10 +370,6 @@
     (param $head (ref null any)) (param $tail (ref any)) (result (ref any))
     (return_call $args_prepend_inner (local.get $head) (local.get $tail)))
 
-  (func $apply (@pub) (export "env:apply")
-    (param $args (ref null any)) (param $callee (ref null any))
-    (return_call $apply_inner (local.get $args) (local.get $callee)))
-
   (func $apply_3 (@pub) (export "env:apply_3")
     (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
     (return_call $apply_3_inner (local.get $args) (local.get $ctx) (local.get $callee)))
@@ -474,6 +462,7 @@
   ;; decode via TextDecoder.
 
   (func $channel_send (@pub)
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -508,13 +497,15 @@
 
     (call $host_channel_send (local.get $tag) (global.get $SCRATCH_BASE) (local.get $len))
 
-    ;; Sender continues with unit.
+    ;; Sender continues with unit, under its captured ctx.
     (call $queue_push
-      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+      (call $make_unit_thunk
+        (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
     (return_call $resume))
 
   (func $op_read (@pub)
+    (param $ctx (ref null any))
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
@@ -523,8 +514,9 @@
   (func $panic (@pub)
     unreachable)
 
-  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
+  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx  (ref null any))
     (param $_args (ref null any))
     unreachable)
 
@@ -567,6 +559,7 @@
   ;; rather than unit (make_unit_thunk).
 
   (func $channel_send_stream
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -598,6 +591,7 @@
 
     (call $queue_push
       (call $make_thunk
+        (local.get $ctx)
         (ref.as_non_null (local.get $cont))
         (ref.as_non_null (local.get $ch))))
 
@@ -605,7 +599,7 @@
 
   (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -621,6 +615,7 @@
     (local.set $value (call $list_head_any (local.get $cursor)))
 
     (return_call $channel_send_stream
+      (local.get $ctx)
       (local.get $stream)
       (local.get $value)
       (local.get $cont)))

@@ -54,13 +54,9 @@
     (func $hash_i31 (param $key (ref eq)) (result i32)))
   (import "rt/protocols.wat" "deep_eq"
     (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
-  (import "rt/apply.wat"     "apply_0"
-    (func $list_apply_0 (param $cont (ref null any))))
-  (import "rt/apply.wat"     "apply_1"
-    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat"     "apply_2_vals"
-    (func $list_apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
-
+  (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $list_apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
   ;; str.wat helpers used by the rec fmt impl below.
   (import "std/str.wat" "from_bytes"
     (func $str_from_bytes (param $buf (ref $ByteArray)) (result (ref $Str))))
@@ -1506,10 +1502,14 @@
   ;; CPS wrappers — compiler-facing interface
   ;; All params/results are (ref null any). Continuation dispatch via _apply_N.
   ;;
-  ;;   rec_set: (rec, key, val, cont) → _apply([new_rec], cont)
-  ;;   rec_merge: (dest, src, cont) → _apply([merged], cont)
-  ;;   rec_pop: (rec, key, fail, succ) → if missing: _apply([], fail)
-  ;;                                     else: _apply([val, rest], succ)
+  ;;   rec_set: (ctx, rec, key, val, cont) → _apply([new_rec], cont)
+  ;;   rec_merge: (ctx, dest, src, cont) → _apply([merged], cont)
+  ;;   rec_pop: (ctx, rec, key, fail, succ) → if missing: _apply([], fail)
+  ;;                                          else: _apply([val, rest], succ)
+  ;;
+  ;; ctx convention: $ctx is the first param and is forwarded to the cont
+  ;; (via apply_N). Rec primitives operate on the monomorphic $RecImpl
+  ;; kernel with no user-callbacks, so ctx is not consulted for dispatch.
 
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
   ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
@@ -1523,9 +1523,11 @@
       (ref.cast (ref eq) (local.get $val))))
 
   (func $rec_put (@pub) (@impl "std/rec.fnk:put")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $_rec_set
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key))
@@ -1533,15 +1535,18 @@
       (local.get $cont)))
 
   (func $rec_merge (@pub) (@impl "std/rec.fnk:merge")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $_rec_merge
         (ref.cast (ref $RecImpl) (local.get $dest))
         (ref.cast (ref $RecImpl) (local.get $src)))
       (local.get $cont)))
 
   (func $rec_pop (@pub) (@impl "std/rec.fnk:pop")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))
@@ -1553,9 +1558,11 @@
     (local.set $val)
     ;; null value = key not found → call fail
     (if (ref.is_null (local.get $val))
-      (then (return_call $list_apply_0 (local.get $fail))))
+      (then (return_call $list_apply_0
+      (local.get $ctx) (local.get $fail))))
     ;; found → pass (value, rest) to succ
     (return_call $list_apply_2_vals
+      (local.get $ctx)
       (local.get $val)
       (local.get $rest)
       (local.get $succ)))
@@ -1563,6 +1570,7 @@
   (func $op_dot (@impl "std/operators.fnk:op_dot" $Rec _)
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (ref.null any)
       (call $get
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))

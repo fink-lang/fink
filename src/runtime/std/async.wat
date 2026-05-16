@@ -26,18 +26,17 @@
   ;; Type imports
   (import "rt/apply.wat" "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
-  (import "rt/apply.wat" "Fn2"      (type $Fn2      (sub any)))
   (import "rt/apply.wat" "Fn3"      (type $Fn3      (sub any)))
   (import "std/list.wat" "List"     (type $List     (sub any)))
 
   ;; Func imports
-  (import "rt/apply.wat" "apply"
-    (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
-  (import "rt/apply.wat" "make_thunk"
-    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat" "make_unit_thunk"
-    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
-
+  (import "rt/apply.wat" "apply_3"
+    (func $apply_3
+      (param $args (ref null any))
+      (param $ctx (ref null any))
+      (param $callee (ref null any))))
+  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
   (import "std/list.wat" "empty"
     (func $list_empty (result (ref $List))))
   (import "std/list.wat" "prepend"
@@ -62,11 +61,24 @@
   ;; Opaque future for cooperative multitasking.
   ;; Returned by `spawn`; passed to `await`. Null value = pending;
   ;; non-null = settled (fink has no null values, so this is unambiguous).
-  ;; Waiters: continuations waiting for this future to settle.
+  ;; Waiters: $Waiter (ctx, cont) pairs parked on this future. When the
+  ;; future settles, each waiter is resumed under its own captured ctx.
   (type $Future (@pub) (struct
     (field $value   (mut (ref null any)))
     (field $waiters (mut (ref $List)))
   ))
+
+  ;; $Waiter — an awaiter parked on a pending $Future. Pairs the cont
+  ;; with the ctx that was active when await() was called, so the cont
+  ;; can resume under that ctx (not the scheduler's) once the future
+  ;; settles. Same shape as channel.wat's $Waiter (kept independent to
+  ;; avoid inter-module coupling between std/async and std/channel).
+  ;; Exported because interop.wat constructs $Future values directly for
+  ;; host-driven async (e.g. op_read).
+  (type $Waiter (@pub) (sub (struct
+    (field $ctx  (ref null any))
+    (field $cont (ref any))
+  )))
 
 
   ;; -- Task queue global ----------------------------------------------------
@@ -121,7 +133,13 @@
         (call $host_resume)
         (if (call $_queue_is_empty)
           (then (return)))))
-    (return_call $_apply (call $list_empty) (call $queue_pop))
+    ;; Scheduler has no ctx of its own; the popped task is a thunk
+    ;; whose body reads ctx from its captured-ctx slot, so the ctx
+    ;; we pass here is intentionally null — it will be discarded.
+    (return_call $apply_3
+      (call $list_empty)
+      (ref.null any)
+      (call $queue_pop))
   )
 
 
@@ -132,11 +150,14 @@
   ;;   2. run next task
 
   (func $yield (@pub) (@impl "std/async.fnk:yield")
+      (param $ctx (ref null any))
     (param $value (ref null any))
     (param $cont (ref null any))
 
-    ;; Push current continuation as a unit thunk to back of queue.
-    (call $queue_push (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+    ;; Push current continuation as a unit thunk to back of queue,
+    ;; capturing the yielder's ctx so it resumes under that ctx.
+    (call $queue_push (call $make_unit_thunk
+      (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
     ;; Run next task.
     (return_call $resume)
@@ -154,7 +175,9 @@
 
   ;; The settle continuation — called when a spawned task produces a result.
   ;; Captures: [future]. Called via _apply with args list [result].
-  (func $_settle_fn (type $Fn3) (param $caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
+  ;; $_sched_ctx is intentionally unused: settle() resumes each waiter
+  ;; under the waiter's own captured ctx (stored in the $Waiter struct).
+  (func $_settle_fn (type $Fn3) (param $caps (ref null any)) (param $_sched_ctx (ref null any)) (param $args (ref null any))
     (local $future (ref $Future))
     (local $result (ref any))
     (local.set $future (ref.cast (ref $Future)
@@ -167,24 +190,38 @@
     (return_call $resume)
   )
 
-  ;; The spawned task body — calls task_fn with the settle continuation.
-  ;; Captures: [task_fn, settle_cont]. Called via _apply.
-  (func $_spawn_task_fn (type $Fn3) (param $caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
+  ;; The spawned task body — calls task_fn with the settle continuation,
+  ;; under the spawner's ctx (captured in the closure).
+  ;; Captures: [task_fn, settle_cont, spawner_ctx]. Called via apply_3
+  ;; with the scheduler's ctx in $_sched_ctx (intentionally ignored —
+  ;; the task runs under its spawner's universe).
+  (func $_spawn_task_fn (type $Fn3) (param $caps (ref null any)) (param $_sched_ctx (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $task_fn (ref any))
     (local $settle_cont (ref any))
+    (local $spawner_ctx (ref null any))
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $task_fn (ref.as_non_null
       (array.get $Captures (local.get $captures) (i32.const 0))))
     (local.set $settle_cont (ref.as_non_null
       (array.get $Captures (local.get $captures) (i32.const 1))))
-    ;; Call task_fn with args = [settle_cont]
-    (return_call $_apply
+    (local.set $spawner_ctx
+      (array.get $Captures (local.get $captures) (i32.const 2)))
+    ;; Call task_fn with args = [settle_cont], under spawner's ctx.
+    (return_call $apply_3
       (call $list_prepend (local.get $settle_cont) (call $list_empty))
+      (local.get $spawner_ctx)
       (local.get $task_fn))
   )
 
+  ;; TODO ctx: the spawn cont resumption now carries ctx (via the
+  ;; ctx-aware make_thunk below), but the spawned task body itself
+  ;; still runs under whatever ctx the scheduler hands in — see
+  ;; $_spawn_task_fn. To run the task under the spawner's ctx, ctx
+  ;; needs to be added to $_spawn_task_fn's captures and threaded
+  ;; through the _apply call inside it.
   (func $spawn (@pub) (@impl "std/async.fnk:spawn")
+      (param $ctx (ref null any))
     (param $task_fn (ref null any))
     (param $cont (ref null any))
 
@@ -202,16 +239,19 @@
       (ref.func $_settle_fn)
       (array.new_fixed $Captures 1 (local.get $future))))
 
-    ;; Create task thunk: captures [task_fn, settle_cont].
+    ;; Create task thunk: captures [task_fn, settle_cont, spawner_ctx].
+    ;; The spawner's ctx is captured so the spawned task runs under it.
     (local.set $task (struct.new $Closure
       (ref.func $_spawn_task_fn)
-      (array.new_fixed $Captures 2
+      (array.new_fixed $Captures 3
         (ref.as_non_null (local.get $task_fn))
-        (local.get $settle_cont))))
+        (local.get $settle_cont)
+        (local.get $ctx))))
 
     ;; Push task and current continuation (wrapped with future) to queue.
     (call $queue_push (local.get $task))
     (call $queue_push (call $make_thunk
+      (local.get $ctx)
       (ref.as_non_null (local.get $cont))
       (local.get $future)))
 
@@ -228,6 +268,7 @@
   ;;   run next task
 
   (func $await (@pub) (@impl "std/async.fnk:await")
+      (param $ctx (ref null any))
     (param $future_val (ref null any))
     (param $cont (ref null any))
 
@@ -240,15 +281,19 @@
     (local.set $value (struct.get $Future $value (local.get $future)))
     (if (ref.is_null (local.get $value))
       (then
-        ;; Pending — add cont to future's waiters list.
+        ;; Pending — park (ctx, cont) as a $Waiter on future.$waiters.
         (struct.set $Future $waiters (local.get $future)
           (call $list_prepend
-            (ref.as_non_null (local.get $cont))
+            (struct.new $Waiter
+              (local.get $ctx)
+              (ref.as_non_null (local.get $cont)))
             (struct.get $Future $waiters (local.get $future)))))
       (else
-        ;; Settled — push thunk(cont, value) to task queue.
+        ;; Settled — push thunk(cont, value) to task queue under the
+        ;; awaiter's own ctx so the cont resumes under it.
         (call $queue_push
           (call $make_thunk
+            (local.get $ctx)
             (ref.as_non_null (local.get $cont))
             (ref.as_non_null (local.get $value))))))
 
@@ -266,18 +311,25 @@
 
   (func $settle (@pub) (param $future (ref $Future)) (param $value (ref any))
     (local $waiters (ref $List))
+    (local $waiter (ref $Waiter))
 
     ;; Set the settled value.
     (struct.set $Future $value (local.get $future) (local.get $value))
 
-    ;; Move all waiters to the task queue.
+    ;; Move all waiters to the task queue. Each waiter carries its own
+    ;; ctx (captured at await-time); we pass it into make_thunk so the
+    ;; cont resumes under THAT ctx, not the scheduler's.
     (local.set $waiters (struct.get $Future $waiters (local.get $future)))
     (block $done
       (loop $loop
         (br_if $done (call $list_is_empty (local.get $waiters)))
+        (local.set $waiter
+          (ref.cast (ref $Waiter)
+            (ref.as_non_null (call $list_head_any (local.get $waiters)))))
         (call $queue_push
           (call $make_thunk
-            (ref.as_non_null (call $list_head_any (local.get $waiters)))
+            (struct.get $Waiter $ctx  (local.get $waiter))
+            (struct.get $Waiter $cont (local.get $waiter))
             (local.get $value)))
         (local.set $waiters
           (ref.cast (ref $List) (call $list_tail_any (local.get $waiters))))

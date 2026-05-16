@@ -1,7 +1,9 @@
-;; Closure dispatch — unified $Fn2 calling convention.
+;; Closure dispatch — unified $Fn3 calling convention.
 ;;
-;; All functions are $Fn2(captures, args). Conts are in captures or in
-;; the args list (conts-first ordering ensures this after lifting).
+;; All functions are $Fn3(captures, ctx, args). Conts are in captures
+;; or in the args list (conts-first ordering ensures this after lifting).
+;; ctx is the universe context threaded as a native wasm param so
+;; callees don't need to peel it off the args list.
 
 (module
 
@@ -38,14 +40,9 @@
     (field $captures (ref null $Captures))
   ))
 
-  ;; Function signature for the unified calling convention.
-  ;; $Fn2(captures, args) — all functions (conts are in captures or args).
-  (type $Fn2 (@pub) (func (param (ref null any) (ref null any))))
-
-  ;; Ctx-aware calling convention. $Fn3(captures, ctx, args) — caller
+  ;; Unified calling convention. $Fn3(captures, ctx, args) — caller
   ;; passes the universe context as a native wasm value, sidestepping
-  ;; the args-list head/tail dance. Compiler emits Fn3 closures for
-  ;; user-defined fns + continuations; the runtime side migrates fn-by-fn.
+  ;; the args-list head/tail dance. Every closure func is Fn3-typed.
   (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
 
   ;; $Ctx — universe context threaded through every Fn3 call. Frames
@@ -82,35 +79,8 @@
 
 
   ;; Universal closure dispatcher. Tail-called from every CPS
-  ;; continuation site.
-  ;;
-  ;; Fn3-aware shim: the compiler now emits every user closure as
-  ;; Fn3 (caps, ctx, args). Existing Fn2-shape callers (runtime
-  ;; builtins like op_plus that invoke their result-cont via $apply)
-  ;; continue to work — we synthesise a placeholder ctx (ref.i31 42)
-  ;; and tail-call the Fn3 underneath. Once the substrate lands and
-  ;; runtime ops thread real ctx, those callers migrate to $apply_3
-  ;; directly and this shim can shrink back to a pure Fn2 dispatch
-  ;; (for runtime-internal Fn2 closures, if any remain).
-  (func $apply (@pub)
-    (param $args (ref null any))
-    (param $callee (ref null any))
-
-    (local $clos (ref $Closure))
-    (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
-
-    (return_call_ref $Fn3
-      (struct.get $Closure $captures (local.get $clos))
-      (ref.i31 (i32.const 42))
-      (local.get $args)
-      (ref.cast (ref $Fn3) (struct.get $Closure $func (local.get $clos))))
-  )
-
-  ;; Ctx-aware closure dispatcher. Mirrors $apply but threads the
-  ;; universe context as a native wasm arg so Fn3-typed callees don't
-  ;; need to peel ctx off the args list. Compiler-emitted user fns
-  ;; route through here; existing Fn2 std/runtime helpers stay on
-  ;; $apply until they are migrated to Fn3.
+  ;; continuation site. Ctx is threaded as a native wasm param so
+  ;; Fn3-typed callees don't need to peel it off the args list.
   (func $apply_3 (@pub)
     (param $args (ref null any))
     (param $ctx (ref null any))
@@ -181,21 +151,27 @@
   ;; -- Apply helpers ---------------------------------------------------
   ;;
   ;; apply_0/1/2_vals wrap N values into an args list and tail-call
-  ;; $apply. Used by every CPS continuation site that returns N values
-  ;; to its continuation.
+  ;; $apply_3. Every CPS continuation site that returns N values to its
+  ;; cont routes through here; ctx is passed explicitly so the cont
+  ;; runs under the producer's universe context.
 
-  (func $apply_0 (@pub) (param $cont (ref null any))
-    (return_call $apply (call $args_empty) (local.get $cont)))
-
-  (func $apply_1 (@pub) (param $result (ref null any)) (param $cont (ref null any))
-    (return_call $apply
-      (call $args_prepend (ref.as_non_null (local.get $result)) (call $args_empty))
+  (func $apply_0 (@pub) (param $ctx (ref null any)) (param $cont (ref null any))
+    (return_call $apply_3
+      (call $args_empty)
+      (local.get $ctx)
       (local.get $cont)))
 
-  (func $apply_2_vals (@pub) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply
+  (func $apply_1 (@pub) (param $ctx (ref null any)) (param $result (ref null any)) (param $cont (ref null any))
+    (return_call $apply_3
+      (call $args_prepend (ref.as_non_null (local.get $result)) (call $args_empty))
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (func $apply_2_vals (@pub) (param $ctx (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $apply_3
       (call $args_prepend (ref.as_non_null (local.get $a))
         (call $args_prepend (ref.as_non_null (local.get $b)) (call $args_empty)))
+      (local.get $ctx)
       (local.get $cont)))
 
 
@@ -208,30 +184,42 @@
   ;; Declarative element segment — required by WASM spec for ref.func.
   (elem declare func $_thunk_fn)
 
-  ;; Thunk body. Captures: [cont, value]. When applied: apply([value], cont).
+  ;; Thunk body. Captures: [cont, value, ctx]. When applied: cont(value)
+  ;; resumes under the *captured* ctx, not whatever ctx the scheduler
+  ;; hands in via $_sched_ctx. The captured ctx is what was active when
+  ;; this thunk was built (e.g. when the sender yielded a value into a
+  ;; channel). Using the captured ctx is how ctx survives the async/
+  ;; channel suspension boundary.
   (func $_thunk_fn (type $Fn3)
       (param $caps (ref null any))
-      (param $_ctx (ref null any))
+      (param $_sched_ctx (ref null any))
       (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
     (local $value (ref any))
+    (local $ctx (ref null any))
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
-    (local.set $cont (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $cont  (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
     (local.set $value (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 1))))
-    (return_call $apply
+    (local.set $ctx   (array.get $Captures (local.get $captures) (i32.const 2)))
+    (return_call $apply_3
       (call $args_prepend (local.get $value) (call $args_empty))
+      (local.get $ctx)
       (local.get $cont))
   )
 
-  (func $make_thunk (@pub) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
+  ;; Build a thunk that captures the caller's ctx. When the scheduler
+  ;; later applies this thunk, the cont resumes under THIS ctx — not the
+  ;; scheduler's. That is the whole point of the extra capture slot.
+  (func $make_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
     (struct.new $Closure
       (ref.func $_thunk_fn)
-      (array.new_fixed $Captures 2 (local.get $cont) (local.get $value)))
+      (array.new_fixed $Captures 3 (local.get $cont) (local.get $value) (local.get $ctx)))
   )
 
-  ;; Make a thunk that calls cont with unit (i31 0).
-  (func $make_unit_thunk (@pub) (param $cont (ref any)) (result (ref $Closure))
-    (call $make_thunk (local.get $cont) (ref.i31 (i32.const 0)))
+  ;; Make a thunk that calls cont with unit (i31 0). Same ctx-capture
+  ;; semantics as $make_thunk.
+  (func $make_unit_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (result (ref $Closure))
+    (call $make_thunk (local.get $ctx) (local.get $cont) (ref.i31 (i32.const 0)))
   )
 )

@@ -45,10 +45,17 @@
 
   ;; ---- CPS apply (for the fink-importable repr) ------------------------
 
-  (import "rt/apply.wat" "apply_1"
-    (func $apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat" "head_any"
-    (func $head_any (param $list (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "args_head"
+    (func $args_head (param (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "args_tail"
+    (func $args_tail (param (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "Closure"
+    (type $Closure (sub any (struct (field funcref) (field (ref null any))))))
+  (import "rt/apply.wat" "Captures"
+    (type $Captures (sub any (array (mut (ref null any))))))
+  (import "rt/apply.wat" "Fn3"
+    (type $Fn3 (sub any (func (param (ref null any) (ref null any) (ref null any))))))
 
   ;; i31 (bool) renderer — repr same as fmt; share str.wat's helper.
   (import "std/str.wat" "_str_fmt_i31"
@@ -127,13 +134,39 @@
   ;; ---- Fink-importable wrapper (CPS) ----------------------------------
 
   ;; std/repr.fnk:repr — user-facing `repr x` call site.
-  ;; Standard CPS shape: peel value off args[0], call $repr_val, apply_1
-  ;; result to cont.
-  (func $repr (@pub) (@impl "std/repr.fnk:repr")
-    (param $args (ref null any)) (param $cont (ref null any))
+  ;;
+  ;; Shape: a no-capture $Closure returned by the bare-@impl accessor.
+  ;; User code does `{repr} = import 'std/repr.fnk'` (which fetches this
+  ;; closure value) and then `repr 42` (which dispatches through apply_3
+  ;; with the caller's ctx). The closure body peels (cont, val) off the
+  ;; args list and forwards ctx into apply_1 so the cont resumes under
+  ;; the caller's universe.
+
+  (elem declare func $repr_apply)
+
+  (func $repr_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $val (ref null any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $val  (call $args_head (local.get $args)))
+
     (return_call $apply_1
-      (call $repr_val (ref.as_non_null (call $head_any (local.get $args))))
-      (local.get $cont))
-  )
+      (local.get $ctx)
+      (call $repr_val (ref.as_non_null (local.get $val)))
+      (local.get $cont)))
+
+  (global $repr_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $repr_apply)
+      (ref.null $Captures)))
+
+  (func $repr (@pub) (@impl "std/repr.fnk:repr") (result (ref any))
+    (global.get $repr_closure))
 
 )

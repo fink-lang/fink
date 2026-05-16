@@ -79,7 +79,6 @@ pub enum Sym {
   U64,
   F64,
   Decimal,
-  Fn2,
   Fn3,
   Closure,
   Captures,
@@ -152,7 +151,7 @@ pub enum Sym {
   // the BuiltIn::Import handler to build the import rec at module-load
   // time without going through the CPS-style rec_set chain.
   RecSetField,
-  // `panic` runtime function — `Fn2` shape. Used when `BuiltIn::Panic`
+  // `panic` runtime function — `Fn3` shape. Used when `BuiltIn::Panic`
   // appears in value position (passed as fail continuation in
   // pattern-match dispatch). Wrapped in a no-capture `$Closure` at
   // the call site.
@@ -309,7 +308,6 @@ pub struct Runtime {
   u64_: Option<TypeSym>,
   f64_: Option<TypeSym>,
   decimal_: Option<TypeSym>,
-  fn2: Option<TypeSym>,
   fn3: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
@@ -397,7 +395,6 @@ impl Runtime {
   pub fn u64_(&self)         -> TypeSym { self.u64_.expect("rt: U64 not declared") }
   pub fn f64_(&self)         -> TypeSym { self.f64_.expect("rt: F64 not declared") }
   pub fn decimal_(&self)     -> TypeSym { self.decimal_.expect("rt: Decimal not declared") }
-  pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
@@ -510,7 +507,6 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
 
     Sym::Panic           => "std/interop.fnk:panic",
 
-    Sym::Fn2             => "rt/apply.wat:Fn2",
     Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
     Sym::Captures        => "rt/apply.wat:Captures",
@@ -577,7 +573,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
 
     Sym::StrFromData     => "std/str.fnk:from_data",
     Sym::StrEmpty        => "std/str.fnk:str_empty",
-    Sym::StrFmt          => "std/str.fnk:fmt",
+    Sym::StrFmt          => "std/str.wat:_fmt_inner",
     Sym::StrMatch        => "std/str.fnk:match",
 
     Sym::Yield           => "std/async.fnk:yield",
@@ -601,7 +597,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   let mut rt = Runtime::default();
   let needed = &usage.used;
 
-  // Value-type imports — `std/num.wat:Num` / `rt/apply.wat:Fn2` / etc.
+  // Value-type imports — `std/num.wat:Num` / `rt/apply.wat:Fn3` / etc.
   // Shared identity across the ABI: user struct.new instances must
   // match runtime's concrete type indices. Emit resolves them against
   // `types-ir.wasm` at emit time.
@@ -628,10 +624,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::Decimal) {
     rt.decimal_ = Some(TypeSym::Runtime(Sym::Decimal));
   }
-  if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
-    rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
-  }
-  if needed.contains(&Sym::Fn3) || needed.contains(&Sym::Apply3) {
+  if needed.contains(&Sym::Fn3) || needed.contains(&Sym::Apply3) || always_need_fn3(usage) {
     rt.fn3 = Some(TypeSym::Runtime(Sym::Fn3));
   }
   if needed.contains(&Sym::Captures) {
@@ -838,10 +831,10 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   *slot = Some(f);
 }
 
-/// Fn2 is required by every fink_module definition. Without a
+/// Fn3 is required by every fink_module definition. Without a
 /// dedicated marker we always declare it when the scan added any
 /// bring-up helpers.
-fn always_need_fn2(usage: &RuntimeUsage) -> bool {
+fn always_need_fn3(usage: &RuntimeUsage) -> bool {
   usage.has(Sym::ArgsHead) || usage.has(Sym::Apply)
 }
 
@@ -854,7 +847,7 @@ fn always_need_fn2(usage: &RuntimeUsage) -> bool {
 ///
 /// The logic has two parts:
 /// 1. **Structural requirements.** Any program that reaches the
-///    fink-module bring-up path uses `Apply`, `Fn2`, and the list
+///    fink-module bring-up path uses `Apply3`, `Fn3`, and the list
 ///    helpers. These are unconditional today; revisit when lowering
 ///    grows to handle fragments that don't emit `fink_module`.
 /// 2. **BuiltIn-driven requirements.** For each `Callable::BuiltIn`
@@ -863,13 +856,13 @@ fn always_need_fn2(usage: &RuntimeUsage) -> bool {
 pub fn scan(cps: &CpsResult) -> RuntimeUsage {
   let mut usage = RuntimeUsage::default();
 
-  // Every well-formed module is a `Fn2`-shaped `fink_module`, so
+  // Every well-formed module is a `Fn3`-shaped `fink_module`, so
   // that type is always needed. `args_head` is always needed
   // because bring-up always pops `done` out of `_args`.
   // `args_tail` is also always needed because fink_module's user
   // params are now `[ƒctx, ƒret]` — two args means at least one peel
   // (head + tail) to unpack them.
-  usage.mark(Sym::Fn2);
+  usage.mark(Sym::Fn3);
   usage.mark(Sym::ArgsHead);
   usage.mark(Sym::ArgsTail);
 
@@ -1095,7 +1088,7 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }
       // When a builtin appears in *value* position (e.g. `panic` as a
       // fail-cont arg), the lowering also needs the runtime symbol
-      // for the underlying `Fn2`, plus the Closure/Captures types to
+      // for the underlying `Fn3`, plus the Closure/Captures types to
       // wrap it.
       if matches!(b, BuiltIn::Panic) {
         usage.mark(Sym::Panic);

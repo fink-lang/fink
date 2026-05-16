@@ -15,7 +15,7 @@ Takes lifted CPS and emits a standalone WebAssembly binary with DWARF debug info
 
 ## Contracts and design
 
-- [calling-convention.md](calling-convention.md) — the unified `$Fn2(captures, args)` signature, `$Closure` layout, the single `_apply` dispatch helper, call-site args-list construction, and how spread / varargs fit in.
+- [calling-convention.md](calling-convention.md) — the unified `$Fn3(captures, ctx, args)` signature, `$Closure` layout, the single `apply_3` dispatch helper, call-site args-list construction, ctx threading, thunk-side ctx capture, and how spread / varargs fit in.
 
 ## Entry point
 

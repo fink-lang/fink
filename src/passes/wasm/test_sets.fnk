@@ -80,7 +80,7 @@ test 'set import + construction', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_101) (local.get $v_103)))
         (local.set $v_124 (struct.new $rt/apply.wat:Closure (ref.func $test:v_117) (local.get $:caps_arg)))
         (local.set $v_17 (call $std/str.fnk:from_data (data.ref $d_0 3)))
-        (return_call $std/rec.fnk:pop (local.get $v_15) (local.get $v_17) (local.get $v_99) (local.get $v_124))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_15) (local.get $v_17) (local.get $v_99) (local.get $v_124))
       )
       (func $test:v_24 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_8 (ref null any))
@@ -99,7 +99,7 @@ test 'set import + construction', fn:
         (local.set $v_89 (struct.new $rt/apply.wat:Closure (ref.func $test:v_82) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_9) (local.get $v_8) (local.get $:ctx_param)))
         (local.set $v_107 (struct.new $rt/apply.wat:Closure (ref.func $test:v_98) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_7) (local.get $v_107) (local.get $v_89))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_7) (local.get $v_107) (local.get $v_89))
       )
       (func $test:v_54 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -173,7 +173,7 @@ test 'set import + construction', fn:
       (data $d_0 "set")
       (data $d_1 "test")
     )
-    ;; sm:Ue4IALoBAL4BAJQBAQIDUgFAAYQBAQYBhAEBBgGEAQBuALwBALwBALwBALwBAKIGALoBAL4BAL4BAG4AngcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDeCAC6AQC-AQDAAQDAAQCUAQDYAQDQAQFNHIwBAQAcsAgAkgEAmgEAkgEAmgEAkgEA3gEAzAEAgAIAzgEBAByUCwC6AQC-AQC-AQCSAQCwAQDMAQB6ANIBAHoA8gEAbgC6AQDKAQC8AQCKCACUAQBkAGwAnAEAhgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
+    ;; sm:Ue4IALoBAL4BAJQBAQIDUgFAAYQBAQYBhAEBBgGEAQBuALwBALwBALwBALwBAKIGALoBAL4BAL4BAG4AngcAugEAwAEAwAEAlAEAmgEAlAEAbgC8AQDeCAC6AQC-AQDAAQDAAQCUAQDYAQDQAQFNHIwBAQAc4AgAkgEAmgEAkgEAmgEAkgEA3gEAzAEAgAIAzgEBABzECwC6AQC-AQC-AQCSAQCwAQDMAQB6ANIBAHoA8gEAbgC6AQDKAQC8AQCKCACUAQBkAGwAnAEAhgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
 
 
 test 'set spread', fn:
@@ -218,7 +218,7 @@ test 'set spread', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $set_121) (local.get $v_123) (local.get $v_125)))
         (local.set $v_162 (struct.new $rt/apply.wat:Closure (ref.func $test:v_153) (local.get $:caps_arg)))
         (local.set $v_35 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/seq.fnk:prepend (local.get $v_35) (local.get $v_33) (local.get $v_162))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_35) (local.get $v_33) (local.get $v_162))
       )
       (func $test:v_91 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -237,7 +237,7 @@ test 'set spread', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $set_92) (local.get $v_94) (local.get $v_96)))
         (local.set $v_129 (struct.new $rt/apply.wat:Closure (ref.func $test:v_120) (local.get $:caps_arg)))
         (local.set $v_32 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (return_call $std/seq.fnk:prepend (local.get $v_32) (local.get $v_30) (local.get $v_129))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_32) (local.get $v_30) (local.get $v_129))
       )
       (func $test:v_78 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -256,7 +256,7 @@ test 'set spread', fn:
         (local.set $v_100 (struct.new $rt/apply.wat:Closure (ref.func $test:v_91) (local.get $:caps_arg)))
         (local.set $v_29 (struct.new $std/int.wat:I64 (i64.const 2)))
         (local.set $v_28 (call $rt/apply.wat:args_empty))
-        (return_call $std/seq.fnk:prepend (local.get $v_29) (local.get $v_28) (local.get $v_100))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_29) (local.get $v_28) (local.get $v_100))
       )
       (func $test:v_109 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -303,7 +303,7 @@ test 'set spread', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_143) (local.get $v_145)))
         (local.set $v_182 (struct.new $rt/apply.wat:Closure (ref.func $test:v_175) (local.get $:caps_arg)))
         (local.set $v_17 (call $std/str.fnk:from_data (data.ref $d_0 3)))
-        (return_call $std/rec.fnk:pop (local.get $v_15) (local.get $v_17) (local.get $v_141) (local.get $v_182))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_15) (local.get $v_17) (local.get $v_141) (local.get $v_182))
       )
       (func $test:v_24 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_8 (ref null any))
@@ -322,7 +322,7 @@ test 'set spread', fn:
         (local.set $v_116 (struct.new $rt/apply.wat:Closure (ref.func $test:v_109) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_9) (local.get $v_8) (local.get $:ctx_param)))
         (local.set $v_149 (struct.new $rt/apply.wat:Closure (ref.func $test:v_140) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_7) (local.get $v_149) (local.get $v_116))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_7) (local.get $v_149) (local.get $v_116))
       )
       (func $test:v_67 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -396,7 +396,7 @@ test 'set spread', fn:
       (data $d_0 "set")
       (data $d_1 "test")
     )
-    ;; sm:aPQHALoBAMQBAMABAMABAJQBAG4AugEAvgEA6ggAugEAxAEAwAEAwAEAlAEAggIA0AEBSAGEAQEAAdgIALoBAMIBAL4BAL4BAJQBAPwBANABAQYBhAEBAAHWCAC6AQC-AQCUAQFLA1IAhgIAzgEBUgGEAQENCWwBDgGYBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBUxyMAQEAHLQIAJIBAJoBAJIBAJoBAJIBAN4BANABAIACANABAQAclgsAugEAvgEAvgEAkgEAsAEAzAEAegDSAQB6APIBAG4AugEAygEAvAEAiggAlAEAZABsAJwBAIYCAG4AxAEA-AcAkgEA3gEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
+    ;; sm:aPQHALoBAMQBAMABAMABAJQBAG4AugEAvgEA6ggAugEAxAEAwAEAwAEAlAEAggIA0AEBSAGEAQEAAYgJALoBAMIBAL4BAL4BAJQBAPwBANABAQYBhAEBAAGGCQC6AQC-AQCUAQFLA1IAhgIAzgEBUgGEAQENCWwBDgHIBgC6AQDAAQDAAQBuAKIHALoBAMABAMABAJQBAJoBAJQBAG4AvAEA4ggAugEAwAEAwAEAwAEAlAEA2AEA0AEBUxyMAQEAHOQIAJIBAJoBAJIBAJoBAJIBAN4BANABAIACANABAQAcxgsAugEAvgEAvgEAkgEAsAEAzAEAegDSAQB6APIBAG4AugEAygEAvAEAiggAlAEAZABsAJwBAIYCAG4AxAEA-AcAkgEA3gEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'set destructure empty', fn:
@@ -491,7 +491,7 @@ test 'set destructure empty', fn:
         (local.set $v_41 (local.get $v_49))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_334) (local.get $v_336) (local.get $v_338)))
         (local.set $v_374 (struct.new $rt/apply.wat:Closure (ref.func $test:v_365) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:op_empty (local.get $v_41) (local.get $v_374))
+        (return_call $std/operators.fnk:op_empty (local.get $:ctx_param) (local.get $v_41) (local.get $v_374))
       )
       (func $test:v_56 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_37 (ref null any))
@@ -510,7 +510,7 @@ test 'set destructure empty', fn:
         (local.set $v_311 (struct.new $rt/apply.wat:Closure (ref.func $test:v_304) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_37) (local.get $:ctx_param) (local.get $v_38)))
         (local.set $v_342 (struct.new $rt/apply.wat:Closure (ref.func $test:v_333) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $v_36) (local.get $v_342) (local.get $v_311))
+        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $v_36) (local.get $v_342) (local.get $v_311))
       )
       (func $test:v_74 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_33 (ref null any))
@@ -698,7 +698,7 @@ test 'set destructure empty', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_230) (local.get $v_232)))
         (local.set $v_279 (struct.new $rt/apply.wat:Closure (ref.func $test:v_272) (local.get $:caps_arg)))
         (local.set $v_18 (call $std/str.fnk:from_data (data.ref $d_2 3)))
-        (return_call $std/rec.fnk:pop (local.get $v_16) (local.get $v_18) (local.get $v_228) (local.get $v_279))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_16) (local.get $v_18) (local.get $v_228) (local.get $v_279))
       )
       (func $test:v_25 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_9 (ref null any))
@@ -717,7 +717,7 @@ test 'set destructure empty', fn:
         (local.set $v_207 (struct.new $rt/apply.wat:Closure (ref.func $test:v_200) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_10) (local.get $v_9) (local.get $:ctx_param)))
         (local.set $v_236 (struct.new $rt/apply.wat:Closure (ref.func $test:v_227) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_8) (local.get $v_236) (local.get $v_207))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_8) (local.get $v_236) (local.get $v_207))
       )
       (func $test:v_162 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -793,7 +793,7 @@ test 'set destructure empty', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:vQH6BQCUAQFsAYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQE_AU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEApggAugEAwAEAlAEBNwNSALIBANABAG4AvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAQEcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
+    ;; sm:vQH6BQCUAQFsAYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAK2CACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAqAJAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQE_AU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEApggAugEAwAEAlAEBNwNSALIBANABAG4AvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAQEcjAEBABzmCACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHM4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
 
 
 test 'set destructure non-empty', fn:
@@ -888,7 +888,7 @@ test 'set destructure non-empty', fn:
         (local.set $v_44 (local.get $v_52))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_337) (local.get $v_339) (local.get $v_341)))
         (local.set $v_377 (struct.new $rt/apply.wat:Closure (ref.func $test:v_368) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:op_empty (local.get $v_44) (local.get $v_377))
+        (return_call $std/operators.fnk:op_empty (local.get $:ctx_param) (local.get $v_44) (local.get $v_377))
       )
       (func $test:v_59 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_40 (ref null any))
@@ -907,7 +907,7 @@ test 'set destructure non-empty', fn:
         (local.set $v_314 (struct.new $rt/apply.wat:Closure (ref.func $test:v_307) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_40) (local.get $:ctx_param) (local.get $v_41)))
         (local.set $v_345 (struct.new $rt/apply.wat:Closure (ref.func $test:v_336) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $v_39) (local.get $v_345) (local.get $v_314))
+        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $v_39) (local.get $v_345) (local.get $v_314))
       )
       (func $test:v_77 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_36 (ref null any))
@@ -1104,7 +1104,7 @@ test 'set destructure non-empty', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_233) (local.get $v_235)))
         (local.set $v_282 (struct.new $rt/apply.wat:Closure (ref.func $test:v_275) (local.get $:caps_arg)))
         (local.set $v_18 (call $std/str.fnk:from_data (data.ref $d_2 3)))
-        (return_call $std/rec.fnk:pop (local.get $v_16) (local.get $v_18) (local.get $v_231) (local.get $v_282))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_16) (local.get $v_18) (local.get $v_231) (local.get $v_282))
       )
       (func $test:v_25 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_9 (ref null any))
@@ -1123,7 +1123,7 @@ test 'set destructure non-empty', fn:
         (local.set $v_210 (struct.new $rt/apply.wat:Closure (ref.func $test:v_203) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_10) (local.get $v_9) (local.get $:ctx_param)))
         (local.set $v_239 (struct.new $rt/apply.wat:Closure (ref.func $test:v_230) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_8) (local.get $v_239) (local.get $v_210))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_8) (local.get $v_239) (local.get $v_210))
       )
       (func $test:v_165 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1199,7 +1199,7 @@ test 'set destructure non-empty', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:wwH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQFLAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy2CACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
+    ;; sm:wwH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAK2CACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAqAJAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQC8BQCUAQEWAYQBAG4AvAEAsgcAlAEAmgEAlAEAmgEAlAEAegDSAQBuALwBAIAEAPIHALoBAMABAMABAHoA0gEAegDWAQBuAL4BAMQBAL4BAK4IAJQBAJoBAJQBANQBANABAHoA0gEAbgC8AQC-AQC8AQC8CQC6AQDAAQCUAQFLAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABzmCACSAQCaAQCUAQCaAQCSAQDgAQDQAQCCAgDQAQEAHM4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
 
 
 test 'set destructure peel one', fn:
@@ -1294,7 +1294,7 @@ test 'set destructure peel one', fn:
         (local.set $v_45 (local.get $v_53))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_415) (local.get $v_417) (local.get $v_419)))
         (local.set $v_472 (struct.new $rt/apply.wat:Closure (ref.func $test:v_463) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:op_empty (local.get $v_45) (local.get $v_472))
+        (return_call $std/operators.fnk:op_empty (local.get $:ctx_param) (local.get $v_45) (local.get $v_472))
       )
       (func $test:v_60 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_41 (ref null any))
@@ -1313,7 +1313,7 @@ test 'set destructure peel one', fn:
         (local.set $v_376 (struct.new $rt/apply.wat:Closure (ref.func $test:v_369) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_41) (local.get $:ctx_param) (local.get $v_42)))
         (local.set $v_423 (struct.new $rt/apply.wat:Closure (ref.func $test:v_414) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $v_40) (local.get $v_423) (local.get $v_376))
+        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $v_40) (local.get $v_423) (local.get $v_376))
       )
       (func $test:v_78 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_37 (ref null any))
@@ -1347,7 +1347,7 @@ test 'set destructure peel one', fn:
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $a_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_109 (struct.new $std/int.wat:I64 (i64.const 100)))
-        (return_call $std/operators.fnk:op_plus (local.get $a_3) (local.get $v_109) (local.get $v_107))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $a_3) (local.get $v_109) (local.get $v_107))
       )
       (func $test:v_294 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1416,7 +1416,7 @@ test 'set destructure peel one', fn:
         (local.set $v_90 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_453) (local.get $v_455) (local.get $v_86)))
         (local.set $v_510 (struct.new $rt/apply.wat:Closure (ref.func $test:v_501) (local.get $:caps_arg)))
-        (return_call $std/seq.fnk:pop (local.get $v_90) (local.get $v_451) (local.get $v_510))
+        (return_call $std/seq.fnk:pop (local.get $:ctx_param) (local.get $v_90) (local.get $v_451) (local.get $v_510))
       )
       (func $test:v_401 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1433,7 +1433,7 @@ test 'set destructure peel one', fn:
         (local.set $v_96 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_402) (local.get $v_404) (local.get $v_406)))
         (local.set $v_459 (struct.new $rt/apply.wat:Closure (ref.func $test:v_450) (local.get $:caps_arg)))
-        (return_call $std/seq.fnk:pop (local.get $v_96) (local.get $v_402) (local.get $v_459))
+        (return_call $std/seq.fnk:pop (local.get $:ctx_param) (local.get $v_96) (local.get $v_402) (local.get $v_459))
       )
       (func $test:v_104 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_84 (ref null any))
@@ -1452,7 +1452,7 @@ test 'set destructure peel one', fn:
         (local.set $v_365 (struct.new $rt/apply.wat:Closure (ref.func $test:v_358) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_85) (local.get $v_84) (local.get $:ctx_param)))
         (local.set $v_410 (struct.new $rt/apply.wat:Closure (ref.func $test:v_401) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $v_83) (local.get $v_410) (local.get $v_365))
+        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $v_83) (local.get $v_410) (local.get $v_365))
       )
       (func $test:v_127 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_80 (ref null any))
@@ -1621,7 +1621,7 @@ test 'set destructure peel one', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_273) (local.get $v_275)))
         (local.set $v_330 (struct.new $rt/apply.wat:Closure (ref.func $test:v_323) (local.get $:caps_arg)))
         (local.set $v_19 (call $std/str.fnk:from_data (data.ref $d_2 3)))
-        (return_call $std/rec.fnk:pop (local.get $v_17) (local.get $v_19) (local.get $v_271) (local.get $v_330))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_17) (local.get $v_19) (local.get $v_271) (local.get $v_330))
       )
       (func $test:v_26 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_10 (ref null any))
@@ -1640,7 +1640,7 @@ test 'set destructure peel one', fn:
         (local.set $v_250 (struct.new $rt/apply.wat:Closure (ref.func $test:v_243) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_11) (local.get $v_10) (local.get $:ctx_param)))
         (local.set $v_279 (struct.new $rt/apply.wat:Closure (ref.func $test:v_270) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_9) (local.get $v_279) (local.get $v_250))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_9) (local.get $v_279) (local.get $v_250))
       )
       (func $test:v_205 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1716,5 +1716,5 @@ test 'set destructure peel one', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:_AH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAKGCACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAvAIAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQDIBQCWAQCaAQCSAQEqA4oBAQcHnggAugEAwAEAlAEBDwFOAHoA1gEAbgC8AQC-AQCuBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvgEA4ggAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBAQeUCAC6AQDAAQDAAQDAAQCUAQD-AQDQAQEAB5gIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAH9AgAlAEAmgEAlAEAmgEAlAEAsAEA0AEAegDWAQBuALwBALwBAL4BAIIEAPQHALoBAMABAMABAHoA1gEAegDWAQBuAL4BAMQBAL4BALQIAJYBAJoBAJYBANgBANABAHoA0gEAbgC-AQC-AQC-AQC8CQC6AQDAAQCUAQFFAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABy4CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEAHJ4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
+    ;; sm:_AH6BQCUAQF4AYQBAG4AvAEAnAcAugEAwAEAegDSAQBuAL4BAKwGALoBAMABAMABAG4A1ggAugEAwAEAwAEAwAEAlAEAhAEAfAC6DQC6AQDAAQDAAQDAAQCUAQEHAlAA_gEA0AEBAAK2CACUAQCaAQCUAQCaAQCUAQDgAQDQAQCEAgDQAQEAAqAJAJQBAJoBAJQBAJoBAJQBALABANABAHoA0gEAbgC8AQC8AQC-AQDIBQCWAQCaAQCSAQEqA4oBAQcHzggAugEAwAEAlAEBDwFOAHoA1gEAbgC8AQC-AQCuBgC6AQDAAQDAAQBuAOYHALoBAMABAMABAMABAJQBAJoBAJQBAG4AvgEA4ggAugEAwAEAwAEAwAEAlAEAmgEAlAEA_AEA0AEBAQfECAC6AQDAAQDAAQDAAQCUAQD-AQDQAQEAB8gIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQAHpAkAlAEAmgEAlAEAmgEAlAEAsAEA0AEAegDWAQBuALwBALwBAL4BAIIEAPQHALoBAMABAMABAHoA1gEAegDWAQBuAL4BAMQBAL4BALQIAJYBAJoBAJYBANgBANABAHoA0gEAbgC-AQC-AQC-AQC8CQC6AQDAAQCUAQFFAU4AVACUAQCWAQC8AQB6ANYBAG4AugEAvgEA7AkAugEAwAEAlAEBNwNSALIBANABAUgBhAEBBgGEAQEGAYQBAG4AvAEAvAEAvAEAvgEAqAYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABAVUcjAEBABzoCACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEAHM4LALoBAMABAMABAJIBALIBANABAHoA0gEAegDyAQBuALoBAMoBAL4BAJAIAJYBAGQAbACcAQCGAgBuAMQBAP4HAJIBAN4BANgBAHoA1gEAbgDGAQCqBQB6AOYBAIwBAA
 

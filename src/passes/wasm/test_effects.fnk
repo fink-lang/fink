@@ -79,7 +79,7 @@ test 'set_ctx import + call', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_99) (local.get $v_101)))
         (local.set $v_122 (struct.new $rt/apply.wat:Closure (ref.func $test:v_115) (local.get $:caps_arg)))
         (local.set $v_17 (call $std/str.fnk:from_data (data.ref $d_1 7)))
-        (return_call $std/rec.fnk:pop (local.get $v_15) (local.get $v_17) (local.get $v_97) (local.get $v_122))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_15) (local.get $v_17) (local.get $v_97) (local.get $v_122))
       )
       (func $test:v_24 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_8 (ref null any))
@@ -98,7 +98,7 @@ test 'set_ctx import + call', fn:
         (local.set $v_87 (struct.new $rt/apply.wat:Closure (ref.func $test:v_80) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_9) (local.get $v_8) (local.get $:ctx_param)))
         (local.set $v_105 (struct.new $rt/apply.wat:Closure (ref.func $test:v_96) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_7) (local.get $v_105) (local.get $v_87))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_7) (local.get $v_105) (local.get $v_87))
       )
       (func $test:v_52 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -173,4 +173,4 @@ test 'set_ctx import + call', fn:
       (data $d_1 "set_ctx")
       (data $d_2 "test")
     )
-    ;; sm:TfIHALoBAL4BAJQBAQIHWgFYBYwBAG4AvAEAvAEAqgYAugEAvgEAvgEAbgCeBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBANwIALoBAL4BAL4BAMABAJQBANYBANABAVkkjAEBACSwCACSAQCaAQCSAQCaAQCSAQDeAQDMAQCAAgDOAQEAJJQLALoBAL4BAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBALoIAJQBAGQAhAEApAEAlgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
+    ;; sm:TfIHALoBAL4BAJQBAQIHWgFYBYwBAG4AvAEAvAEAqgYAugEAvgEAvgEAbgCeBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBANwIALoBAL4BAL4BAMABAJQBANYBANABAVkkjAEBACTgCACSAQCaAQCSAQCaAQCSAQDeAQDMAQCAAgDOAQEAJMQLALoBAL4BAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBALoIAJQBAGQAhAEApAEAlgIAbgDEAQD4BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA

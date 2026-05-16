@@ -18,11 +18,11 @@
 ;; separate bool. The empty rec is created up front by `init` so `pub`
 ;; only ever mutates an existing rec.
 ;;
-;; ## Calling `import_module` without a closure wrapper
+;; ## Calling `import_module` via apply_3
 ;;
-;; Every `<fqn>:import_module` is a Fn2-shaped function with no
-;; captures. `import` calls it via `return_call_ref $Fn2 (null, args,
-;; mod_ref)` directly — no $Closure box, no _apply dispatch.
+;; Every `<fqn>:import_module` is a Fn3-shaped function. `import`
+;; routes it through `apply_3` with `empty_ctx` as the universe seed
+;; -- modules are the universe entry, no caller ctx exists yet.
 ;;
 ;; ## wrap_cont — the bridge between import_module's done and import's cont
 ;;
@@ -40,12 +40,16 @@
   (import "std/list.wat"  "List"     (type $List     (sub any)))
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
-  (import "rt/apply.wat"  "Fn2"      (type $Fn2      (sub any)))
   (import "rt/apply.wat"  "Fn3"      (type $Fn3      (sub any)))
 
   ;; Func imports
-  (import "rt/apply.wat"  "apply"
-    (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "rt/apply.wat"  "apply_3"
+    (func $apply_3
+      (param $args (ref null any))
+      (param $ctx (ref null any))
+      (param $callee (ref null any))))
+  (import "rt/apply.wat"  "empty_ctx"
+    (func $empty_ctx (result (ref any))))
   (import "std/dict.wat"  "dict_empty"
     (func $dict_empty (result (ref $DictImpl))))
   (import "std/dict.wat"  "dict_get"
@@ -60,8 +64,7 @@
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
   (import "std/list.wat"  "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "rt/apply.wat"  "apply_1"
-    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat"  "empty"
     (func $list_empty (result (ref $List))))
   (import "std/list.wat"  "prepend"
@@ -191,6 +194,7 @@
         (if (i32.eqz (ref.is_null (local.get $existing)))
           (then
             (return_call $list_apply_1
+      (ref.null any)
               (local.get $existing)
               (local.get $cont))))))
 
@@ -214,29 +218,34 @@
         (ref.func $_import_wrap_step)
         (local.get $caps)))
 
-    ;; Fn3 calling convention: ctx is a native wasm param synthesised
-    ;; by $_apply's Fn3 shim. Args list carries only the wrap_clos
-    ;; cont. Module body shape: `fn :caps_param, :ctx_param, :params`
-    ;; with cont = args_head(:params).
-    (return_call $_apply
+    ;; Fn3 calling convention: ctx is a native wasm param. Module
+    ;; bodies are pure (no observable side effects depending on ctx),
+    ;; so we seed with empty_ctx here. Args list carries only the
+    ;; wrap_clos cont. Module body shape:
+    ;; `fn :caps_param, :ctx_param, :params` with cont = args_head(:params).
+    (return_call $apply_3
       (call $list_prepend (local.get $wrap_clos) (call $list_empty))
+      (call $empty_ctx)
       (local.get $mod_ref)))
 
 
   ;; Internal: like `std/list.wat:apply_2_vals` but allows null
   ;; values. Substitutes `$Nil` for null since `$Cons.head` is
-  ;; `(ref any)` (non-null).
+  ;; `(ref any)` (non-null). Used to fire the host-supplied cont at
+  ;; module-init completion. No ctx in scope (init_module is the
+  ;; universe entry point), so we mint an empty ctx for the cont.
   (func $_apply_2_nullable
     (param $a (ref null any))
     (param $b (ref null any))
     (param $cont (ref null any))
 
-    (return_call $_apply
+    (return_call $apply_3
       (call $list_prepend
         (call $_or_nil (local.get $a))
         (call $list_prepend
           (call $_or_nil (local.get $b))
           (call $list_empty)))
+      (call $empty_ctx)
       (local.get $cont)))
 
   ;; If `v` is null, returns a sentinel non-null (an empty list as a
@@ -314,12 +323,13 @@
         (ref.func $_init_module_step)
         (local.get $caps)))
 
-    ;; Fn3 calling convention: ctx is a native wasm param synthesised
-    ;; by $_apply's Fn3 shim. Args list carries only the intermediate
-    ;; cont. Module body shape: `fn :caps_param, :ctx_param, :params`
-    ;; with cont = args_head(:params).
-    (return_call $_apply
+    ;; Fn3 calling convention: ctx is a native wasm param. The module
+    ;; body is the universe entry; we seed with empty_ctx here. Args
+    ;; list carries only the intermediate cont. Module body shape:
+    ;; `fn :caps_param, :ctx_param, :params` with cont = args_head(:params).
+    (return_call $apply_3
       (call $list_prepend (local.get $intermediate) (call $list_empty))
+      (call $empty_ctx)
       (local.get $mod_clos)))
 
 
@@ -362,7 +372,7 @@
 
   ;; -- _import_wrap_step ---------------------------------------------
   ;;
-  ;; The Fn2-shaped function that backs wrap_cont. Captures hold
+  ;; The Fn3-shaped function that backs wrap_cont. Captures hold
   ;; (url, user_cont). When fired by the producer's done, it ignores
   ;; whatever payload arrives in $args, reads registry[url] (now
   ;; guaranteed populated), and tail-applies user_cont with the rec.
@@ -390,6 +400,7 @@
         (ref.cast (ref eq) (local.get $url))))
 
     (return_call $list_apply_1
+      (ref.null any)
       (local.get $rec)
       (local.get $user_cont)))
 

@@ -499,10 +499,10 @@ impl Cont {
 /// Distinguishes CPS functions from CPS closures at the IR level.
 ///
 /// The distinction is about the calling convention: CpsFunction is called
-/// with `Arg::Cont` at the call site (the cont is a separate WASM param
-/// or prepended to the args list in unified $Fn2 mode). CpsClosure is
-/// never called with `Arg::Cont` — it receives any continuation values
-/// as regular `Arg::Val` arguments or captures.
+/// with `Arg::Cont` at the call site (the cont is prepended to the args
+/// list under the unified $Fn3 calling convention). CpsClosure is never
+/// called with `Arg::Cont` — it receives any continuation values as
+/// regular `Arg::Val` arguments or captures.
 ///
 /// Set once by the CPS transform at creation time. Preserved through lifting.
 /// See `../wasm/calling-convention.md` for the WASM-level design.
@@ -510,7 +510,7 @@ impl Cont {
 pub enum CpsFnKind {
   /// Called with `Arg::Cont` at the call site. Includes user-defined
   /// functions, match wrappers (m_0), and match matchers (mp_N).
-  /// At the WASM level, the cont is prepended to the args list ($Fn2).
+  /// At the WASM level, the cont is prepended to the args list ($Fn3).
   CpsFunction,
 
   /// Never called with `Arg::Cont`. Includes compiler-generated

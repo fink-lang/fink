@@ -1,4 +1,4 @@
-{test, expect, equals, run} = import '!fake'
+{test, skip, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -38,5 +38,172 @@ test 'ctx set in outer scope reads in nested fn', fn:
     get_ctx _
   | equals ƒink:
     2
+
+
+# -- ctx passthrough across runtime boundaries -----------------------
+#
+# These tests pin down that ctx survives every place where a cont gets
+# suspended and later resumed by the runtime: yield, channel I/O, await,
+# host stdout. Each test sets a sentinel ctx, crosses the boundary, then
+# reads ctx back on the other side -- if any thunk/Waiter on the path
+# drops ctx, the resumed value will be the previous (default) ctx
+# instead of the sentinel.
+
+test 'ctx survives yield/resume', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    set_ctx 'yielded'
+    yield 0
+    get_ctx _
+  | equals ":
+    yielded
+
+
+test 'ctx survives channel receive', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    ch = channel 0
+    spawn fn:
+      'msg' >> ch
+
+    set_ctx 'receiver-ctx'
+    _ = receive ch
+    get_ctx _
+  | equals ":
+    receiver-ctx
+
+
+test 'ctx survives await of spawned task', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    fut = spawn fn:
+      42
+
+    set_ctx 'awaiter-ctx'
+    _ = await fut
+    get_ctx _
+  | equals ":
+    awaiter-ctx
+
+
+test 'ctx survives stdout write', fn:
+  expect run ƒink:
+    {stdout, write} = import 'std/io.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'writer-ctx'
+    write stdout, ''
+    get_ctx _
+  | equals ":
+    writer-ctx
+
+
+# A spawned task body now runs under the SPAWNER's ctx (we captured it
+# in $_spawn_task_fn's captures).
+test 'spawned task body inherits spawner ctx', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'spawner-ctx'
+    fut = spawn fn:
+      get_ctx _
+
+    await fut
+  | equals ":
+    spawner-ctx
+
+
+# Protocols dispatchers (op_plus etc.) forward ctx to their cont without
+# consulting it for dispatch. After an arbitrary numeric op chain, ctx
+# should still be the caller's.
+test 'ctx survives arithmetic chain', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'math-ctx'
+    foo = 1 + 2 * 3 - 4
+    get_ctx _
+  | equals ":
+    math-ctx
+
+
+# Pattern match arms are CPS conts under the hood; ctx must survive
+# match dispatch.
+test 'ctx survives match', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'match-ctx'
+    _ = match 'x':
+      'x': 1
+      _: 0
+    get_ctx _
+  | equals ":
+    match-ctx
+
+
+# Channel I/O via the host bridge (HostChannel) — write goes through
+# interop_channel_send. ctx should survive that too.
+test 'ctx survives stderr write', fn:
+  expect run ƒink:
+    {stderr, write} = import 'std/io.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'stderr-ctx'
+    write stderr, ''
+    get_ctx _
+  | equals ":
+    stderr-ctx
+
+
+# std/math.wat's per-fn closures (abs, sqrt, sin, cos, log, ...) now
+# forward the caller's ctx into apply_1 — previously they discarded it.
+test 'ctx survives sqrt', fn:
+  expect run ƒink:
+    {sqrt} = import 'std/math.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'math-fn-ctx'
+    _ = sqrt 16.0
+    get_ctx _
+  | equals ":
+    math-fn-ctx
+
+
+# -- KNOWN ctx-drop sites ----------------------------------------------
+#
+# Verified gaps that fail today. Skipped so they don't break CI but
+# stay visible for the next ctx-threading pass. Un-skip to reproduce.
+
+
+# `repr x` and `fmt x` as user-imported fns. The bare-@impl wrapper in
+# the .wat file returns a no-capture $Closure; the user-import binding
+# receives the closure value; apply_3 dispatches with caller's ctx.
+test 'ctx survives repr', fn:
+  expect run ƒink:
+    {repr} = import 'std/repr.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'repr-ctx'
+    _ = repr 42
+    get_ctx _
+  | equals ":
+    repr-ctx
+
+
+# `fmt x` as a direct user-imported call (not template-string interp,
+# which goes through the StrFmt builtin sym path with ctx threaded).
+test 'ctx survives fmt as imported fn', fn:
+  expect run ƒink:
+    {fmt} = import 'std/str.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'fmt-ctx'
+    _ = fmt 42
+    get_ctx _
+  | equals ":
+    fmt-ctx
 
 

@@ -1,7 +1,7 @@
 ;; Operator implementations — CPS functions for arithmetic, comparison, and logic.
 ;;
 ;; Each operator follows the CPS calling convention:
-;;   (func $op_plus (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+;;   (func $op_plus (param $ctx ...) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 ;;     ;; unbox args, compute, box result, tail-call _apply([result], cont)
 ;;   )
 ;;
@@ -13,19 +13,24 @@
 ;; These are the phase-0 implementations operating on concrete types.
 ;; Protocol-based overloading (future) will replace these with dispatch
 ;; through user-defined protocol implementations.
+;;
+;; ctx convention (2026-05-16): every op_* takes $ctx as the first param.
+;; Every op_* in this file FORWARDS $ctx to its cont (via list_apply_N).
+;; What it does NOT do is consult $ctx for dispatch — type dispatch is
+;; purely by `ref.test` on $a, and the per-type kernels in num/set/int/
+;; float/list/dict are pure compute (no user-callbacks reachable), so we
+;; don't pass ctx down into them either. The (param $ctx ...) line in
+;; each op_* is marked `;; TODO ctx: not consulted` as a reminder: when
+;; user-defined protocol impls land, this is the boundary where dispatch
+;; must start consulting ctx (e.g. for ctx-scoped operator overrides).
 
 (module
 
   ;; Type imports
-  (import "rt/apply.wat"     "Fn2"         (type $Fn2         (sub any)))
-  (import "rt/apply.wat"     "Closure"     (type $Closure     (sub any)))
-  (import "rt/apply.wat"     "Captures"    (type $Captures    (sub any)))
   (import "std/num.wat"      "Num"         (type $Num         (sub any)))
   (import "std/int.wat"      "Int"         (type $Int         (sub any)))
   (import "std/int.wat"      "I64"         (type $I64         (sub any)))
-  (import "std/int.wat"      "U64"         (type $U64         (sub any)))
   (import "std/float.wat"    "F64"         (type $F64         (sub any)))
-  (import "std/decimal.wat"  "Decimal"     (type $Decimal     (sub any)))
   (import "std/str.wat"      "Str"         (type $Str         (sub any)))
   (import "std/list.wat"     "List"        (type $List        (sub any)))
   ;; Pull std/math.wat into the link DAG. rt/protocols doesn't call any
@@ -41,10 +46,8 @@
   (import "interop.wat" "HostChannel" (type $HostChannel (sub any)))
 
   ;; Func imports — list helpers
-  (import "rt/apply.wat" "apply_0"
-    (func $list_apply_0 (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_1"
-    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
   (import "std/list.wat" "seq_pop"
@@ -113,70 +116,86 @@
   (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
   ;; Func imports — channel
-  (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "std/channel.wat" "receive" (func $channel_receive (param (ref null any)) (param (ref null any))))
-
+  (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/channel.wat" "receive" (func $channel_receive (param (ref null any)) (param (ref null any)) (param (ref null any))))
   ;; Func imports — interop (host bridge)
-  (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  ;; ctx-aware: each leading (ref null any) is the caller's $Ctx.
+  (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
   ;; =========================================================================
 
   (func $op_plus (@pub) (@impl "std/operators.fnk:op_plus")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — union
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (call $set_op_plus
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))
         (local.get $cont)))
 
     ;; Default: $Num add
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_plus
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_minus (@pub) (@impl "std/operators.fnk:op_minus")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — difference
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (call $set_op_minus
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))
         (local.get $cont)))
 
     ;; Default: $Num sub
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_minus
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_mul (@pub) (@impl "std/operators.fnk:op_mul")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_mul
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_div (@pub) (@impl "std/operators.fnk:op_div")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_div
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -187,56 +206,70 @@
   ;; =========================================================================
 
   (func $op_intdiv (@pub) (@impl "std/operators.fnk:op_intdiv")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_intdiv
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_rem (@pub) (@impl "std/operators.fnk:op_rem")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_rem
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_intmod (@pub) (@impl "std/operators.fnk:op_intmod")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_intmod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_pow (@pub) (@impl "std/operators.fnk:op_pow")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_pow
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_divmod (@pub) (@impl "std/operators.fnk:op_divmod")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_divmod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_rotl (@pub) (@impl "std/operators.fnk:op_rotl")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_rotl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_rotr (@pub) (@impl "std/operators.fnk:op_rotr")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_rotr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -292,40 +325,53 @@
   ;;   $Str    → str_op_eq
   ;;   $Set    → set:op_eq
   (func $op_eq (@pub) (@impl "std/operators.fnk:op_eq")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_num (ref $Num))
+    (local $a_str (ref $Str))
+    (local $a_set (ref $Set))
 
     ;; Try $Num
     (block $not_num
-      (block $is_num (result (ref $Num))
+      (local.set $a_num
+        (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
-            (local.get $a))))
+            (local.get $a)))))
       ;; $a is $Num — cast $b and compare
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $num_op_eq
+          (local.get $a_num)
           (ref.cast (ref $Num) (local.get $b))))
         (local.get $cont)))
 
     ;; Try $Str
     (block $not_str
-      (block $is_str (result (ref $Str))
+      (local.set $a_str
+        (block $is_str (result (ref $Str))
         (br $not_str
           (br_on_cast $is_str (ref null any) (ref $Str)
-            (local.get $a))))
+            (local.get $a)))))
       ;; $a is $Str — cast $b and call str_op_eq
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $str_op_eq
+          (local.get $a_str)
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
 
     ;; Try $Set
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_eq
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
@@ -336,40 +382,53 @@
   ;;   $Str    → !str_op_eq
   ;;   $Set    → !set:op_eq
   (func $op_neq (@pub) (@impl "std/operators.fnk:op_neq")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_num (ref $Num))
+    (local $a_str (ref $Str))
+    (local $a_set (ref $Set))
 
     ;; Try $Num
     (block $not_num
-      (block $is_num (result (ref $Num))
+      (local.set $a_num
+        (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
-            (local.get $a))))
+            (local.get $a)))))
       ;; $a is $Num — cast $b and compare
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $num_op_neq
+          (local.get $a_num)
           (ref.cast (ref $Num) (local.get $b))))
         (local.get $cont)))
 
     ;; Try $Str
     (block $not_str
-      (block $is_str (result (ref $Str))
+      (local.set $a_str
+        (block $is_str (result (ref $Str))
         (br $not_str
           (br_on_cast $is_str (ref null any) (ref $Str)
-            (local.get $a))))
+            (local.get $a)))))
       ;; $a is $Str — cast $b, call str_op_eq, invert
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (i32.eqz (call $str_op_eq
+          (local.get $a_str)
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
 
     ;; Try $Set
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (i32.eqz (call $set_op_eq
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))))
         (local.get $cont)))
 
@@ -380,96 +439,125 @@
   ;; relations don't apply.
   ;;   $Set    → set:op_disjoint
   (func $op_disjoint (@pub) (@impl "std/operators.fnk:op_disjoint")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_disjoint
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
     (unreachable))
 
   (func $op_lt (@pub) (@impl "std/operators.fnk:op_lt")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — strict subset
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_lt
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (call $num_op_lt
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   (func $op_lte (@pub) (@impl "std/operators.fnk:op_lte")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — subset
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_lte
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (call $num_op_lte
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   (func $op_gt (@pub) (@impl "std/operators.fnk:op_gt")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — strict superset
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_gt
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (call $num_op_gt
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   (func $op_gte (@pub) (@impl "std/operators.fnk:op_gte")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — superset
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_gte
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (call $num_op_gte
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b))))
@@ -480,111 +568,149 @@
   ;; =========================================================================
 
   (func $op_not (@pub) (@impl "std/operators.fnk:op_not")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $cont (ref null any))
+    (local $a_num (ref $Num))
 
     ;; Try $Num → delegate to int_op_not
     (block $not_num
-      (block $is_num (result (ref $Num))
-        (br $not_num
-          (br_on_cast $is_num (ref null any) (ref $Num)
-            (local.get $a))))
+      (local.set $a_num
+        (block $is_num (result (ref $Num))
+          (br $not_num
+            (br_on_cast $is_num (ref null any) (ref $Num)
+              (local.get $a)))))
       (return_call $list_apply_1
-        (call $num_op_not)
+        (local.get $ctx)
+        (call $num_op_not (local.get $a_num))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean not
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $a)))))
       (local.get $cont)))
 
   (func $op_and (@pub) (@impl "std/operators.fnk:op_and")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_num (ref $Num))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — intersect
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (call $set_op_and
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))
         (local.get $cont)))
 
     ;; Try $Num → delegate to int_op_and
     (block $not_num
-      (block $is_num (result (ref $Num))
+      (local.set $a_num
+        (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
-        (call $num_op_and (ref.cast (ref $Num) (local.get $b)))
+      (local.get $ctx)
+        (call $num_op_and
+          (local.get $a_num)
+          (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean and
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (i32.and
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
       (local.get $cont)))
 
   (func $op_or (@pub) (@impl "std/operators.fnk:op_or")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_num (ref $Num))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — union
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (call $set_op_or
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))
         (local.get $cont)))
 
     ;; Try $Num → delegate to int_op_or
     (block $not_num
-      (block $is_num (result (ref $Num))
+      (local.set $a_num
+        (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
-        (call $num_op_or (ref.cast (ref $Num) (local.get $b)))
+      (local.get $ctx)
+        (call $num_op_or
+          (local.get $a_num)
+          (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean or
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (i32.or
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
       (local.get $cont)))
 
   (func $op_xor (@pub) (@impl "std/operators.fnk:op_xor")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $a_num (ref $Num))
+    (local $a_set (ref $Set))
 
     ;; Try $Set — symmetric difference
     (block $not_set
-      (block $is_set (result (ref $Set))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
+      (local.get $ctx)
         (call $set_op_xor
+          (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))
         (local.get $cont)))
 
     ;; Try $Num → delegate to int_op_xor
     (block $not_num
-      (block $is_num (result (ref $Num))
+      (local.set $a_num
+        (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
-            (local.get $a))))
+            (local.get $a)))))
       (return_call $list_apply_1
-        (call $num_op_xor (ref.cast (ref $Num) (local.get $b)))
+      (local.get $ctx)
+        (call $num_op_xor
+          (local.get $a_num)
+          (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean xor
     (return_call $list_apply_1
+      (local.get $ctx)
       (ref.i31 (i32.xor
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -596,6 +722,7 @@
 
   ;; is_seq_like(val, succ, fail): succ(val) if $List or $Set, else fail()
   (func $is_seq_like (@pub) (@impl "std/operators.fnk:is_seq_like")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
 
     ;; $List
@@ -605,7 +732,8 @@
           (br_on_cast $is_list (ref null any) (ref $List)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1 (local.get $val) (local.get $succ)))
+      (return_call $list_apply_1
+      (local.get $ctx) (local.get $val) (local.get $succ)))
 
     ;; $Set
     (block $not_set
@@ -614,12 +742,15 @@
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1 (local.get $val) (local.get $succ)))
+      (return_call $list_apply_1
+      (local.get $ctx) (local.get $val) (local.get $succ)))
 
-    (return_call $list_apply_0 (local.get $fail)))
+    (return_call $list_apply_0
+      (local.get $ctx) (local.get $fail)))
 
   ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
   (func $is_rec_like (@pub) (@impl "std/operators.fnk:is_rec_like")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
     (block $not_rec
       (block $is_rec (result (ref $Rec))
@@ -627,8 +758,10 @@
           (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1 (local.get $val) (local.get $succ)))
-    (return_call $list_apply_0 (local.get $fail)))
+      (return_call $list_apply_1
+      (local.get $ctx) (local.get $val) (local.get $succ)))
+    (return_call $list_apply_0
+      (local.get $ctx) (local.get $fail)))
 
   ;; =========================================================================
   ;; Collection predicates (polymorphic — dispatch on type tag)
@@ -639,12 +772,15 @@
   ;;   $List    → list_op_empty
   ;;   $Rec     → rec_op_empty
   (func $op_empty (@pub) (@impl "std/operators.fnk:op_empty")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $cont (ref null any))
+    (local $a_set (ref $Set))
 
     ;; null = empty
     (if (ref.is_null (local.get $val))
       (then
         (return_call $list_apply_1
+      (local.get $ctx)
           (ref.i31 (i32.const 1))
           (local.get $cont))))
 
@@ -656,6 +792,7 @@
             (local.get $val))))
       (drop)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $list_op_empty (local.get $val)))
         (local.get $cont)))
 
@@ -667,17 +804,20 @@
             (local.get $val))))
       (drop)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $dict_op_empty (local.get $val)))
         (local.get $cont)))
 
     ;; $Set → set:op_empty
     (block $not_set
-      (block $is_set (result (ref $Set))
-        (br $not_set
-          (br_on_cast $is_set (ref null any) (ref $Set)
-            (local.get $val))))
+      (local.set $a_set
+        (block $is_set (result (ref $Set))
+          (br $not_set
+            (br_on_cast $is_set (ref null any) (ref $Set)
+              (local.get $val)))))
       (return_call $list_apply_1
-        (ref.i31 (call $set_op_empty))
+        (local.get $ctx)
+        (ref.i31 (call $set_op_empty (local.get $a_set)))
         (local.get $cont)))
 
     (unreachable))
@@ -693,6 +833,7 @@
   ;; If empty: tail-call fail() with no args.
   ;; Else: tail-call succ(head, tail) with two args.
   (func $seq_pop (@pub) (@impl "std/seq.fnk:pop")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     ;; $Set → set:seq_pop
@@ -713,6 +854,7 @@
   ;; container. Today $List only — sets and other seq types could
   ;; gain a typed impl in future.
   (func $seq_prepend (@pub) (@impl "std/seq.fnk:prepend")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $seq (ref null any)) (param $cont (ref null any))
     (return_call $list_seq_prepend
       (local.get $val) (local.get $seq) (local.get $cont)))
@@ -723,6 +865,7 @@
   ;; If empty: tail-call fail() with no args.
   ;; Else: tail-call succ(init, last) with two args.
   (func $seq_pop_back (@pub) (@impl "std/seq.fnk:pop_back")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (return_call $list_seq_pop_back
@@ -734,6 +877,7 @@
 
   ;; op_in(val, container, cont) → bool
   (func $op_in (@pub) (@impl "std/operators.fnk:op_in")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
@@ -747,6 +891,7 @@
             (local.get $b))))
       (local.set $range)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $range_op_in
           (ref.cast (ref $I64) (local.get $a))
           (local.get $range)))
@@ -760,6 +905,7 @@
             (local.get $b))))
       (local.set $rec)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $dict_op_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
@@ -773,6 +919,7 @@
             (local.get $b))))
       (local.set $set)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_in
           (local.get $set)
           (ref.cast (ref eq) (local.get $a))))
@@ -782,6 +929,7 @@
 
   ;; op_notin(val, container, cont) → bool
   (func $op_notin (@pub) (@impl "std/operators.fnk:op_notin")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
@@ -795,6 +943,7 @@
             (local.get $b))))
       (local.set $range)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $range_op_not_in
           (ref.cast (ref $I64) (local.get $a))
           (local.get $range)))
@@ -808,6 +957,7 @@
             (local.get $b))))
       (local.set $rec)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $dict_op_notin
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
@@ -821,6 +971,7 @@
             (local.get $b))))
       (local.set $set)
       (return_call $list_apply_1
+      (local.get $ctx)
         (ref.i31 (call $set_op_notin
           (local.get $set)
           (ref.cast (ref eq) (local.get $a))))
@@ -837,6 +988,7 @@
   ;;   $Rec  → rec_op_dot
   ;;   $List → list_op_dot
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     ;; Try $Str
@@ -887,6 +1039,7 @@
   ;;   otherwise         → int_op_shl(a, b)  [numeric shift]
   ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shl (@pub) (@impl "std/operators.fnk:op_shl")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel on a → host channel send
@@ -897,6 +1050,7 @@
             (local.get $a))))
       (drop)
       (return_call $interop_channel_send
+        (local.get $ctx)
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
@@ -909,12 +1063,14 @@
             (local.get $a))))
       (drop)
       (return_call $channel_op_shr
+        (local.get $ctx)
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
 
     ;; Fallback: numeric shift left
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_shl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -930,6 +1086,7 @@
   ;;   otherwise         → int_op_shr(a, b)  [numeric shift]
   ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shr (@pub) (@impl "std/operators.fnk:op_shr")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel on b → host channel send
@@ -940,6 +1097,7 @@
             (local.get $b))))
       (drop)
       (return_call $interop_channel_send
+        (local.get $ctx)
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
@@ -952,12 +1110,14 @@
             (local.get $b))))
       (drop)
       (return_call $channel_op_shr
+        (local.get $ctx)
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
 
     ;; Fallback: numeric shift right
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $num_op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -975,8 +1135,10 @@
   ;; this trampoline exists only as the cross-wat handle (typed impl
   ;; on $Channel) for protocol-table consumers.
   (func $channels_receive (@pub) (@impl "std/channel.fnk:receive" $Channel)
+      (param $ctx (ref null any))
     (param $ch (ref null any)) (param $cont (ref null any))
     (return_call $channel_receive
+      (local.get $ctx)
       (local.get $ch)
       (local.get $cont)))
 
@@ -985,14 +1147,16 @@
   ;; read — async read from a stream
   ;; =========================================================================
 
-  ;; op_read(stream, size, cont):
+  ;; op_read(ctx, stream, size, cont):
   ;;   Dispatches to interop_op_read for host channels.
   (func $op_read (@pub) (@impl "rt/protocols.wat:op_read")
+    (param $ctx (ref null any))
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
 
     (return_call $interop_op_read
+      (local.get $ctx)
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))

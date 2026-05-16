@@ -19,18 +19,15 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"  "Num"  (type $Num  (sub any)))
   (import "std/int.wat"  "Int"  (type $Int  (sub any) (struct)))
   (import "std/int.wat"  "I64"  (type $I64  (sub $Int (struct (field $ival i64)))))
-  (import "std/list.wat" "List" (type $List (sub any)))
   (import "std/str.wat"  "Str"  (type $Str  (sub any) (struct)))
   (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
   ;; TODO: apply_1 wraps a single result and calls _apply — conceptually
   ;; an apply concern, not a list one. Move to rt/apply.wat.
-  (import "rt/apply.wat" "apply_1"
-    (func $list_apply_1 (param $val (ref any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref any)) (param $cont (ref null any))))
   (import "std/int.wat"  "fmt" (func $int_fmt (param (ref $Int)) (result (ref $Str))))
   (import "std/str.wat"  "from_bytes" (func $str_from_bytes
     (param (ref $ByteArray)) (result (ref $Str))))
@@ -165,26 +162,36 @@
   ;;
   ;; User-imported via `import 'std/range.fnk'`. Wrap direct-style ctors
   ;; in CPS so they fit the user calling convention.
+  ;;
+  ;; ctx convention: each wrapper takes $ctx and forwards it to the cont.
+  ;; Range construction itself is a pure $I64-typed kernel — no
+  ;; user-callbacks reachable — so ctx is not consulted for dispatch.
 
   (func $cps_excl (@pub) (@impl "std/range.fnk:excl")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $excl
         (ref.cast (ref $I64) (local.get $a))
         (ref.cast (ref $I64) (local.get $b)))
       (local.get $cont)))
 
   (func $cps_incl (@pub) (@impl "std/range.fnk:incl")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $incl
         (ref.cast (ref $I64) (local.get $a))
         (ref.cast (ref $I64) (local.get $b)))
       (local.get $cont)))
 
   (func $cps_from (@pub) (@impl "std/range.fnk:from")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
+      (local.get $ctx)
       (call $from
         (ref.cast (ref $I64) (local.get $a)))
       (local.get $cont)))
