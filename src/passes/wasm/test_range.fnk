@@ -15,7 +15,7 @@ test 'range exclusive', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 10)))
-        (return_call $std/range.fnk:excl (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/range.fnk:excl (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -28,7 +28,7 @@ test 'range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBBgKEAQEFBYoFAHoA5gEAjAEA
+    ;; sm:CIoFAJIBAQABggEBBgKEAQEFBboFAHoA5gEAjAEA
 
 
 test 'range inclusive', fn:
@@ -44,7 +44,7 @@ test 'range inclusive', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 10)))
-        (return_call $std/range.fnk:incl (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/range.fnk:incl (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -57,7 +57,7 @@ test 'range inclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBCAKEAQEHBooFAHoA5gEAjAEA
+    ;; sm:CIoFAJIBAQABggEBCAKEAQEHBroFAHoA5gEAjAEA
 
 
 test 'open range exclusive', fn:
@@ -71,7 +71,7 @@ test 'open range exclusive', fn:
         (local $v_1 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/range.fnk:from (local.get $v_1) (local.get $v_0))
+        (return_call $std/range.fnk:from (local.get $:ctx_param) (local.get $v_1) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -84,7 +84,7 @@ test 'open range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:B8oEAJIBAQABggEBAAPoBAB6AOYBAIwBAA
+    ;; sm:B8oEAJIBAQABggEBAAOYBQB6AOYBAIwBAA
 
 
 test 'range in', fn:
@@ -102,7 +102,7 @@ test 'range in', fn:
         (local.set $v_14 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 5)))
-        (return_call $std/operators.fnk:op_in (local.get $v_1) (local.get $v_4) (local.get $v_14))
+        (return_call $std/operators.fnk:op_in (local.get $:ctx_param) (local.get $v_1) (local.get $v_4) (local.get $v_14))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -115,7 +115,7 @@ test 'range in', fn:
         (local.set $v_18 (struct.new $rt/apply.wat:Closure (ref.func $test:v_13) (local.get $:caps_arg)))
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $v_3 (struct.new $std/int.wat:I64 (i64.const 10)))
-        (return_call $std/range.fnk:excl (local.get $v_2) (local.get $v_3) (local.get $v_18))
+        (return_call $std/range.fnk:excl (local.get $:ctx_param) (local.get $v_2) (local.get $v_3) (local.get $v_18))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -128,4 +128,4 @@ test 'range in', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:D-YFALoBAL4BAJIBAQABggEBAArwBgCSAQCuAQDMAQEKAYIBAQYChAEBBQWMBQB6AOYBAIwBAA
+    ;; sm:D-YFALoBAL4BAJIBAQABggEBAAqgBwCSAQCuAQDMAQEKAYIBAQYChAEBBQW8BQB6AOYBAIwBAA

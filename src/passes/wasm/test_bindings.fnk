@@ -110,7 +110,7 @@ test 'multiple let bindings used', fn:
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $y_1))
-        (return_call $std/operators.fnk:op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_0) (local.get $y_1) (local.get $v_2))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -127,7 +127,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:ELYHAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBDAWYBQB6AOYBAIwBAA
+    ;; sm:ELYHAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBDAXIBQB6AOYBAIwBAA
 
 
 
@@ -148,7 +148,7 @@ test 'binding rhs is a call', fn:
         (local.set $a_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $b_3 (call $rt/apply.wat:args_head (local.get $:params)))
-        (return_call $std/operators.fnk:op_plus (local.get $a_2) (local.get $b_3) (local.get $v_6))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $a_2) (local.get $b_3) (local.get $v_6))
       )
       (func $test:v_39 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -213,7 +213,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:JfgEAJIBAJoBAJIBAJoBAJIBAR4F7AcAugEAvgEAlAEBDAFOAFQAlAEAlgEAvAEAbgC6AQCGCgCSAQB6ASkDzAEAXACUAQCWAQDAAQCuAQDMAQE6AYQBAQYBhAEAbgC8AQC8AQC8AQCkBQB6AOYBAIwBAA
+    ;; sm:JfgEAJIBAJoBAJIBAJoBAJIBAR4FnAgAugEAvgEAlAEBDAFOAFQAlAEAlgEAvAEAbgC6AQCGCgCSAQB6ASkDzAEAXACUAQCWAQDAAQCuAQDMAQE6AYQBAQYBhAEAbgC8AQC8AQC8AQCkBQB6AOYBAIwBAA
 
 
 
@@ -235,7 +235,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_30 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $a_2 (call $rt/apply.wat:args_head (local.get $:params)))
-        (return_call $std/operators.fnk:op_plus (local.get $x_92) (local.get $a_2) (local.get $v_30))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_92) (local.get $a_2) (local.get $v_30))
       )
       (func $test:v_78 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -308,7 +308,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_123) (local.get $v_125)))
         (local.set $v_147 (struct.new $rt/apply.wat:Closure (ref.func $test:v_140) (local.get $:caps_arg)))
         (local.set $v_19 (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (return_call $std/rec.fnk:pop (local.get $v_17) (local.get $v_19) (local.get $v_121) (local.get $v_147))
+        (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $v_17) (local.get $v_19) (local.get $v_121) (local.get $v_147))
       )
       (func $test:v_26 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_10 (ref null any))
@@ -327,7 +327,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_110 (struct.new $rt/apply.wat:Closure (ref.func $test:v_103) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_11) (local.get $v_10) (local.get $:ctx_param)))
         (local.set $v_129 (struct.new $rt/apply.wat:Closure (ref.func $test:v_120) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $v_9) (local.get $v_129) (local.get $v_110))
+        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $v_9) (local.get $v_129) (local.get $v_110))
       )
       (func $test:v_67 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -366,7 +366,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_4 (call $std/rec.fnk:new))
         (local.set $v_5 (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 42)))
-        (return_call $std/rec.fnk:put (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_74))
+        (return_call $std/rec.fnk:put (local.get $:ctx_param) (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_74))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -398,6 +398,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:VeoGALoBAL4BAJQBAJoBAJIBATQF6AkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAJQBAJYBAMABAG4AvgEApgYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABARsNjAEBAA24CACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEADZYLALoBAL4BAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAPQFAJQBAQwHWgECAYoBAQYChAEBBQX-BwCSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
+    ;; sm:VeoGALoBAL4BAJQBAJoBAJIBATQFmAoAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAJQBAJYBAMABAG4AvgEApgYAugEAwAEAwAEAbgCiBwC6AQDAAQDAAQCUAQCaAQCUAQBuALwBAOIIALoBAMABAMABAMABAJQBANgBANABARsNjAEBAA3oCACUAQCaAQCUAQCaAQCSAQDgAQDQAQCEAgDQAQEADcYLALoBAL4BAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAPQFAJQBAQwHWgECAYoBAQYChAEBBQWuCACSAQDeAQDUAQB6ANIBAG4AxAEAqAUAegDmAQCMAQA
 
 

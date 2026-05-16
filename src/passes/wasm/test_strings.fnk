@@ -145,7 +145,7 @@ test 'str templ two exprs', fn:
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $b_1))
         (local.set $v_6 (call $std/str.fnk:from_data (data.ref $d_3 5)))
         (local.set $:varargs (array.new_fixed $rt/apply.wat:VarArgs 3 (local.get $a_0) (local.get $v_6) (local.get $b_1)))
-        (return_call $std/str.fnk:fmt (local.get $:varargs) (local.get $v_2))
+        (return_call $std/str.fnk:fmt (local.get $:ctx_param) (local.get $:varargs) (local.get $v_2))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -163,7 +163,7 @@ test 'str templ two exprs', fn:
       (data $d_2 "b")
       (data $d_3 " and ")
     )
-    ;; sm:EuQIAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBFgWKAQDuAQEJD-wEAHoA5gEAjAEA
+    ;; sm:EuQIAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBFgWKAQDuAQEJD5wFAHoA5gEAjAEA
 
 
 test 'str tagged template', fn:
@@ -208,7 +208,7 @@ test 'str tagged template', fn:
         (local.set $v_39 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_11 (call $std/str.fnk:from_data (data.ref $d_2 4)))
         (local.set $v_10 (call $rt/apply.wat:args_empty))
-        (return_call $std/seq.fnk:prepend (local.get $v_11) (local.get $v_10) (local.get $v_39))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_11) (local.get $v_10) (local.get $v_39))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
@@ -250,7 +250,7 @@ test 'str tagged template', fn:
       (data $d_1 "foo")
       (data $d_2 "1\\n2")
     )
-    ;; sm:JYIFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBALYFAJQBATgEjAEBBwlsAQAJtAoAkgEAegEvA8wBAFwAlAEAlgEAwAEAhAIA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
+    ;; sm:JYIFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBALYFAJQBATgEjAEBBwlsAQAJ5AoAkgEAegEvA8wBAFwAlAEAlgEAwAEAhAIA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'str tagged template escape handling', fn:
@@ -306,7 +306,7 @@ test 'str tagged template escape handling', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $foo_66) (local.get $v_68) (local.get $v_70)))
         (local.set $v_91 (struct.new $rt/apply.wat:Closure (ref.func $test:v_82) (local.get $:caps_arg)))
         (local.set $v_19 (call $std/str.fnk:from_data (data.ref $d_0 8)))
-        (return_call $std/seq.fnk:prepend (local.get $v_19) (local.get $v_17) (local.get $v_91))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_19) (local.get $v_17) (local.get $v_91))
       )
       (func $test:v_46 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -325,7 +325,7 @@ test 'str tagged template escape handling', fn:
         (local.set $v_14 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $foo_49) (local.get $v_51) (local.get $v_53)))
         (local.set $v_74 (struct.new $rt/apply.wat:Closure (ref.func $test:v_65) (local.get $:caps_arg)))
-        (return_call $std/seq.fnk:prepend (local.get $bar_47) (local.get $v_14) (local.get $v_74))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $bar_47) (local.get $v_14) (local.get $v_74))
       )
       (func $test:v_62 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_57 (ref null any))
@@ -334,7 +334,7 @@ test 'str tagged template escape handling', fn:
         (local.set $v_57 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_13 (call $std/str.fnk:from_data (data.ref $d_1 27)))
         (local.set $v_12 (call $rt/apply.wat:args_empty))
-        (return_call $std/seq.fnk:prepend (local.get $v_13) (local.get $v_12) (local.get $v_57))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_13) (local.get $v_12) (local.get $v_57))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -387,7 +387,7 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "foo")
       (data $d_4 "bar")
     )
-    ;; sm:PIIFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBANwIALoBAMIBAL4BAL4BAJQBAPwBAMwBAUgIjAEBBy7YCAC6AQDCAQDCAQC-AQC-AQCUAQD8AQDMAQEALrIFAJQBASQbjgEBIy5sAQAujgwAkgEAegE_A8wBAFwAlAEAlgEAwAEBMAOGAQBcAJQBAJYBAMABAKoCANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
+    ;; sm:PIIFAJoBAJoBAFwAbgDCAQCuBwC6AQDCAQC-AQC-AQCUAQBuALoBALwBANwIALoBAMIBAL4BAL4BAJQBAPwBAMwBAUgIjAEBBy6ICQC6AQDCAQDCAQC-AQC-AQCUAQD8AQDMAQEALuIFAJQBASQbjgEBIy5sAQAuvgwAkgEAegE_A8wBAFwAlAEAlgEAwAEBMAOGAQBcAJQBAJYBAMABAKoCANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
 
 
 test 'str implicit formatting handling', fn:
@@ -467,7 +467,7 @@ test 'empty string eq', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:str_empty))
         (local.set $v_2 (call $std/str.fnk:str_empty))
-        (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -480,7 +480,7 @@ test 'empty string eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQACZgEMAmYBCwiUBQB6AOYBAIwBAA
+    ;; sm:CIoFAJIBAQACZgEMAmYBCwjEBQB6AOYBAIwBAA
 
 
 # TODO: move to ./test_patterns.fnk
@@ -560,7 +560,7 @@ test 'match empty string', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_11) (local.get $:ctx_param) (local.get $v_12)))
         (local.set $v_176 (struct.new $rt/apply.wat:Closure (ref.func $test:v_167) (local.get $:caps_arg)))
         (local.set $v_14 (call $std/str.fnk:str_empty))
-        (return_call $std/operators.fnk:op_eq (local.get $v_10) (local.get $v_14) (local.get $v_176))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_10) (local.get $v_14) (local.get $v_176))
       )
       (func $test:v_41 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
@@ -707,7 +707,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:avgEAJQBAUABhAEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEHAmgBAALcCACSAQCaAQCSAQCaAQCSAQCuAQDQAQB6ANIBAG4AugEAugEAvgEAvAUAlAEBGgGEAQBuALwBALIHAJQBAJoBAJQBAJoBAJQBAHoA0gEAbgC8AQCABADyBwC6AQDAAQDAAQB6ANIBAHoA1gEAbgC-AQDEAQC-AQCsCACUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEA8AYAkgEAmgEAkgEAegDSAQBuALoBALoBANYHAJIBAHoBUQTOAQBgAJQBAJYBAMIBAG4AwAEAoAUAegDmAQCMAQA
+    ;; sm:avgEAJQBAUABhAEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEHAmgBAAKMCQCSAQCaAQCSAQCaAQCSAQCuAQDQAQB6ANIBAG4AugEAugEAvgEAvAUAlAEBGgGEAQBuALwBALIHAJQBAJoBAJQBAJoBAJQBAHoA0gEAbgC8AQCABADyBwC6AQDAAQDAAQB6ANIBAHoA1gEAbgC-AQDEAQC-AQCsCACUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEA8AYAkgEAmgEAkgEAegDSAQBuALoBALoBANYHAJIBAHoBUQTOAQBgAJQBAJYBAMIBAG4AwAEAoAUAegDmAQCMAQA
 
 
 test 'empty string eq template', fn:
@@ -723,7 +723,7 @@ test 'empty string eq template', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:str_empty))
         (local.set $v_2 (call $std/str.fnk:str_empty))
-        (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -736,7 +736,7 @@ test 'empty string eq template', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQACZgEMB2YBCw2UBQB6AOYBAIwBAA
+    ;; sm:CIoFAJIBAQACZgEMB2YBCw3EBQB6AOYBAIwBAA
 
 
 test 'str eq', fn:
@@ -752,7 +752,7 @@ test 'str eq', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (local.set $v_2 (call $std/str.fnk:from_data (data.ref $d_0 5)))
-        (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -766,5 +766,5 @@ test 'str eq', fn:
       (data $d_0 "hello")
       (data $d_1 "test")
     )
-    ;; sm:CIoFAJIBAQAHigEBFgeKAQEVEpQFAHoA5gEAjAEA
+    ;; sm:CIoFAJIBAQAHigEBFgeKAQEVEsQFAHoA5gEAjAEA
 

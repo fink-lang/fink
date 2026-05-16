@@ -41,7 +41,7 @@ test 'yield suspends and resumes', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_1) (local.get $:ctx_param)))
         (local.set $v_23 (struct.new $rt/apply.wat:Closure (ref.func $test:v_16) (local.get $:caps_arg)))
         (local.set $v_3 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/async.fnk:yield (local.get $v_3) (local.get $v_23))
+        (return_call $std/async.fnk:yield (local.get $:ctx_param) (local.get $v_3) (local.get $v_23))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -54,7 +54,7 @@ test 'yield suspends and resumes', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:EqIHALoBAL4BAL4BAJIBAQAHTAEQAoQBAG4AugEAsAYAkgEA3gEAzAEBAwGCAQELB-wEAHoA5gEAjAEA
+    ;; sm:EqIHALoBAL4BAL4BAJIBAQAHTAEQAoQBAG4AugEAsAYAkgEA3gEAzAEBAwGCAQELB5wFAHoA5gEAjAEA
 
 
 test 'spawn and await', fn:
@@ -119,7 +119,7 @@ test 'spawn and await', fn:
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $fut_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $result_40) (local.get $v_42)))
         (local.set $v_58 (struct.new $rt/apply.wat:Closure (ref.func $test:v_51) (local.get $:caps_arg)))
-        (return_call $std/async.fnk:await (local.get $fut_0) (local.get $v_58))
+        (return_call $std/async.fnk:await (local.get $:ctx_param) (local.get $fut_0) (local.get $v_58))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $result_4 (ref null any))
@@ -132,7 +132,7 @@ test 'spawn and await', fn:
         (local.set $v_46 (struct.new $rt/apply.wat:Closure (ref.func $test:v_39) (local.get $:caps_arg)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $v_6_fn (struct.new $rt/apply.wat:Closure (ref.func $test:v_6) (local.get $:caps_arg)))
-        (return_call $std/async.fnk:spawn (local.get $v_6_fn) (local.get $v_46))
+        (return_call $std/async.fnk:spawn (local.get $:ctx_param) (local.get $v_6_fn) (local.get $v_46))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -149,7 +149,7 @@ test 'spawn and await', fn:
       (data $d_1 "result")
       (data $d_2 "fut")
     )
-    ;; sm:J_IEAJIBASQChAEAbgC6AQDKCAC6AQDIAQC-AQCUAQEGBlgAaACUAQCWAQDGAQBuAMQBAL4JALoBAMgBAL4BAJQBASkDUgBcAJQBAJYBAMABAN4BAMwBATwJjAcAnAEA6AEAzAEAegDOAQEvDvIEAHoA5gEAjAEA
+    ;; sm:J_IEAJIBASQChAEAbgC6AQDKCAC6AQDIAQC-AQCUAQEGBlgAaACUAQCWAQDGAQBuAMQBAL4JALoBAMgBAL4BAJQBASkDUgBcAJQBAJYBAMABAN4BAMwBATwJvAcAnAEA6AEAzAEAegDOAQEvDqIFAHoA5gEAjAEA
 
 
 test 'channel send and receive', fn:
@@ -200,7 +200,7 @@ test 'channel send and receive', fn:
         (local.set $v_13 (local.get $v_11))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $msg_53) (local.get $v_55)))
         (local.set $v_78 (struct.new $rt/apply.wat:Closure (ref.func $test:v_71) (local.get $:caps_arg)))
-        (return_call $std/channel.fnk:receive (local.get $ch_51) (local.get $v_78))
+        (return_call $std/channel.fnk:receive (local.get $:ctx_param) (local.get $ch_51) (local.get $v_78))
       )
       (func $test:v_86 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -211,7 +211,7 @@ test 'channel send and receive', fn:
         (local.set $ch_87 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_59 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_9 (struct.new $std/int.wat:I64 (i64.const 42)))
-        (return_call $std/operators.fnk:op_shr (local.get $v_9) (local.get $ch_87) (local.get $v_59))
+        (return_call $std/operators.fnk:op_shr (local.get $:ctx_param) (local.get $v_9) (local.get $ch_87) (local.get $v_59))
       )
       (func $test:v_39 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -248,7 +248,7 @@ test 'channel send and receive', fn:
         (local $v_6 (ref null any))
         (local.set $v_46 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/channel.fnk:channel (local.get $v_6) (local.get $v_46))
+        (return_call $std/channel.fnk:channel (local.get $:ctx_param) (local.get $v_6) (local.get $v_46))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $msg_4 (ref null any))
@@ -281,7 +281,7 @@ test 'channel send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OYIIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4K_gUAugEAwAEAlAEBHQKEAQEACKYLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
+    ;; sm:OYIIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4KrgYAugEAwAEAlAEBHQKEAQEACNYLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCf4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
 
 
 test 'channel with spawned sender', fn:
@@ -303,7 +303,7 @@ test 'channel with spawned sender', fn:
         (local.set $ch_62 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_12 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_13 (struct.new $std/int.wat:I64 (i64.const 99)))
-        (return_call $std/operators.fnk:op_shr (local.get $v_13) (local.get $ch_62) (local.get $v_12))
+        (return_call $std/operators.fnk:op_shr (local.get $:ctx_param) (local.get $v_13) (local.get $ch_62) (local.get $v_12))
       )
       (func $test:v_90 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -344,7 +344,7 @@ test 'channel with spawned sender', fn:
         (local.set $v_21 (local.get $v_19))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $msg_76) (local.get $v_78)))
         (local.set $v_97 (struct.new $rt/apply.wat:Closure (ref.func $test:v_90) (local.get $:caps_arg)))
-        (return_call $std/channel.fnk:receive (local.get $ch_74) (local.get $v_97))
+        (return_call $std/channel.fnk:receive (local.get $:ctx_param) (local.get $ch_74) (local.get $v_97))
       )
       (func $test:v_50 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -371,14 +371,14 @@ test 'channel with spawned sender', fn:
         (local.set $v_64 (struct.new $rt/apply.wat:Closure (ref.func $test:v_61) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $ch_0) (local.get $msg_51) (local.get $v_53)))
         (local.set $v_82 (struct.new $rt/apply.wat:Closure (ref.func $test:v_73) (local.get $:caps_arg)))
-        (return_call $std/async.fnk:spawn (local.get $v_64) (local.get $v_82))
+        (return_call $std/async.fnk:spawn (local.get $:ctx_param) (local.get $v_64) (local.get $v_82))
       )
       (func $test:v_68 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_57 (ref null any))
         (local $v_7 (ref null any))
         (local.set $v_57 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_7 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/channel.fnk:channel (local.get $v_7) (local.get $v_57))
+        (return_call $std/channel.fnk:channel (local.get $:ctx_param) (local.get $v_7) (local.get $v_57))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $msg_5 (ref null any))
@@ -411,7 +411,7 @@ test 'channel with spawned sender', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:N-wFALoBAMABAJQBATYChgEBAAi8CAC6AQDCAQC-AQCUAQESA1IAXACUAQCWAQDAAQBuAL4BAN4IALoBAMABAMIBAL4BAJQBASkUUADYAQDMAQE2CsAKALoBAMIBAL4BAJIBAVMCTgBYAJQBAJYBAL4BALABAMwBAPwBAMwBAR4UxgQAlAEBAwGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
+    ;; sm:N-wFALoBAMABAJQBATYChgEBAAjsCAC6AQDCAQC-AQCUAQESA1IAXACUAQCWAQDAAQBuAL4BAN4IALoBAMABAMIBAL4BAJQBASkUUADYAQDMAQE2CvAKALoBAMIBAL4BAJIBAVMCTgBYAJQBAJYBAL4BALABAMwBAPwBAMwBAR4U9gQAlAEBAwGCAQEPCf4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -463,7 +463,7 @@ test 'channel multiple messages FIFO', fn:
         (local.set $v_18 (local.get $v_16))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $a_83) (local.get $v_85)))
         (local.set $v_111 (struct.new $rt/apply.wat:Closure (ref.func $test:v_104) (local.get $:caps_arg)))
-        (return_call $std/channel.fnk:receive (local.get $ch_81) (local.get $v_111))
+        (return_call $std/channel.fnk:receive (local.get $:ctx_param) (local.get $ch_81) (local.get $v_111))
       )
       (func $test:v_59 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -484,7 +484,7 @@ test 'channel multiple messages FIFO', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $ch_60) (local.get $a_62) (local.get $v_64)))
         (local.set $v_89 (struct.new $rt/apply.wat:Closure (ref.func $test:v_80) (local.get $:caps_arg)))
         (local.set $v_14 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (return_call $std/operators.fnk:op_shr (local.get $v_14) (local.get $ch_60) (local.get $v_89))
+        (return_call $std/operators.fnk:op_shr (local.get $:ctx_param) (local.get $v_14) (local.get $ch_60) (local.get $v_89))
       )
       (func $test:v_97 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -495,7 +495,7 @@ test 'channel multiple messages FIFO', fn:
         (local.set $ch_98 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_68 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_9 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_shr (local.get $v_9) (local.get $ch_98) (local.get $v_68))
+        (return_call $std/operators.fnk:op_shr (local.get $:ctx_param) (local.get $v_9) (local.get $ch_98) (local.get $v_68))
       )
       (func $test:v_48 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -532,7 +532,7 @@ test 'channel multiple messages FIFO', fn:
         (local $v_6 (ref null any))
         (local.set $v_55 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/channel.fnk:channel (local.get $v_6) (local.get $v_55))
+        (return_call $std/channel.fnk:channel (local.get $:ctx_param) (local.get $v_6) (local.get $v_55))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $a_4 (ref null any))
@@ -565,7 +565,7 @@ test 'channel multiple messages FIFO', fn:
       (data $d_1 "a")
       (data $d_2 "ch")
     )
-    ;; sm:Q4AIALoBAMABAMABAJQBAT4BTgBUAJQBAJYBALwBAG4AugEA3AgAugEAwAEAvgEAvgEAlAEBDwdQANQBANABARgK_AgAugEAwAEAvgEAvgEAlAEBJwdQAPoBAMwBARABhAEBAAekBgC6AQDAAQCUAQEPAYIBAQAHpgsAugEAvgEAvgEAkgEBHQJOAFgAlAEAlgEAvgEAsAEAzgEA-AEA1gEAbgDGAQD8BACUAQEaAYIBAQ8JygcAkgEA3gEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
+    ;; sm:Q4AIALoBAMABAMABAJQBAT4BTgBUAJQBAJYBALwBAG4AugEA3AgAugEAwAEAvgEAvgEAlAEBDwdQANQBANABARgKrAkAugEAwAEAvgEAvgEAlAEBJwdQAPoBAMwBARABhAEBAAfUBgC6AQDAAQCUAQEPAYIBAQAH1gsAugEAvgEAvgEAkgEBHQJOAFgAlAEAlgEAvgEAsAEAzgEA-AEA1gEAbgDGAQD8BACUAQEaAYIBAQ8J-gcAkgEA3gEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'channel receiver waits for sender', fn:
@@ -586,7 +586,7 @@ test 'channel receiver waits for sender', fn:
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $ch_74 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_14 (call $rt/apply.wat:args_head (local.get $:params)))
-        (return_call $std/channel.fnk:receive (local.get $ch_74) (local.get $v_14))
+        (return_call $std/channel.fnk:receive (local.get $:ctx_param) (local.get $ch_74) (local.get $v_14))
       )
       (func $test:v_120 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -627,7 +627,7 @@ test 'channel receiver waits for sender', fn:
         (local.set $v_27 (local.get $v_25))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $result_105) (local.get $v_107)))
         (local.set $v_127 (struct.new $rt/apply.wat:Closure (ref.func $test:v_120) (local.get $:caps_arg)))
-        (return_call $std/async.fnk:await (local.get $fut_103) (local.get $v_127))
+        (return_call $std/async.fnk:await (local.get $:ctx_param) (local.get $fut_103) (local.get $v_127))
       )
       (func $test:v_85 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -654,7 +654,7 @@ test 'channel receiver waits for sender', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $fut_1) (local.get $result_88) (local.get $v_90)))
         (local.set $v_111 (struct.new $rt/apply.wat:Closure (ref.func $test:v_102) (local.get $:caps_arg)))
         (local.set $v_23 (struct.new $std/int.wat:I64 (i64.const 77)))
-        (return_call $std/operators.fnk:op_shr (local.get $v_23) (local.get $ch_86) (local.get $v_111))
+        (return_call $std/operators.fnk:op_shr (local.get $:ctx_param) (local.get $v_23) (local.get $ch_86) (local.get $v_111))
       )
       (func $test:v_62 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -681,14 +681,14 @@ test 'channel receiver waits for sender', fn:
         (local.set $v_76 (struct.new $rt/apply.wat:Closure (ref.func $test:v_73) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $ch_0) (local.get $result_63) (local.get $v_65)))
         (local.set $v_94 (struct.new $rt/apply.wat:Closure (ref.func $test:v_85) (local.get $:caps_arg)))
-        (return_call $std/async.fnk:spawn (local.get $v_76) (local.get $v_94))
+        (return_call $std/async.fnk:spawn (local.get $:ctx_param) (local.get $v_76) (local.get $v_94))
       )
       (func $test:v_80 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_69 (ref null any))
         (local $v_9 (ref null any))
         (local.set $v_69 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_9 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/channel.fnk:channel (local.get $v_9) (local.get $v_69))
+        (return_call $std/channel.fnk:channel (local.get $:ctx_param) (local.get $v_9) (local.get $v_69))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $result_7 (ref null any))
@@ -723,7 +723,7 @@ test 'channel receiver waits for sender', fn:
       (data $d_2 "fut")
       (data $d_3 "ch")
     )
-    ;; sm:RKoFALoBAMABAJQBAUIKqAgAugEAygEAwAEAlAEBKAZYAGgAlAEAlgEAxgEAbgDEAQD6CAC6AQDEAQDKAQDAAQCUAQERCFAA4gEA0AEBJAmcCgC6AQDAAQDIAQC-AQCUAQFdA1IAXACUAQCWAQDAAQCEAgDQAQE6AoYBAQAI8AoAugEAyAEAvgEAlAEBVwJQAFgAlAEAlgEAvgEAsAEAzAEAggIAzAEBKhbGBACUAQEPAYIBAQ8J1AcAnAEA6AEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
+    ;; sm:RKoFALoBAMABAJQBAUIK2AgAugEAygEAwAEAlAEBKAZYAGgAlAEAlgEAxgEAbgDEAQD6CAC6AQDEAQDKAQDAAQCUAQERCFAA4gEA0AEBJAnMCgC6AQDAAQDIAQC-AQCUAQFdA1IAXACUAQCWAQDAAQCEAgDQAQE6AoYBAQAIoAsAugEAyAEAvgEAlAEBVwJQAFgAlAEAlgEAvgEAsAEAzAEAggIAzAEBKhb2BACUAQEPAYIBAQ8JhAgAnAEA6AEA1AEAegDSAQBuAMQBAKgFAHoA5gEAjAEA
 
 
 test 'channel << send and receive', fn:
@@ -774,7 +774,7 @@ test 'channel << send and receive', fn:
         (local.set $v_13 (local.get $v_11))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $msg_53) (local.get $v_55)))
         (local.set $v_78 (struct.new $rt/apply.wat:Closure (ref.func $test:v_71) (local.get $:caps_arg)))
-        (return_call $std/channel.fnk:receive (local.get $ch_51) (local.get $v_78))
+        (return_call $std/channel.fnk:receive (local.get $:ctx_param) (local.get $ch_51) (local.get $v_78))
       )
       (func $test:v_86 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -785,7 +785,7 @@ test 'channel << send and receive', fn:
         (local.set $ch_87 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_59 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_10 (struct.new $std/int.wat:I64 (i64.const 42)))
-        (return_call $std/operators.fnk:op_shl (local.get $ch_87) (local.get $v_10) (local.get $v_59))
+        (return_call $std/operators.fnk:op_shl (local.get $:ctx_param) (local.get $ch_87) (local.get $v_10) (local.get $v_59))
       )
       (func $test:v_39 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -822,7 +822,7 @@ test 'channel << send and receive', fn:
         (local $v_6 (ref null any))
         (local.set $v_46 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/channel.fnk:channel (local.get $v_6) (local.get $v_46))
+        (return_call $std/channel.fnk:channel (local.get $:ctx_param) (local.get $v_6) (local.get $v_46))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $msg_4 (ref null any))
@@ -855,4 +855,4 @@ test 'channel << send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OYIIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4KgAYAugEAwAEAlAEBEQKGAQELCKgLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCc4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA
+    ;; sm:OYIIALoBAMIBAL4BAJQBATADUgBcAJQBAJYBAMABAG4AvgEA3ggAugEAwAEAwgEAvgEAlAEBEQhQANgBAMwBAR4KsAYAugEAwAEAlAEBEQKGAQELCNgLALoBAMIBAL4BAJIBAR0CTgBYAJQBAJYBAL4BALABAMwBAPwBANQBAG4AxAEA-gQAlAEBGgGCAQEPCf4HAJYBAOIBANQBAHoA0gEAbgDEAQCoBQB6AOYBAIwBAA

@@ -19,7 +19,7 @@ test 'user fn call', fn:
         (local.set $a_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $b_2 (call $rt/apply.wat:args_head (local.get $:params)))
-        (return_call $std/operators.fnk:op_plus (local.get $a_1) (local.get $b_2) (local.get $v_5))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $a_1) (local.get $b_2) (local.get $v_5))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -58,7 +58,7 @@ test 'user fn call', fn:
       (data $d_0 "test")
       (data $d_1 "add")
     )
-    ;; sm:GPgEAJIBAJoBAJIBAJoBAJIBASIFyAgAkgEAegEhA8wBAFwAlAEAlgEAwAEBNgGEAQEGAYQBAG4AvAEAvAEAugEApAUAegDmAQCMAQA
+    ;; sm:GPgEAJIBAJoBAJIBAJoBAJIBASIF-AgAkgEAegEhA8wBAFwAlAEAlgEAwAEBNgGEAQEGAYQBAG4AvAEAvAEAugEApAUAegDmAQCMAQA
 
 
 test 'chained fn calls', fn:
@@ -81,7 +81,7 @@ test 'chained fn calls', fn:
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $x_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_9 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (return_call $std/operators.fnk:op_mul (local.get $x_3) (local.get $v_9) (local.get $v_7))
+        (return_call $std/operators.fnk:op_mul (local.get $:ctx_param) (local.get $x_3) (local.get $v_9) (local.get $v_7))
       )
       (func $test:v_14 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_15 (ref null any))
@@ -91,7 +91,7 @@ test 'chained fn calls', fn:
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $x_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_17 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_plus (local.get $x_4) (local.get $v_17) (local.get $v_15))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_4) (local.get $v_17) (local.get $v_15))
       )
       (func $test:v_56 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -168,7 +168,7 @@ test 'chained fn calls', fn:
       (data $d_2 "double")
       (data $d_3 "inc")
     )
-    ;; sm:L_gEAJIBAJoBAJIBASoBggEBBwWwBQCUAQCaAQCSAQEwAYQBAQcFtggAugEAwgEAvgEAlAEBDgFOAFQAlAEAlgEAvAEAbgC6AQC8AQCaDACSAQB6AVcG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQFAAYQBAG4AvAEAvAEAqgUAegDmAQCMAQA
+    ;; sm:L_gEAJIBAJoBAJIBASoBggEBBwXgBQCUAQCaAQCSAQEwAYQBAQcF5ggAugEAwgEAvgEAlAEBDgFOAFQAlAEAlgEAvAEAbgC6AQC8AQCaDACSAQB6AVcG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQFAAYQBAG4AvAEAvAEAqgUAegDmAQCMAQA
 
 
 test 'pipe unary', fn:
@@ -190,7 +190,7 @@ test 'pipe unary', fn:
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $x_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_8 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (return_call $std/operators.fnk:op_mul (local.get $x_2) (local.get $v_8) (local.get $v_6))
+        (return_call $std/operators.fnk:op_mul (local.get $:ctx_param) (local.get $x_2) (local.get $v_8) (local.get $v_6))
       )
       (func $test:v_13 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_14 (ref null any))
@@ -200,7 +200,7 @@ test 'pipe unary', fn:
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $x_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_16 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_plus (local.get $x_3) (local.get $v_16) (local.get $v_14))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_3) (local.get $v_16) (local.get $v_14))
       )
       (func $test:v_50 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -267,7 +267,7 @@ test 'pipe unary', fn:
       (data $d_1 "double")
       (data $d_2 "inc")
     )
-    ;; sm:KvgEAJIBAJoBAJIBASoBggEBBwWwBQCUAQCaAQCSAQEwAYQBAQcF4AYAugEAwgEAvgEAlAEAbgC8AQC8AQCaDACSAQB6AUkG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQEqAYQBAG4AvAEAvAEAqgUAegDmAQCMAQA
+    ;; sm:KvgEAJIBAJoBAJIBASoBggEBBwXgBQCUAQCaAQCSAQEwAYQBAQcFkAcAugEAwgEAvgEAlAEAbgC8AQC8AQCaDACSAQB6AUkG0gEAaACUAQCWAQDGAQB6AS4DzgEAXACUAQCWAQDAAQDUAQDMAQEqAYQBAG4AvAEAvAEAqgUAegDmAQCMAQA
 
 
 test 'match literal first arm', fn:
@@ -345,7 +345,7 @@ test 'match literal first arm', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_7) (local.get $:ctx_param) (local.get $v_8)))
         (local.set $v_151 (struct.new $rt/apply.wat:Closure (ref.func $test:v_142) (local.get $:caps_arg)))
         (local.set $v_10 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/operators.fnk:op_eq (local.get $v_6) (local.get $v_10) (local.get $v_151))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_6) (local.get $v_10) (local.get $v_151))
       )
       (func $test:v_37 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -471,7 +471,7 @@ test 'match literal first arm', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:X_gEAJQBARwChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACADACSAQCaAQCSAQCaAQCSAQCAAgDQAQEFAYQBAQAB2ggAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwFAJQBARYChgEAbgC8AQCyBwCUAQCaAQCUAQCaAQCUAQB6ANIBAG4AvAEAgAQA8gcAugEAwAEAwAEAegDSAQB6ANYBAG4AvgEAxAEAvgEArAgAlAEAmgEAlAEA1AEA0AEAegDSAQBuALwBAL4BALwBAIIHAJIBAHoA0gEBHwGCAQBuALoBALoBAKgFAHoA5gEAjAEA
+    ;; sm:X_gEAJQBARwChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACADACSAQCaAQCSAQCaAQCSAQCAAgDQAQEFAYQBAQABigkAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwFAJQBARYChgEAbgC8AQCyBwCUAQCaAQCUAQCaAQCUAQB6ANIBAG4AvAEAgAQA8gcAugEAwAEAwAEAegDSAQB6ANYBAG4AvgEAxAEAvgEArAgAlAEAmgEAlAEA1AEA0AEAegDSAQBuALwBAL4BALwBAIIHAJIBAHoA0gEBHwGCAQBuALoBALoBAKgFAHoA5gEAjAEA
 
 
 test 'match with binding', fn:
@@ -550,7 +550,7 @@ test 'match with binding', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_9) (local.get $:ctx_param) (local.get $v_10)))
         (local.set $v_175 (struct.new $rt/apply.wat:Closure (ref.func $test:v_166) (local.get $:caps_arg)))
         (local.set $v_12 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/operators.fnk:op_eq (local.get $v_8) (local.get $v_12) (local.get $v_175))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_8) (local.get $v_12) (local.get $v_175))
       )
       (func $test:v_39 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_5 (ref null any))
@@ -585,7 +585,7 @@ test 'match with binding', fn:
         (local.set $x_107 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_44 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_46 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_plus (local.get $x_107) (local.get $v_46) (local.get $v_44))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_107) (local.get $v_46) (local.get $v_44))
       )
       (func $test:v_115 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -696,7 +696,7 @@ test 'match with binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:afgEAJQBASgBhAEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACCDACSAQCaAQCUAQCaAQCSAQCCAgDQAQEFAYQBAQAB2ggAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALIGALoBAMABAJQBARwBhAEBBwWmBwC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAPwDAPwGALoBAMABAJYBAJoBAJYBAHoA1gEAbgC-AQDEAQC-AQCoCACUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEAugwAkgEBNQGCAQBUAJQBAJYBALwBAK4BANABALIBANABALIBANABAHoA0gEAbgC6AQC6AQCoBQB6AOYBAIwBAA
+    ;; sm:afgEAJQBASgBhAEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACCDACSAQCaAQCUAQCaAQCSAQCCAgDQAQEFAYQBAQABigkAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALIGALoBAMABAJQBARwBhAEBBwXWBwC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAPwDAPwGALoBAMABAJYBAJoBAJYBAHoA1gEAbgC-AQDEAQC-AQCoCACUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEAugwAkgEBNQGCAQBUAJQBAJYBALwBAK4BANABALIBANABALIBANABAHoA0gEAbgC6AQC6AQCoBQB6AOYBAIwBAA
 
 
 test 'simple recursion', fn:
@@ -777,7 +777,7 @@ test 'simple recursion', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_11) (local.get $:ctx_param) (local.get $v_12)))
         (local.set $v_209 (struct.new $rt/apply.wat:Closure (ref.func $test:v_200) (local.get $:caps_arg)))
         (local.set $v_14 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/operators.fnk:op_eq (local.get $v_10) (local.get $v_14) (local.get $v_209))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_10) (local.get $v_14) (local.get $v_209))
       )
       (func $test:v_41 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
@@ -833,7 +833,7 @@ test 'simple recursion', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:ctx_param) (local.get $v_46)))
         (local.set $v_152 (struct.new $rt/apply.wat:Closure (ref.func $test:v_145) (local.get $:caps_arg)))
         (local.set $v_49 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_minus (local.get $n_126) (local.get $v_49) (local.get $v_152))
+        (return_call $std/operators.fnk:op_minus (local.get $:ctx_param) (local.get $n_126) (local.get $v_49) (local.get $v_152))
       )
       (func $test:v_138 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -959,7 +959,7 @@ test 'simple recursion', fn:
       (data $d_0 "test")
       (data $d_1 "recurse")
     )
-    ;; sm:fPgEAJQBAUQChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQAB3AgAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwHALoBAMABAMABAJQBAG4AbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQEyAYQBAQcFqgcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAmggAkgEAegFnB9QBAGwAlAEAlgEAyAEBhAEBhAEAbgC8AQC6AQCsBQB6AOYBAIwBAA
+    ;; sm:fPgEAJQBAUQChgEAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQABjAkAkgEAmgEAkgEAmgEAkgEArgEA0AEAegDSAQBuALoBALoBAL4BALwHALoBAMABAMABAJQBAG4AbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQEyAYQBAQcF2gcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAmggAkgEAegFnB9QBAGwAlAEAlgEAyAEBhAEBhAEAbgC8AQC6AQCsBQB6AOYBAIwBAA
 
 
 test 'mutual recursion — ping pong', fn:
@@ -1128,7 +1128,7 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_13) (local.get $:ctx_param) (local.get $v_14)))
         (local.set $v_423 (struct.new $rt/apply.wat:Closure (ref.func $test:v_414) (local.get $:caps_arg)))
         (local.set $v_16 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/operators.fnk:op_eq (local.get $v_12) (local.get $v_16) (local.get $v_423))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_12) (local.get $v_16) (local.get $v_423))
       )
       (func $test:v_43 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_9 (ref null any))
@@ -1184,7 +1184,7 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:ctx_param) (local.get $v_48)))
         (local.set $v_316 (struct.new $rt/apply.wat:Closure (ref.func $test:v_309) (local.get $:caps_arg)))
         (local.set $v_51 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_minus (local.get $n_259) (local.get $v_51) (local.get $v_316))
+        (return_call $std/operators.fnk:op_minus (local.get $:ctx_param) (local.get $n_259) (local.get $v_51) (local.get $v_316))
       )
       (func $test:v_302 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1343,7 +1343,7 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_100) (local.get $:ctx_param) (local.get $v_101)))
         (local.set $v_397 (struct.new $rt/apply.wat:Closure (ref.func $test:v_388) (local.get $:caps_arg)))
         (local.set $v_103 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/operators.fnk:op_eq (local.get $v_99) (local.get $v_103) (local.get $v_397))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_99) (local.get $v_103) (local.get $v_397))
       )
       (func $test:v_130 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_96 (ref null any))
@@ -1401,7 +1401,7 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $is_even_250) (local.get $:ctx_param) (local.get $v_135)))
         (local.set $v_291 (struct.new $rt/apply.wat:Closure (ref.func $test:v_282) (local.get $:caps_arg)))
         (local.set $v_138 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/operators.fnk:op_minus (local.get $n_248) (local.get $v_138) (local.get $v_291))
+        (return_call $std/operators.fnk:op_minus (local.get $:ctx_param) (local.get $n_248) (local.get $v_138) (local.get $v_291))
       )
       (func $test:v_275 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1545,7 +1545,7 @@ test 'mutual recursion — is_even / is_odd', fn:
       (data $d_1 "is_even")
       (data $d_2 "is_odd")
     )
-    ;; sm:8gH4BACUAQFEBFwAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQAB3ggAkgEAmgEAlAEAmgEAkgEArgEA0AEAegDSAQBuALoBALwBAL4BALwHALoBAMABAMABAJQBAGwAbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQE0AYQBAQcFqgcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAvgUAlgEBTgVeAG4AvgEAoAcAugEAwAEAegDWAQBuAL4BAOgIALoBAMABAMABAMABAJYBAIYBAHwAjgwAlgEAmgEAlgEAmgEAlAEAiAIA0AEBBQGGAQEAAegIAJQBAJoBAJQBAJoBAJQBALABANABAHoA1gEAbgC8AQC8AQC-AQDCBwC6AQDMAQDAAQDAAQCWAQBuAL4BAL4BALoIALoBAMABAMwBAJYBAJQCANABATgBhgEBBwWyBwC6AQDAAQCWAQCaAQCWAQCaAQCWAQBuAL4BAPwDAPwGALoBAMABAMABAMABAHoA1gEAbgC-AQDEAQC-AQDeCQC6AQDAAQCWAQCaAQCWAQD-AQDQAQB6ANYBAG4AvgEAvgEAvgEAmgsAugEAzAEAlAEAmgEAkgEA4AEA0AEAsgEA0AEAsgEA0AEAbgC6AQC8AQCyCwCSAQB6AeEBB9QBAGwAlAEAlgEAyAEAugEA0AEBdgZaAGgAlAEAlgEAxgEBiAEBhgEAbgC-AQC6AQCsBQB6AOYBAIwBAA
+    ;; sm:8gH4BACUAQFEBFwAbgC8AQCcBwC6AQDAAQB6ANIBAG4AvgEA5AgAugEAwAEAwAEAwAEAlAEAhAEAfACGDACUAQCaAQCUAQCaAQCUAQCEAgDQAQEFAYQBAQABjgkAkgEAmgEAlAEAmgEAkgEArgEA0AEAegDSAQBuALoBALwBAL4BALwHALoBAMABAMABAJQBAGwAbgC8AQC-AQDkBwC6AQDAAQCUAQDgAQDQAQE0AYQBAQcF2gcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD8AwD8BgC6AQDAAQDAAQDAAQB6ANYBAG4AvgEAxAEAvgEA2AkAugEAwAEAlAEAmgEAlAEA-gEA0AEAegDSAQBuALwBAL4BALwBANgJAJIBAJoBAJIBAK4BANABALIBANABALIBANABAG4AugEAugEAvgUAlgEBTgVeAG4AvgEAoAcAugEAwAEAegDWAQBuAL4BAOgIALoBAMABAMABAMABAJYBAIYBAHwAjgwAlgEAmgEAlgEAmgEAlAEAiAIA0AEBBQGGAQEAAZgJAJQBAJoBAJQBAJoBAJQBALABANABAHoA1gEAbgC8AQC8AQC-AQDCBwC6AQDMAQDAAQDAAQCWAQBuAL4BAL4BALoIALoBAMABAMwBAJYBAJQCANABATgBhgEBBwXiBwC6AQDAAQCWAQCaAQCWAQCaAQCWAQBuAL4BAPwDAPwGALoBAMABAMABAMABAHoA1gEAbgC-AQDEAQC-AQDeCQC6AQDAAQCWAQCaAQCWAQD-AQDQAQB6ANYBAG4AvgEAvgEAvgEAmgsAugEAzAEAlAEAmgEAkgEA4AEA0AEAsgEA0AEAsgEA0AEAbgC6AQC8AQCyCwCSAQB6AeEBB9QBAGwAlAEAlgEAyAEAugEA0AEBdgZaAGgAlAEAlgEAxgEBiAEBhgEAbgC-AQC6AQCsBQB6AOYBAIwBAA
 
 
 test 'closure construction and call', fn:
@@ -1567,7 +1567,7 @@ test 'closure construction and call', fn:
         (local.set $v_8 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $y_3 (call $rt/apply.wat:args_head (local.get $:params)))
-        (return_call $std/operators.fnk:op_plus (local.get $x_56) (local.get $y_3) (local.get $v_8))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_56) (local.get $y_3) (local.get $v_8))
       )
       (func $test:v_5 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_6 (ref null any))
@@ -1647,7 +1647,7 @@ test 'closure construction and call', fn:
       (data $d_1 "add1")
       (data $d_2 "add")
     )
-    ;; sm:LeYFALoBAL4BAJIBAJoBAJIBASgF4gYAkgEAmgEAkgEArgEA0gEAbgDCAQC8CAC6AQC-AQCUAQEMBFQAYACUAQCWAQDCAQEkAYQBAG4AvAEAvAEAyAkAkgEAegFXA8wBAFwAlAEAlgEAwAEArgEAzAEBSgGEAQBuALwBALwBAKQFAHoA5gEAjAEA
+    ;; sm:LeYFALoBAL4BAJIBAJoBAJIBASgFkgcAkgEAmgEAkgEArgEA0gEAbgDCAQC8CAC6AQC-AQCUAQEMBFQAYACUAQCWAQDCAQEkAYQBAG4AvAEAvAEAyAkAkgEAegFXA8wBAFwAlAEAlgEAwAEArgEAzAEBSgGEAQBuALwBALwBAKQFAHoA5gEAjAEA
 
 
 # TODO, duplicate?
@@ -1742,7 +1742,7 @@ test 'recursive list sum', fn:
         (local.set $v_18 (local.get $v_26))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_399) (local.get $v_401) (local.get $v_403)))
         (local.set $v_453 (struct.new $rt/apply.wat:Closure (ref.func $test:v_444) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:op_empty (local.get $v_18) (local.get $v_453))
+        (return_call $std/operators.fnk:op_empty (local.get $:ctx_param) (local.get $v_18) (local.get $v_453))
       )
       (func $test:v_33 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_14 (ref null any))
@@ -1761,7 +1761,7 @@ test 'recursive list sum', fn:
         (local.set $v_364 (struct.new $rt/apply.wat:Closure (ref.func $test:v_357) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_14) (local.get $:ctx_param) (local.get $v_15)))
         (local.set $v_407 (struct.new $rt/apply.wat:Closure (ref.func $test:v_398) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $v_13) (local.get $v_407) (local.get $v_364))
+        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $v_13) (local.get $v_407) (local.get $v_364))
       )
       (func $test:v_252 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1828,7 +1828,7 @@ test 'recursive list sum', fn:
         (local.set $rest_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:ctx_param) (local.get $v_80) (local.get $rest_4)))
         (local.set $v_321 (struct.new $rt/apply.wat:Closure (ref.func $test:v_312) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:op_plus (local.get $c_280) (local.get $a_3) (local.get $v_321))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $c_280) (local.get $a_3) (local.get $v_321))
       )
       (func $test:v_348 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -1899,7 +1899,7 @@ test 'recursive list sum', fn:
         (local.set $v_68 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $v_482) (local.get $v_484)))
         (local.set $v_522 (struct.new $rt/apply.wat:Closure (ref.func $test:v_515) (local.get $:caps_arg)))
-        (return_call $std/seq.fnk:pop (local.get $v_68) (local.get $v_480) (local.get $v_522))
+        (return_call $std/seq.fnk:pop (local.get $:ctx_param) (local.get $v_68) (local.get $v_480) (local.get $v_522))
       )
       (func $test:v_76 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_57 (ref null any))
@@ -1918,7 +1918,7 @@ test 'recursive list sum', fn:
         (local.set $v_440 (struct.new $rt/apply.wat:Closure (ref.func $test:v_433) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $v_58) (local.get $v_57) (local.get $:ctx_param)))
         (local.set $v_488 (struct.new $rt/apply.wat:Closure (ref.func $test:v_479) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $v_56) (local.get $v_488) (local.get $v_440))
+        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $v_56) (local.get $v_488) (local.get $v_440))
       )
       (func $test:v_305 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -2066,7 +2066,7 @@ test 'recursive list sum', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $sum_240) (local.get $v_242) (local.get $v_244)))
         (local.set $v_275 (struct.new $rt/apply.wat:Closure (ref.func $test:v_266) (local.get $:caps_arg)))
         (local.set $v_147 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (return_call $std/seq.fnk:prepend (local.get $v_147) (local.get $v_145) (local.get $v_275))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_147) (local.get $v_145) (local.get $v_275))
       )
       (func $test:v_214 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -2085,7 +2085,7 @@ test 'recursive list sum', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $sum_215) (local.get $v_217) (local.get $v_219)))
         (local.set $v_248 (struct.new $rt/apply.wat:Closure (ref.func $test:v_239) (local.get $:caps_arg)))
         (local.set $v_144 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (return_call $std/seq.fnk:prepend (local.get $v_144) (local.get $v_142) (local.get $v_248))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_144) (local.get $v_142) (local.get $v_248))
       )
       (func $test:v_197 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -2104,7 +2104,7 @@ test 'recursive list sum', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $sum_198) (local.get $v_200) (local.get $v_202)))
         (local.set $v_223 (struct.new $rt/apply.wat:Closure (ref.func $test:v_214) (local.get $:caps_arg)))
         (local.set $v_141 (struct.new $std/int.wat:I64 (i64.const 3)))
-        (return_call $std/seq.fnk:prepend (local.get $v_141) (local.get $v_139) (local.get $v_223))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_141) (local.get $v_139) (local.get $v_223))
       )
       (func $test:v_211 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_206 (ref null any))
@@ -2113,7 +2113,7 @@ test 'recursive list sum', fn:
         (local.set $v_206 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_138 (struct.new $std/int.wat:I64 (i64.const 4)))
         (local.set $v_137 (call $rt/apply.wat:args_empty))
-        (return_call $std/seq.fnk:prepend (local.get $v_138) (local.get $v_137) (local.get $v_206))
+        (return_call $std/seq.fnk:prepend (local.get $:ctx_param) (local.get $v_138) (local.get $v_137) (local.get $v_206))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_5 (ref null any))
@@ -2154,7 +2154,7 @@ test 'recursive list sum', fn:
       (data $d_0 "test")
       (data $d_1 "sum")
     )
-    ;; sm:-AHmBQC6AQDAAQCUAQBuAL4BAKYGALoBAMABAMABAG4AvgEAqAYAugEAwAEAwAEAbgDWCAC6AQDAAQDAAQDAAQCUAQCEAQB8ALoNALoBAMABAMABAMABAJQBAUwCUAD-AQDQAQEAAoYIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQACngoAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEA0AEAegDSAQBuALoBALwBAL4BAIYIALoBAMABAMABAMYBAJQBAGYAbgC8AQDEAQC-AQCoCAC6AQDAAQCUAQCaAQCSAQCaAQCYAQCIAgDQAQFCBa4IALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQCoBgC6AQDAAQDAAQBuAOQHALoBAMABAMABAJQBAJoBAJQBAQsLUABuALwBALwBAKAIALoBAMABAMABAMABAJQBANgBANABAQALlggAlAEAmgEAlAEAmgEAlAEA4AEA0AEAhAIA0AEBAAugCgC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDQAQB6ANIBAG4AvAEAvAEAvgEAgAQA_AYAugEAwAEAwAEAwAEAegDWAQBuAL4BAMQBAL4BAOYIALoBAMABAMABAJYBAJoBAJYBAP4BANABAG4AvgEAvgEAvgEAiA0AkgEAmgEAmgEAmgEAkgEArgEA0AEAsgEA0AEArgEA0AEAsgEA0AEA2AEA0AEAbgDCAQC6AQD4BwC6AQDEAQDAAQDAAQCWAQFgAYYBAG4AvgEAvgEAvgEA7ggAugEAxAEAwAEAwAEAlgEAggIA0AEBGQGGAQEAAegIALoBAMQBAMABAMABAJYBAIICANABAQYBhgEBAAHoCAC6AQDEAQDAAQDAAQCWAQCCAgDQAQEGAYYBAQABvAUAlgEBBgGGAQETDG4BFAG-CgCSAQB6AbcBA8wBAFwAlAEAlgEAwAEAhAIA2AEAegDWAQBuAMYBAKoFAHoA5gEAjAEA
+    ;; sm:-AHmBQC6AQDAAQCUAQBuAL4BAKYGALoBAMABAMABAG4AvgEAqAYAugEAwAEAwAEAbgDWCAC6AQDAAQDAAQDAAQCUAQCEAQB8ALoNALoBAMABAMABAMABAJQBAUwCUAD-AQDQAQEAArYIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQACzgoAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEA0AEAegDSAQBuALoBALwBAL4BAIYIALoBAMABAMABAMYBAJQBAGYAbgC8AQDEAQC-AQCoCAC6AQDAAQCUAQCaAQCSAQCaAQCYAQCIAgDQAQFCBd4IALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQCoBgC6AQDAAQDAAQBuAOQHALoBAMABAMABAJQBAJoBAJQBAQsLUABuALwBALwBAKAIALoBAMABAMABAMABAJQBANgBANABAQALxggAlAEAmgEAlAEAmgEAlAEA4AEA0AEAhAIA0AEBAAvQCgC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDQAQB6ANIBAG4AvAEAvAEAvgEAgAQA_AYAugEAwAEAwAEAwAEAegDWAQBuAL4BAMQBAL4BAOYIALoBAMABAMABAJYBAJoBAJYBAP4BANABAG4AvgEAvgEAvgEAiA0AkgEAmgEAmgEAmgEAkgEArgEA0AEAsgEA0AEArgEA0AEAsgEA0AEA2AEA0AEAbgDCAQC6AQD4BwC6AQDEAQDAAQDAAQCWAQFgAYYBAG4AvgEAvgEAvgEA7ggAugEAxAEAwAEAwAEAlgEAggIA0AEBGQGGAQEAAZgJALoBAMQBAMABAMABAJYBAIICANABAQYBhgEBAAGYCQC6AQDEAQDAAQDAAQCWAQCCAgDQAQEGAYYBAQAB7AUAlgEBBgGGAQETDG4BFAHuCgCSAQB6AbcBA8wBAFwAlAEAlgEAwAEAhAIA2AEAegDWAQBuAMYBAKoFAHoA5gEAjAEA
 
 
 
