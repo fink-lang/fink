@@ -38,10 +38,8 @@
 
   (import "std/async.wat" "queue_push"
     (func $queue_push (param $task (ref any))))
-  (import "rt/apply.wat" "make_thunk"
-    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat" "make_unit_thunk"
-    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
   (import "std/async.wat" "resume"
     (func $resume))
 
@@ -110,6 +108,7 @@
 
     (call $queue_push
       (call $make_thunk
+      (local.get $ctx)
         (ref.as_non_null (local.get $cont))
         (local.get $ch)))
     (return_call $resume)
@@ -149,7 +148,8 @@
 
     ;; Sender continues with unit (always suspends).
     (call $queue_push
-      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+      (call $make_unit_thunk
+      (ref.null any) (ref.as_non_null (local.get $cont))))
 
     (return_call $resume)
   )
@@ -247,6 +247,7 @@
     ;; Push thunk(receiver, msg) to task queue.
     (call $queue_push
       (call $make_thunk
+      (ref.null any)
         (ref.as_non_null (call $list_head_any (local.get $receivers)))
         (ref.as_non_null (call $list_head_any (local.get $messages)))))
 

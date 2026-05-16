@@ -80,10 +80,8 @@
     (func $str_bytes (param $s (ref $Str)) (result (ref $ByteArray))))
   (import "std/async.wat"   "queue_push"
     (func $queue_push (param $task (ref any))))
-  (import "rt/apply.wat"    "make_thunk"
-    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat"    "make_unit_thunk"
-    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
   (import "std/async.wat"   "resume"
     (func $resume))
 
@@ -239,7 +237,8 @@
 
     ;; Sender continues with unit.
     (call $queue_push
-      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+      (call $make_unit_thunk
+      (ref.null any) (ref.as_non_null (local.get $cont))))
 
     (return_call $resume)
   )
@@ -426,6 +425,7 @@
     ;; Sender continues with the stream itself.
     (call $queue_push
       (call $make_thunk
+      (ref.null any)
         (ref.as_non_null (local.get $cont))
         (ref.as_non_null (local.get $ch))))
 

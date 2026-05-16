@@ -208,30 +208,42 @@
   ;; Declarative element segment — required by WASM spec for ref.func.
   (elem declare func $_thunk_fn)
 
-  ;; Thunk body. Captures: [cont, value]. When applied: apply([value], cont).
+  ;; Thunk body. Captures: [cont, value, ctx]. When applied: cont(value)
+  ;; resumes under the *captured* ctx, not whatever ctx the scheduler
+  ;; hands in via $_sched_ctx. The captured ctx is what was active when
+  ;; this thunk was built (e.g. when the sender yielded a value into a
+  ;; channel). Using the captured ctx is how ctx survives the async/
+  ;; channel suspension boundary.
   (func $_thunk_fn (type $Fn3)
       (param $caps (ref null any))
-      (param $_ctx (ref null any))
+      (param $_sched_ctx (ref null any))
       (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
     (local $value (ref any))
+    (local $ctx (ref null any))
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
-    (local.set $cont (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $cont  (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
     (local.set $value (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 1))))
-    (return_call $apply
+    (local.set $ctx   (array.get $Captures (local.get $captures) (i32.const 2)))
+    (return_call $apply_3
       (call $args_prepend (local.get $value) (call $args_empty))
+      (local.get $ctx)
       (local.get $cont))
   )
 
-  (func $make_thunk (@pub) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
+  ;; Build a thunk that captures the caller's ctx. When the scheduler
+  ;; later applies this thunk, the cont resumes under THIS ctx — not the
+  ;; scheduler's. That is the whole point of the extra capture slot.
+  (func $make_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
     (struct.new $Closure
       (ref.func $_thunk_fn)
-      (array.new_fixed $Captures 2 (local.get $cont) (local.get $value)))
+      (array.new_fixed $Captures 3 (local.get $cont) (local.get $value) (local.get $ctx)))
   )
 
-  ;; Make a thunk that calls cont with unit (i31 0).
-  (func $make_unit_thunk (@pub) (param $cont (ref any)) (result (ref $Closure))
-    (call $make_thunk (local.get $cont) (ref.i31 (i32.const 0)))
+  ;; Make a thunk that calls cont with unit (i31 0). Same ctx-capture
+  ;; semantics as $make_thunk.
+  (func $make_unit_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (result (ref $Closure))
+    (call $make_thunk (local.get $ctx) (local.get $cont) (ref.i31 (i32.const 0)))
   )
 )

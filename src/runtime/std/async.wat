@@ -33,11 +33,8 @@
   ;; Func imports
   (import "rt/apply.wat" "apply"
     (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
-  (import "rt/apply.wat" "make_thunk"
-    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat" "make_unit_thunk"
-    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
-
+  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
   (import "std/list.wat" "empty"
     (func $list_empty (result (ref $List))))
   (import "std/list.wat" "prepend"
@@ -141,7 +138,8 @@
     (param $cont (ref null any))
 
     ;; Push current continuation as a unit thunk to back of queue.
-    (call $queue_push (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $queue_push (call $make_unit_thunk
+      (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
     ;; Run next task.
     (return_call $resume)
@@ -230,6 +228,7 @@
     ;; Push task and current continuation (wrapped with future) to queue.
     (call $queue_push (local.get $task))
     (call $queue_push (call $make_thunk
+      (local.get $ctx)
       (ref.as_non_null (local.get $cont))
       (local.get $future)))
 
@@ -272,6 +271,7 @@
         ;; Settled — push thunk(cont, value) to task queue.
         (call $queue_push
           (call $make_thunk
+      (local.get $ctx)
             (ref.as_non_null (local.get $cont))
             (ref.as_non_null (local.get $value))))))
 
@@ -300,6 +300,7 @@
         (br_if $done (call $list_is_empty (local.get $waiters)))
         (call $queue_push
           (call $make_thunk
+      (ref.null any)
             (ref.as_non_null (call $list_head_any (local.get $waiters)))
             (local.get $value)))
         (local.set $waiters
