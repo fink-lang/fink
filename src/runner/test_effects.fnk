@@ -178,13 +178,17 @@ test 'ctx survives sqrt', fn:
 # stay visible for the next ctx-threading pass. Un-skip to reproduce.
 
 
-# std/repr.wat:repr dispatcher — lower.rs treats `repr` as a direct CPS
-# call (not through apply_3), so the impl has shape `(args, cont)`
-# without a ctx slot. The body passes (ref.null any) to apply_1, so the
-# cont resumes under null ctx. Fix requires either routing through
-# apply_3 in lower.rs or adding a ctx param here and matching the
-# call-site emission.
-skip 'ctx survives repr (repr dispatcher drops ctx)', fn:
+# Imported-as-user-fn ctx-drop sites: lower.rs treats some bare-@impl
+# fns as a direct CPS call (not through apply_3), so the impl has shape
+# `(args, cont)` without a ctx slot. The body passes (ref.null any) to
+# apply_1, so the cont resumes under null ctx.
+#
+# Fix requires either routing the user-imported call through apply_3 in
+# lower.rs, or adding a ctx param at the impl AND matching the call-site
+# emission. Affects any bare-@impl fn that user code imports directly
+# rather than going through a dedicated BuiltIn sym.
+
+skip 'ctx survives repr', fn:
   expect run ƒink:
     {repr} = import 'std/repr.fnk'
     {set_ctx, get_ctx} = import 'std/effects.fnk'
@@ -194,5 +198,19 @@ skip 'ctx survives repr (repr dispatcher drops ctx)', fn:
     get_ctx _
   | equals ":
     repr-ctx
+
+
+# `fmt x` as a direct user-imported call (not template-string interp,
+# which goes through the StrFmt builtin sym path with ctx threaded).
+skip 'ctx survives fmt as imported fn', fn:
+  expect run ƒink:
+    {fmt} = import 'std/str.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'fmt-ctx'
+    _ = fmt 42
+    get_ctx _
+  | equals ":
+    fmt-ctx
 
 
