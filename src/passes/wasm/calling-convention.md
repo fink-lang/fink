@@ -44,27 +44,29 @@ Continuations ride in the args list when the callee is a CPS function; CPS closu
 
 The emitter knows each function's `$Captures` layout and its positional param count. Entry unpacks both:
 
+The compiler-emitted param names follow a `$:NAME` convention so they don't collide with user identifiers:
+
 ```wat
 ;; fn {k, x}, [a, b]:
 (func $foo (type $Fn3)
-  (param $caps (ref null any))
+  (param $:caps_param (ref null any))
   (param $:ctx_param (ref null any))
-  (param $args (ref null any))
+  (param $:params (ref null any))
 
-  ;; Unpack captures from the $Captures array at local 0.
+  ;; Unpack captures from the $Captures array.
   (local.set $k
     (array.get $foo_caps
-      (ref.cast (ref $foo_caps) (local.get $caps))
+      (ref.cast (ref $foo_caps) (local.get $:caps_param))
       (i32.const 0)))
   (local.set $x
     (array.get $foo_caps
-      (ref.cast (ref $foo_caps) (local.get $caps))
+      (ref.cast (ref $foo_caps) (local.get $:caps_param))
       (i32.const 1)))
 
   ;; Unpack positional params from the args list.
-  (local.set $a (call $args_head (local.get $args)))
-  (local.set $args (call $args_tail (local.get $args)))
-  (local.set $b (call $args_head (local.get $args)))
+  (local.set $a (call $args_head (local.get $:params)))
+  (local.set $:params (call $args_tail (local.get $:params)))
+  (local.set $b (call $args_head (local.get $:params)))
   ...)
 ```
 
