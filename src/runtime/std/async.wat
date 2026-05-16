@@ -33,6 +33,11 @@
   ;; Func imports
   (import "rt/apply.wat" "apply"
     (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "rt/apply.wat" "apply_3"
+    (func $apply_3
+      (param $args (ref null any))
+      (param $ctx (ref null any))
+      (param $callee (ref null any))))
   (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
   (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
   (import "std/list.wat" "empty"
@@ -131,7 +136,13 @@
         (call $host_resume)
         (if (call $_queue_is_empty)
           (then (return)))))
-    (return_call $_apply (call $list_empty) (call $queue_pop))
+    ;; Scheduler has no ctx of its own; the popped task is a thunk
+    ;; whose body reads ctx from its captured-ctx slot, so the ctx
+    ;; we pass here is intentionally null — it will be discarded.
+    (return_call $apply_3
+      (call $list_empty)
+      (ref.null any)
+      (call $queue_pop))
   )
 
 
@@ -182,23 +193,27 @@
     (return_call $resume)
   )
 
-  ;; The spawned task body — calls task_fn with the settle continuation.
-  ;; Captures: [task_fn, settle_cont]. Called via _apply.
-  ;; TODO ctx: $_ctx is the scheduler's ctx. To run the task under the
-  ;; spawner's ctx, the spawner's ctx must be added to the captures and
-  ;; threaded through the _apply call below.
-  (func $_spawn_task_fn (type $Fn3) (param $caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
+  ;; The spawned task body — calls task_fn with the settle continuation,
+  ;; under the spawner's ctx (captured in the closure).
+  ;; Captures: [task_fn, settle_cont, spawner_ctx]. Called via apply_3
+  ;; with the scheduler's ctx in $_sched_ctx (intentionally ignored —
+  ;; the task runs under its spawner's universe).
+  (func $_spawn_task_fn (type $Fn3) (param $caps (ref null any)) (param $_sched_ctx (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $task_fn (ref any))
     (local $settle_cont (ref any))
+    (local $spawner_ctx (ref null any))
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $task_fn (ref.as_non_null
       (array.get $Captures (local.get $captures) (i32.const 0))))
     (local.set $settle_cont (ref.as_non_null
       (array.get $Captures (local.get $captures) (i32.const 1))))
-    ;; Call task_fn with args = [settle_cont]
-    (return_call $_apply
+    (local.set $spawner_ctx
+      (array.get $Captures (local.get $captures) (i32.const 2)))
+    ;; Call task_fn with args = [settle_cont], under spawner's ctx.
+    (return_call $apply_3
       (call $list_prepend (local.get $settle_cont) (call $list_empty))
+      (local.get $spawner_ctx)
       (local.get $task_fn))
   )
 
@@ -227,12 +242,14 @@
       (ref.func $_settle_fn)
       (array.new_fixed $Captures 1 (local.get $future))))
 
-    ;; Create task thunk: captures [task_fn, settle_cont].
+    ;; Create task thunk: captures [task_fn, settle_cont, spawner_ctx].
+    ;; The spawner's ctx is captured so the spawned task runs under it.
     (local.set $task (struct.new $Closure
       (ref.func $_spawn_task_fn)
-      (array.new_fixed $Captures 2
+      (array.new_fixed $Captures 3
         (ref.as_non_null (local.get $task_fn))
-        (local.get $settle_cont))))
+        (local.get $settle_cont)
+        (local.get $ctx))))
 
     ;; Push task and current continuation (wrapped with future) to queue.
     (call $queue_push (local.get $task))
