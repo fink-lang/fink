@@ -49,10 +49,23 @@
   ;; Multi-message async channel (point-to-point).
   ;; send buffers messages; an internal task drains (msg, receiver) pairs.
   ;; $tag: user-supplied metadata value (set at creation, immutable).
+  ;;
+  ;; $receivers stores $Waiter structs (ctx, cont) — see $Waiter below.
+  ;; Receivers are parked here when they call receive() with no buffered
+  ;; messages yet; when a sender shows up, _process_msg_q_fn pairs each
+  ;; waiter with the next message and resumes the waiter under its own ctx.
   (type $Channel (@pub) (sub (struct
     (field $messages  (mut (ref $List)))
     (field $receivers (mut (ref $List)))
     (field $tag       (ref any))
+  )))
+
+  ;; $Waiter — a parked receiver. Pairs a continuation with the universe
+  ;; ctx that was active when receive() was called, so the cont can resume
+  ;; under that same ctx (not the scheduler's ctx) once a message arrives.
+  (type $Waiter (sub (struct
+    (field $ctx  (ref null any))
+    (field $cont (ref any))
   )))
 
 
@@ -162,26 +175,24 @@
   ;;   2. if ch.$messages non-empty, push process_msg_q(ch) to task queue
   ;;   3. resume
 
-  ;; TODO ctx: $ctx received but dropped. The cont is parked on
-  ;; ch.$receivers as a bare value; when _process_msg_q_fn later builds
-  ;; a thunk(receiver, msg) the receiver resumes under the scheduler's
-  ;; ctx, not the one it had when it called receive. To preserve ctx,
-  ;; ch.$receivers must store (ctx, cont) pairs, and _process_msg_q_fn
-  ;; must build the thunk's closure with the captured ctx.
   (func $receive (@pub) (@impl "std/channel.fnk:receive")
-      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
+      (param $ctx (ref null any))
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 
     (local $ch (ref $Channel))
     (local.set $ch (ref.cast (ref $Channel) (local.get $ch_val)))
 
-    ;; Append cont to receivers (FIFO).
+    ;; Park (ctx, cont) as a $Waiter on the FIFO receivers list. ctx is
+    ;; captured here so the resume thunk built by _process_msg_q_fn can
+    ;; restore it on the receiving side.
     (struct.set $Channel $receivers (local.get $ch)
       (call $list_concat
         (struct.get $Channel $receivers (local.get $ch))
         (call $list_prepend
-          (ref.as_non_null (local.get $cont))
+          (struct.new $Waiter
+            (local.get $ctx)
+            (ref.as_non_null (local.get $cont)))
           (call $list_empty))))
 
     ;; If messages are buffered, trigger matching.
@@ -208,20 +219,19 @@
   ;;   4. if both lists still non-empty → push self to task queue
   ;;   5. resume
 
-  ;; TODO ctx: $_ctx is the scheduler's ctx (whatever was active when
-  ;; the scheduler popped this task). It is NOT the receiver's original
-  ;; ctx — the receiver was parked under its own ctx in receive(). To
-  ;; restore the receiver's ctx at resume, the thunk built below must
-  ;; capture the receiver's ctx (currently lost because $receivers stores
-  ;; bare conts, not (ctx, cont) pairs).
+  ;; The $_ctx param is the scheduler's ctx — intentionally unused.
+  ;; The receiver's real ctx is captured per-receiver in the $Waiter
+  ;; struct parked on ch.$receivers; we read it here and pass it into
+  ;; make_thunk so the receiver resumes under its own ctx, not ours.
   (func $_process_msg_q_fn (type $Fn3)
     (param $caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $_sched_ctx (ref null any))
     (param $args (ref null any))
 
     (local $ch (ref $Channel))
     (local $messages (ref $List))
     (local $receivers (ref $List))
+    (local $waiter (ref $Waiter))
 
     (local.set $ch (ref.cast (ref $Channel)
       (ref.as_non_null (array.get $Captures
@@ -237,18 +247,23 @@
           (call $list_is_empty (local.get $receivers)))
       (then (return_call $resume)))
 
-    ;; Pop one message: receiver gets messages.head; remaining = messages.tail
+    ;; Pop one waiter and one message.
+    (local.set $waiter
+      (ref.cast (ref $Waiter)
+        (ref.as_non_null (call $list_head_any (local.get $receivers)))))
+
     (struct.set $Channel $messages (local.get $ch)
       (ref.cast (ref $List) (call $list_tail_any (local.get $messages))))
 
     (struct.set $Channel $receivers (local.get $ch)
       (ref.cast (ref $List) (call $list_tail_any (local.get $receivers))))
 
-    ;; Push thunk(receiver, msg) to task queue.
+    ;; Resume the waiter's cont with the message, under the waiter's
+    ;; captured ctx.
     (call $queue_push
       (call $make_thunk
-      (ref.null any)
-        (ref.as_non_null (call $list_head_any (local.get $receivers)))
+        (struct.get $Waiter $ctx  (local.get $waiter))
+        (struct.get $Waiter $cont (local.get $waiter))
         (ref.as_non_null (call $list_head_any (local.get $messages)))))
 
     ;; If more pairs remain, self-requeue.
