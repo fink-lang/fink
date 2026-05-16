@@ -1,4 +1,4 @@
-{test, expect, equals, run} = import '!fake'
+{test, skip, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -123,7 +123,7 @@ test 'ctx survives arithmetic chain', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'math-ctx'
-    _ = 1 + 2 * 3 - 4
+    foo = 1 + 2 * 3 - 4
     get_ctx _
   | equals ":
     math-ctx
@@ -156,5 +156,26 @@ test 'ctx survives stderr write', fn:
     get_ctx _
   | equals ":
     stderr-ctx
+
+
+# -- KNOWN ctx-drop sites ----------------------------------------------
+#
+# Documented gaps. Skipped so they don't break CI but stay visible
+# for the next ctx-threading pass. Un-skip to reproduce the gap.
+
+# std/math.wat's per-fn closures (_abs_apply, _sqrt_apply, _sin_apply,
+# ...) are Fn3-typed and receive caller's ctx, but their bodies pass
+# `(ref.null any)` to apply_1 instead of forwarding the caller's ctx.
+# About 35-40 sites, all the same pattern.
+skip 'ctx survives sqrt (math closure drops ctx)', fn:
+  expect run ƒink:
+    {sqrt} = import 'std/math.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'math-fn-ctx'
+    _ = sqrt 16.0
+    get_ctx _
+  | equals ":
+    math-fn-ctx
 
 
