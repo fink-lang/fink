@@ -116,11 +116,12 @@
   (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
   ;; Func imports — channel
-  (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "std/channel.wat" "receive" (func $channel_receive (param (ref null any)) (param (ref null any)) (param (ref null any))))
   ;; Func imports — interop (host bridge)
-  (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  ;; ctx-aware: each leading (ref null any) is the caller's $Ctx.
+  (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
@@ -1049,6 +1050,7 @@
             (local.get $a))))
       (drop)
       (return_call $interop_channel_send
+        (local.get $ctx)
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
@@ -1061,6 +1063,7 @@
             (local.get $a))))
       (drop)
       (return_call $channel_op_shr
+        (local.get $ctx)
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
@@ -1094,6 +1097,7 @@
             (local.get $b))))
       (drop)
       (return_call $interop_channel_send
+        (local.get $ctx)
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
@@ -1106,6 +1110,7 @@
             (local.get $b))))
       (drop)
       (return_call $channel_op_shr
+        (local.get $ctx)
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
@@ -1142,14 +1147,16 @@
   ;; read — async read from a stream
   ;; =========================================================================
 
-  ;; op_read(stream, size, cont):
+  ;; op_read(ctx, stream, size, cont):
   ;;   Dispatches to interop_op_read for host channels.
   (func $op_read (@pub) (@impl "rt/protocols.wat:op_read")
+    (param $ctx (ref null any))
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
 
     (return_call $interop_op_read
+      (local.get $ctx)
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))

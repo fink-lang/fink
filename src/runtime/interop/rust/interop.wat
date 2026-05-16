@@ -173,14 +173,15 @@
 
   ;; -- host_channel_send -----------------------------------------------------
   ;;
-  ;; host_channel_send(ch, msg, cont):
+  ;; host_channel_send(ctx, ch, msg, cont):
   ;;   1. Write msg to the host via the appropriate host_write import
-  ;;   2. Queue unit_thunk(cont) to resume the sender
+  ;;   2. Queue unit_thunk(cont) to resume the sender under its ctx
   ;;   3. Resume scheduler
   ;;
   ;; Dispatches stdout vs stderr by channel tag (i31ref: 1=stdout, 2=stderr).
 
   (func $channel_send (@pub)
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -201,10 +202,10 @@
     ;; Send to host — host reads bytes directly from the GC array.
     (call $host_channel_send (local.get $tag) (local.get $bytes))
 
-    ;; Sender continues with unit.
+    ;; Sender continues with unit, under its captured ctx.
     (call $queue_push
       (call $make_unit_thunk
-      (ref.null any) (ref.as_non_null (local.get $cont))))
+        (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
     (return_call $resume)
   )
@@ -220,23 +221,20 @@
   ;; The host settles the future during host_resume when data arrives.
 
   (func $op_read (@pub)
+    (param $ctx (ref null any))
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
 
     (local $future (ref $Future))
 
-    ;; Create pending future with cont parked as a $Waiter. TODO ctx:
-    ;; op_read is a typed @impl shape today so the caller's ctx is not
-    ;; threaded in — we park ref.null any as the waiter's ctx, meaning
-    ;; the resumed cont sees a null ctx. To preserve op_read's caller's
-    ;; ctx, op_read must grow a leading (param $ctx ...) and pass it
-    ;; into the $Waiter below.
+    ;; Create pending future with (ctx, cont) parked as a $Waiter so
+    ;; the reader resumes under its caller's universe once data arrives.
     (local.set $future (struct.new $Future
       (ref.null any)
       (call $list_prepend
         (struct.new $Waiter
-          (ref.null any)   ;; TODO ctx: see comment above
+          (local.get $ctx)
           (ref.as_non_null (local.get $cont)))
         (call $list_empty))))
 
@@ -338,7 +336,7 @@
 
   (func $read_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -355,6 +353,7 @@
     (local.set $size (call $list_head_any (local.get $cursor)))
 
     (return_call $op_read
+      (local.get $ctx)
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))
@@ -379,6 +378,7 @@
   ;; the stream value (via `make_thunk`) instead of unit.
 
   (func $channel_send_stream
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -396,10 +396,10 @@
 
     (call $host_channel_send (local.get $tag) (local.get $bytes))
 
-    ;; Sender continues with the stream itself.
+    ;; Sender continues with the stream itself, under its captured ctx.
     (call $queue_push
       (call $make_thunk
-      (ref.null any)
+        (local.get $ctx)
         (ref.as_non_null (local.get $cont))
         (ref.as_non_null (local.get $ch))))
 
@@ -408,7 +408,7 @@
 
   (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -424,6 +424,7 @@
     (local.set $value (call $list_head_any (local.get $cursor)))
 
     (return_call $channel_send_stream
+      (local.get $ctx)
       (local.get $stream)
       (local.get $value)
       (local.get $cont)))

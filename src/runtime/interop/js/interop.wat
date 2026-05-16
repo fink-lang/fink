@@ -462,6 +462,7 @@
   ;; decode via TextDecoder.
 
   (func $channel_send (@pub)
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -496,14 +497,15 @@
 
     (call $host_channel_send (local.get $tag) (global.get $SCRATCH_BASE) (local.get $len))
 
-    ;; Sender continues with unit.
+    ;; Sender continues with unit, under its captured ctx.
     (call $queue_push
       (call $make_unit_thunk
-      (ref.null any) (ref.as_non_null (local.get $cont))))
+        (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
     (return_call $resume))
 
   (func $op_read (@pub)
+    (param $ctx (ref null any))
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
@@ -557,6 +559,7 @@
   ;; rather than unit (make_unit_thunk).
 
   (func $channel_send_stream
+    (param $ctx (ref null any))
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -588,7 +591,7 @@
 
     (call $queue_push
       (call $make_thunk
-      (ref.null any)
+        (local.get $ctx)
         (ref.as_non_null (local.get $cont))
         (ref.as_non_null (local.get $ch))))
 
@@ -596,7 +599,7 @@
 
   (func $write_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cursor (ref null any))
@@ -612,6 +615,7 @@
     (local.set $value (call $list_head_any (local.get $cursor)))
 
     (return_call $channel_send_stream
+      (local.get $ctx)
       (local.get $stream)
       (local.get $value)
       (local.get $cont)))
