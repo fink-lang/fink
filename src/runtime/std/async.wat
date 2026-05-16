@@ -31,8 +31,6 @@
   (import "std/list.wat" "List"     (type $List     (sub any)))
 
   ;; Func imports
-  (import "rt/apply.wat" "apply"
-    (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat" "apply_3"
     (func $apply_3
       (param $args (ref null any))

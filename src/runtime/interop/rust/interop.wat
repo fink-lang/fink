@@ -100,7 +100,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
+  (elem declare func $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -138,31 +138,12 @@
   ;; Net: host sees only an opaque anyref; never touches $Closure /
   ;; $Fn2 / funcref directly. Internals are interop's business.
 
-  ;; $Fn2 adapter body — fires when WASM invokes a host-wrapped cont.
-  (func $host_cont_adapter (type $Fn2)
-    (param $caps (ref null any))
-    (param $args (ref null any))
-
-    (local $captures (ref $Captures))
-    (local $id_box (ref i31))
-
-    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
-    (local.set $id_box
-      (ref.cast (ref i31)
-        (array.get $Captures (local.get $captures) (i32.const 0))))
-
-    (call $host_invoke_cont
-      (i31.get_s (local.get $id_box))
-      (local.get $args))
-  )
-
   ;; $Fn3 adapter body — fires when WASM invokes a host-wrapped cont
-  ;; via the ctx-aware `apply_3` dispatcher. Same as $host_cont_adapter
-  ;; but accepts an extra ctx native param which we ignore (the host
-  ;; cont doesn't participate in the substrate).
+  ;; via the ctx-aware `apply_3` dispatcher. The host cont doesn't
+  ;; participate in the substrate, so $ctx is ignored.
   (func $host_cont_adapter_3 (type $Fn3)
     (param $caps (ref null any))
-    (param $ctx (ref null any))  ;; TODO ctx: unused
+    (param $_ctx (ref null any))
     (param $args (ref null any))
 
     (local $captures (ref $Captures))
@@ -178,20 +159,7 @@
       (local.get $args))
   )
 
-  ;; Factory: host calls this with its callback id; gets back an
-  ;; opaque (ref null any) fit for any CPS continuation slot.
-  ;; Fn2 variant — used by the existing default Fn2 pipeline.
-  (func $wrap_host_cont (export "env:wrap_host_cont")
-    (param $id i32)
-    (result (ref null any))
-
-    (struct.new $Closure
-      (ref.func $host_cont_adapter)
-      (array.new_fixed $Captures 1
-        (ref.i31 (local.get $id))))
-  )
-
-  ;; Fn3 variant — used by the ctx-aware (lower_ctx) pipeline.
+  ;; Fn3 variant — used by the ctx-aware pipeline (the only one now).
   ;; The closure's funcref is Fn3-typed so `apply_3` can cast it
   ;; without trapping. The runner uses this when invoking a
   ;; ctx-aware module.
@@ -297,18 +265,19 @@
   )
 
 
-  ;; -- $Fn2-shaped panic for CPS dispatch ------------------------------------
+  ;; -- $Fn3-shaped panic for CPS dispatch ------------------------------------
   ;;
   ;; CPS-side panic — used as a $Closure value passed as a fail continuation
   ;; to pattern matchers, and as a direct tail-call at the terminal of a
-  ;; fail chain. Signature matches the universal $Fn2 calling convention so
-  ;; `_apply` can dispatch to it like any other continuation.
+  ;; fail chain. Signature matches the ctx-aware $Fn3 calling convention so
+  ;; `apply_3` can dispatch to it like any other continuation.
   ;;
   ;; Delegates to `$panic`, which traps the instance via host_panic. Today
   ;; panic carries no payload; future work will pass a reason / source
   ;; location for better diagnostics.
-  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
+  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx  (ref null any))
     (param $_args (ref null any))
     (return_call $panic))
 

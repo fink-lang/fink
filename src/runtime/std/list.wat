@@ -20,8 +20,6 @@
   (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
-  (import "rt/apply.wat" "apply"
-    (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $result (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))

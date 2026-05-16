@@ -522,8 +522,9 @@
   (func $panic (@pub)
     unreachable)
 
-  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
+  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn3)
     (param $_caps (ref null any))
+    (param $_ctx  (ref null any))
     (param $_args (ref null any))
     unreachable)
 

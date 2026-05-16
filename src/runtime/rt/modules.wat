@@ -44,8 +44,6 @@
   (import "rt/apply.wat"  "Fn3"      (type $Fn3      (sub any)))
 
   ;; Func imports
-  (import "rt/apply.wat"  "apply"
-    (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat"  "apply_3"
     (func $apply_3
       (param $args (ref null any))
