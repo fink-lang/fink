@@ -1523,6 +1523,7 @@
       (ref.cast (ref eq) (local.get $val))))
 
   (func $rec_put (@pub) (@impl "std/rec.fnk:put")
+      (param $ctx (ref null any))
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
@@ -1533,6 +1534,7 @@
       (local.get $cont)))
 
   (func $rec_merge (@pub) (@impl "std/rec.fnk:merge")
+      (param $ctx (ref null any))
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
     (return_call $list_apply_1
@@ -1542,6 +1544,7 @@
       (local.get $cont)))
 
   (func $rec_pop (@pub) (@impl "std/rec.fnk:pop")
+      (param $ctx (ref null any))
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))

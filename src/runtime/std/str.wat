@@ -1697,6 +1697,7 @@
   ;; result to the continuation via _apply.
   ;; TODO might need a proper wrapper to be fink importable?
   (func $fmt (@pub) (@impl "std/str.fnk:fmt")
+      (param $ctx (ref null any))
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
     (local $segments (ref $VarArgs))
@@ -1940,6 +1941,7 @@
   ;; Checks subj starts with prefix and ends with suffix (non-overlapping).
   ;; On match: calls succ(middle_slice). On mismatch: calls fail().
   (func $match (@impl "std/str.fnk:match")
+      (param $ctx (ref null any))
     (param $subj (ref null any))
     (param $prefix (ref null any))
     (param $suffix (ref null any))

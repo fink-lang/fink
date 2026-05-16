@@ -167,6 +167,7 @@
   ;; in CPS so they fit the user calling convention.
 
   (func $cps_excl (@pub) (@impl "std/range.fnk:excl")
+      (param $ctx (ref null any))
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $excl
@@ -175,6 +176,7 @@
       (local.get $cont)))
 
   (func $cps_incl (@pub) (@impl "std/range.fnk:incl")
+      (param $ctx (ref null any))
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $incl
@@ -183,6 +185,7 @@
       (local.get $cont)))
 
   (func $cps_from (@pub) (@impl "std/range.fnk:from")
+      (param $ctx (ref null any))
     (param $a (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $from

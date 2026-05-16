@@ -94,6 +94,7 @@
   ;;   3. resume
 
   (func $channel (@pub) (@impl "std/channel.fnk:channel")
+      (param $ctx (ref null any))
     (param $tag (ref null any))
     (param $cont (ref null any))
 
@@ -154,6 +155,7 @@
   ;;   3. resume
 
   (func $receive (@pub) (@impl "std/channel.fnk:receive")
+      (param $ctx (ref null any))
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 

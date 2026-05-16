@@ -132,6 +132,7 @@
   ;;   2. run next task
 
   (func $yield (@pub) (@impl "std/async.fnk:yield")
+      (param $ctx (ref null any))
     (param $value (ref null any))
     (param $cont (ref null any))
 
@@ -185,6 +186,7 @@
   )
 
   (func $spawn (@pub) (@impl "std/async.fnk:spawn")
+      (param $ctx (ref null any))
     (param $task_fn (ref null any))
     (param $cont (ref null any))
 
@@ -228,6 +230,7 @@
   ;;   run next task
 
   (func $await (@pub) (@impl "std/async.fnk:await")
+      (param $ctx (ref null any))
     (param $future_val (ref null any))
     (param $cont (ref null any))
 
