@@ -665,9 +665,9 @@ fn lower_expr(
       if args.len() != 5 {
         panic!("lower: StrMatch expects 5 args, got {}", args.len());
       }
-      let ops: Vec<Operand> = args.iter()
-        .map(|a| emit_arg_as_operand(lcx, ctx, a))
-        .collect();
+      let ctx_local = ctx.ctx_local.expect("lower StrMatch: enclosing fn must have :ctx_param");
+      let mut ops: Vec<Operand> = vec![op_local(ctx_local)];
+      ops.extend(args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)));
       let i = push_return_call(lcx.frag, lcx.rt.str_match(), ops);
       if let Some(o) = origin_of(lcx.cps, lcx.ast, expr.id) { set_origin(lcx.frag, i, o); }
       set_cps_id(lcx.frag, i, expr.id);
@@ -1269,9 +1269,9 @@ fn emit_quaternary(
   if args.len() != 4 {
     panic!("lower: 4-arg primitive expects 4 args, got {}", args.len());
   }
-  let ops: Vec<Operand> = args.iter()
-    .map(|a| emit_arg_as_operand(lcx, ctx, a))
-    .collect();
+  let ctx_local = ctx.ctx_local.expect("emit_quaternary: enclosing fn must have :ctx_param");
+  let mut ops: Vec<Operand> = vec![op_local(ctx_local)];
+  ops.extend(args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)));
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
@@ -1295,7 +1295,8 @@ fn emit_ternary_guard(
   let val_op = emit_arg_as_operand(lcx, ctx, &args[0]);
   let cont1_op = emit_arg_as_operand(lcx, ctx, &args[1]);
   let cont2_op = emit_arg_as_operand(lcx, ctx, &args[2]);
-  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![val_op, cont1_op, cont2_op]);
+  let ctx_local = ctx.ctx_local.expect("emit_ternary_guard: enclosing fn must have :ctx_param");
+  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![op_local(ctx_local), val_op, cont1_op, cont2_op]);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
@@ -1314,7 +1315,9 @@ fn emit_op_tail_call(
     Arg::Val(v) => val_as_operand(lcx, ctx, v),
     _ => panic!("lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
   };
-  let mut operands = value_operands;
+  let ctx_local = ctx.ctx_local.expect("emit_op_tail_call: enclosing fn must have :ctx_param");
+  let mut operands = vec![op_local(ctx_local)];
+  operands.extend(value_operands);
   operands.push(cont_op);
   let i = push_return_call(lcx.frag, lcx.rt.op(sym), operands);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
