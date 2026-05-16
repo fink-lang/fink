@@ -59,11 +59,24 @@
   ;; Opaque future for cooperative multitasking.
   ;; Returned by `spawn`; passed to `await`. Null value = pending;
   ;; non-null = settled (fink has no null values, so this is unambiguous).
-  ;; Waiters: continuations waiting for this future to settle.
+  ;; Waiters: $Waiter (ctx, cont) pairs parked on this future. When the
+  ;; future settles, each waiter is resumed under its own captured ctx.
   (type $Future (@pub) (struct
     (field $value   (mut (ref null any)))
     (field $waiters (mut (ref $List)))
   ))
+
+  ;; $Waiter — an awaiter parked on a pending $Future. Pairs the cont
+  ;; with the ctx that was active when await() was called, so the cont
+  ;; can resume under that ctx (not the scheduler's) once the future
+  ;; settles. Same shape as channel.wat's $Waiter (kept independent to
+  ;; avoid inter-module coupling between std/async and std/channel).
+  ;; Exported because interop.wat constructs $Future values directly for
+  ;; host-driven async (e.g. op_read).
+  (type $Waiter (@pub) (sub (struct
+    (field $ctx  (ref null any))
+    (field $cont (ref any))
+  )))
 
 
   ;; -- Task queue global ----------------------------------------------------
@@ -244,12 +257,8 @@
   ;;   if pending: push cont to future.$waiters
   ;;   run next task
 
-  ;; TODO ctx: $ctx received but dropped. Both resume paths (settled =
-  ;; thunk(cont, value); pending = cont parked on future.$waiters) lose
-  ;; the awaiter's ctx. The settled-path thunk needs ctx captured; the
-  ;; waiter-list needs to store (ctx, cont) pairs instead of bare conts.
   (func $await (@pub) (@impl "std/async.fnk:await")
-      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
+      (param $ctx (ref null any))
     (param $future_val (ref null any))
     (param $cont (ref null any))
 
@@ -262,16 +271,19 @@
     (local.set $value (struct.get $Future $value (local.get $future)))
     (if (ref.is_null (local.get $value))
       (then
-        ;; Pending — add cont to future's waiters list.
+        ;; Pending — park (ctx, cont) as a $Waiter on future.$waiters.
         (struct.set $Future $waiters (local.get $future)
           (call $list_prepend
-            (ref.as_non_null (local.get $cont))
+            (struct.new $Waiter
+              (local.get $ctx)
+              (ref.as_non_null (local.get $cont)))
             (struct.get $Future $waiters (local.get $future)))))
       (else
-        ;; Settled — push thunk(cont, value) to task queue.
+        ;; Settled — push thunk(cont, value) to task queue under the
+        ;; awaiter's own ctx so the cont resumes under it.
         (call $queue_push
           (call $make_thunk
-      (local.get $ctx)
+            (local.get $ctx)
             (ref.as_non_null (local.get $cont))
             (ref.as_non_null (local.get $value))))))
 
@@ -289,19 +301,25 @@
 
   (func $settle (@pub) (param $future (ref $Future)) (param $value (ref any))
     (local $waiters (ref $List))
+    (local $waiter (ref $Waiter))
 
     ;; Set the settled value.
     (struct.set $Future $value (local.get $future) (local.get $value))
 
-    ;; Move all waiters to the task queue.
+    ;; Move all waiters to the task queue. Each waiter carries its own
+    ;; ctx (captured at await-time); we pass it into make_thunk so the
+    ;; cont resumes under THAT ctx, not the scheduler's.
     (local.set $waiters (struct.get $Future $waiters (local.get $future)))
     (block $done
       (loop $loop
         (br_if $done (call $list_is_empty (local.get $waiters)))
+        (local.set $waiter
+          (ref.cast (ref $Waiter)
+            (ref.as_non_null (call $list_head_any (local.get $waiters)))))
         (call $queue_push
           (call $make_thunk
-      (ref.null any)
-            (ref.as_non_null (call $list_head_any (local.get $waiters)))
+            (struct.get $Waiter $ctx  (local.get $waiter))
+            (struct.get $Waiter $cont (local.get $waiter))
             (local.get $value)))
         (local.set $waiters
           (ref.cast (ref $List) (call $list_tail_any (local.get $waiters))))

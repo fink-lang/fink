@@ -37,6 +37,7 @@
   (import "std/channel.wat" "Channel"   (type $Channel  (sub any)))
   (import "std/list.wat"    "List"      (type $List     (sub any)))
   (import "std/async.wat"   "Future"    (type $Future   (sub any)))
+  (import "std/async.wat"   "Waiter"    (type $Waiter   (sub any)))
   (import "std/int.wat"     "Int"       (type $Int      (sub $Num (struct))))
   (import "std/int.wat"     "I64"       (type $I64      (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "U64"       (type $U64      (sub $Int (struct (field $ival i64)))))
@@ -260,11 +261,18 @@
 
     (local $future (ref $Future))
 
-    ;; Create pending future with cont as waiter.
+    ;; Create pending future with cont parked as a $Waiter. TODO ctx:
+    ;; op_read is a typed @impl shape today so the caller's ctx is not
+    ;; threaded in — we park ref.null any as the waiter's ctx, meaning
+    ;; the resumed cont sees a null ctx. To preserve op_read's caller's
+    ;; ctx, op_read must grow a leading (param $ctx ...) and pass it
+    ;; into the $Waiter below.
     (local.set $future (struct.new $Future
       (ref.null any)
       (call $list_prepend
-        (ref.as_non_null (local.get $cont))
+        (struct.new $Waiter
+          (ref.null any)   ;; TODO ctx: see comment above
+          (ref.as_non_null (local.get $cont)))
         (call $list_empty))))
 
     ;; Tell host to start async read. Host captures the future ref.
