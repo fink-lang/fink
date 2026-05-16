@@ -114,7 +114,7 @@
 
   ;; Func imports — channel
   (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "std/channel.wat" "receive" (func $channel_receive (;ctx;) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/channel.wat" "receive" (func $channel_receive (param (ref null any)) (param (ref null any)) (param (ref null any))))
   ;; Func imports — interop (host bridge)
   (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
