@@ -58,7 +58,7 @@ test 'std io import handling', fn:
         (local.set $v_285 (struct.new $rt/apply.wat:Closure (ref.func $test:v_274) (local.get $:caps_arg)))
         (local.set $v_80 (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:varargs (array.new_fixed $rt/apply.wat:VarArgs 2 (local.get $v_80) (local.get $ham_231)))
-        (return_call $std/str.fnk:fmt (local.get $:ctx_param) (local.get $:varargs) (local.get $v_285))
+        (return_call $std/str.wat:_fmt_inner (local.get $:ctx_param) (local.get $:varargs) (local.get $v_285))
       )
       (func $test:v_188 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -99,7 +99,7 @@ test 'std io import handling', fn:
         (local.set $v_203 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_71 (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (local.set $:varargs (array.new_fixed $rt/apply.wat:VarArgs 2 (local.get $v_71) (local.get $ham_268)))
-        (return_call $std/str.fnk:fmt (local.get $:ctx_param) (local.get $:varargs) (local.get $v_203))
+        (return_call $std/str.wat:_fmt_inner (local.get $:ctx_param) (local.get $:varargs) (local.get $v_203))
       )
       (func $test:v_157 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
@@ -459,4 +459,4 @@ test 'std io import handling', fn:
       (data $d_7 "stderr")
       (data $d_8 "stdout")
     )
-    ;; sm:4AHGCAC6AQDIAQDAAQDAAQDKAQCUAQBuALwBAMgBAL4BAPQKALoBAMQBAMgBAMABAMoBAJQBAaYBGlAAwAIA0AEBVASMAQDWAQEBDMwKALoBAMgBAMABAMQBAMABAMoBAMoBAJQBALoCANABAG4AvAEAyAEAvgEAoAcAugEAxAEAlgEBMwSMAQDWAQEBDNgMALoBAMgBAMABAMoBAMoBAJQBAUkDUgBcAJQBAJYBAMABALIBANABAJYDANgBAG4AxgEAkA0AugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBdQZYARAGWAEQBVYBDgRUAQwFVgC0AgDQAQFgBIoBAG4AvAEAwgEAvgEAqgYAugEAwAEAwAEAbgCyCQC6AQDAAQDAAQDAAQDAAQDAAQDAAQCUAQCaAQCUAQBuALwBAL4BAL4BAL4BAL4BAPAKALoBAMABAMABAMABAMABAMABAMABAJQBAJoBAJQBAO4CANABAZsBOowBAQA69AoAugEAwAEAwAEAwAEAwAEAwAEAlAEAmgEAlAEA7gIA0AEBADqMAQEAOrAKALoBAMABAMABAMABAMABAJQBAJoBAJQBAMgCANABAQA6jAEBADrsCQC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDQAQEAOowBAQA6qgkAugEAwAEAwAEAwAEAlAEA_gEA0AEBADqMAQEAOuoIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQA60gsAugEAwAEAwAEAlAEAsgEA0AEAegDSAQB6APIBAG4AvAEAygEAvgEAnBMAlgEAZAB2AKIBAJICAHYAogEAkgIAcgCgAQCOAgBuAJ4BAIoCAHIAoAEAjgIAbgDEAQD-BwCSAQDeAQDYAQB6ANYBAG4AxgEAqgUAegDmAQCMAQA
+    ;; sm:4AHGCAC6AQDIAQDAAQDAAQDKAQCUAQBuALwBAMgBAL4BAPQKALoBAMQBAMgBAMABAMoBAJQBAaYBGlAAwAIA0AEBVASMAQDWAQEBDNoKALoBAMgBAMABAMQBAMABAMoBAMoBAJQBALoCANABAG4AvAEAyAEAvgEAoAcAugEAxAEAlgEBMwSMAQDWAQEBDOYMALoBAMgBAMABAMoBAMoBAJQBAUkDUgBcAJQBAJYBAMABALIBANABAJYDANgBAG4AxgEAkA0AugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBdQZYARAGWAEQBVYBDgRUAQwFVgC0AgDQAQFgBIoBAG4AvAEAwgEAvgEAqgYAugEAwAEAwAEAbgCyCQC6AQDAAQDAAQDAAQDAAQDAAQDAAQCUAQCaAQCUAQBuALwBAL4BAL4BAL4BAL4BAPAKALoBAMABAMABAMABAMABAMABAMABAJQBAJoBAJQBAO4CANABAZsBOowBAQA69AoAugEAwAEAwAEAwAEAwAEAwAEAlAEAmgEAlAEA7gIA0AEBADqMAQEAOrAKALoBAMABAMABAMABAMABAJQBAJoBAJQBAMgCANABAQA6jAEBADrsCQC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDQAQEAOowBAQA6qgkAugEAwAEAwAEAwAEAlAEA_gEA0AEBADqMAQEAOuoIAJQBAJoBAJQBAJoBAJQBAOABANABAIQCANABAQA60gsAugEAwAEAwAEAlAEAsgEA0AEAegDSAQB6APIBAG4AvAEAygEAvgEAnBMAlgEAZAB2AKIBAJICAHYAogEAkgIAcgCgAQCOAgBuAJ4BAIoCAHIAoAEAjgIAbgDEAQD-BwCSAQDeAQDYAQB6ANYBAG4AxgEAqgUAegDmAQCMAQA

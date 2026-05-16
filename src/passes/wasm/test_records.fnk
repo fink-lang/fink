@@ -846,7 +846,7 @@ test 'rec format template', fn:
         (local.set $v_5 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (local.set $:varargs (array.new_fixed $rt/apply.wat:VarArgs 2 (local.get $v_1) (local.get $v_5)))
-        (return_call $std/str.fnk:fmt (local.get $:ctx_param) (local.get $:varargs) (local.get $v_15))
+        (return_call $std/str.wat:_fmt_inner (local.get $:ctx_param) (local.get $:varargs) (local.get $v_15))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -876,7 +876,7 @@ test 'rec format template', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:EdYHALoBAL4BAJIBAQIFigEAzAEBARC4BwCSAQCuAQDMAQEQBloBAgGKAQEGAYIBAQUE2AUAegDmAQCMAQA
+    ;; sm:EdYHALoBAL4BAJIBAQIFigEAzAEBARDGBwCSAQCuAQDMAQEQBloBAgGKAQEGAYIBAQUE2AUAegDmAQCMAQA
 
 test 'rec dot dynamic key', fn:
   expect wat ƒink:

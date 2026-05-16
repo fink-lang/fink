@@ -145,7 +145,7 @@ test 'str templ two exprs', fn:
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $b_1))
         (local.set $v_6 (call $std/str.fnk:from_data (data.ref $d_3 5)))
         (local.set $:varargs (array.new_fixed $rt/apply.wat:VarArgs 3 (local.get $a_0) (local.get $v_6) (local.get $b_1)))
-        (return_call $std/str.fnk:fmt (local.get $:ctx_param) (local.get $:varargs) (local.get $v_2))
+        (return_call $std/str.wat:_fmt_inner (local.get $:ctx_param) (local.get $:varargs) (local.get $v_2))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -163,7 +163,7 @@ test 'str templ two exprs', fn:
       (data $d_2 "b")
       (data $d_3 " and ")
     )
-    ;; sm:EuQIAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBFgWKAQDuAQEJD5wFAHoA5gEAjAEA
+    ;; sm:EuQIAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBFgWKAQDuAQEJD6oFAHoA5gEAjAEA
 
 
 test 'str tagged template', fn:

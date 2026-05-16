@@ -573,7 +573,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
 
     Sym::StrFromData     => "std/str.fnk:from_data",
     Sym::StrEmpty        => "std/str.fnk:str_empty",
-    Sym::StrFmt          => "std/str.fnk:fmt",
+    Sym::StrFmt          => "std/str.wat:_fmt_inner",
     Sym::StrMatch        => "std/str.fnk:match",
 
     Sym::Yield           => "std/async.fnk:yield",

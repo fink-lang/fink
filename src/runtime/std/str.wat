@@ -35,6 +35,13 @@
   (import "std/set.wat"    "Set"       (type $Set       (sub any)))
   (import "std/list.wat"   "List"      (type $List      (sub any)))
   (import "rt/apply.wat"   "VarArgs"   (type $VarArgs   (sub any)))
+  (import "rt/apply.wat"   "Closure"   (type $Closure   (sub any)))
+  (import "rt/apply.wat"   "Captures"  (type $Captures  (sub any)))
+  (import "rt/apply.wat"   "Fn3"       (type $Fn3       (sub any)))
+  (import "rt/apply.wat"   "args_head"
+    (func $args_head (param (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat"   "args_tail"
+    (func $args_tail (param (ref null any)) (result (ref null any))))
 
   ;; Func imports
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
@@ -1684,18 +1691,24 @@
 
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).
 
-  ;; str_fmt : (ref null any, ref null any) -> void
-  ;; CPS string formatter. First arg is a $VarArgs array of string segments,
-  ;; second arg is the continuation. Formats each segment via _str_fmt_val,
+  ;; str_fmt : (ctx, segments_any, cont) -> void
+  ;; CPS string formatter. First arg is the caller's ctx (forwarded to
+  ;; the cont). Second arg is a $VarArgs array of string segments.
+  ;; Third arg is the continuation. Formats each segment via _str_fmt_val,
   ;; concatenates all results into a single $StrBytesImpl, and passes the
   ;; result to the continuation via _apply.
-  ;; TODO might need a proper wrapper to be fink importable?
+  ;;
+  ;; This is the direct-call CPS shape used by lower.rs's StrFmt sym
+  ;; path for template-string interpolation (`'foo ${x}'`). The
+  ;; user-importable `{fmt} = import 'std/str.fnk'` path goes through
+  ;; the closure accessor below ($fmt + $fmt_apply).
+  ;;
   ;; TODO ctx: $ctx is forwarded to the cont but not consulted by
   ;; dispatch. Per-type fmt impls are monomorphic kernels today, but the
   ;; moment a user-defined `fmt` impl exists for a user type, this is
   ;; the boundary where ctx-scoped fmt dispatch must thread ctx into
   ;; the per-element fmt call.
-  (func $fmt (@pub) (@impl "std/str.fnk:fmt")
+  (func $_fmt_inner (@pub)
       (param $ctx (ref null any))  ;; TODO ctx: not consulted — see comment above
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
@@ -2060,5 +2073,43 @@
       (struct.new $StrBytesImpl (local.get $mid))
       (local.get $succ))
   )
+
+
+  ;; ---- User-importable `fmt` closure -----------------------------------
+  ;;
+  ;; `{fmt} = import 'std/str.fnk'` binds the closure below; `fmt x`
+  ;; dispatches it through apply_3 with the caller's ctx. The closure
+  ;; body peels (cont, val) off the args list, runs fmt_val on the value,
+  ;; and resumes the cont under the caller's ctx via apply_1.
+  ;;
+  ;; This is independent of the template-string `'${x}'` path, which
+  ;; goes through Sym::StrFmt → $_fmt_inner direct-CPS call (see above).
+
+  (elem declare func $fmt_apply)
+
+  (func $fmt_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $val (ref null any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $val  (call $args_head (local.get $args)))
+
+    (return_call $apply_1
+      (local.get $ctx)
+      (call $fmt_val (ref.as_non_null (local.get $val)))
+      (local.get $cont)))
+
+  (global $fmt_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $fmt_apply)
+      (ref.null $Captures)))
+
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt") (result (ref any))
+    (global.get $fmt_closure))
 
 )

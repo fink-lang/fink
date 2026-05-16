@@ -178,17 +178,10 @@ test 'ctx survives sqrt', fn:
 # stay visible for the next ctx-threading pass. Un-skip to reproduce.
 
 
-# Imported-as-user-fn ctx-drop sites: lower.rs treats some bare-@impl
-# fns as a direct CPS call (not through apply_3), so the impl has shape
-# `(args, cont)` without a ctx slot. The body passes (ref.null any) to
-# apply_1, so the cont resumes under null ctx.
-#
-# Fix requires either routing the user-imported call through apply_3 in
-# lower.rs, or adding a ctx param at the impl AND matching the call-site
-# emission. Affects any bare-@impl fn that user code imports directly
-# rather than going through a dedicated BuiltIn sym.
-
-skip 'ctx survives repr', fn:
+# `repr x` and `fmt x` as user-imported fns. The bare-@impl wrapper in
+# the .wat file returns a no-capture $Closure; the user-import binding
+# receives the closure value; apply_3 dispatches with caller's ctx.
+test 'ctx survives repr', fn:
   expect run ƒink:
     {repr} = import 'std/repr.fnk'
     {set_ctx, get_ctx} = import 'std/effects.fnk'
@@ -202,7 +195,7 @@ skip 'ctx survives repr', fn:
 
 # `fmt x` as a direct user-imported call (not template-string interp,
 # which goes through the StrFmt builtin sym path with ctx threaded).
-skip 'ctx survives fmt as imported fn', fn:
+test 'ctx survives fmt as imported fn', fn:
   expect run ƒink:
     {fmt} = import 'std/str.fnk'
     {set_ctx, get_ctx} = import 'std/effects.fnk'
