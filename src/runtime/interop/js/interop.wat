@@ -24,8 +24,6 @@
 ;;   Other = 0
 
 (module
-
-  (import "rt/apply.wat"    "Fn2"      (type $Fn2      (sub any)))
   (import "rt/apply.wat"    "Fn3"      (type $Fn3      (sub any)))
   (import "rt/apply.wat"    "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"    "Captures" (type $Captures (sub any)))
@@ -116,7 +114,6 @@
   ;; gives JS a TextDecoder-friendly window.
   (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
   (import "env" "host_read"         (func $host_read         (param (ref any) (ref any) (ref any))))
-  (import "env" "host_panic"        (func $host_panic))
   ;; host_invoke_cont: dispatch a JS-side cont. The first arg is the
   ;; opaque externref the host originally handed to wrap_host_cont — JS
   ;; uses it directly (call it, look it up, whatever) to find the

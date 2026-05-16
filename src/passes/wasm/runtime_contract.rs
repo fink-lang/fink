@@ -79,7 +79,6 @@ pub enum Sym {
   U64,
   F64,
   Decimal,
-  Fn2,
   Fn3,
   Closure,
   Captures,
@@ -309,7 +308,6 @@ pub struct Runtime {
   u64_: Option<TypeSym>,
   f64_: Option<TypeSym>,
   decimal_: Option<TypeSym>,
-  fn2: Option<TypeSym>,
   fn3: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
@@ -397,7 +395,6 @@ impl Runtime {
   pub fn u64_(&self)         -> TypeSym { self.u64_.expect("rt: U64 not declared") }
   pub fn f64_(&self)         -> TypeSym { self.f64_.expect("rt: F64 not declared") }
   pub fn decimal_(&self)     -> TypeSym { self.decimal_.expect("rt: Decimal not declared") }
-  pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
@@ -510,7 +507,6 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
 
     Sym::Panic           => "std/interop.fnk:panic",
 
-    Sym::Fn2             => "rt/apply.wat:Fn2",
     Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
     Sym::Captures        => "rt/apply.wat:Captures",
@@ -628,10 +624,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::Decimal) {
     rt.decimal_ = Some(TypeSym::Runtime(Sym::Decimal));
   }
-  if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
-    rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
-  }
-  if needed.contains(&Sym::Fn3) || needed.contains(&Sym::Apply3) {
+  if needed.contains(&Sym::Fn3) || needed.contains(&Sym::Apply3) || always_need_fn3(usage) {
     rt.fn3 = Some(TypeSym::Runtime(Sym::Fn3));
   }
   if needed.contains(&Sym::Captures) {
@@ -838,10 +831,10 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   *slot = Some(f);
 }
 
-/// Fn2 is required by every fink_module definition. Without a
+/// Fn3 is required by every fink_module definition. Without a
 /// dedicated marker we always declare it when the scan added any
 /// bring-up helpers.
-fn always_need_fn2(usage: &RuntimeUsage) -> bool {
+fn always_need_fn3(usage: &RuntimeUsage) -> bool {
   usage.has(Sym::ArgsHead) || usage.has(Sym::Apply)
 }
 
@@ -863,13 +856,13 @@ fn always_need_fn2(usage: &RuntimeUsage) -> bool {
 pub fn scan(cps: &CpsResult) -> RuntimeUsage {
   let mut usage = RuntimeUsage::default();
 
-  // Every well-formed module is a `Fn2`-shaped `fink_module`, so
+  // Every well-formed module is a `Fn3`-shaped `fink_module`, so
   // that type is always needed. `args_head` is always needed
   // because bring-up always pops `done` out of `_args`.
   // `args_tail` is also always needed because fink_module's user
   // params are now `[ƒctx, ƒret]` — two args means at least one peel
   // (head + tail) to unpack them.
-  usage.mark(Sym::Fn2);
+  usage.mark(Sym::Fn3);
   usage.mark(Sym::ArgsHead);
   usage.mark(Sym::ArgsTail);
 

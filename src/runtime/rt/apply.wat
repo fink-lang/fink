@@ -1,7 +1,9 @@
-;; Closure dispatch — unified $Fn2 calling convention.
+;; Closure dispatch — unified $Fn3 calling convention.
 ;;
-;; All functions are $Fn2(captures, args). Conts are in captures or in
-;; the args list (conts-first ordering ensures this after lifting).
+;; All functions are $Fn3(captures, ctx, args). Conts are in captures
+;; or in the args list (conts-first ordering ensures this after lifting).
+;; ctx is the universe context threaded as a native wasm param so
+;; callees don't need to peel it off the args list.
 
 (module
 
@@ -38,14 +40,9 @@
     (field $captures (ref null $Captures))
   ))
 
-  ;; Function signature for the unified calling convention.
-  ;; $Fn2(captures, args) — all functions (conts are in captures or args).
-  (type $Fn2 (@pub) (func (param (ref null any) (ref null any))))
-
-  ;; Ctx-aware calling convention. $Fn3(captures, ctx, args) — caller
+  ;; Unified calling convention. $Fn3(captures, ctx, args) — caller
   ;; passes the universe context as a native wasm value, sidestepping
-  ;; the args-list head/tail dance. Compiler emits Fn3 closures for
-  ;; user-defined fns + continuations; the runtime side migrates fn-by-fn.
+  ;; the args-list head/tail dance. Every closure func is Fn3-typed.
   (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
 
   ;; $Ctx — universe context threaded through every Fn3 call. Frames

@@ -18,11 +18,11 @@
 ;; separate bool. The empty rec is created up front by `init` so `pub`
 ;; only ever mutates an existing rec.
 ;;
-;; ## Calling `import_module` without a closure wrapper
+;; ## Calling `import_module` via apply_3
 ;;
-;; Every `<fqn>:import_module` is a Fn2-shaped function with no
-;; captures. `import` calls it via `return_call_ref $Fn2 (null, args,
-;; mod_ref)` directly — no $Closure box, no _apply dispatch.
+;; Every `<fqn>:import_module` is a Fn3-shaped function. `import`
+;; routes it through `apply_3` with `empty_ctx` as the universe seed
+;; -- modules are the universe entry, no caller ctx exists yet.
 ;;
 ;; ## wrap_cont — the bridge between import_module's done and import's cont
 ;;
@@ -40,7 +40,6 @@
   (import "std/list.wat"  "List"     (type $List     (sub any)))
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
-  (import "rt/apply.wat"  "Fn2"      (type $Fn2      (sub any)))
   (import "rt/apply.wat"  "Fn3"      (type $Fn3      (sub any)))
 
   ;; Func imports
@@ -373,7 +372,7 @@
 
   ;; -- _import_wrap_step ---------------------------------------------
   ;;
-  ;; The Fn2-shaped function that backs wrap_cont. Captures hold
+  ;; The Fn3-shaped function that backs wrap_cont. Captures hold
   ;; (url, user_cont). When fired by the producer's done, it ignores
   ;; whatever payload arrives in $args, reads registry[url] (now
   ;; guaranteed populated), and tail-applies user_cont with the rec.

@@ -1200,13 +1200,13 @@ fn lower_import_user_fragment(
   let url_local = emit_str_const(lcx, ctx, canonical_url.as_bytes(), ":imp_url");
 
   // 2. Declare a func import of the producer's `<canonical_url>:fink_module`,
-  //    typed as `$Fn2`. Resolved at emit time by name lookup against
+  //    typed as `$Fn3`. Resolved at emit time by name lookup against
   //    the merged runtime's export table; link::link rewrites it to
   //    the producer's local FuncSym during multi-fragment merge by
   //    matching the canonical URL against producer fragments' display
   //    names.
   let mod_fn_sym = crate::passes::wasm::ir::import_func(
-    lcx.frag, lcx.rt.fn2(), &canonical_url, "fink_module");
+    lcx.frag, lcx.rt.fn3(), &canonical_url, "fink_module");
 
   // 3. Build a no-capture `$Closure` over that funcref. funcrefs are
   //    not anyref-compatible (disjoint typing hierarchies in WasmGC),

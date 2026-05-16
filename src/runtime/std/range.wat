@@ -19,10 +19,8 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"  "Num"  (type $Num  (sub any)))
   (import "std/int.wat"  "Int"  (type $Int  (sub any) (struct)))
   (import "std/int.wat"  "I64"  (type $I64  (sub $Int (struct (field $ival i64)))))
-  (import "std/list.wat" "List" (type $List (sub any)))
   (import "std/str.wat"  "Str"  (type $Str  (sub any) (struct)))
   (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 

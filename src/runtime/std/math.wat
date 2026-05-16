@@ -21,7 +21,6 @@
   ;; Type imports
   (import "rt/apply.wat" "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
-  (import "rt/apply.wat" "Fn2"      (type $Fn2      (sub any)))
   (import "rt/apply.wat" "Fn3"      (type $Fn3      (sub any)))
   (import "std/num.wat"  "Num"      (type $Num      (sub any) (struct)))
   (import "std/int.wat"  "Int"      (type $Int      (sub $Num (struct))))

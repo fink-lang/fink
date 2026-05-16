@@ -20,7 +20,6 @@
 
 (module
 
-  (import "rt/apply.wat"     "Fn2"     (type $Fn2 (sub any)))
   (import "rt/apply.wat"     "Fn3"     (type $Fn3 (sub any)))
   (import "rt/apply.wat"    "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"    "Captures" (type $Captures (sub any)))
@@ -118,23 +117,23 @@
   ;; -- Host callable (inbound contract) --------------------------------------
   ;;
   ;; The host cannot hand WASM a raw funcref and have it pass as a
-  ;; fink $Fn2: a host-built funcref carries a structural function
-  ;; type distinct from the runtime's nominal $Fn2, so
-  ;; `ref.cast (ref $Fn2)` inside `_apply` would always trap.
+  ;; fink $Fn3: a host-built funcref carries a structural function
+  ;; type distinct from the runtime's nominal $Fn3, so
+  ;; `ref.cast (ref $Fn3)` inside `apply_3` would always trap.
   ;;
   ;; Instead, the host registers its callback under an i32 id on its
-  ;; side, calls `wrap_host_cont(id)` to get an opaque (ref null any),
+  ;; side, calls `wrap_host_cont_3(id)` to get an opaque (ref null any),
   ;; and hands that anyref to WASM wherever a continuation is
   ;; expected (done, await cont, scheduler trampolines, etc.).
   ;;
   ;; When fink-side code eventually fires the continuation via
-  ;; `_apply`, `_apply` casts it to $Closure, pulls the funcref (which
-  ;; is `$host_cont_adapter` by construction — correct nominal type)
-  ;; and tail-calls it. The adapter reads `id` out of the captures
+  ;; `apply_3`, it casts the value to $Closure, pulls the funcref
+  ;; (which is `$host_cont_adapter_3` by construction — correct nominal
+  ;; type) and tail-calls it. The adapter reads `id` out of the captures
   ;; array and forwards to `env.host_invoke_cont(id, args)`.
   ;;
   ;; Net: host sees only an opaque anyref; never touches $Closure /
-  ;; $Fn2 / funcref directly. Internals are interop's business.
+  ;; $Fn3 / funcref directly. Internals are interop's business.
 
   ;; $Fn3 adapter body — fires when WASM invokes a host-wrapped cont
   ;; via the ctx-aware `apply_3` dispatcher. The host cont doesn't

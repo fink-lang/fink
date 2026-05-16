@@ -26,15 +26,10 @@
 (module
 
   ;; Type imports
-  (import "rt/apply.wat"     "Fn2"         (type $Fn2         (sub any)))
-  (import "rt/apply.wat"     "Closure"     (type $Closure     (sub any)))
-  (import "rt/apply.wat"     "Captures"    (type $Captures    (sub any)))
   (import "std/num.wat"      "Num"         (type $Num         (sub any)))
   (import "std/int.wat"      "Int"         (type $Int         (sub any)))
   (import "std/int.wat"      "I64"         (type $I64         (sub any)))
-  (import "std/int.wat"      "U64"         (type $U64         (sub any)))
   (import "std/float.wat"    "F64"         (type $F64         (sub any)))
-  (import "std/decimal.wat"  "Decimal"     (type $Decimal     (sub any)))
   (import "std/str.wat"      "Str"         (type $Str         (sub any)))
   (import "std/list.wat"     "List"        (type $List        (sub any)))
   ;; Pull std/math.wat into the link DAG. rt/protocols doesn't call any
