@@ -126,12 +126,15 @@
   ;; ---- Fink-importable wrapper (CPS) ----------------------------------
 
   ;; std/repr.fnk:repr — user-facing `repr x` call site.
-  ;; Standard CPS shape: peel value off args[0], call $repr_val, apply_1
-  ;; result to cont.
+  ;; TODO ctx: this is called via a non-apply_3 direct path from lower.rs
+  ;; (treating `repr` like a primitive), so it doesn't receive a ctx
+  ;; param today. The (ref.null any) below means the cont resumes under
+  ;; null ctx. Fix requires lower.rs to route through apply_3 for repr,
+  ;; OR adding a ctx param here and updating lower.rs to pass it.
   (func $repr (@pub) (@impl "std/repr.fnk:repr")
     (param $args (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (ref.null any)
+      (ref.null any)  ;; TODO ctx: see comment above
       (call $repr_val (ref.as_non_null (call $head_any (local.get $args))))
       (local.get $cont))
   )
