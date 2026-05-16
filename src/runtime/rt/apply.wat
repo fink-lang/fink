@@ -82,35 +82,8 @@
 
 
   ;; Universal closure dispatcher. Tail-called from every CPS
-  ;; continuation site.
-  ;;
-  ;; Fn3-aware shim: the compiler now emits every user closure as
-  ;; Fn3 (caps, ctx, args). Existing Fn2-shape callers (runtime
-  ;; builtins like op_plus that invoke their result-cont via $apply)
-  ;; continue to work — we synthesise a placeholder ctx (ref.i31 42)
-  ;; and tail-call the Fn3 underneath. Once the substrate lands and
-  ;; runtime ops thread real ctx, those callers migrate to $apply_3
-  ;; directly and this shim can shrink back to a pure Fn2 dispatch
-  ;; (for runtime-internal Fn2 closures, if any remain).
-  (func $apply (@pub)
-    (param $args (ref null any))
-    (param $callee (ref null any))
-
-    (local $clos (ref $Closure))
-    (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
-
-    (return_call_ref $Fn3
-      (struct.get $Closure $captures (local.get $clos))
-      (ref.i31 (i32.const 42))
-      (local.get $args)
-      (ref.cast (ref $Fn3) (struct.get $Closure $func (local.get $clos))))
-  )
-
-  ;; Ctx-aware closure dispatcher. Mirrors $apply but threads the
-  ;; universe context as a native wasm arg so Fn3-typed callees don't
-  ;; need to peel ctx off the args list. Compiler-emitted user fns
-  ;; route through here; existing Fn2 std/runtime helpers stay on
-  ;; $apply until they are migrated to Fn3.
+  ;; continuation site. Ctx is threaded as a native wasm param so
+  ;; Fn3-typed callees don't need to peel it off the args list.
   (func $apply_3 (@pub)
     (param $args (ref null any))
     (param $ctx (ref null any))

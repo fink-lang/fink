@@ -75,9 +75,6 @@
   (import "rt/apply.wat" "args_prepend"
     (func $args_prepend_inner
       (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
-  (import "rt/apply.wat" "apply"
-    (func $apply_inner
-      (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat" "apply_3"
     (func $apply_3_inner
       (param $args (ref null any))
@@ -375,10 +372,6 @@
   (func $args_prepend (@pub) (export "env:args_prepend")
     (param $head (ref null any)) (param $tail (ref any)) (result (ref any))
     (return_call $args_prepend_inner (local.get $head) (local.get $tail)))
-
-  (func $apply (@pub) (export "env:apply")
-    (param $args (ref null any)) (param $callee (ref null any))
-    (return_call $apply_inner (local.get $args) (local.get $callee)))
 
   (func $apply_3 (@pub) (export "env:apply_3")
     (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))

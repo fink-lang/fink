@@ -57,8 +57,6 @@
     (func $args_empty (result (ref any))))
   (import "rt/apply.wat"    "args_prepend"
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
-  (import "rt/apply.wat"    "apply"
-    (func $apply (param $args (ref null any)) (param $callee (ref null any))))
   (import "rt/apply.wat"    "apply_3"
     (func $apply_3
       (param $args (ref null any))
@@ -448,10 +446,6 @@
   ;;
   ;; TODO: move the apply_main bootstrap inside the wasm module behind
   ;; one entry point, then drop these.
-
-  (func (export "env:apply")
-    (param $args (ref null any)) (param $callee (ref null any))
-    (return_call $apply (local.get $args) (local.get $callee)))
 
   (func (export "env:apply_3")
     (param $args (ref null any)) (param $ctx (ref null any)) (param $callee (ref null any))
