@@ -104,12 +104,12 @@
   ;;   2. push thunk(cont, channel) to task queue
   ;;   3. resume
 
-  ;; TODO ctx: $ctx received but dropped. The thunk built below resumes
-  ;; the caller via apply_3 with whatever ctx the scheduler hands in
-  ;; (today: empty_ctx). To preserve the caller's ctx across the
-  ;; scheduler boundary, $ctx must be captured in the thunk's closure.
+  ;; channel(ctx, tag, cont):
+  ;;   1. allocate $Channel with empty lists and user-supplied tag
+  ;;   2. push thunk(cont, channel) under caller's ctx to task queue
+  ;;   3. resume
   (func $channel (@pub) (@impl "std/channel.fnk:channel")
-    (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
+    (param $ctx (ref null any))
     (param $tag (ref null any))
     (param $cont (ref null any))
 
@@ -119,9 +119,10 @@
       (call $list_empty)
       (ref.as_non_null (local.get $tag))))
 
+    ;; Resume the caller under its own ctx via the captured thunk.
     (call $queue_push
       (call $make_thunk
-      (local.get $ctx)
+        (local.get $ctx)
         (ref.as_non_null (local.get $cont))
         (local.get $ch)))
     (return_call $resume)

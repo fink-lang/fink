@@ -141,16 +141,13 @@
   ;;   1. wrap cont as unit thunk, push to back of queue
   ;;   2. run next task
 
-  ;; TODO ctx: $ctx received but dropped. The unit thunk built below
-  ;; resumes the yielder via apply_3 under the scheduler's ctx, not the
-  ;; yielder's. To restore ctx at resume, $ctx must be captured in the
-  ;; thunk's closure (not the unit-thunk shape — needs a ctx-aware thunk).
   (func $yield (@pub) (@impl "std/async.fnk:yield")
-      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
+      (param $ctx (ref null any))
     (param $value (ref null any))
     (param $cont (ref null any))
 
-    ;; Push current continuation as a unit thunk to back of queue.
+    ;; Push current continuation as a unit thunk to back of queue,
+    ;; capturing the yielder's ctx so it resumes under that ctx.
     (call $queue_push (call $make_unit_thunk
       (local.get $ctx) (ref.as_non_null (local.get $cont))))
 
@@ -170,10 +167,9 @@
 
   ;; The settle continuation — called when a spawned task produces a result.
   ;; Captures: [future]. Called via _apply with args list [result].
-  ;; TODO ctx: $_ctx is the scheduler's ctx. The awaiter conts later
-  ;; resumed via this settle path also need their original ctx — must
-  ;; capture each awaiter's ctx in future.$waiters and restore it here.
-  (func $_settle_fn (type $Fn3) (param $caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
+  ;; $_sched_ctx is intentionally unused: settle() resumes each waiter
+  ;; under the waiter's own captured ctx (stored in the $Waiter struct).
+  (func $_settle_fn (type $Fn3) (param $caps (ref null any)) (param $_sched_ctx (ref null any)) (param $args (ref null any))
     (local $future (ref $Future))
     (local $result (ref any))
     (local.set $future (ref.cast (ref $Future)
@@ -206,14 +202,14 @@
       (local.get $task_fn))
   )
 
-  ;; TODO ctx: $ctx received but dropped at two boundaries:
-  ;;   (a) the spawned task closure ($task) currently runs under whatever
-  ;;       ctx the scheduler hands in, not the spawner's ctx;
-  ;;   (b) the cont thunk pushed to the queue (cont, future) also resumes
-  ;;       under the scheduler's ctx, not the spawner's.
-  ;; Both spots need ctx captured in their closures.
+  ;; TODO ctx: the spawn cont resumption now carries ctx (via the
+  ;; ctx-aware make_thunk below), but the spawned task body itself
+  ;; still runs under whatever ctx the scheduler hands in — see
+  ;; $_spawn_task_fn. To run the task under the spawner's ctx, ctx
+  ;; needs to be added to $_spawn_task_fn's captures and threaded
+  ;; through the _apply call inside it.
   (func $spawn (@pub) (@impl "std/async.fnk:spawn")
-      (param $ctx (ref null any))  ;; TODO ctx: unused — see comment above
+      (param $ctx (ref null any))
     (param $task_fn (ref null any))
     (param $cont (ref null any))
 
