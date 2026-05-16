@@ -39,13 +39,9 @@
   ;; Func imports
   (import "rt/apply.wat" "apply"
     (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
-  (import "rt/apply.wat" "apply_1"
-    (func $apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_0"
-    (func $apply_0 (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_2_vals"
-    (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
-
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
   (import "std/set.wat" "fmt"
     (func $set_fmt (param (ref $Set)) (result (ref $Str))))
 
@@ -1759,6 +1755,7 @@
 
     ;; Wrap and pass to continuation.
     (return_call $apply_1
+      (local.get $ctx)
       (struct.new $StrBytesImpl (local.get $dst))
       (local.get $cont))
   )
@@ -1859,10 +1856,12 @@
     (if (ref.is_null (local.get $result))
       (then
         (return_call $apply_1
+      (ref.null any)
           (local.get $str)
           (local.get $fail))))
 
     (return_call $apply_1
+      (ref.null any)
       (ref.as_non_null (local.get $result))
       (local.get $succ))
   )
@@ -1914,6 +1913,7 @@
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1
+      (ref.null any)
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
@@ -1933,6 +1933,7 @@
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1
+      (ref.null any)
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
@@ -1974,7 +1975,8 @@
 
     ;; Cast subject to $Str — fail if not a string
     (if (i32.eqz (ref.test (ref $Str) (local.get $subj)))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $apply_0
+      (local.get $ctx) (local.get $fail))))
     (local.set $s_str (ref.cast (ref $Str) (local.get $subj)))
 
     ;; Cast prefix/suffix
@@ -1989,7 +1991,8 @@
     ;; Non-overlapping check: subject must be at least prefix + suffix long
     (if (i32.lt_u (local.get $s_len)
           (i32.add (local.get $p_len) (local.get $x_len)))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $apply_0
+      (local.get $ctx) (local.get $fail))))
 
     ;; Get byte arrays
     (local.set $s_bytes (call $bytes (local.get $s_str)))
@@ -2008,7 +2011,8 @@
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br_if $pfx_loop (i32.lt_u (local.get $i) (local.get $p_len))))
           (br 1)) ;; skip fail — prefix matched
-        (return_call $apply_0 (local.get $fail))))
+        (return_call $apply_0
+      (local.get $ctx) (local.get $fail))))
 
     ;; Check suffix match
     (local.set $mid_start (local.get $p_len))
@@ -2030,15 +2034,18 @@
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br_if $sfx_loop (i32.lt_u (local.get $i) (local.get $x_len))))
           (br 1)) ;; skip fail — suffix matched
-        (return_call $apply_0 (local.get $fail))))
+        (return_call $apply_0
+      (local.get $ctx) (local.get $fail))))
 
     ;; Both matched — slice the middle
     (if (i32.eqz (local.get $mid_len))
-      (then (return_call $apply_1 (call $str_empty) (local.get $succ))))
+      (then (return_call $apply_1
+      (local.get $ctx) (call $str_empty) (local.get $succ))))
 
     ;; Full string — no prefix or suffix
     (if (i32.eq (local.get $mid_len) (local.get $s_len))
-      (then (return_call $apply_1 (local.get $s_str) (local.get $succ))))
+      (then (return_call $apply_1
+      (local.get $ctx) (local.get $s_str) (local.get $succ))))
 
     ;; Copy middle bytes
     (local.set $mid (array.new $ByteArray (i32.const 0) (local.get $mid_len)))
@@ -2053,6 +2060,7 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $copy)))
     (return_call $apply_1
+      (local.get $ctx)
       (struct.new $StrBytesImpl (local.get $mid))
       (local.get $succ))
   )

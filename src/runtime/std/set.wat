@@ -67,12 +67,9 @@
     (func $hash_i31 (param $key (ref eq)) (result i32)))
   (import "rt/protocols.wat" "deep_eq"
     (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
-  (import "rt/apply.wat"     "apply_0"
-    (func $list_apply_0 (param $cont (ref null any))))
-  (import "rt/apply.wat"     "apply_1"
-    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat"     "apply_2_vals"
-    (func $list_apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $list_apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat"     "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
   (import "std/list.wat"     "tail_any"
@@ -1505,12 +1502,14 @@
       (struct.get $SetImpl $node (ref.cast (ref $SetImpl) (local.get $s))))
 
     (if (i32.eqz (call $_set_size_node (local.get $node)))
-      (then (return_call $list_apply_0 (local.get $fail))))
+      (then (return_call $list_apply_0
+      (ref.null any) (local.get $fail))))
 
     (local.set $key (call $_pick_first_key (local.get $node)))
     (local.set $rest_node (call $remove (local.get $node) (local.get $key)))
 
     (return_call $list_apply_2_vals
+      (ref.null any)
       (local.get $key)
       (struct.new $SetImpl (local.get $rest_node))
       (local.get $succ))
@@ -1882,6 +1881,7 @@
 
     ;; Tail-call cont with [SetImpl(node)].
     (return_call $list_apply_1
+      (ref.null any)
       (struct.new $SetImpl (local.get $node))
       (local.get $cont))
   )

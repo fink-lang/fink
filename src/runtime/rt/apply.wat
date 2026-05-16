@@ -181,21 +181,27 @@
   ;; -- Apply helpers ---------------------------------------------------
   ;;
   ;; apply_0/1/2_vals wrap N values into an args list and tail-call
-  ;; $apply. Used by every CPS continuation site that returns N values
-  ;; to its continuation.
+  ;; $apply_3. Every CPS continuation site that returns N values to its
+  ;; cont routes through here; ctx is passed explicitly so the cont
+  ;; runs under the producer's universe context.
 
-  (func $apply_0 (@pub) (param $cont (ref null any))
-    (return_call $apply (call $args_empty) (local.get $cont)))
-
-  (func $apply_1 (@pub) (param $result (ref null any)) (param $cont (ref null any))
-    (return_call $apply
-      (call $args_prepend (ref.as_non_null (local.get $result)) (call $args_empty))
+  (func $apply_0 (@pub) (param $ctx (ref null any)) (param $cont (ref null any))
+    (return_call $apply_3
+      (call $args_empty)
+      (local.get $ctx)
       (local.get $cont)))
 
-  (func $apply_2_vals (@pub) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply
+  (func $apply_1 (@pub) (param $ctx (ref null any)) (param $result (ref null any)) (param $cont (ref null any))
+    (return_call $apply_3
+      (call $args_prepend (ref.as_non_null (local.get $result)) (call $args_empty))
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (func $apply_2_vals (@pub) (param $ctx (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $apply_3
       (call $args_prepend (ref.as_non_null (local.get $a))
         (call $args_prepend (ref.as_non_null (local.get $b)) (call $args_empty)))
+      (local.get $ctx)
       (local.get $cont)))
 
 

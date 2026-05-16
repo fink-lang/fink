@@ -60,8 +60,7 @@
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
   (import "std/list.wat"  "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "rt/apply.wat"  "apply_1"
-    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat"  "empty"
     (func $list_empty (result (ref $List))))
   (import "std/list.wat"  "prepend"
@@ -191,6 +190,7 @@
         (if (i32.eqz (ref.is_null (local.get $existing)))
           (then
             (return_call $list_apply_1
+      (ref.null any)
               (local.get $existing)
               (local.get $cont))))))
 
@@ -390,6 +390,7 @@
         (ref.cast (ref eq) (local.get $url))))
 
     (return_call $list_apply_1
+      (ref.null any)
       (local.get $rec)
       (local.get $user_cont)))
 

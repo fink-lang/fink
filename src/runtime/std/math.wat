@@ -28,8 +28,7 @@
   (import "std/float.wat" "F64"     (type $F64      (sub final $Num (struct (field $val f64)))))
 
   ;; Func imports — apply / list plumbing
-  (import "rt/apply.wat" "apply_1"
-    (func $apply_1 (param $result (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $result (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat" "head_any"
     (func $head_any (param (ref null any)) (result (ref null any))))
   (import "std/list.wat" "tail_any"
@@ -268,70 +267,80 @@
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $abs_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $abs_num (local.get $a)) (local.get $cont)))
 
   (func $_neg_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $neg_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $neg_num (local.get $a)) (local.get $cont)))
 
   (func $_ceil_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $ceil_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $ceil_num (local.get $a)) (local.get $cont)))
 
   (func $_floor_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $floor_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $floor_num (local.get $a)) (local.get $cont)))
 
   (func $_trunc_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $trunc_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $trunc_num (local.get $a)) (local.get $cont)))
 
   (func $_round_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $round_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $round_num (local.get $a)) (local.get $cont)))
 
   (func $_round_even_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $round_even_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $round_even_num (local.get $a)) (local.get $cont)))
 
   (func $_sqrt_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $sqrt_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $sqrt_num (local.get $a)) (local.get $cont)))
 
   (func $_sign_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $sign_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $sign_num (local.get $a)) (local.get $cont)))
 
   (func $_fract_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $fract_num (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $fract_num (local.get $a)) (local.get $cont)))
 
   ;; --- varargs adapters (fold) — min / max ---
 
@@ -351,7 +360,8 @@
           (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
         (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
         (br $fold)))
-    (return_call $apply_1 (local.get $acc) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (local.get $acc) (local.get $cont)))
 
   (func $_max_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
@@ -369,7 +379,8 @@
           (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
         (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
         (br $fold)))
-    (return_call $apply_1 (local.get $acc) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (local.get $acc) (local.get $cont)))
 
   (func $_copysign_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
@@ -381,6 +392,7 @@
     (local.set $rest (call $tail_any (local.get $rest)))
     (local.set $b (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (return_call $apply_1
+      (ref.null any)
       (call $copysign_num (local.get $a) (local.get $b))
       (local.get $cont)))
 
@@ -396,6 +408,7 @@
     (local.set $rest (call $tail_any (local.get $rest)))
     (local.set $hi (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (return_call $apply_1
+      (ref.null any)
       (call $clamp_num (local.get $lo) (local.get $x) (local.get $hi))
       (local.get $cont)))
 
@@ -502,140 +515,160 @@
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_exp (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_exp (local.get $a)) (local.get $cont)))
 
   (func $_exp2_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_exp2 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_exp2 (local.get $a)) (local.get $cont)))
 
   (func $_expm1_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_expm1 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_expm1 (local.get $a)) (local.get $cont)))
 
   (func $_log_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_log (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_log (local.get $a)) (local.get $cont)))
 
   (func $_log2_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_log2 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_log2 (local.get $a)) (local.get $cont)))
 
   (func $_log10_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_log10 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_log10 (local.get $a)) (local.get $cont)))
 
   (func $_log1p_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_log1p (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_log1p (local.get $a)) (local.get $cont)))
 
   (func $_cbrt_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_cbrt (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_cbrt (local.get $a)) (local.get $cont)))
 
   (func $_sin_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_sin (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_sin (local.get $a)) (local.get $cont)))
 
   (func $_cos_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_cos (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_cos (local.get $a)) (local.get $cont)))
 
   (func $_tan_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_tan (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_tan (local.get $a)) (local.get $cont)))
 
   (func $_asin_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_asin (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_asin (local.get $a)) (local.get $cont)))
 
   (func $_acos_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_acos (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_acos (local.get $a)) (local.get $cont)))
 
   (func $_atan_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_atan (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_atan (local.get $a)) (local.get $cont)))
 
   (func $_sinh_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_sinh (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_sinh (local.get $a)) (local.get $cont)))
 
   (func $_cosh_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_cosh (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_cosh (local.get $a)) (local.get $cont)))
 
   (func $_tanh_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_tanh (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_tanh (local.get $a)) (local.get $cont)))
 
   (func $_asinh_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_asinh (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_asinh (local.get $a)) (local.get $cont)))
 
   (func $_acosh_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_acosh (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_acosh (local.get $a)) (local.get $cont)))
 
   (func $_atanh_apply (type $Fn3)
     (param $_caps (ref null any)) (param $_ctx (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $a (ref $F64))
     (call $_unary_peel_f64 (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $libm_atanh (local.get $a)) (local.get $cont)))
+    (return_call $apply_1
+      (ref.null any) (call $libm_atanh (local.get $a)) (local.get $cont)))
 
   ;; --- 2-arg adapters: pow, hypot, atan2 ---
 
@@ -659,6 +692,7 @@
     (call $_binary_peel_f64 (local.get $args))
     (local.set $b) (local.set $a) (local.set $cont)
     (return_call $apply_1
+      (ref.null any)
       (call $libm_pow (local.get $a) (local.get $b))
       (local.get $cont)))
 
@@ -668,6 +702,7 @@
     (call $_binary_peel_f64 (local.get $args))
     (local.set $b) (local.set $a) (local.set $cont)
     (return_call $apply_1
+      (ref.null any)
       (call $libm_hypot (local.get $a) (local.get $b))
       (local.get $cont)))
 
@@ -677,6 +712,7 @@
     (call $_binary_peel_f64 (local.get $args))
     (local.set $b) (local.set $a) (local.set $cont)
     (return_call $apply_1
+      (ref.null any)
       (call $libm_atan2 (local.get $a) (local.get $b))
       (local.get $cont)))
 

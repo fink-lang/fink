@@ -22,12 +22,9 @@
   ;; Func imports
   (import "rt/apply.wat" "apply"
     (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
-  (import "rt/apply.wat" "apply_0"
-    (func $apply_0 (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_1"
-    (func $apply_1 (param $result (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_2_vals"
-    (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $result (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
   (import "std/str.wat" "from_bytes"
     (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
   (import "std/str.wat" "_str_len"
@@ -403,6 +400,7 @@
             (local.set $end_i (i64.add (local.get $end_i) (i64.const 1))))))
 
       (return_call $apply_1
+      (ref.null any)
         (call $_list_slice
           (local.get $l)
           (local.get $start_i)
@@ -431,6 +429,7 @@
       (if (ref.is_null (local.get $elem))
         (then (unreachable)))
       (return_call $apply_1
+      (ref.null any)
         (ref.as_non_null (local.get $elem))
         (local.get $cont)))
 
@@ -477,6 +476,7 @@
   (func $seq_prepend (@pub) (@impl "std/seq.fnk:prepend" $List)
     (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
+      (ref.null any)
       (call $prepend
         (ref.cast (ref any) (local.get $val))
         (ref.cast (ref $List) (local.get $list)))
@@ -486,6 +486,7 @@
   (func $seq_concat (@impl "std/seq.fnk:concat" $List)
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
+      (ref.null any)
       (call $concat
         (ref.cast (ref $List) (local.get $a))
         (ref.cast (ref $List) (local.get $b)))
@@ -500,11 +501,13 @@
     (local $cons (ref $Cons))
 
     (if (ref.test (ref $Nil) (local.get $cursor))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $apply_0
+      (ref.null any) (local.get $fail))))
 
     (local.set $cons (ref.cast (ref $Cons) (local.get $cursor)))
 
     (return_call $apply_2_vals
+      (ref.null any)
       (struct.get $Cons $head (local.get $cons))
       (struct.get $Cons $tail (local.get $cons))
       (local.get $succ)))
@@ -553,13 +556,15 @@
     (local $last (ref any))
 
     (if (ref.test (ref $Nil) (local.get $cursor))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $apply_0
+      (ref.null any) (local.get $fail))))
 
     (call $pop_back (ref.cast (ref $List) (local.get $cursor)))
     (local.set $last)
     (local.set $init)
 
     (return_call $apply_2_vals
+      (ref.null any)
       (local.get $init)
       (local.get $last)
       (local.get $succ)))
@@ -584,6 +589,7 @@
 
     ;; Tail-call cont with [list].
     (return_call $apply_1
+      (ref.null any)
       (local.get $rest)
       (local.get $cont)))
 

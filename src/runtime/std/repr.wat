@@ -45,8 +45,7 @@
 
   ;; ---- CPS apply (for the fink-importable repr) ------------------------
 
-  (import "rt/apply.wat" "apply_1"
-    (func $apply_1 (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat" "head_any"
     (func $head_any (param $list (ref null any)) (result (ref null any))))
 
@@ -132,6 +131,7 @@
   (func $repr (@pub) (@impl "std/repr.fnk:repr")
     (param $args (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
+      (ref.null any)
       (call $repr_val (ref.as_non_null (call $head_any (local.get $args))))
       (local.get $cont))
   )
