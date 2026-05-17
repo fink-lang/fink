@@ -68,7 +68,7 @@ test 'ctx survives channel receive', fn:
       'msg' >> ch
 
     set_ctx 'receiver-ctx'
-    _ = receive ch
+    receive ch
     get_ctx _
   | equals ":
     receiver-ctx
@@ -82,7 +82,7 @@ test 'ctx survives await of spawned task', fn:
       42
 
     set_ctx 'awaiter-ctx'
-    _ = await fut
+    await fut
     get_ctx _
   | equals ":
     awaiter-ctx
@@ -136,7 +136,7 @@ test 'ctx survives match', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'match-ctx'
-    _ = match 'x':
+    match 'x':
       'x': 1
       _: 0
     get_ctx _
@@ -166,7 +166,7 @@ test 'ctx survives sqrt', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'math-fn-ctx'
-    _ = sqrt 16.0
+    sqrt 16.0
     get_ctx _
   | equals ":
     math-fn-ctx
@@ -187,7 +187,7 @@ test 'ctx survives repr', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'repr-ctx'
-    _ = repr 42
+    repr 42
     get_ctx _
   | equals ":
     repr-ctx
@@ -201,9 +201,92 @@ test 'ctx survives fmt as imported fn', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'fmt-ctx'
-    _ = fmt 42
+    fmt 42
     get_ctx _
   | equals ":
     fmt-ctx
+
+
+# `abort` with no enclosing `with` traps -- there's no frame to jump
+# to. The future interop wrapper will install a root frame so this
+# becomes unreachable in practice.
+
+test 'abort with no enclosing with traps', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+    abort 42
+
+  | equals ":
+    ERROR: entry wrapper: error while executing at wasm backtrace:
+        0:  <unknown>!std/effects.wat:frame_pop
+        1:  <unknown>!std/effects.wat:abort_apply: wasm trap: null reference
+
+
+# -- with-block (substrate) -------------------------------------------
+#
+# `with H: B` lowers to with_invoke(ctx, H, body_fn, k_outer). The
+# runtime invokes H with [k_outer, wrapped_body]. H is a
+# `fn body: ...` handler; when it calls `body args`, the wrapper
+# pushes a frame holding the body-call cont, then runs B. When B
+# returns normally OR aborts, control lands at the same place: the
+# handler's `body args` call site, with the value. Handler is always
+# re-entered uniformly -- can run cleanup, transform the value, or
+# decide what the block evaluates to.
+
+test 'with: reader handler returns body value', fn:
+  expect run ƒink:
+    handler = fn body:
+      body 0
+
+    with handler:
+      42
+
+  | equals ƒink:
+    42
+
+
+test 'with: handler ignoring body returns its own value', fn:
+  expect run ƒink:
+    handler = fn _: 'handler-result'
+
+    with handler:
+      'body-result'
+
+  | equals ":
+    handler-result
+
+
+test 'with: abort in body lands at handler body-call site', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+
+    handler = fn body:
+      body 0
+
+    with handler:
+      abort 'aborted'
+      42
+
+  | equals ":
+    aborted
+
+
+# Handler resumes at `body 0` site after abort, runs cleanup, then
+# returns its own transformed value. Proves abort lands *inside* the
+# handler, not at k_outer directly.
+test 'with: handler transforms aborted value after cleanup', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+
+    handler = fn body:
+      result = body 0
+      'wrapped: ${result}'
+
+    with handler:
+      abort 'inner'
+      42
+
+  | equals ":
+    wrapped: inner
 
 

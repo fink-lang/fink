@@ -291,6 +291,12 @@ pub enum BuiltIn {
   // Spawn(task_fn, cont) — create new task from task_fn; cont receives future.
   // Await(future, cont) — wait for future to settle; cont receives settled value.
   Yield, Spawn, Await,
+  // Effect handlers — `with H: B` lowering target. Compiler-emitted
+  // (no source-level name); WithInvoke(handler_val, body_fn_val, cont).
+  // The runtime fn pushes a frame holding cont, then invokes the
+  // handler with body_fn under a pop-then-k_outer cont. abort inside
+  // body jumps to the same k_outer via the frame stack.
+  WithInvoke,
   // Channels — multi-message async communication between tasks (point-to-point).
   // Channel(tag, cont) — create new channel; cont receives channel value.
   // Receive(channel, cont) — park receiver; cont receives message when matched.

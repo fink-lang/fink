@@ -641,6 +641,16 @@ fn lower_expr(
     // same as `BuiltIn::Not` / `BuiltIn::Empty`. Side effects happen in
     // the runtime function (queue manipulation, host channel I/O); the
     // user-facing call shape is plain unary.
+    // Effect-handler `with H: B` lowering target — 4-param
+    // `(ctx, handler, body_fn, cont)`. Compiler-emitted only; users
+    // never type the builtin name.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::WithInvoke), args } => {
+      let (h, body_fn, cont) = split_binary_args(args);
+      let h_op = emit_arg_as_operand(lcx, ctx, h);
+      let body_fn_op = emit_arg_as_operand(lcx, ctx, body_fn);
+      emit_op_tail_call(lcx, ctx, Sym::WithInvoke, vec![h_op, body_fn_op], cont, expr.id);
+    }
+
     ExprKind::App { func: Callable::BuiltIn(b), args }
       if matches!(b, BuiltIn::Yield | BuiltIn::Spawn | BuiltIn::Await
                    | BuiltIn::Channel | BuiltIn::Receive) =>

@@ -111,7 +111,7 @@ Notable current gaps:
 
 - Type-guards in patterns are not yet implemented. Without them, the registration syntax in 4.1 cannot be written in ƒink source. The compiler hard-codes the currently-possible resolutions (operator dispatch on known types, container ops on known containers, etc.) in WAT instead of consulting a registry populated by ƒink-level registrations. The model is unchanged; the realisation is narrower than the model allows.
 - The module-lifecycle handshake in section 5 is not staged in today's implementation. The host calls a single fixed entry; runtime and stdlib impls are wired in at link time rather than through host-driven registration.
-- User-level contexts (section 7) are designed but syntax and semantics are not settled. Today the only handlers are compiler-internal (impl registration baked into the lowering, the scheduler, the host-root registration).
+- User-level handlers (section 7) ship as a minimal substrate: one source form (`with H: B`) and one primitive (`abort v`). The substrate gives handlers a uniform re-entry point at their `body args` call site -- normal return and abort both land there. Userland conventions on top (named effects like `cancel` / `catch` / `find`, multi-operation effects, resource cleanup) are not yet shipped; they're library code written against the substrate.
 
 Each implementation file documents its own deviation from the concept. For the compiler's backend realisation story — how pure vs. effectful computations lower to WASM, how scopes and registries are realised, where compile-time resolution happens — see [src/passes/wasm/](../src/passes/wasm/).
 
@@ -125,33 +125,48 @@ The three defining pieces of algebraic effects are present:
 - **Handlers.** Any ƒink construct that produces a new context is a handler: impl registration, mutual-recursive binding, host capability registration, user-defined context blocks (see below), and the scheduler (which parks and resumes continuations at `yield`).
 - **Resumable continuations.** At the concept level, an effectful call receives an explicit rest-of-computation that the handler can resume, run multiple times, or discard. The current compiler represents this directly via CPS: every call site has an explicit continuation value, the scheduler parks and resumes continuations, `yield` is a language-level suspend point. A non-CPS compiler would represent the same continuations differently.
 
-**User contexts** (a planned feature, design not yet settled) will make scoped handler installation source-visible — the only place context scoping shows up in ƒink source. The exact syntax and semantics are open; the sketch below is only to convey the shape, not to specify the feature:
+**User handlers** are the only place context scoping shows up in ƒink source. The substrate is one form and one primitive:
 
 ```fink
-# sketch, not final syntax
-foo = context fn ...:
-  ...
+{abort} = import 'std/effects.fnk'
 
-spam = fn ...:
-  # does something that requires the foo context
+cleanup_on_exit = fn body:
+  result = body 0
+  cleanup _
+  result
 
-with foo 1, 2:
-  spam 3, 4
+with cleanup_on_exit:
+  # body runs; cleanup happens on every exit path
+  do_work _
+  abort 'short-circuit'   # also runs cleanup, returns 'short-circuit'
 ```
 
-Something like `foo` would be declared as a context (a handler). A `with` form would install it for the duration of a block; code inside the block (like `spam`) would have the handler available; outside the block it would not. This is the construct that makes the "scoped override" feature — present in Koka, OCaml 5, Unison — available at the ƒink source level.
+`with H: B` invokes the handler `H` with the body wrapped as a fn-value. The handler decides what to do with body: call it (`body args`), ignore it, call it multiple times, transform its result. Crucially, **both normal completion and `abort v` from inside body re-enter the handler at the same place** -- the handler can't distinguish them. Whatever the handler returns becomes the value of the `with` block.
+
+`abort v` does a non-local return to the nearest enclosing handler's body-call site with value `v`. Handlers that don't want to claim a given value re-abort to propagate it to the next outer handler:
+
+```fink
+cancel = fn v: abort Cancelled v
+
+cancellable = fn body:
+  match body 0:
+    Cancelled reason: cleanup reason; 'cancelled'
+    v: abort v    # propagate anything else to the outer handler
+```
+
+There's no substrate-level wrapping of aborted values -- handlers and operations agree on tag conventions (`Cancelled _`, `Error _`, `Hit _`, ...) by library convention. Specific effect libraries (cancel/raise/find/state/...) are userland code on top of the substrate; the substrate itself ships only `abort` and the `with`-block lowering.
 
 **Compared to other languages with algebraic effects:**
 
 - **Koka, OCaml 5, Unison, Frank** — same concept-level semantics; different surface. They have dedicated `effect` declarations, `handler` blocks, and `perform` / `resume` primitives. ƒink unifies these: protocols declared as ordinary typed values play the role of Koka's named effect operations; constructs that produce a new context play the role of handlers; the implicit context threading plays the role of `perform`/`resume`.
 - **Effect-row typing.** Koka and Unison annotate every function with the effects it may perform. ƒink's model has the same type-level notion. The compiler already infers effect information at protocol granularity — every `+` compiles to a call into the operator dispatcher in `operators.wat`, every protocol use routes through its dispatcher, and these routings are known at compile time. What's missing is exposing that information in the source as effect rows on function signatures. An impl gap pending type inference, not a model difference.
-- **Handler syntax.** Koka has `with handler { ... } { ... }` as a dedicated form. ƒink's planned user-context form (the `with foo 1, 2: ...` sketch above) fills the same role; other ƒink handlers (impl registration, mutual-rec binding, host-root setup) are implicit in their constructs.
+- **Handler syntax.** Koka has `with handler { ... } { ... }` as a dedicated form. ƒink's `with H: B` fills the same role -- `H` is the handler value, `B` is the body. Other ƒink handlers (impl registration, mutual-rec binding, host-root setup) are implicit in their constructs.
 
 **Not to be confused with:**
 
 - **Haskell's `IO` / `State` monads or F#'s computation expressions** — those are monadic encodings of effects, not algebraic effects. ƒink's model is operationally closer to Koka than to Haskell.
 - **Typeclass dictionary passing (Haskell, Rust traits).** ƒink does not dictionary-pass at runtime. A protocol use compiles to a direct call (when the impl is fully known), a closed set of statically-enumerated cases (when the impl is narrowed to a few candidates), or a call into a polymorphic dispatcher like the ones in `operators.wat` (when it isn't). None of these materialise a dictionary in the runtime context. Haskell/Rust, by contrast, pass explicit dictionary arguments at every polymorphic call site.
-- **Dynamic scope / implicit parameters (Racket parameters, Common Lisp specials, Scala `given`).** Closer than Haskell, but in those systems the implicit parameter is named at least once at source — declared, installed, or referenced explicitly. ƒink's implicit is *entirely invisible* at source: a `read_file "foo.txt"` has no visible parameter for the file system capability, an iterator has no visible state, a `yield` has no visible scheduler handle. Only the planned user-contexts feature surfaces the implicit. Those systems also typically lack continuation capture; ƒink's CPS-with-handlers makes `yield` + scheduler and other control-flow-shaped handlers first-class.
+- **Dynamic scope / implicit parameters (Racket parameters, Common Lisp specials, Scala `given`).** Closer than Haskell, but in those systems the implicit parameter is named at least once at source — declared, installed, or referenced explicitly. ƒink's implicit is *entirely invisible* at source for ambient state: a `read_file "foo.txt"` has no visible parameter for the file system capability, an iterator has no visible state, a `yield` has no visible scheduler handle. The `with H: B` form is the only place context scoping shows up in source -- and there it's just installing a handler, not naming the ambient state. Those systems also typically lack continuation capture; ƒink's CPS-with-handlers makes `yield` + scheduler and other control-flow-shaped handlers first-class.
 
 ## 8. Glossary
 

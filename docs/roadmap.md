@@ -27,17 +27,9 @@ scores = dict 'alice': 1, 'bob': 2
 
 Compile-time AST manipulation — `macro` definitions, `eval`, `gen_ast`-style APIs. Entirely future work; nothing in the compiler.
 
-## Context and effects (`with`, `get_ctx`)
+## Effect-handler libraries
 
-Scoped ambient values — a structured alternative to implicit globals. Designed in sketch form, no compiler support.
-
-```fink
-DB_CTX = context DB
-with db_ctx:
-  result = foo ()
-```
-
-Concept: see [execution-model.md](execution-model.md) §7.
+The substrate (`with H: B` form + `abort v` primitive) ships today. The conventional libraries on top of it -- `cancel` / `catch` for error short-circuiting, `find` for early-return search, `state` for scoped mutable state, `cleanup` for resource lifecycle, transactional `commit`/`rollback`, etc. -- are not yet written. Each is pure ƒink code against the substrate; see [execution-model.md](execution-model.md) §7 for the shape.
 
 ## Float exponentiation
 
