@@ -74,13 +74,13 @@ test 'fn params in scope', fn:
     f = fn a, b:
       a + b
   | equals ƒink:
-    scope 11, 'module',
+    scope 9, 'module',
 
-      scope 9, 'fn',
-        bind 2, 'a'
-        bind 4, 'b'
-        ref 'a', 2
-        ref 'b', 4
+      scope 7, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
       bind 0, 'f'
 
 
@@ -135,13 +135,13 @@ test 'wildcard in match arm', fn:
       match x:
         _: 42
   | equals ƒink:
-    scope 14, 'module',
+    scope 12, 'module',
 
-      scope 12, 'fn',
-        bind 2, 'x'
-        ref 'x', 2
+      scope 10, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
 
-        scope 10, 'arm'
+        scope 8, 'arm'
       bind 0, 'f'
 
 
@@ -167,12 +167,12 @@ test 'self-recursion', fn:
     fib = fn n:
       fib n - 1
   | equals ƒink:
-    scope 11, 'module',
+    scope 10, 'module',
 
-      scope 9, 'fn',
-        bind 2, 'n'
+      scope 8, 'fn',
+        bind 1, 'n'
         self_ref 'fib', 0, depth 1
-        ref 'n', 2
+        ref 'n', 1
       bind 0, 'fib'
 
 
@@ -182,15 +182,15 @@ test 'nested fn — closure depth', fn:
       fn b:
         a + b
   | equals ƒink:
-    scope 13, 'module',
+    scope 11, 'module',
 
-      scope 11, 'fn',
-        bind 2, 'a'
+      scope 9, 'fn',
+        bind 1, 'a'
 
-        scope 10, 'fn',
-          bind 5, 'b'
-          ref 'a', 2, depth 1
-          ref 'b', 5
+        scope 8, 'fn',
+          bind 3, 'b'
+          ref 'a', 1, depth 1
+          ref 'b', 3
       bind 0, 'f'
 
 
@@ -235,18 +235,18 @@ test 'two fns — main refs add', fn:
       add 3, 4
 
   | equals ƒink:
-    scope 19, 'module',
+    scope 17, 'module',
 
-      scope 9, 'fn',
-        bind 2, 'a'
-        bind 4, 'b'
-        ref 'a', 2
-        ref 'b', 4
+      scope 7, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
       bind 0, 'add'
 
-      scope 17, 'fn',
+      scope 15, 'fn',
         ref 'add', 0, depth 1
-      bind 11, 'main'
+      bind 9, 'main'
 
 
 test 'mutual recursion — is-even refs is-odd', fn:
@@ -262,29 +262,29 @@ test 'mutual recursion — is-even refs is-odd', fn:
         _: is-even n - 1
 
   | equals ƒink:
-    scope 44, 'module',
+    scope 40, 'module',
 
-      scope 20, 'fn',
-        bind 2, 'n'
-        ref 'n', 2
+      scope 18, 'fn',
+        bind 1, 'n'
+        ref 'n', 1
 
-        scope 10, 'arm'
+        scope 8, 'arm'
 
-        scope 18, 'arm',
-          fwd_ref 'is-odd', 22, depth 2
-          ref 'n', 2, depth 1
+        scope 16, 'arm',
+          fwd_ref 'is-odd', 20, depth 2
+          ref 'n', 1, depth 1
       bind 0, 'is-even'
 
-      scope 42, 'fn',
-        bind 24, 'n'
-        ref 'n', 24
+      scope 38, 'fn',
+        bind 21, 'n'
+        ref 'n', 21
 
-        scope 32, 'arm'
+        scope 28, 'arm'
 
-        scope 40, 'arm',
+        scope 36, 'arm',
           ref 'is-even', 0, depth 2
-          ref 'n', 24, depth 1
-      bind 22, 'is-odd'
+          ref 'n', 21, depth 1
+      bind 20, 'is-odd'
 
 
 test 'match with binding in arm', fn:
@@ -294,17 +294,17 @@ test 'match with binding in arm', fn:
         0: 42
         n: n + 1
   | equals ƒink:
-    scope 21, 'module',
+    scope 18, 'module',
 
-      scope 19, 'fn',
-        bind 2, 'x'
-        ref 'x', 2
+      scope 16, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
 
-        scope 10, 'arm'
+        scope 8, 'arm'
 
-        scope 17, 'arm',
-          bind 12, 'n'
-          ref 'n', 12
+        scope 14, 'arm',
+          bind 9, 'n'
+          ref 'n', 9
       bind 0, 'f'
 
 
@@ -314,22 +314,22 @@ test 'pipe — refs to fns', fn:
     inc = fn x: x + 1
     main = fn: 5 | double | inc
   | equals ƒink:
-    scope 26, 'module',
+    scope 24, 'module',
 
-      scope 7, 'fn',
-        bind 2, 'x'
-        ref 'x', 2
+      scope 6, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
       bind 0, 'double'
 
-      scope 16, 'fn',
-        bind 11, 'x'
-        ref 'x', 11
-      bind 9, 'inc'
+      scope 14, 'fn',
+        bind 9, 'x'
+        ref 'x', 9
+      bind 8, 'inc'
 
-      scope 24, 'fn',
+      scope 22, 'fn',
         ref 'double', 0, depth 1
-        ref 'inc', 9, depth 1
-      bind 18, 'main'
+        ref 'inc', 8, depth 1
+      bind 16, 'main'
 
 
 ---
@@ -349,31 +349,31 @@ test 'inner binding shadows outer', fn:
     main = fn: add 3, 4
 
   | equals ƒink:
-    scope 40, 'module',
+    scope 34, 'module',
 
-      scope 9, 'fn',
-        bind 2, 'a'
-        bind 4, 'b'
-        ref 'a', 2
-        ref 'b', 4
+      scope 7, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
       bind 0, 'add'
 
-      scope 30, 'fn',
-        bind 13, 'a'
-        bind 15, 'b'
+      scope 24, 'fn',
+        bind 10, 'a'
+        bind 11, 'b'
 
-        scope 22, 'fn',
-          bind 19, 'foo'
-          ref 'foo', 19
-        bind 17, 'add'
-        ref 'a', 13
-        ref 'add', 17
-        ref 'b', 15
-      bind 11, 'sub'
+        scope 17, 'fn',
+          bind 14, 'foo'
+          ref 'foo', 14
+        bind 13, 'add'
+        ref 'a', 10
+        ref 'add', 13
+        ref 'b', 11
+      bind 9, 'sub'
 
-      scope 38, 'fn',
+      scope 32, 'fn',
         ref 'add', 0, depth 1
-      bind 32, 'main'
+      bind 26, 'main'
 
 
 ---
@@ -465,12 +465,12 @@ test 'bind-right at statement top', fn:
     |= result
     result
   | equals ƒink:
-    scope 9, 'module',
+    scope 8, 'module',
       unresolved 'foo'
       unresolved 'arg1'
       unresolved 'arg2'
-      bind 6, 'result'
-      ref 'result', 6
+      bind 5, 'result'
+      ref 'result', 5
 
 
 test 'record destructure with field rename', fn:
@@ -487,9 +487,9 @@ test 'predicate guard in seq pattern', fn:
   expect scope ƒink:
     [a, is_even b] = foo
   | equals ƒink:
-    scope 8, 'module',
+    scope 7, 'module',
       bind 0, 'a'
-      bind 3, 'b'
+      bind 2, 'b'
       unresolved 'foo'
       unresolved 'is_even'
 
@@ -518,14 +518,14 @@ test 'str templ pattern in match', fn:
       'foo${x}bar': x
       _: 0
   | equals ƒink:
-    scope 17, 'module',
+    scope 16, 'module',
       unresolved 'val'
 
-      scope 11, 'arm',
-        bind 5, 'x'
-        ref 'x', 5
+      scope 10, 'arm',
+        bind 4, 'x'
+        ref 'x', 4
 
-      scope 15, 'arm'
+      scope 14, 'arm'
 
 
 ---
@@ -549,11 +549,11 @@ test 'with single handler resolves and body refs scope', fn:
     with foo:
       foo
   | equals ƒink:
-    scope 8, 'module',
+    scope 7, 'module',
       bind 0, 'foo'
       ref 'foo', 0
 
-      scope 7, 'with',
+      scope 6, 'with',
         ref 'foo', 0, depth 1
 
 
@@ -564,13 +564,13 @@ test 'with multiple handlers all resolve', fn:
     with foo, bar:
       foo + bar
   | equals ƒink:
-    scope 15, 'module',
+    scope 13, 'module',
       bind 0, 'foo'
       bind 3, 'bar'
       ref 'foo', 0
       ref 'bar', 3
 
-      scope 14, 'with',
+      scope 12, 'with',
         ref 'foo', 0, depth 1
         ref 'bar', 3, depth 1
 
@@ -645,14 +645,14 @@ test 'with body calls outer user fn with arg', fn:
     with:
       foo 1
   | equals ƒink:
-    scope 12, 'module',
+    scope 11, 'module',
 
-      scope 5, 'fn',
-        bind 2, 'x'
-        ref 'x', 2
+      scope 4, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
       bind 0, 'foo'
 
-      scope 11, 'with',
+      scope 10, 'with',
         ref 'foo', 0, depth 1
 
 
@@ -685,4 +685,10 @@ test 'import resolves to prelude', fn:
     scope 8, 'module',
       bind 0, 'foo'
       ref 'import', builtin 0
+
+
+
+
+
+
 
