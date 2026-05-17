@@ -80,6 +80,34 @@ test 'not equal', fn:
     true
 
 
+test 'bool equal -- true == true', fn:
+  expect run ƒink:
+    true == true
+  | equals ƒink:
+    true
+
+
+test 'bool equal -- false == false', fn:
+  expect run ƒink:
+    false == false
+  | equals ƒink:
+    true
+
+
+test 'bool equal -- true == false', fn:
+  expect run ƒink:
+    true == false
+  | equals ƒink:
+    false
+
+
+test 'bool not equal -- true != false', fn:
+  expect run ƒink:
+    true != false
+  | equals ƒink:
+    true
+
+
 test 'less than', fn:
   expect run ƒink:
     3 < 4

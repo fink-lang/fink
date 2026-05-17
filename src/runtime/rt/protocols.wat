@@ -375,6 +375,20 @@
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
+    ;; i31ref (booleans, small ints) — ref.eq identity
+    (block $not_i31
+      (drop
+        (block $is_i31 (result (ref i31))
+          (br $not_i31
+            (br_on_cast $is_i31 (ref null any) (ref i31)
+              (local.get $a)))))
+      (return_call $list_apply_1
+        (local.get $ctx)
+        (ref.i31 (ref.eq
+          (ref.cast (ref i31) (local.get $a))
+          (ref.cast (ref i31) (local.get $b))))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; Polymorphic !=: dispatch on $a's type.
@@ -430,6 +444,20 @@
         (ref.i31 (i32.eqz (call $set_op_eq
           (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b)))))
+        (local.get $cont)))
+
+    ;; i31ref (booleans, small ints) — !ref.eq identity
+    (block $not_i31
+      (drop
+        (block $is_i31 (result (ref i31))
+          (br $not_i31
+            (br_on_cast $is_i31 (ref null any) (ref i31)
+              (local.get $a)))))
+      (return_call $list_apply_1
+        (local.get $ctx)
+        (ref.i31 (i32.eqz (ref.eq
+          (ref.cast (ref i31) (local.get $a))
+          (ref.cast (ref i31) (local.get $b)))))
         (local.get $cont)))
 
     (unreachable))

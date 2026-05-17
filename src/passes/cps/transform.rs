@@ -3289,4 +3289,5 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_effects.fnk");
 }
