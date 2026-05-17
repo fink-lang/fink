@@ -301,4 +301,78 @@
 
   (func $init_effects (@pub) (@impl "std/effects.fnk:init_effects") (result (ref any))
     (global.get $init_effects_closure))
+
+
+  ;; -- with_invoke ----------------------------------------------------
+  ;;
+  ;; Compiler-emitted target of `with H: B` lowering. NOT a user-import
+  ;; -- called directly via Sym::WithInvoke as a 4-param fn:
+  ;;
+  ;;   with_invoke(ctx, handler, body_fn, cont)
+  ;;
+  ;; Pushes a frame holding `cont` (the cont after the with-expr), then
+  ;; invokes the handler with [pop_cont, body_fn]. The handler is a
+  ;; one-user-arg fn `fn body: ...` -- it receives body_fn as `body`
+  ;; and pop_cont as its return cont. Three exit paths, each pops the
+  ;; frame exactly once:
+  ;;
+  ;;   (a) Handler returns normally  -> calls pop_cont -> pop, k_outer
+  ;;   (b) Body returns normally     -> calls handler's cont (typically
+  ;;                                    pop_cont) -> pop, k_outer
+  ;;   (c) Body aborts               -> abort pops, return_calls k_outer
+  ;;
+  ;; The pop-cont closure captures k_outer. When invoked, it pops the
+  ;; top frame (discarding the popped k_outer -- ours is captured) and
+  ;; tail-calls k_outer with the value handed in via args.
+
+  (elem declare func $_pop_cont_fn)
+
+  (func $_pop_cont_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $k_outer (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $k_outer
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+
+    (drop (call $frame_pop))
+    (return_call $apply_3
+      (local.get $args)
+      (local.get $ctx)
+      (local.get $k_outer)))
+
+  (func $make_pop_cont (param $k_outer (ref any)) (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_pop_cont_fn)
+      (array.new_fixed $Captures 1 (local.get $k_outer))))
+
+  (func $with_invoke (@pub) (@impl "std/effects.fnk:with_invoke")
+    (param $ctx (ref null any))
+    (param $handler (ref null any))
+    (param $body_fn (ref null any))
+    (param $cont (ref null any))
+
+    (local $k_outer (ref any))
+    (local $pop_cont (ref $Closure))
+    (local $h_args (ref any))
+
+    (local.set $k_outer (ref.as_non_null (local.get $cont)))
+
+    (call $frame_push (local.get $k_outer))
+
+    (local.set $pop_cont (call $make_pop_cont (local.get $k_outer)))
+
+    ;; handler args: [pop_cont, body_fn]
+    (local.set $h_args
+      (call $args_prepend (local.get $pop_cont)
+        (call $args_prepend (local.get $body_fn) (call $args_empty))))
+
+    (return_call $apply_3
+      (local.get $h_args)
+      (local.get $ctx)
+      (local.get $handler)))
 )

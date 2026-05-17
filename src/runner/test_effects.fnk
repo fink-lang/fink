@@ -241,7 +241,8 @@ test 'init_effects accepts get/set handler fns', fn:
 
 
 # `abort` with no enclosing `with` traps -- there's no frame to jump
-# to. Real abort-inside-with tests land with slice 2c.
+# to. The future interop wrapper will install a root frame so this
+# becomes unreachable in practice.
 
 test 'abort with no enclosing with traps', fn:
   expect run ƒink:
@@ -251,5 +252,49 @@ test 'abort with no enclosing with traps', fn:
     ERROR: entry wrapper: error while executing at wasm backtrace:
         0:  <unknown>!std/effects.wat:frame_pop
         1:  <unknown>!std/effects.wat:abort_apply: wasm trap: null reference
+
+
+# -- with-block (substrate) -------------------------------------------
+#
+# `with H: B` lowers to with_invoke(ctx, H, body_fn, k_outer). The
+# runtime pushes a frame holding k_outer, then invokes H with
+# [pop_cont, body_fn]. H is a `fn body: ...` handler -- when it calls
+# `body _`, B runs; B's value flows back through pop_cont, popping the
+# frame. abort inside B jumps straight to k_outer (bypassing the
+# handler) via the frame stack.
+
+test 'with: reader handler returns body value', fn:
+  expect run ƒink:
+    handler = fn body: body 0
+
+    with handler:
+      42
+
+  | equals ƒink:
+    42
+
+
+test 'with: handler ignoring body returns its own value', fn:
+  expect run ƒink:
+    handler = fn _: 'handler-result'
+
+    with handler:
+      'body-result'
+
+  | equals ":
+    handler-result
+
+
+test 'with: abort in body jumps to k_outer with value', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+    handler = fn body: body 0
+
+    with handler:
+      abort 'aborted'
+      42
+
+  | equals ":
+    aborted
 
 
