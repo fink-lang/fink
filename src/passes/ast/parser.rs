@@ -442,7 +442,7 @@ impl<'src> Parser<'src> {
       if self.block_names.contains_key(name) && name != "fn" && name != "match" {
         return self.parse_block(self.loc_of(head), name);
       }
-      let func = self.node(NodeKind::Ident(name), self.loc_of(head));
+      let func = head;
 
       // Tagged template string in argument position: ident immediately adjacent to StrStart
       if self.at(TokenKind::StrStart) && self.peek().loc.start.idx == self.loc_of(func).end.idx {
