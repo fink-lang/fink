@@ -207,19 +207,12 @@ test 'ctx survives fmt as imported fn', fn:
     fmt-ctx
 
 
-# -- substrate primitives (stubs) -------------------------------------
+# -- substrate primitives ---------------------------------------------
 #
-# `abort` and `register` import end-to-end. Real handler-stack semantics
-# don't exist yet -- the stub `abort v` just returns v to the current
-# cont, and `register op, handler` returns handler unchanged.
-
-test 'abort imports and returns value to current cont (stub)', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-    abort 42
-  | equals ƒink:
-    42
-
+# Smoke tests for `register` and `init_effects` -- these only prove
+# import + call + return without trapping. Real behaviour tests land
+# with the `with H: B` lowering (slice 2c); these will be subsumed
+# then.
 
 test 'register imports and returns value bound to result (stub)', fn:
   expect run ƒink:
@@ -232,5 +225,31 @@ test 'register imports and returns value bound to result (stub)', fn:
     'done'
   | equals ":
     done
+
+
+test 'init_effects accepts get/set handler fns', fn:
+  expect run ƒink:
+    {init_effects} = import 'std/effects.fnk'
+    get_h = fn _:
+      'gh'
+    set_h = fn _, _:
+      'sh'
+    init_effects get_h, set_h
+    'done'
+  | equals ":
+    done
+
+
+# `abort` with no enclosing `with` traps -- there's no frame to jump
+# to. Real abort-inside-with tests land with slice 2c.
+
+test 'abort with no enclosing with traps', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+    abort 42
+  | equals ":
+    ERROR: entry wrapper: error while executing at wasm backtrace:
+        0:  <unknown>!std/effects.wat:frame_pop
+        1:  <unknown>!std/effects.wat:abort_apply: wasm trap: null reference
 
 
