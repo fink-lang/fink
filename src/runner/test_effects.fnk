@@ -236,7 +236,7 @@ test 'abort with no enclosing with traps', fn:
 test 'with: reader handler returns body value', fn:
   expect run ƒink:
     handler = fn body:
-      body 0
+      body _
 
     with handler:
       42
@@ -261,7 +261,7 @@ test 'with: abort in body lands at handler body-call site', fn:
     {abort} = import 'std/effects.fnk'
 
     handler = fn body:
-      body 0
+      body _
 
     with handler:
       abort 'aborted'
@@ -271,7 +271,7 @@ test 'with: abort in body lands at handler body-call site', fn:
     aborted
 
 
-# Handler resumes at `body 0` site after abort, runs cleanup, then
+# Handler resumes at `body _` site after abort, runs cleanup, then
 # returns its own transformed value. Proves abort lands *inside* the
 # handler, not at k_outer directly.
 test 'with: handler transforms aborted value after cleanup', fn:
@@ -279,7 +279,7 @@ test 'with: handler transforms aborted value after cleanup', fn:
     {abort} = import 'std/effects.fnk'
 
     handler = fn body:
-      result = body 0
+      result = body _
       'wrapped: ${result}'
 
     with handler:
@@ -288,5 +288,195 @@ test 'with: handler transforms aborted value after cleanup', fn:
 
   | equals ":
     wrapped: inner
+
+
+# -- multishot whole-body replay -------------------------------------
+#
+# Handler can call `body _` more than once -- each call re-enters the
+# body from the top and produces its own value. No `resume` primitive
+# today, so multishot is "replay the whole body", not "resume from a
+# suspension point". Enough for tests that pin current substrate shape.
+
+test 'with: handler calls body twice, combines results', fn:
+  expect run ƒink:
+    handler = fn body:
+      a = body _
+      b = body _
+      'a=${a} b=${b}'
+
+    with handler:
+      42
+
+  | equals ":
+    a=42 b=42
+
+
+test 'with: handler calls body in a loop, collects results', fn:
+  expect run ƒink:
+    handler = fn body:
+      [
+        body _
+        body _
+        body _
+      ]
+
+    ni = with handler:
+      7
+
+    '${ni}'
+  | equals ":
+    [7, 7, 7]
+
+
+# SKIPPED: `with pick true: B` (partial-applied handler) traps at
+# std/list.wat:head_any. `with` lowering currently expects an
+# arity-1 handler expression; curried handlers aren't recognised.
+test 'with: handler chooses zero vs one shot at runtime', fn:
+  expect run ƒink:
+    pick = fn flag: fn body:
+      match flag:
+        1: body _
+        2: 'skipped'
+
+    a = with pick 1:
+      'ran 1'
+
+    b = with pick 2:
+      'ran 2'
+
+    '${a}/${b}'
+
+  | equals ":
+    ran 1/skipped
+
+
+# -- nested with ------------------------------------------------------
+#
+# Frame stack is LIFO. `with outer: with inner: B` pushes outer's frame
+# first, then inner's. abort inside B walks to the nearest frame
+# (inner). If inner re-enters cleanly, outer sees inner's value.
+
+test 'with: nested -- inner catches, outer sees transformed value', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+
+    inner = fn body:
+      x = body _
+      'inner:${x}'
+
+    outer = fn body:
+      y = body _
+      'outer:${y}'
+
+    with outer:
+      with inner:
+        abort 'boom'
+        42
+
+  | equals ":
+    outer:inner:boom
+
+
+test 'with: nested -- outer abort skips inner frame', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+
+    inner = fn body:
+      x = body _
+      'inner-saw:${x}'
+
+    outer = fn body:
+      y = body _
+      'outer-caught:${y}'
+
+    with outer:
+      with inner:
+        abort 'from-deep'
+        42
+
+  | equals ":
+    outer-caught:inner-saw:from-deep
+
+
+# -- frame-stack robustness through call depth -----------------------
+#
+# Abort from inside a nested fn call walks frames correctly. abort
+# inside a match arm likewise -- match arms are CPS conts under the
+# hood, but at language level they're just expressions in the body.
+
+test 'with: abort from inside nested fn call in body', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+
+    handler = fn body:
+      x = body _
+      'caught:${x}'
+
+    boom = fn:
+      abort 'deep'
+      0
+
+    with handler:
+      boom _
+      42
+
+  | equals ":
+    caught:deep
+
+
+test 'with: abort from inside match arm in body', fn:
+  expect run ƒink:
+    {abort} = import 'std/effects.fnk'
+
+    handler = fn body:
+      x = body _
+      'caught:${x}'
+
+    with handler:
+      match 'go':
+        'go': abort 'matched'
+        _: 0
+      42
+
+  | equals ":
+    caught:matched
+
+
+# -- handler captures outer scope ------------------------------------
+#
+# Handler is a real closure value; it captures bindings from its
+# defining scope and uses them when re-entered at the body-call site.
+
+test 'with: handler captures outer variable', fn:
+  expect run ƒink:
+    prefix = 'tag'
+
+    handler = fn body:
+      x = body _
+      '${prefix}:${x}'
+
+    with handler:
+      99
+
+  | equals ":
+    tag:99
+
+
+# -- non-scalar body value -------------------------------------------
+#
+# Body produces a record; handler passes it through via `body _`. Pins
+# that body values are not restricted to scalars.
+
+test 'with: body returns a record, handler passes it through', fn:
+  expect run ƒink:
+    handler = fn body:
+      body _
+
+    r = with handler:
+      {x: 1, y: 2}
+
+    '${r}'
+  | equals ":
+    {x: 1, y: 2}
 
 

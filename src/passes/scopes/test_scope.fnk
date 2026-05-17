@@ -618,6 +618,44 @@ test 'with body shadows outer binding', fn:
       ref 'x', 0
 
 
+# Regression: calling an outer-scope user fn from inside a with body
+# must produce a ref the lower pass can resolve. Previously this
+# crashed lower with "unbound CpsId" because the user-fn call inside
+# `with` body was not given a captured ref.
+test 'with body calls outer user fn', fn:
+  expect scope ƒink:
+    foo = fn:
+      0
+    with:
+      foo _
+  | equals ƒink:
+    scope 13, 'module',
+
+      scope 3, 'fn'
+      bind 0, 'foo'
+
+      scope 12, 'with',
+        ref 'foo', 0, depth 1
+
+
+test 'with body calls outer user fn with arg', fn:
+  expect scope ƒink:
+    foo = fn x:
+      x
+    with:
+      foo 1
+  | equals ƒink:
+    scope 12, 'module',
+
+      scope 5, 'fn',
+        bind 2, 'x'
+        ref 'x', 2
+      bind 0, 'foo'
+
+      scope 11, 'with',
+        ref 'foo', 0, depth 1
+
+
 
 ---
 member access

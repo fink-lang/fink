@@ -1,0 +1,68 @@
+---
+with-block CPS lowering
+---
+
+# `with H: B` lowers to `with_invoke(ctx, H, body_fn, k_outer)`.
+# The body `B` becomes its own continuation/fn; any outer-scope name
+# referenced inside the body must be captured into `body_fn`'s
+# environment so the lift / lower passes can resolve it.
+
+{test, expect, equals, cps_module} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+# Regression: calling an outer-scope user fn from inside a with body.
+# Previously crashed lower with "unbound CpsId" because the user-fn
+# call inside `with` body was not given a captured ref. Scopes pass
+# already emits the cross-scope ref correctly; this test pins the
+# CPS-layer shape.
+test 'with body calls outer user fn', fn:
+  expect cps_module ƒink:
+    handler = fn body:
+      body _
+    foo = fn:
+      0
+    with handler:
+      foo _
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_42, ·ƒret_3:
+      ·fn
+        fn ·ƒctx_44, ·ƒret_5, ·body_2: ·body_2 ·ƒctx_44, ·ƒret_5
+        fn ·v_4:
+          ·let ·v_4, fn ·handler_0:
+            ·ƒpub ·handler_0, fn:
+              ·fn
+                fn ·ƒctx_46, ·ƒret_12: ·ƒret_12 ·ƒctx_46, (i8 0)
+                fn ·v_11:
+                  ·let ·v_11, fn ·foo_1:
+                    ·ƒpub ·foo_1, fn:
+                      ·fn
+                        fn ·ƒctx_48, ·ƒret_19: ·foo_1 ·ƒctx_48, ·ƒret_19
+                        fn ·v_18: ·with_invoke ·handler_0, ·v_18, ·ƒret_3
+    # sm:VgABAD8AAQA_JAEAPxgBVBUSAAIABgE_EQABABEIABAAGAEWBhYBDwQQAAQBEAYAAQAEEgAUAAQBAAYSABABFREKAAIADgEDAQABAAEMAQQRCgAKARMHFgACABIBAAcAAQAHEAEABxYACAACABYBRAcAAQAHCAAgABgBDAEUAAQBAAEAAQABFgAUAAYBAAEAAQABBgEAAQQAIAELBwwAAgAeAQMBAAEAAQwBBAcMAAoBCwMOAAIAIgEAAwABAAMQAQADDgAIAAIAJgEcFQABABUIADAAGAEgBRQABAEABQABAAMQABQABAEABRQAMAEfFQwABAEAFQABABUcAQoHFgAEAQkVDAAEAQAV
+
+
+test 'with body calls outer user fn with arg', fn:
+  expect cps_module ƒink:
+    handler = fn body:
+      body _
+    foo = fn x:
+      x
+    with handler:
+      foo 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_44, ·ƒret_4:
+      ·fn
+        fn ·ƒctx_46, ·ƒret_6, ·body_2: ·body_2 ·ƒctx_46, ·ƒret_6
+        fn ·v_5:
+          ·let ·v_5, fn ·handler_0:
+            ·ƒpub ·handler_0, fn:
+              ·fn
+                fn ·ƒctx_48, ·ƒret_13, ·x_3: ·ƒret_13 ·ƒctx_48, ·x_3
+                fn ·v_12:
+                  ·let ·v_12, fn ·foo_1:
+                    ·ƒpub ·foo_1, fn:
+                      ·fn
+                        fn ·ƒctx_50, ·ƒret_20: ·foo_1 ·ƒctx_50, ·ƒret_20, (i8 1)
+                        fn ·v_19: ·with_invoke ·handler_0, ·v_19, ·ƒret_4
+    # sm:WQABAEEAAQBBJAEAQRgBWBUSAAIABgFDEQABABEIABAAGAEWBhYBDwQQAAQBEAYAAQAEEgAUAAQBAAYSABABFREKAAIADgEDAQABAAEMAQQRCgAKARMHFgACABIBAAcAAQAHEAEABxYACAACABYBRAkAAQAJCAAgABgBEAEYAQkBCgAEAQoBAAEAARYAFAAEAQABCgAgAQ8JDAACAB4BAwEAAQABDAEECQwACgELAw4AAgAiAQADAAEAAxABAAMOAAgAAgAmASAVAAEAFQgAMAAYASAFFAAEAQAFAAEAAxAAFAAEAQAFFAAGAQgBAAEAAQYBAAEEADABJxUMAAQBABUAAQAVHAEKBxYABAEJFQwABAEAFQ

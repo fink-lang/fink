@@ -298,6 +298,27 @@ fn rewrite_wildcard_call<'src>(
         builder.append(NodeKind::ChainedCmp(new_parts.into_boxed_slice()), loc)
       }
     }
+    NodeKind::With { handlers, sep, body } => {
+      let new_handlers: Vec<AstId> = handlers.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      let new_body: Vec<AstId> = body.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      let handlers_unchanged = new_handlers.iter().zip(handlers.items.iter()).all(|(a, b)| a == b);
+      let body_unchanged = new_body.iter().zip(body.items.iter()).all(|(a, b)| a == b);
+      if handlers_unchanged && body_unchanged {
+        return id;
+      }
+      builder.append(
+        NodeKind::With {
+          handlers: Exprs { items: new_handlers.into_boxed_slice(), seps: handlers.seps.clone() },
+          sep,
+          body: Exprs { items: new_body.into_boxed_slice(), seps: body.seps.clone() },
+        },
+        loc,
+      )
+    }
     _ => id,
   }
 }
