@@ -378,7 +378,7 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     // directly) land in follow-up slices.
     NodeKind::With { handlers, body, .. } => {
       assert_eq!(handlers.items.len(), 1, "with: multi-handler not yet supported");
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       assert!(!body_items.is_empty(), "with: empty body not yet supported");
       let (h_val, mut pending) = lower(g, handlers.items[0]);
       let (body_fn_val, body_pending) = lower_module_as_fn(g, &body_items, o);
