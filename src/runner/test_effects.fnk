@@ -699,18 +699,12 @@ test 'userland cancel/catch via yield2', fn:
 # ctx is monotonic-forward: never travels backward across a
 # continuation. Each test builds a trace string by chaining set_ctx
 # calls so the final ctx records the path control flowed through.
-#
-# SKIPPED (Bug A 2026-05-18): ctx-through-with-block leaks the pre-with
-# ctx. Root cause: thread_ctx treats BuiltIn::WithInvoke as ctx-unaware
-# so its result-cont inherits lexical ctx rather than reading the
-# apply-time threaded ctx. Same root cause likely affects yield2's
-# resume-cast failure. Fix lands on a fresh branch.
 
 # Body sets ctx, returns naturally. Handler reads ctx via `body _` --
 # but ctx flows through k_outer, not through the handler's caller-ctx,
 # so the handler sees the ctx body had at return. After with, ctx is
 # what the handler's tail-return produced.
-skip test 'with: ctx set in handler (no body call) persists', fn:
+test 'with: ctx set in handler (no body call) persists', fn:
   expect run ƒink:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
@@ -726,7 +720,7 @@ skip test 'with: ctx set in handler (no body call) persists', fn:
     H
 
 
-skip test 'with: ctx set in body (handler discards) persists', fn:
+test 'with: ctx set in body (handler discards) persists', fn:
   expect run ƒink:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
@@ -742,7 +736,7 @@ skip test 'with: ctx set in body (handler discards) persists', fn:
     B
 
 
-skip test 'with: ctx set in body persists past handler return', fn:
+test 'with: ctx set in body persists past handler return', fn:
   expect run ƒink:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
@@ -762,6 +756,10 @@ skip test 'with: ctx set in body persists past handler return', fn:
 # Body sets ctx, yield2s, handler resumes. After resume, body runs
 # more code that reads ctx and yields it again. Proves ctx flows
 # forward through the yield2/resume hop.
+#
+# SKIPPED (Bug B 2026-05-18): resume's _resume_fn traps in args_head
+# when re-entering body. Independent of ctx flow; surfaces whenever
+# resume is invoked. Fix tracked separately.
 skip test 'with: ctx flows through yield2 and resume', fn:
   expect run ƒink:
     {set_ctx, get_ctx, yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
