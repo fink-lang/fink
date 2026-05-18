@@ -780,6 +780,33 @@ test 'with: ctx flows through yield2 and resume', fn:
     A->A/post-resume
 
 
+# -- stored/late resume -----------------------------------------------
+#
+# Handler returns the captured resume in a rec; outer code fires resume
+# AFTER the with-block has already returned. Proves the cont survives
+# past handler completion -- the foundation for await/scheduler shapes
+# where resumes get parked in queues for later.
+test 'with: handler returns resume, outer fires it later', fn:
+  expect run ƒink:
+    {yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
+
+    handler = fn body:
+      y = body _
+      v = get_yield_value y
+      r = get_yield_resume y
+      {value: v, resume: r}
+
+    parked = with handler:
+      r = yield2 'paused'
+      'final: ${r}'
+
+    after = parked.resume 'fired-later'
+    '${parked.value} | ${after}'
+
+  | equals ":
+    paused | final: fired-later
+
+
 test 'yield2 with no enclosing with traps', fn:
   expect run ƒink:
     {yield2} = import 'std/effects.fnk'
