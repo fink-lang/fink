@@ -820,4 +820,82 @@ test 'yield2 with no enclosing with traps', fn:
         1:  <unknown>!std/effects.wat:yield2_apply: wasm trap: null reference
 
 
+# Two sequential yield2 calls in body, each producing a distinct
+# resume captured by the handler. Both fire in sequence and body
+# threads two values through to the final expression.
+test 'with: two sequential yield2 in body', fn:
+  expect run ƒink:
+    {yield2, get_yield_resume} = import 'std/effects.fnk'
+
+    handler = fn body:
+      r1 = body _
+      resume1 = get_yield_resume r1
+      r2 = resume1 'tick-1'
+      resume2 = get_yield_resume r2
+      resume2 'tick-2'
+
+    with handler:
+      a = yield2 'first'
+      b = yield2 'second'
+      '${a}/${b}'
+
+  | equals ":
+    tick-1/tick-2
+
+
+# Userland scheduler over yield2: a recursive `drive` loop dequeues
+# tasks from a ctx-held queue, fires each task's `resume`, and either
+# re-enqueues the fresh resume on a yield or drops it on natural
+# return. This shape stresses the lifting pass: the deeply destructured
+# patterns + nested match + tail recursion produce CPS trees that take
+# 20+ rounds of one-level hoisting to flatten. Earlier this hit the
+# MAX_ROUNDS=20 panic and forced users to manually split `drive` into
+# multiple smaller fns. Keep this test as a regression bound -- if the
+# pass starts taking many more rounds for ordinary scheduler code,
+# something is wrong.
+test 'userland scheduler over yield2 -- single-fn drive loop', fn:
+  expect run ƒink:
+    {yield2, get_yield_resume, is_yield, get_ctx, set_ctx} = import 'std/effects.fnk'
+
+    dequeue = fn:
+      {queue: [task, ..rest]} = get_ctx _
+      set_ctx {queue: rest}
+      task
+
+    enqueue = fn task:
+      {queue} = get_ctx _
+      set_ctx {queue: [..queue, task]}
+
+    has_tasks = fn:
+      match get_ctx _:
+        {queue: []}: false
+        _: true
+
+    drive = fn cntr:
+      match has_tasks _:
+        true:
+          {resume, ..task} = dequeue _
+          res = resume 'tick'
+          match is_yield res:
+            true:
+              fresh = get_yield_resume res
+              enqueue {..task, resume: fresh}
+            false: cntr
+          drive cntr + 1
+        false: cntr
+
+    handler = fn body:
+      set_ctx {queue: []}
+      r = body _
+      enqueue {resume: get_yield_resume r}
+      drive 0
+
+    v = with handler:
+      yield2 'A'
+      yield2 'B'
+      'done'
+    '${v}'
+
+  | equals ":
+    2
 

@@ -15,18 +15,14 @@ pause = fn:
   yield2 'pause'
 
 
-on_yielded = fn y:
-  r = get_yield_resume y
-  r 'tick'
-
-
-on_natural = fn y:
-  y
-
-
 handle = fn body:
   y = body _
-  is_yield y, on_yielded, on_natural
+  match is_yield y:
+    true:
+      r = get_yield_resume y
+      r 'tick'
+    false:
+      y
 
 
 run = fn user_body:
