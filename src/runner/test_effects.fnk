@@ -788,7 +788,7 @@ test 'with: ctx flows through yield2 and resume', fn:
 # where resumes get parked in queues for later.
 test 'with: handler returns resume, outer fires it later', fn:
   expect run ƒink:
-    {yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
+    {set_ctx, get_ctx, yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
 
     handler = fn body:
       y = body _
@@ -796,15 +796,17 @@ test 'with: handler returns resume, outer fires it later', fn:
       r = get_yield_resume y
       {value: v, resume: r}
 
+    set_ctx 'pre'
     parked = with handler:
       r = yield2 'paused'
-      'final: ${r}'
+      'final: ${r} ctx=${get_ctx _}'
 
+    set_ctx 'between'
     after = parked.resume 'fired-later'
-    '${parked.value} | ${after}'
+    '${parked.value} | ${after} | outer-ctx=${get_ctx _}'
 
   | equals ":
-    paused | final: fired-later
+    paused | final: fired-later ctx=between | outer-ctx=between
 
 
 test 'yield2 with no enclosing with traps', fn:
