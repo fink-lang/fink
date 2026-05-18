@@ -121,7 +121,12 @@ pub fn lift<'src>(
   result: CpsResult,
   ast: &crate::ast::Ast<'src>,
 ) -> CpsResult {
-  const MAX_ROUNDS: usize = 20;
+  // Each round hoists one level of nested fns. Programs with deeply
+  // destructured patterns combined with `match` + tail-call recursion
+  // (e.g. effect-substrate userland schedulers) can need 20+ rounds
+  // to flatten — the previous cap of 20 panicked while still making
+  // progress.
+  const MAX_ROUNDS: usize = 100;
 
   let mut current = result;
 
