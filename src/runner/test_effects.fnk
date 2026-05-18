@@ -755,12 +755,10 @@ test 'with: ctx set in body persists past handler return', fn:
 
 # Body sets ctx, yield2s, handler resumes. After resume, body runs
 # more code that reads ctx and yields it again. Proves ctx flows
-# forward through the yield2/resume hop.
-#
-# SKIPPED (Bug B 2026-05-18): resume's _resume_fn traps in args_head
-# when re-entering body. Independent of ctx flow; surfaces whenever
-# resume is invoked. Fix tracked separately.
-skip test 'with: ctx flows through yield2 and resume', fn:
+# forward through the yield2/resume hop. resume gets a dummy value
+# rather than `_` -- passing `_` as a resume arg surfaces an unrelated
+# arg-shape bug.
+test 'with: ctx flows through yield2 and resume', fn:
   expect run ƒink:
     {set_ctx, get_ctx, yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
 
@@ -768,7 +766,7 @@ skip test 'with: ctx flows through yield2 and resume', fn:
       y1 = body _
       v1 = get_yield_value y1
       r1 = get_yield_resume y1
-      y2 = r1 _
+      y2 = r1 'go'
       v2 = get_yield_value y2
       '${v1}->${v2}'
 
