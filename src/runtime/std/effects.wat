@@ -426,14 +426,9 @@
 
   ;; -- is_yield -------------------------------------------------------
   ;;
-  ;; Fink-level: `is_yield val, on_yield, on_natural`.
-  ;;   - if val is a $Yield struct: tail-call `on_yield val`
-  ;;   - otherwise:                 tail-call `on_natural _`
-  ;;
-  ;; Succ/fail-thunk convention matches is_seq_like / is_rec_like in
-  ;; rt/protocols.wat. Returning a thunk-dispatched result avoids the
-  ;; bool-encoding-vs-Int mismatch a plain `1/0` return would cause
-  ;; when match-ed against fink integer literals.
+  ;; Fink-level: `is_yield val -> bool`. Returns i31 1 if val is a
+  ;; $Yield struct, i31 0 otherwise. Booleans flow as i31ref (matches
+  ;; the convention in rt/protocols.wat:10).
 
   (elem declare func $is_yield_apply)
 
@@ -444,42 +439,28 @@
 
     (local $cont (ref null any))
     (local $val (ref any))
-    (local $on_yield (ref null any))
-    (local $on_natural (ref null any))
     (local $result_args (ref any))
 
-    ;; args = [cont, val, on_yield, on_natural].
+    ;; args = [cont, val].
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $args (call $args_tail (local.get $args)))
     (local.set $val (ref.as_non_null (call $args_head (local.get $args))))
-    (local.set $args (call $args_tail (local.get $args)))
-    (local.set $on_yield (call $args_head (local.get $args)))
-    (local.set $args (call $args_tail (local.get $args)))
-    (local.set $on_natural (call $args_head (local.get $args)))
 
-    (block $not_yield
-      (block $is (result (ref $Yield))
-        (br $not_yield
-          (br_on_cast $is (ref any) (ref $Yield) (local.get $val))))
-      (drop)
-      ;; Tail-call on_yield with [cont, val].
-      (local.set $result_args
-        (call $args_prepend (local.get $cont)
-          (call $args_prepend (local.get $val) (call $args_empty))))
-      (return_call $apply_3
-        (local.get $result_args)
-        (local.get $ctx)
-        (local.get $on_yield)))
-
-    ;; Tail-call on_natural with [cont, val]. Pass val as the arg so
-    ;; the natural-return path can still see body's return value.
     (local.set $result_args
-      (call $args_prepend (local.get $cont)
-        (call $args_prepend (local.get $val) (call $args_empty))))
+      (call $args_prepend
+        (block $done (result (ref any))
+          (block $not_yield
+            (block $is (result (ref $Yield))
+              (br $not_yield
+                (br_on_cast $is (ref any) (ref $Yield) (local.get $val))))
+            (drop)
+            (br $done (ref.i31 (i32.const 1))))
+          (ref.i31 (i32.const 0)))
+        (call $args_empty)))
     (return_call $apply_3
       (local.get $result_args)
       (local.get $ctx)
-      (local.get $on_natural)))
+      (local.get $cont)))
 
   (global $is_yield_closure (ref $Closure)
     (struct.new $Closure
