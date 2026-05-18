@@ -666,6 +666,34 @@ test 'with: yield2 zero-shot from inside match arm', fn:
     caught: matched
 
 
+# Userland `cancel` / `catch` defined as plain fink against yield2.
+# Proves the library pattern: cancel is just `yield2 v`; catch is a
+# handler that runs body and returns the cancelled value if body
+# yielded, otherwise body's natural value.
+test 'userland cancel/catch via yield2', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    cancel = fn v:
+      yield2 v
+
+    catch = fn body:
+      y = body _
+      get_yield_value y
+
+    a = with catch:
+      cancel 'short'
+      'unreached'
+
+    b = with catch:
+      'normal'
+
+    '${a}/${b}'
+
+  | equals ":
+    short/normal
+
+
 test 'yield2 with no enclosing with traps', fn:
   expect run ƒink:
     {yield2} = import 'std/effects.fnk'

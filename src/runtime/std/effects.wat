@@ -326,25 +326,41 @@
 
   (elem declare func $get_yield_value_apply)
 
+  ;; Pass-through projection: if arg is a $Yield, return its value
+  ;; field; otherwise return the arg as-is. Lets handlers treat body's
+  ;; natural-return value and a yielded value uniformly.
   (func $get_yield_value_apply (type $Fn3)
     (param $_caps (ref null any))
     (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cont (ref null any))
-    (local $y (ref $Yield))
+    (local $arg (ref any))
+    (local $value (ref any))
     (local $result_args (ref any))
 
-    ;; args = [cont, yield_struct]
+    ;; args = [cont, value-or-yield]
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $args (call $args_tail (local.get $args)))
-    (local.set $y
-      (ref.cast (ref $Yield) (call $args_head (local.get $args))))
+    (local.set $arg (ref.as_non_null (call $args_head (local.get $args))))
 
+    ;; If $arg is a $Yield, set $value to its .value field; else
+    ;; pass-through $arg unchanged.
+    (block $not_yield
+      (block $is_yield (result (ref $Yield))
+        (br $not_yield
+          (br_on_cast $is_yield (ref any) (ref $Yield) (local.get $arg))))
+      ;; is_yield path: $Yield on stack as block result
+      (local.set $value (struct.get $Yield $value))
+      (local.set $result_args
+        (call $args_prepend (local.get $value) (call $args_empty)))
+      (return_call $apply_3
+        (local.get $result_args)
+        (local.get $ctx)
+        (local.get $cont)))
+    ;; not_yield path: pass $arg through
     (local.set $result_args
-      (call $args_prepend
-        (struct.get $Yield $value (local.get $y))
-        (call $args_empty)))
+      (call $args_prepend (local.get $arg) (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
@@ -362,24 +378,37 @@
 
   (elem declare func $get_yield_resume_apply)
 
+  ;; Pass-through projection: if arg is a $Yield, return its resume
+  ;; field; otherwise return the arg as-is. Symmetric with
+  ;; $get_yield_value -- handlers can call both uniformly without
+  ;; first checking whether body yielded.
   (func $get_yield_resume_apply (type $Fn3)
     (param $_caps (ref null any))
     (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cont (ref null any))
-    (local $y (ref $Yield))
+    (local $arg (ref any))
+    (local $resume (ref any))
     (local $result_args (ref any))
 
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $args (call $args_tail (local.get $args)))
-    (local.set $y
-      (ref.cast (ref $Yield) (call $args_head (local.get $args))))
+    (local.set $arg (ref.as_non_null (call $args_head (local.get $args))))
 
+    (block $not_yield
+      (block $is_yield (result (ref $Yield))
+        (br $not_yield
+          (br_on_cast $is_yield (ref any) (ref $Yield) (local.get $arg))))
+      (local.set $resume (struct.get $Yield $resume))
+      (local.set $result_args
+        (call $args_prepend (local.get $resume) (call $args_empty)))
+      (return_call $apply_3
+        (local.get $result_args)
+        (local.get $ctx)
+        (local.get $cont)))
     (local.set $result_args
-      (call $args_prepend
-        (struct.get $Yield $resume (local.get $y))
-        (call $args_empty)))
+      (call $args_prepend (local.get $arg) (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
