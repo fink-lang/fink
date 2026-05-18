@@ -694,6 +694,96 @@ test 'userland cancel/catch via yield2', fn:
     short/normal
 
 
+# -- ctx flow through with --------------------------------------------
+#
+# ctx is monotonic-forward: never travels backward across a
+# continuation. Each test builds a trace string by chaining set_ctx
+# calls so the final ctx records the path control flowed through.
+#
+# SKIPPED (Bug A 2026-05-18): ctx-through-with-block leaks the pre-with
+# ctx. Root cause: thread_ctx treats BuiltIn::WithInvoke as ctx-unaware
+# so its result-cont inherits lexical ctx rather than reading the
+# apply-time threaded ctx. Same root cause likely affects yield2's
+# resume-cast failure. Fix lands on a fresh branch.
+
+# Body sets ctx, returns naturally. Handler reads ctx via `body _` --
+# but ctx flows through k_outer, not through the handler's caller-ctx,
+# so the handler sees the ctx body had at return. After with, ctx is
+# what the handler's tail-return produced.
+skip test 'with: ctx set in handler (no body call) persists', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    handler = fn _:
+      set_ctx 'H'
+
+    set_ctx 'pre'
+    with handler:
+      42
+    get_ctx _
+
+  | equals ":
+    H
+
+
+skip test 'with: ctx set in body (handler discards) persists', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    handler = fn body:
+      body _
+
+    set_ctx 'pre'
+    with handler:
+      set_ctx 'B'
+    get_ctx _
+
+  | equals ":
+    B
+
+
+skip test 'with: ctx set in body persists past handler return', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    handler = fn body:
+      body _
+      set_ctx '${get_ctx _}/H'
+
+    set_ctx 'pre'
+    with handler:
+      set_ctx 'B'
+    get_ctx _
+
+  | equals ":
+    B/H
+
+
+# Body sets ctx, yield2s, handler resumes. After resume, body runs
+# more code that reads ctx and yields it again. Proves ctx flows
+# forward through the yield2/resume hop.
+skip test 'with: ctx flows through yield2 and resume', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx, yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
+
+    handler = fn body:
+      y1 = body _
+      v1 = get_yield_value y1
+      r1 = get_yield_resume y1
+      y2 = r1 _
+      v2 = get_yield_value y2
+      '${v1}->${v2}'
+
+    set_ctx 'A'
+    with handler:
+      yield2 get_ctx _
+      set_ctx '${get_ctx _}/post-resume'
+      yield2 get_ctx _
+
+  | equals ":
+    A->A/post-resume
+
+
 test 'yield2 with no enclosing with traps', fn:
   expect run ƒink:
     {yield2} = import 'std/effects.fnk'

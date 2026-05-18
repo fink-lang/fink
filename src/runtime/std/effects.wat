@@ -424,6 +424,59 @@
     (global.get $get_yield_resume_closure))
 
 
+  ;; -- is_yield -------------------------------------------------------
+  ;;
+  ;; Fink-level: `is_yield val -> 1 if Yield else 0`. Lets handlers
+  ;; branch on whether body yielded or returned naturally:
+  ;;
+  ;;   match is_yield y:
+  ;;     1: # body yielded; get_yield_value/resume y
+  ;;     0: # body returned naturally; y is the value
+
+  (elem declare func $is_yield_apply)
+
+  (func $is_yield_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $val (ref any))
+    (local $result i32)
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $val (ref.as_non_null (call $args_head (local.get $args))))
+
+    (block $not_yield
+      (block $is (result (ref $Yield))
+        (br $not_yield
+          (br_on_cast $is (ref any) (ref $Yield) (local.get $val))))
+      (drop)
+      (local.set $result (i32.const 1))
+      (br 1))
+    (local.set $result (i32.const 0))
+
+    (local.set $result_args
+      (call $args_prepend
+        (ref.i31 (local.get $result))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $is_yield_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $is_yield_apply)
+      (ref.null $Captures)))
+
+  (func $is_yield (@pub) (@impl "std/effects.fnk:is_yield") (result (ref any))
+    (global.get $is_yield_closure))
+
+
   ;; -- with_invoke ----------------------------------------------------
   ;;
   ;; Compiler-emitted target of `with H: B` lowering. NOT a user-import
