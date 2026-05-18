@@ -31,54 +31,26 @@
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
 
 
-  ;; -- handler frame stack -------------------------------------------
+  ;; -- substrate-internal ctx and handler-frame chain ----------------
   ;;
-  ;; Substrate-internal data structure: a singly-linked list of frames,
-  ;; one per active `with` block. Each frame holds the k_outer cont --
-  ;; where `abort v` / `yield2 v` jumps to. Fink code never sees frames.
+  ;; ctx is the value threaded forward through every CPS call. The
+  ;; substrate wraps it as a $Ctx struct with two slots:
+  ;;   $user        -- the value fink code sees via get_ctx / set_ctx.
+  ;;   $frame_chain -- the substrate-only handler-frame chain. yield2
+  ;;                   and abort read the head frame from here; their
+  ;;                   k_outer takes them to the enclosing `with`
+  ;;                   handler. wrapped_body pushes a frame on entry;
+  ;;                   pop_cont pops on natural body return.
   ;;
-  ;; Migration target: move from a global mutable stack into a ctx slot
-  ;; (see $Ctx below and `.brain/.scratch/effects-ctx-frame-chain.md`).
-  ;; Step 1 (this commit): introduce $Ctx as the carrier of (user, chain)
-  ;; but keep the global stack as the active store -- get_ctx/set_ctx
-  ;; project through $Ctx.user, with back-compat fallback for bare-value
-  ;; ctx. Later steps migrate yield2/abort/with_invoke off the global.
+  ;; Each $Frame holds the body-call-cont (where yield2 / abort /
+  ;; natural-return land in the handler).
+  ;;
+  ;; All non-substrate code treats ctx opaquely as `(ref null any)`.
+  ;; The substrate is the only place that pattern-matches on $Ctx.
 
   (type $Frame (struct
     (field $k_outer (ref any))
     (field $parent  (ref null $Frame))))
-
-  (global $frame_stack (mut (ref null $Frame))
-    (ref.null $Frame))
-
-  ;; Push a frame holding k_outer; returns nothing.
-  (func $frame_push (param $k_outer (ref any))
-    (global.set $frame_stack
-      (struct.new $Frame
-        (local.get $k_outer)
-        (global.get $frame_stack))))
-
-  ;; Pop the top frame; returns its k_outer. Traps if stack is empty.
-  (func $frame_pop (result (ref any))
-    (local $top (ref $Frame))
-    (local.set $top
-      (ref.as_non_null (global.get $frame_stack)))
-    (global.set $frame_stack
-      (struct.get $Frame $parent (local.get $top)))
-    (struct.get $Frame $k_outer (local.get $top)))
-
-
-  ;; -- $Ctx: substrate-internal ctx carrier --------------------------
-  ;;
-  ;; ctx is what threads forward through every CPS call. We split it
-  ;; into two slots:
-  ;;   $user        -- the value fink code sees via get_ctx / set_ctx.
-  ;;   $frame_chain -- the substrate-only handler-frame chain. Unused
-  ;;                   in step 1; future yield2/abort will read this
-  ;;                   directly instead of the global $frame_stack.
-  ;;
-  ;; All non-substrate code treats ctx opaquely as `(ref null any)`.
-  ;; The substrate is the only place that pattern-matches on $Ctx.
 
   (type $Ctx (struct
     (field $user        (ref null any))
