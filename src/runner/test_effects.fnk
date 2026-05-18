@@ -218,8 +218,7 @@ test 'abort with no enclosing with traps', fn:
 
   | equals ":
     ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:  <unknown>!std/effects.wat:frame_pop
-        1:  <unknown>!std/effects.wat:abort_apply: wasm trap: null reference
+        0:  <unknown>!std/effects.wat:abort_apply: wasm trap: null reference
 
 
 # -- with-block (substrate) -------------------------------------------
@@ -816,8 +815,7 @@ test 'yield2 with no enclosing with traps', fn:
 
   | equals ":
     ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:  <unknown>!std/effects.wat:frame_pop
-        1:  <unknown>!std/effects.wat:yield2_apply: wasm trap: null reference
+        0:  <unknown>!std/effects.wat:yield2_apply: wasm trap: null reference
 
 
 # Two sequential yield2 calls in body, each producing a distinct

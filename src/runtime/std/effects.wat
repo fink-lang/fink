@@ -120,6 +120,19 @@
       (local.get $new_user)
       (ref.null $Frame)))
 
+  ;; Return ctx.frame_chain, or null if ctx is a bare value (no chain).
+  (func $ctx_frame_chain
+      (param $ctx (ref null any))
+      (result (ref null $Frame))
+    (local $as_ctx (ref null $Ctx))
+    (block $not_ctx
+      (block $is (result (ref $Ctx))
+        (br $not_ctx
+          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
+      (local.set $as_ctx)
+      (return (struct.get $Ctx $frame_chain (local.get $as_ctx))))
+    (ref.null $Frame))
+
 
   ;; -- set_ctx --------------------------------------------------------
   ;;
@@ -208,17 +221,17 @@
   ;; -- abort ----------------------------------------------------------
   ;;
   ;; Substrate primitive for the effect-handler `with` machinery.
-  ;; Fink-level signature: `abort v`. Pops the top frame off the
-  ;; handler stack and return_calls its k_outer with v -- non-local
-  ;; return to the nearest enclosing `with` block.
+  ;; Fink-level signature: `abort v`. Reads the head frame from
+  ;; ctx.frame_chain and tail-calls its k_outer with v under the
+  ;; parent ctx (chain head popped for the handler's view) --
+  ;; non-local return to the nearest enclosing `with` block.
   ;;
-  ;; Traps with "no handler frame" if abort is called with an empty
-  ;; stack (no enclosing `with`).
+  ;; Traps with "no handler frame" (ref.as_non_null on null
+  ;; frame_chain) if abort is called with no enclosing `with`.
   ;;
   ;; Importable: `{abort} = import 'std/effects.fnk'`. Fn3-shaped
-  ;; closure, same path as set_ctx / get_ctx. Note: the cont arg the
-  ;; compiler passes is the caller's continuation -- abort discards it
-  ;; (that's the whole point of non-local return).
+  ;; closure. The cont arg the compiler passes is the caller's
+  ;; continuation -- abort discards it.
 
   (elem declare func $abort_apply)
 
@@ -228,22 +241,32 @@
     (param $args (ref null any))
 
     (local $value (ref null any))
+    (local $frame (ref $Frame))
     (local $k_outer (ref any))
+    (local $parent_ctx (ref $Ctx))
     (local $result_args (ref any))
 
     ;; args = [cont, value]; we only need value (cont is discarded).
     (local.set $args (call $args_tail (local.get $args)))
     (local.set $value (call $args_head (local.get $args)))
 
-    ;; Pop top frame -> k_outer. Traps if stack empty.
-    (local.set $k_outer (call $frame_pop))
+    ;; Read chain head from ctx.
+    (local.set $frame
+      (ref.as_non_null (call $ctx_frame_chain (local.get $ctx))))
+    (local.set $k_outer (struct.get $Frame $k_outer (local.get $frame)))
+
+    ;; Build parent ctx: same user payload, chain with head popped.
+    (local.set $parent_ctx
+      (struct.new $Ctx
+        (call $ctx_user (local.get $ctx))
+        (struct.get $Frame $parent (local.get $frame))))
 
     (local.set $result_args
       (call $args_prepend (local.get $value) (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
-      (local.get $ctx)
+      (local.get $parent_ctx)
       (local.get $k_outer)))
 
   (global $abort_closure (ref $Closure)
@@ -257,36 +280,40 @@
 
   ;; -- yield2 ---------------------------------------------------------
   ;;
-  ;; Resumable-yield substrate primitive (step 1).
+  ;; Resumable-yield substrate primitive.
   ;;
   ;; Fink-level signature: `yield2 v -> Yield{value, resume}`. Captures
-  ;; the caller's continuation as `resume` and returns a `$Yield` struct
-  ;; carrying the yielded value and the captured cont. The handler reads
-  ;; the struct via `get_yield_value` / `get_yield_resume` and decides
-  ;; whether to call `resume r` (re-enter body at the yield2 site with
-  ;; r) or discard it (zero-shot).
+  ;; (k_body_rest, ctx) and packages them as a `resume` closure inside a
+  ;; `$Yield` struct. The handler reads the struct via `get_yield_value`
+  ;; / `get_yield_resume` and decides whether to call `resume r`
+  ;; (re-enter body at the yield2 site with r) or discard it.
   ;;
-  ;; Reaches the handler the same way `abort` does: pops the top handler
-  ;; frame and tail-calls k_outer with the Yield struct. Traps with
-  ;; "no handler frame" if there's no enclosing `with`. Step-1 limitation:
-  ;; once popped, the resumed body has no frame, so a second yield2 from
-  ;; inside the resumed body will trap. ctx-threaded handler discovery
-  ;; (the longer-term shape) is deferred until a test forces it.
+  ;; Routing: reads ctx.frame_chain head, tail-calls its k_outer with
+  ;; the Yield struct under the parent ctx (chain head popped).
   ;;
-  ;; Importable: `{yield2, get_yield_value, get_yield_resume} =
-  ;;             import 'std/effects.fnk'`.
+  ;; The captured ctx in `resume` retains the un-popped chain -- so
+  ;; firing the resume later (even outside the spawning with-block)
+  ;; re-enters body under the original chain. Subsequent yields from
+  ;; the resumed body find the original frame.
+  ;;
+  ;; Traps if there's no enclosing `with` (null chain).
 
   (type $Yield (struct
     (field $value  (ref any))
     (field $resume (ref any))))
 
-  ;; resume closure: captures k_body_rest (body's continuation after
-  ;; the yield2 site). When the handler invokes `resume r`, the resume
-  ;; call's own cont (`k_handler_after_resume`) becomes the *new*
-  ;; frame's k_outer. So body's next yield2 (or natural return through
-  ;; _pop_cont_fn) lands at the handler's after-resume code -- as if
-  ;; resume were a regular fn call returning body's next value. r
-  ;; becomes the value of the original yield2 expression in body.
+  ;; resume closure: captures (k_body_rest, captured_chain). When
+  ;; fired via `resume r`:
+  ;;   - frame_chain is restored to captured_chain (with a new frame
+  ;;     for the resume call pushed on top). This is the substrate-
+  ;;     internal world: yield2 / abort from the resumed body land
+  ;;     at the captured handler's body-call site (extended by the
+  ;;     resume call's own cont so body's next observable lands at
+  ;;     the resume caller).
+  ;;   - user payload comes from the FIRER (caller of resume). This
+  ;;     matches ctx's monotonic-forward semantics for user state:
+  ;;     a stored resume sees set_ctx mutations that happened after
+  ;;     it was captured.
   (elem declare func $_resume_fn)
 
   (func $_resume_fn (type $Fn3)
@@ -296,39 +323,54 @@
 
     (local $captures (ref $Captures))
     (local $k_body_rest (ref any))
+    (local $captured_chain (ref null $Frame))
     (local $k_handler_after_resume (ref any))
     (local $r (ref null any))
+    (local $new_frame (ref $Frame))
+    (local $new_ctx (ref $Ctx))
     (local $result_args (ref any))
 
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $k_body_rest
       (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $captured_chain
+      (ref.cast (ref null $Frame)
+        (array.get $Captures (local.get $captures) (i32.const 1))))
 
-    ;; args = [cont, r]. cont is the handler's continuation after the
-    ;; resume call -- the new frame's k_outer so body's next yield2 or
-    ;; natural completion returns the value to the handler here.
+    ;; args = [k_handler_after_resume, r].
     (local.set $k_handler_after_resume
       (ref.as_non_null (call $args_head (local.get $args))))
     (local.set $args (call $args_tail (local.get $args)))
     (local.set $r (call $args_head (local.get $args)))
 
-    (call $frame_push (local.get $k_handler_after_resume))
+    ;; Push a new frame onto the captured chain for this resume call.
+    (local.set $new_frame
+      (struct.new $Frame
+        (local.get $k_handler_after_resume)
+        (local.get $captured_chain)))
+    ;; Combine firer's user payload with restored-and-extended chain.
+    (local.set $new_ctx
+      (struct.new $Ctx
+        (call $ctx_user (local.get $ctx))
+        (local.get $new_frame)))
 
     (local.set $result_args
       (call $args_prepend (local.get $r) (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
-      (local.get $ctx)
+      (local.get $new_ctx)
       (local.get $k_body_rest)))
 
   (func $make_resume
       (param $k_body_rest (ref any))
+      (param $captured_chain (ref null $Frame))
       (result (ref $Closure))
     (struct.new $Closure
       (ref.func $_resume_fn)
-      (array.new_fixed $Captures 1
-        (local.get $k_body_rest))))
+      (array.new_fixed $Captures 2
+        (local.get $k_body_rest)
+        (local.get $captured_chain))))
 
   (elem declare func $yield2_apply)
 
@@ -339,7 +381,9 @@
 
     (local $cont (ref any))
     (local $value (ref any))
+    (local $frame (ref $Frame))
     (local $k_outer (ref any))
+    (local $parent_ctx (ref $Ctx))
     (local $resume (ref $Closure))
     (local $yielded (ref $Yield))
     (local $result_args (ref any))
@@ -350,14 +394,25 @@
     (local.set $args (call $args_tail (local.get $args)))
     (local.set $value (ref.as_non_null (call $args_head (local.get $args))))
 
-    ;; Pop top frame -> k_outer (body-call-cont). Traps if stack empty.
-    (local.set $k_outer (call $frame_pop))
+    ;; Read chain head from ctx.
+    (local.set $frame
+      (ref.as_non_null (call $ctx_frame_chain (local.get $ctx))))
+    (local.set $k_outer (struct.get $Frame $k_outer (local.get $frame)))
 
-    ;; Build resume closure capturing k_body_rest. When invoked, the
-    ;; resume's own caller-cont becomes the new frame's k_outer, so
-    ;; body's next yield2 / natural return lands at the handler's
-    ;; after-resume site.
-    (local.set $resume (call $make_resume (local.get $cont)))
+    ;; Build parent ctx for the trip up to k_outer (chain head popped
+    ;; for the handler's view).
+    (local.set $parent_ctx
+      (struct.new $Ctx
+        (call $ctx_user (local.get $ctx))
+        (struct.get $Frame $parent (local.get $frame))))
+
+    ;; Capture the body's continuation AND the un-popped chain in
+    ;; resume. Firing this later re-enters body with the original
+    ;; chain intact (under the firer's user payload).
+    (local.set $resume
+      (call $make_resume
+        (local.get $cont)
+        (struct.get $Frame $parent (local.get $frame))))
 
     (local.set $yielded
       (struct.new $Yield (local.get $value) (local.get $resume)))
@@ -367,7 +422,7 @@
 
     (return_call $apply_3
       (local.get $result_args)
-      (local.get $ctx)
+      (local.get $parent_ctx)
       (local.get $k_outer)))
 
   (global $yield2_closure (ref $Closure)
@@ -571,10 +626,11 @@
   ;; choice. Cleanup naturally runs after the `body 0` call site,
   ;; uniformly across both paths.
 
-  ;; pop_cont reads the body-call-cont from the top frame's k_outer
-  ;; rather than capturing it directly. That makes the frame the single
-  ;; source of truth for "where body's return value goes" -- resume can
-  ;; retarget natural-return by pushing a frame with a different k_outer.
+  ;; pop_cont: body's natural-return cont. Reads the body-call-cont
+  ;; (and the parent ctx) from the top frame of ctx.frame_chain.
+  ;; Pops the chain head and tail-calls the body-call-cont with body's
+  ;; value under the parent ctx -- so the handler sees the same chain
+  ;; depth it had when it called body.
   (elem declare func $_pop_cont_fn)
 
   (func $_pop_cont_fn (type $Fn3)
@@ -582,12 +638,22 @@
     (param $ctx (ref null any))
     (param $args (ref null any))
 
+    (local $as_ctx (ref $Ctx))
+    (local $frame (ref $Frame))
     (local $body_call_cont (ref any))
+    (local $parent_ctx (ref $Ctx))
 
-    (local.set $body_call_cont (call $frame_pop))
+    (local.set $as_ctx (ref.cast (ref $Ctx) (local.get $ctx)))
+    (local.set $frame
+      (ref.as_non_null (struct.get $Ctx $frame_chain (local.get $as_ctx))))
+    (local.set $body_call_cont (struct.get $Frame $k_outer (local.get $frame)))
+    (local.set $parent_ctx
+      (struct.new $Ctx
+        (struct.get $Ctx $user (local.get $as_ctx))
+        (struct.get $Frame $parent (local.get $frame))))
     (return_call $apply_3
       (local.get $args)
-      (local.get $ctx)
+      (local.get $parent_ctx)
       (local.get $body_call_cont)))
 
   (global $_pop_cont (ref $Closure)
@@ -595,9 +661,11 @@
       (ref.func $_pop_cont_fn)
       (ref.null $Captures)))
 
-  ;; wrapped_body: closure capturing body_fn. Pushes frame on entry,
-  ;; redirects body's return through pop_cont so the frame pops on
-  ;; normal completion. Abort also pops + jumps to the same cont.
+  ;; wrapped_body: closure capturing body_fn. Pushes a frame onto
+  ;; ctx.frame_chain holding the body-call-cont, then runs body
+  ;; under the extended ctx. Body's yield2 / abort find the frame at
+  ;; the chain head. Natural return flows through pop_cont which
+  ;; pops the chain head and restores the parent.
   (elem declare func $_wrapped_body_fn)
 
   (func $_wrapped_body_fn (type $Fn3)
@@ -609,6 +677,10 @@
     (local $body_fn (ref any))
     (local $body_call_cont (ref any))
     (local $body_args (ref any))
+    (local $parent_chain (ref null $Frame))
+    (local $new_frame (ref $Frame))
+    (local $new_ctx (ref $Ctx))
+    (local $user (ref null any))
 
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $body_fn
@@ -618,21 +690,32 @@
     (local.set $body_call_cont
       (ref.as_non_null (call $args_head (local.get $args))))
 
-    ;; Push frame holding the body-call cont -- single source of truth
-    ;; for "where body's value goes". Both abort/yield2 and the
-    ;; natural-return path (_pop_cont) read it from here.
-    (call $frame_push (local.get $body_call_cont))
+    ;; Extract user payload and parent chain from caller's ctx (with
+    ;; back-compat for bare-value ctx -- treat as empty chain).
+    (local.set $user (call $ctx_user (local.get $ctx)))
+    (local.set $parent_chain (call $ctx_frame_chain (local.get $ctx)))
+
+    ;; Push frame holding the body-call cont onto the chain.
+    (local.set $new_frame
+      (struct.new $Frame
+        (local.get $body_call_cont)
+        (local.get $parent_chain)))
+    (local.set $new_ctx
+      (struct.new $Ctx
+        (local.get $user)
+        (local.get $new_frame)))
 
     ;; Replace head of args with the shared _pop_cont closure; body sees
     ;; [pop_cont, ...user_args]. Natural return -> pop_cont -> pops the
-    ;; frame, tail-calls the frame's k_outer with body's value.
+    ;; chain head, tail-calls the frame's k_outer with body's value
+    ;; under the parent ctx.
     (local.set $body_args
       (call $args_prepend (global.get $_pop_cont)
         (ref.cast (ref any) (call $args_tail (local.get $args)))))
 
     (return_call $apply_3
       (local.get $body_args)
-      (local.get $ctx)
+      (local.get $new_ctx)
       (local.get $body_fn)))
 
   (func $make_wrapped_body (param $body_fn (ref any)) (result (ref $Closure))
