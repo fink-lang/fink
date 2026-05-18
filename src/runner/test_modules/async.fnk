@@ -1,0 +1,34 @@
+# Userland scheduler in pure fink against the yield2 substrate.
+#
+# Slice 1: cooperative `pause` for single-yield bodies. Handler pumps
+# body once: if body yielded, resume with a dummy value and surface
+# the result; otherwise surface body's natural return as-is.
+#
+# Multi-yield (slice 2+) and spawn (slice 3) need a per-resume handler
+# frame and a queue; the current shape only handles one yield. The
+# substrate-level work to unblock that is tracked separately.
+
+{yield2, get_yield_resume, is_yield} = import 'std/effects.fnk'
+
+
+pause = fn:
+  yield2 'pause'
+
+
+on_yielded = fn y:
+  r = get_yield_resume y
+  r 'tick'
+
+
+on_natural = fn y:
+  y
+
+
+handle = fn body:
+  y = body _
+  is_yield y, on_yielded, on_natural
+
+
+run = fn user_body:
+  with handle:
+    user_body _

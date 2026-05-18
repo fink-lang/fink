@@ -426,12 +426,14 @@
 
   ;; -- is_yield -------------------------------------------------------
   ;;
-  ;; Fink-level: `is_yield val -> 1 if Yield else 0`. Lets handlers
-  ;; branch on whether body yielded or returned naturally:
+  ;; Fink-level: `is_yield val, on_yield, on_natural`.
+  ;;   - if val is a $Yield struct: tail-call `on_yield val`
+  ;;   - otherwise:                 tail-call `on_natural _`
   ;;
-  ;;   match is_yield y:
-  ;;     1: # body yielded; get_yield_value/resume y
-  ;;     0: # body returned naturally; y is the value
+  ;; Succ/fail-thunk convention matches is_seq_like / is_rec_like in
+  ;; rt/protocols.wat. Returning a thunk-dispatched result avoids the
+  ;; bool-encoding-vs-Int mismatch a plain `1/0` return would cause
+  ;; when match-ed against fink integer literals.
 
   (elem declare func $is_yield_apply)
 
@@ -442,31 +444,42 @@
 
     (local $cont (ref null any))
     (local $val (ref any))
-    (local $result i32)
+    (local $on_yield (ref null any))
+    (local $on_natural (ref null any))
     (local $result_args (ref any))
 
+    ;; args = [cont, val, on_yield, on_natural].
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $args (call $args_tail (local.get $args)))
     (local.set $val (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $on_yield (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $on_natural (call $args_head (local.get $args)))
 
     (block $not_yield
       (block $is (result (ref $Yield))
         (br $not_yield
           (br_on_cast $is (ref any) (ref $Yield) (local.get $val))))
       (drop)
-      (local.set $result (i32.const 1))
-      (br 1))
-    (local.set $result (i32.const 0))
+      ;; Tail-call on_yield with [cont, val].
+      (local.set $result_args
+        (call $args_prepend (local.get $cont)
+          (call $args_prepend (local.get $val) (call $args_empty))))
+      (return_call $apply_3
+        (local.get $result_args)
+        (local.get $ctx)
+        (local.get $on_yield)))
 
+    ;; Tail-call on_natural with [cont, val]. Pass val as the arg so
+    ;; the natural-return path can still see body's return value.
     (local.set $result_args
-      (call $args_prepend
-        (ref.i31 (local.get $result))
-        (call $args_empty)))
-
+      (call $args_prepend (local.get $cont)
+        (call $args_prepend (local.get $val) (call $args_empty))))
     (return_call $apply_3
       (local.get $result_args)
       (local.get $ctx)
-      (local.get $cont)))
+      (local.get $on_natural)))
 
   (global $is_yield_closure (ref $Closure)
     (struct.new $Closure

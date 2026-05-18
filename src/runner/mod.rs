@@ -705,6 +705,7 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_effects.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_async.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_main.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_io.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
