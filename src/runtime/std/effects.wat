@@ -193,6 +193,208 @@
     (global.get $abort_closure))
 
 
+  ;; -- yield2 ---------------------------------------------------------
+  ;;
+  ;; Resumable-yield substrate primitive (step 1).
+  ;;
+  ;; Fink-level signature: `yield2 v -> Yield{value, resume}`. Captures
+  ;; the caller's continuation as `resume` and returns a `$Yield` struct
+  ;; carrying the yielded value and the captured cont. The handler reads
+  ;; the struct via `get_yield_value` / `get_yield_resume` and decides
+  ;; whether to call `resume r` (re-enter body at the yield2 site with
+  ;; r) or discard it (zero-shot).
+  ;;
+  ;; Reaches the handler the same way `abort` does: pops the top handler
+  ;; frame and tail-calls k_outer with the Yield struct. Traps with
+  ;; "no handler frame" if there's no enclosing `with`. Step-1 limitation:
+  ;; once popped, the resumed body has no frame, so a second yield2 from
+  ;; inside the resumed body will trap. ctx-threaded handler discovery
+  ;; (the longer-term shape) is deferred until a test forces it.
+  ;;
+  ;; Importable: `{yield2, get_yield_value, get_yield_resume} =
+  ;;             import 'std/effects.fnk'`.
+
+  (type $Yield (struct
+    (field $value  (ref any))
+    (field $resume (ref any))))
+
+  ;; resume closure: captures k_body_rest (body's continuation after
+  ;; the yield2 site). When the handler invokes `resume r`, the resume
+  ;; call's own cont (`k_handler_after_resume`) becomes the *new*
+  ;; frame's k_outer. So body's next yield2 (or natural return through
+  ;; _pop_cont_fn) lands at the handler's after-resume code -- as if
+  ;; resume were a regular fn call returning body's next value. r
+  ;; becomes the value of the original yield2 expression in body.
+  (elem declare func $_resume_fn)
+
+  (func $_resume_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $k_body_rest (ref any))
+    (local $k_handler_after_resume (ref any))
+    (local $r (ref null any))
+    (local $result_args (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $k_body_rest
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+
+    ;; args = [cont, r]. cont is the handler's continuation after the
+    ;; resume call -- the new frame's k_outer so body's next yield2 or
+    ;; natural completion returns the value to the handler here.
+    (local.set $k_handler_after_resume
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $r (call $args_head (local.get $args)))
+
+    (call $frame_push (local.get $k_handler_after_resume))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $r) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $k_body_rest)))
+
+  (func $make_resume
+      (param $k_body_rest (ref any))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_resume_fn)
+      (array.new_fixed $Captures 1
+        (local.get $k_body_rest))))
+
+  (elem declare func $yield2_apply)
+
+  (func $yield2_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref any))
+    (local $value (ref any))
+    (local $k_outer (ref any))
+    (local $resume (ref $Closure))
+    (local $yielded (ref $Yield))
+    (local $result_args (ref any))
+
+    ;; args = [cont, value]. cont is k_body_rest -- the continuation of
+    ;; the yield2 call site in body.
+    (local.set $cont (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $value (ref.as_non_null (call $args_head (local.get $args))))
+
+    ;; Pop top frame -> k_outer (body-call-cont). Traps if stack empty.
+    (local.set $k_outer (call $frame_pop))
+
+    ;; Build resume closure capturing k_body_rest. When invoked, the
+    ;; resume's own caller-cont becomes the new frame's k_outer, so
+    ;; body's next yield2 / natural return lands at the handler's
+    ;; after-resume site.
+    (local.set $resume (call $make_resume (local.get $cont)))
+
+    (local.set $yielded
+      (struct.new $Yield (local.get $value) (local.get $resume)))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $yielded) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $k_outer)))
+
+  (global $yield2_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $yield2_apply)
+      (ref.null $Captures)))
+
+  (func $yield2 (@pub) (@impl "std/effects.fnk:yield2") (result (ref any))
+    (global.get $yield2_closure))
+
+
+  ;; -- get_yield_value / get_yield_resume -----------------------------
+  ;;
+  ;; Accessors for the opaque $Yield struct. Fink-level signatures:
+  ;;   get_yield_value  y -> v   (the value passed to yield2)
+  ;;   get_yield_resume y -> k   (the captured cont; call as `k r` to
+  ;;                              re-enter body at the yield2 site with r)
+
+  (elem declare func $get_yield_value_apply)
+
+  (func $get_yield_value_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $y (ref $Yield))
+    (local $result_args (ref any))
+
+    ;; args = [cont, yield_struct]
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $y
+      (ref.cast (ref $Yield) (call $args_head (local.get $args))))
+
+    (local.set $result_args
+      (call $args_prepend
+        (struct.get $Yield $value (local.get $y))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $get_yield_value_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_yield_value_apply)
+      (ref.null $Captures)))
+
+  (func $get_yield_value (@pub) (@impl "std/effects.fnk:get_yield_value") (result (ref any))
+    (global.get $get_yield_value_closure))
+
+
+  (elem declare func $get_yield_resume_apply)
+
+  (func $get_yield_resume_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $y (ref $Yield))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $y
+      (ref.cast (ref $Yield) (call $args_head (local.get $args))))
+
+    (local.set $result_args
+      (call $args_prepend
+        (struct.get $Yield $resume (local.get $y))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $get_yield_resume_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_yield_resume_apply)
+      (ref.null $Captures)))
+
+  (func $get_yield_resume (@pub) (@impl "std/effects.fnk:get_yield_resume") (result (ref any))
+    (global.get $get_yield_resume_closure))
+
+
   ;; -- with_invoke ----------------------------------------------------
   ;;
   ;; Compiler-emitted target of `with H: B` lowering. NOT a user-import
@@ -231,30 +433,29 @@
   ;; choice. Cleanup naturally runs after the `body 0` call site,
   ;; uniformly across both paths.
 
+  ;; pop_cont reads the body-call-cont from the top frame's k_outer
+  ;; rather than capturing it directly. That makes the frame the single
+  ;; source of truth for "where body's return value goes" -- resume can
+  ;; retarget natural-return by pushing a frame with a different k_outer.
   (elem declare func $_pop_cont_fn)
 
   (func $_pop_cont_fn (type $Fn3)
-    (param $caps (ref null any))
+    (param $_caps (ref null any))
     (param $ctx (ref null any))
     (param $args (ref null any))
 
-    (local $captures (ref $Captures))
     (local $body_call_cont (ref any))
 
-    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
-    (local.set $body_call_cont
-      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
-
-    (drop (call $frame_pop))
+    (local.set $body_call_cont (call $frame_pop))
     (return_call $apply_3
       (local.get $args)
       (local.get $ctx)
       (local.get $body_call_cont)))
 
-  (func $make_pop_cont (param $cont (ref any)) (result (ref $Closure))
+  (global $_pop_cont (ref $Closure)
     (struct.new $Closure
       (ref.func $_pop_cont_fn)
-      (array.new_fixed $Captures 1 (local.get $cont))))
+      (ref.null $Captures)))
 
   ;; wrapped_body: closure capturing body_fn. Pushes frame on entry,
   ;; redirects body's return through pop_cont so the frame pops on
@@ -269,7 +470,6 @@
     (local $captures (ref $Captures))
     (local $body_fn (ref any))
     (local $body_call_cont (ref any))
-    (local $pop_cont (ref $Closure))
     (local $body_args (ref any))
 
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
@@ -280,17 +480,16 @@
     (local.set $body_call_cont
       (ref.as_non_null (call $args_head (local.get $args))))
 
-    ;; Push frame holding the body-call cont -- this is where abort
-    ;; jumps to. The handler will resume at its `body 0` site with
-    ;; the abort value.
+    ;; Push frame holding the body-call cont -- single source of truth
+    ;; for "where body's value goes". Both abort/yield2 and the
+    ;; natural-return path (_pop_cont) read it from here.
     (call $frame_push (local.get $body_call_cont))
 
-    ;; Build pop_cont so body's normal return also pops the frame.
-    (local.set $pop_cont (call $make_pop_cont (local.get $body_call_cont)))
-
-    ;; Replace head of args with pop_cont; body sees [pop_cont, ...user_args].
+    ;; Replace head of args with the shared _pop_cont closure; body sees
+    ;; [pop_cont, ...user_args]. Natural return -> pop_cont -> pops the
+    ;; frame, tail-calls the frame's k_outer with body's value.
     (local.set $body_args
-      (call $args_prepend (local.get $pop_cont)
+      (call $args_prepend (global.get $_pop_cont)
         (ref.cast (ref any) (call $args_tail (local.get $args)))))
 
     (return_call $apply_3

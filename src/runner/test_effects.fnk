@@ -480,3 +480,201 @@ test 'with: body returns a record, handler passes it through', fn:
     {x: 1, y: 2}
 
 
+# -- yield2 substrate (step 1) ---------------------------------------
+#
+# yield2 v captures the caller's continuation and returns an opaque
+# $Yield struct {value, resume} to the handler. Handler reads via
+# get_yield_value / get_yield_resume; calling resume r re-enters body
+# at the yield2 site with r.
+
+test 'with: yield2 zero-shot -- handler ignores resume', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    handler = fn body:
+      result = body _
+      v = get_yield_value result
+      'caught: ${v}'
+
+    with handler:
+      yield2 'hello'
+      42
+
+  | equals ":
+    caught: hello
+
+
+test 'with: yield2 one-shot -- handler resumes body', fn:
+  expect run ƒink:
+    {yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
+
+    handler = fn body:
+      result = body _
+      v = get_yield_value result
+      resume = get_yield_resume result
+      resume 'got: ${v}'
+
+    with handler:
+      r = yield2 'asked'
+      'final: ${r}'
+
+  | equals ":
+    final: got: asked
+
+
+test 'with: nested yield2 -- inner handler intercepts', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    outer = fn body:
+      r = body _
+      'outer saw: ${r}'
+
+    inner = fn body:
+      r = body _
+      'inner caught: ${get_yield_value r}'
+
+    with outer:
+      with inner:
+        yield2 'hello'
+        42
+
+  | equals ":
+    outer saw: inner caught: hello
+
+
+test 'with: nested yield2 -- inner re-yields to outer', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    outer = fn body:
+      r = body _
+      'outer caught: ${get_yield_value r}'
+
+    inner = fn body:
+      r = body _
+      v = get_yield_value r
+      yield2 v
+
+    with outer:
+      with inner:
+        yield2 'propagate'
+        42
+
+  | equals ":
+    outer caught: propagate
+
+
+test 'with: nested yield2 -- outer resumes inner handler', fn:
+  expect run ƒink:
+    {yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
+
+    inner = fn body:
+      y = body _
+      v = get_yield_value y
+      resumed = yield2 v
+      'inner done: ${resumed}'
+
+    outer = fn body:
+      y = body _
+      resume = get_yield_resume y
+      resume 'outer-said'
+
+    with outer:
+      with inner:
+        yield2 'asked'
+        42
+
+  | equals ":
+    inner done: outer-said
+
+
+test 'with: yield2 multi-shot -- handler resumes twice', fn:
+  expect run ƒink:
+    {yield2, get_yield_value, get_yield_resume} = import 'std/effects.fnk'
+
+    handler = fn body:
+      y = body _
+      v = get_yield_value y
+      resume = get_yield_resume y
+      a = resume 'first'
+      b = resume 'second'
+      'a=${a} b=${b} v=${v}'
+
+    with handler:
+      r = yield2 'asked'
+      'got:${r}'
+
+  | equals ":
+    a=got:first b=got:second v=asked
+
+
+# yield2 with a handler that ignores resume gives abort semantics --
+# the value yield2 was called with becomes the with-block's value,
+# nothing in body after yield2 runs.
+test 'with: yield2 zero-shot equals abort -- value at body site', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    handler = fn body:
+      y = body _
+      get_yield_value y
+
+    with handler:
+      yield2 'aborted'
+      42
+
+  | equals ":
+    aborted
+
+
+test 'with: yield2 zero-shot from nested fn call in body', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    handler = fn body:
+      y = body _
+      'caught: ${get_yield_value y}'
+
+    boom = fn:
+      yield2 'deep'
+      0
+
+    with handler:
+      boom _
+      42
+
+  | equals ":
+    caught: deep
+
+
+test 'with: yield2 zero-shot from inside match arm', fn:
+  expect run ƒink:
+    {yield2, get_yield_value} = import 'std/effects.fnk'
+
+    handler = fn body:
+      y = body _
+      'caught: ${get_yield_value y}'
+
+    with handler:
+      match 'go':
+        'go': yield2 'matched'
+        _: 0
+      42
+
+  | equals ":
+    caught: matched
+
+
+test 'yield2 with no enclosing with traps', fn:
+  expect run ƒink:
+    {yield2} = import 'std/effects.fnk'
+    yield2 42
+
+  | equals ":
+    ERROR: entry wrapper: error while executing at wasm backtrace:
+        0:  <unknown>!std/effects.wat:frame_pop
+        1:  <unknown>!std/effects.wat:yield2_apply: wasm trap: null reference
+
+
+
