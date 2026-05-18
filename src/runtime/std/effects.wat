@@ -35,13 +35,14 @@
   ;;
   ;; Substrate-internal data structure: a singly-linked list of frames,
   ;; one per active `with` block. Each frame holds the k_outer cont --
-  ;; where `abort v` jumps to. Fink code never sees frames; the only
-  ;; code that touches the stack is the `with H: B` lowering (push on
-  ;; entry, pop on normal return) and the `abort` impl (pop + jump).
+  ;; where `abort v` / `yield2 v` jumps to. Fink code never sees frames.
   ;;
-  ;; Module-level global stop-gap -- expected to migrate to a ctx slot
-  ;; once the substrate surface settles. Same trajectory as
-  ;; $get_handler / $set_handler below.
+  ;; Migration target: move from a global mutable stack into a ctx slot
+  ;; (see $Ctx below and `.brain/.scratch/effects-ctx-frame-chain.md`).
+  ;; Step 1 (this commit): introduce $Ctx as the carrier of (user, chain)
+  ;; but keep the global stack as the active store -- get_ctx/set_ctx
+  ;; project through $Ctx.user, with back-compat fallback for bare-value
+  ;; ctx. Later steps migrate yield2/abort/with_invoke off the global.
 
   (type $Frame (struct
     (field $k_outer (ref any))
@@ -67,6 +68,59 @@
     (struct.get $Frame $k_outer (local.get $top)))
 
 
+  ;; -- $Ctx: substrate-internal ctx carrier --------------------------
+  ;;
+  ;; ctx is what threads forward through every CPS call. We split it
+  ;; into two slots:
+  ;;   $user        -- the value fink code sees via get_ctx / set_ctx.
+  ;;   $frame_chain -- the substrate-only handler-frame chain. Unused
+  ;;                   in step 1; future yield2/abort will read this
+  ;;                   directly instead of the global $frame_stack.
+  ;;
+  ;; All non-substrate code treats ctx opaquely as `(ref null any)`.
+  ;; The substrate is the only place that pattern-matches on $Ctx.
+
+  (type $Ctx (struct
+    (field $user        (ref null any))
+    (field $frame_chain (ref null $Frame))))
+
+  ;; If ctx is a $Ctx, return its user payload. Otherwise return ctx
+  ;; itself -- back-compat for code paths that still pass bare-value
+  ;; ctx during the migration.
+  (func $ctx_user (param $ctx (ref null any)) (result (ref null any))
+    (local $as_ctx (ref null $Ctx))
+    (block $not_ctx
+      (block $is (result (ref $Ctx))
+        (br $not_ctx
+          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
+      (local.set $as_ctx)
+      (return (struct.get $Ctx $user (local.get $as_ctx))))
+    (local.get $ctx))
+
+  ;; Return a fresh $Ctx with the given user payload and the
+  ;; frame_chain inherited from the input ctx (null if input is not a
+  ;; $Ctx).
+  (func $ctx_with_user
+      (param $ctx (ref null any))
+      (param $new_user (ref null any))
+      (result (ref $Ctx))
+    (local $as_ctx (ref null $Ctx))
+    (local $parent_chain (ref null $Frame))
+    (block $not_ctx
+      (block $is (result (ref $Ctx))
+        (br $not_ctx
+          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
+      (local.set $as_ctx)
+      (local.set $parent_chain
+        (struct.get $Ctx $frame_chain (local.get $as_ctx)))
+      (return (struct.new $Ctx
+        (local.get $new_user)
+        (local.get $parent_chain))))
+    (struct.new $Ctx
+      (local.get $new_user)
+      (ref.null $Frame)))
+
+
   ;; -- set_ctx --------------------------------------------------------
   ;;
   ;; Fink-level signature: `set_ctx new_ctx -> old_ctx`.
@@ -83,19 +137,23 @@
     (param $args (ref null any))
 
     (local $cont (ref null any))
-    (local $new_ctx (ref null any))
+    (local $new_user (ref null any))
     (local $result_args (ref any))
 
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $args (call $args_tail (local.get $args)))
-    (local.set $new_ctx (call $args_head (local.get $args)))
+    (local.set $new_user (call $args_head (local.get $args)))
 
+    ;; Return the user-facing OLD ctx to cont; thread a fresh $Ctx
+    ;; (new user payload, preserved frame chain) as the new ctx.
     (local.set $result_args
-      (call $args_prepend (local.get $ctx) (call $args_empty)))
+      (call $args_prepend
+        (call $ctx_user (local.get $ctx))
+        (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
-      (local.get $new_ctx)
+      (call $ctx_with_user (local.get $ctx) (local.get $new_user))
       (local.get $cont)))
 
   (global $set_ctx_closure (ref $Closure)
@@ -126,8 +184,12 @@
 
     (local.set $cont (call $args_head (local.get $args)))
 
+    ;; Return the user-facing ctx; thread the full $Ctx (still
+    ;; carrying the frame chain) unchanged.
     (local.set $result_args
-      (call $args_prepend (local.get $ctx) (call $args_empty)))
+      (call $args_prepend
+        (call $ctx_user (local.get $ctx))
+        (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
