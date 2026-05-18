@@ -116,6 +116,9 @@ pub enum Sym {
   // as binary protocol ops). Used by `BuiltIn::SeqPrepend` for list
   // literals and pattern-match recursion.
   SeqPrepend,
+  // Seq concatenation — `(a, b, cont)`. Same ternary CPS shape. Used
+  // for `[..a, ..b]` / `[..xs, item]` / `[item, ..xs]` list literals.
+  SeqConcat,
   // Rec merge — `(dest, src, cont)`. Same ternary CPS shape. Used
   // for `{..r1, ..r2, k: v}` record spreads.
   RecMerge,
@@ -260,6 +263,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Receive   => &[Sym::Receive],
     BuiltIn::WithInvoke => &[Sym::WithInvoke],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
+    BuiltIn::SeqConcat  => &[Sym::SeqConcat],
     BuiltIn::RecMerge   => &[Sym::RecMerge],
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
@@ -354,6 +358,7 @@ pub struct Runtime {
   op_not:     Option<FuncSym>,
   op_empty:   Option<FuncSym>,
   seq_prepend: Option<FuncSym>,
+  seq_concat:  Option<FuncSym>,
   rec_merge:   Option<FuncSym>,
   is_seq_like: Option<FuncSym>,
   is_rec_like: Option<FuncSym>,
@@ -464,6 +469,7 @@ impl Runtime {
       Sym::OpNot    => self.op_not,
       Sym::OpEmpty  => self.op_empty,
       Sym::SeqPrepend => self.seq_prepend,
+      Sym::SeqConcat  => self.seq_concat,
       Sym::RecMerge   => self.rec_merge,
       Sym::IsSeqLike  => self.is_seq_like,
       Sym::IsRecLike  => self.is_rec_like,
@@ -567,6 +573,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Decimal         => "std/decimal.wat:Decimal",
 
     Sym::SeqPrepend      => "std/seq.fnk:prepend",
+    Sym::SeqConcat       => "std/seq.fnk:concat",
     Sym::SeqPop          => "std/seq.fnk:pop",
     Sym::SeqPopBack      => "std/seq.fnk:pop_back",
 
@@ -801,6 +808,7 @@ fn set_effect_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
 /// (`(any, any, any) -> ()`). Each is a 3-arg CPS function.
 const TERNARY_PRIMITIVES: &[Sym] = &[
   Sym::SeqPrepend,
+  Sym::SeqConcat,
   Sym::RecMerge,
   Sym::IsSeqLike, Sym::IsRecLike,
   Sym::SeqPop, Sym::SeqPopBack,
@@ -809,6 +817,7 @@ const TERNARY_PRIMITIVES: &[Sym] = &[
 fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   let slot = match sym {
     Sym::SeqPrepend => &mut rt.seq_prepend,
+    Sym::SeqConcat  => &mut rt.seq_concat,
     Sym::RecMerge   => &mut rt.rec_merge,
     Sym::IsSeqLike  => &mut rt.is_seq_like,
     Sym::IsRecLike  => &mut rt.is_rec_like,

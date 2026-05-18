@@ -56,6 +56,8 @@
     (func $list_seq_pop_back (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
   (import "std/list.wat" "seq_prepend"
     (func $list_seq_prepend (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))))
+  (import "std/list.wat" "seq_concat"
+    (func $list_seq_concat (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
   ;; Func imports — set ops
   (import "std/set.wat" "op_plus"     (func $set_op_plus     (param $b (ref $Set)) (result (ref $Set))))
@@ -886,6 +888,15 @@
     (param $val (ref null any)) (param $seq (ref null any)) (param $cont (ref null any))
     (return_call $list_seq_prepend
       (local.get $val) (local.get $seq) (local.get $cont)))
+
+  ;; seq_concat(a, b, cont): concatenate two seqs. Today $List only;
+  ;; other seq types could gain a typed impl in future. Used for list
+  ;; literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
+  (func $seq_concat (@pub) (@impl "std/seq.fnk:concat")
+      (param $ctx (ref null any))  ;; TODO ctx: not consulted
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $list_seq_concat
+      (local.get $a) (local.get $b) (local.get $cont)))
 
   ;; seq_pop_back(cursor, fail, succ): peel one element off the END of a
   ;; seq-like container. Currently only $List is supported (sets have no

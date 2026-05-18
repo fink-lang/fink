@@ -712,6 +712,15 @@ fn lower_expr(
       emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
     }
 
+    // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
+    // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {
+      let (a, b, cont) = split_binary_args(args);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let b_op = emit_arg_as_operand(lcx, ctx, b);
+      emit_op_tail_call(lcx, ctx, Sym::SeqConcat, vec![a_op, b_op], cont, expr.id);
+    }
+
     // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args } => {
       let (a, b, cont) = split_binary_args(args);
