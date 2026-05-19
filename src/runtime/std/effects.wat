@@ -1460,4 +1460,92 @@
 
   (func $rethrow (@pub) (@impl "std/effects.fnk:rethrow") (result (ref any))
     (global.get $rethrow_closure))
+
+
+  ;; ---- bind_chain --------------------------------------------------
+  ;;
+  ;; Fink-level: `bind_chain fn -> wrapped_fn`. Captures the current
+  ;; op_frame_chain in a closure. When wrapped_fn is later called
+  ;; (anywhere -- inside or outside any with-block), it restores the
+  ;; captured chain and tail-calls `fn`. Effectively re-installs the
+  ;; chain that was active at bind_chain time.
+  ;;
+  ;; Used by spawn-style patterns: a handler wants to enqueue a fresh
+  ;; task fn so a drive loop OUTSIDE the with-block can fire it. The
+  ;; task body performs ops that must route through the with-block's
+  ;; handler. Calling bind_chain on the task before enqueueing pins
+  ;; the chain to the task.
+
+  (elem declare func $_bound_fn_apply)
+
+  (func $_bound_fn_apply (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $inner_fn (ref any))
+    (local $captured_chain (ref null $OpFrame))
+    (local $new_ctx (ref $Ctx))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $inner_fn
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $captured_chain
+      (ref.cast (ref null $OpFrame)
+        (array.get $Captures (local.get $captures) (i32.const 1))))
+
+    ;; Switch op_frame_chain to captured; preserve firer's user + clear current_op.
+    (local.set $new_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (local.get $captured_chain)
+        (ref.null $OpInvocation)))
+
+    (return_call $apply_3
+      (local.get $args)
+      (local.get $new_ctx)
+      (local.get $inner_fn)))
+
+  (elem declare func $bind_chain_apply)
+
+  (func $bind_chain_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $inner_fn (ref any))
+    (local $wrapped (ref $Closure))
+    (local $result_args (ref any))
+
+    ;; args = [cont, fn]
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $inner_fn
+      (ref.as_non_null (call $args_head (local.get $args))))
+
+    (local.set $wrapped
+      (struct.new $Closure
+        (ref.func $_bound_fn_apply)
+        (array.new_fixed $Captures 2
+          (local.get $inner_fn)
+          (call $ctx_op_frame_chain (local.get $ctx)))))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $wrapped) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $bind_chain_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $bind_chain_apply)
+      (ref.null $Captures)))
+
+  (func $bind_chain (@pub) (@impl "std/effects.fnk:bind_chain") (result (ref any))
+    (global.get $bind_chain_closure))
 )
