@@ -52,9 +52,28 @@
     (field $k_outer (ref any))
     (field $parent  (ref null $Frame))))
 
+  ;; Tagged-op substrate (new): each frame is keyed by an op id and
+  ;; carries the with-block's body fn + exit cont. See "-- tagged-op
+  ;; substrate ----" further down.
+  (type $OpFrame (struct
+    (field $op_id        i32)
+    (field $handler      (ref any))
+    (field $body_fn      (ref any))
+    (field $k_block_exit (ref any))
+    (field $parent       (ref null $OpFrame))))
+
+  ;; Per-handler-invocation slot: the verbs an active handler can use.
+  ;; Set on the ctx that flows into the handler call; null elsewhere.
+  (type $OpInvocation (struct
+    (field $resume       (ref any))   ;; closure: re-enter suspension
+    (field $block_rerun  (ref any))   ;; closure: re-enter body from top
+    (field $block_return (ref any)))) ;; closure: skip to k_block_exit
+
   (type $Ctx (struct
-    (field $user        (ref null any))
-    (field $frame_chain (ref null $Frame))))
+    (field $user           (ref null any))
+    (field $frame_chain    (ref null $Frame))      ;; OLD substrate
+    (field $op_frame_chain (ref null $OpFrame))    ;; NEW substrate
+    (field $current_op     (ref null $OpInvocation)))) ;; NEW: only set during handler call
 
   ;; If ctx is a $Ctx, return its user payload. Otherwise return ctx
   ;; itself -- back-compat for code paths that still pass bare-value
@@ -69,28 +88,17 @@
       (return (struct.get $Ctx $user (local.get $as_ctx))))
     (local.get $ctx))
 
-  ;; Return a fresh $Ctx with the given user payload and the
-  ;; frame_chain inherited from the input ctx (null if input is not a
-  ;; $Ctx).
+  ;; Return a fresh $Ctx with the given user payload and the other
+  ;; slots inherited from the input ctx (null if input is not a $Ctx).
   (func $ctx_with_user
       (param $ctx (ref null any))
       (param $new_user (ref null any))
       (result (ref $Ctx))
-    (local $as_ctx (ref null $Ctx))
-    (local $parent_chain (ref null $Frame))
-    (block $not_ctx
-      (block $is (result (ref $Ctx))
-        (br $not_ctx
-          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
-      (local.set $as_ctx)
-      (local.set $parent_chain
-        (struct.get $Ctx $frame_chain (local.get $as_ctx)))
-      (return (struct.new $Ctx
-        (local.get $new_user)
-        (local.get $parent_chain))))
     (struct.new $Ctx
       (local.get $new_user)
-      (ref.null $Frame)))
+      (call $ctx_frame_chain    (local.get $ctx))
+      (call $ctx_op_frame_chain (local.get $ctx))
+      (call $ctx_current_op     (local.get $ctx))))
 
   ;; Return ctx.frame_chain, or null if ctx is a bare value (no chain).
   (func $ctx_frame_chain
@@ -104,6 +112,60 @@
       (local.set $as_ctx)
       (return (struct.get $Ctx $frame_chain (local.get $as_ctx))))
     (ref.null $Frame))
+
+  ;; Return ctx.op_frame_chain, or null if ctx is a bare value.
+  (func $ctx_op_frame_chain
+      (param $ctx (ref null any))
+      (result (ref null $OpFrame))
+    (local $as_ctx (ref null $Ctx))
+    (block $not_ctx
+      (block $is (result (ref $Ctx))
+        (br $not_ctx
+          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
+      (local.set $as_ctx)
+      (return (struct.get $Ctx $op_frame_chain (local.get $as_ctx))))
+    (ref.null $OpFrame))
+
+  ;; Return ctx.current_op, or null if not in a handler invocation
+  ;; (or ctx is a bare value).
+  (func $ctx_current_op
+      (param $ctx (ref null any))
+      (result (ref null $OpInvocation))
+    (local $as_ctx (ref null $Ctx))
+    (block $not_ctx
+      (block $is (result (ref $Ctx))
+        (br $not_ctx
+          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
+      (local.set $as_ctx)
+      (return (struct.get $Ctx $current_op (local.get $as_ctx))))
+    (ref.null $OpInvocation))
+
+  ;; Build a fresh $Ctx from an input ctx with selected slots
+  ;; replaced. For each replacement arg, pass the new value directly;
+  ;; for "inherit", use the accessor on $ctx.
+  (func $ctx_make
+      (param $new_user (ref null any))
+      (param $new_frame_chain (ref null $Frame))
+      (param $new_op_chain (ref null $OpFrame))
+      (param $new_current_op (ref null $OpInvocation))
+      (result (ref $Ctx))
+    (struct.new $Ctx
+      (local.get $new_user)
+      (local.get $new_frame_chain)
+      (local.get $new_op_chain)
+      (local.get $new_current_op)))
+
+  ;; Return a fresh ctx with frame_chain replaced; other slots
+  ;; inherited from input.
+  (func $ctx_with_frame_chain
+      (param $ctx (ref null any))
+      (param $new_chain (ref null $Frame))
+      (result (ref $Ctx))
+    (call $ctx_make
+      (call $ctx_user           (local.get $ctx))
+      (local.get $new_chain)
+      (call $ctx_op_frame_chain (local.get $ctx))
+      (call $ctx_current_op     (local.get $ctx))))
 
 
   ;; -- set_ctx --------------------------------------------------------
@@ -229,8 +291,8 @@
 
     ;; Build parent ctx: same user payload, chain with head popped.
     (local.set $parent_ctx
-      (struct.new $Ctx
-        (call $ctx_user (local.get $ctx))
+      (call $ctx_with_frame_chain
+        (local.get $ctx)
         (struct.get $Frame $parent (local.get $frame))))
 
     (local.set $result_args
@@ -322,8 +384,8 @@
         (local.get $captured_chain)))
     ;; Combine firer's user payload with restored-and-extended chain.
     (local.set $new_ctx
-      (struct.new $Ctx
-        (call $ctx_user (local.get $ctx))
+      (call $ctx_with_frame_chain
+        (local.get $ctx)
         (local.get $new_frame)))
 
     (local.set $result_args
@@ -374,8 +436,8 @@
     ;; Build parent ctx for the trip up to k_outer (chain head popped
     ;; for the handler's view).
     (local.set $parent_ctx
-      (struct.new $Ctx
-        (call $ctx_user (local.get $ctx))
+      (call $ctx_with_frame_chain
+        (local.get $ctx)
         (struct.get $Frame $parent (local.get $frame))))
 
     ;; Capture the body's continuation AND the un-popped chain in
@@ -610,18 +672,16 @@
     (param $ctx (ref null any))
     (param $args (ref null any))
 
-    (local $as_ctx (ref $Ctx))
     (local $frame (ref $Frame))
     (local $body_call_cont (ref any))
     (local $parent_ctx (ref $Ctx))
 
-    (local.set $as_ctx (ref.cast (ref $Ctx) (local.get $ctx)))
     (local.set $frame
-      (ref.as_non_null (struct.get $Ctx $frame_chain (local.get $as_ctx))))
+      (ref.as_non_null (call $ctx_frame_chain (local.get $ctx))))
     (local.set $body_call_cont (struct.get $Frame $k_outer (local.get $frame)))
     (local.set $parent_ctx
-      (struct.new $Ctx
-        (struct.get $Ctx $user (local.get $as_ctx))
+      (call $ctx_with_frame_chain
+        (local.get $ctx)
         (struct.get $Frame $parent (local.get $frame))))
     (return_call $apply_3
       (local.get $args)
@@ -649,10 +709,8 @@
     (local $body_fn (ref any))
     (local $body_call_cont (ref any))
     (local $body_args (ref any))
-    (local $parent_chain (ref null $Frame))
     (local $new_frame (ref $Frame))
     (local $new_ctx (ref $Ctx))
-    (local $user (ref null any))
 
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $body_fn
@@ -662,19 +720,14 @@
     (local.set $body_call_cont
       (ref.as_non_null (call $args_head (local.get $args))))
 
-    ;; Extract user payload and parent chain from caller's ctx (with
-    ;; back-compat for bare-value ctx -- treat as empty chain).
-    (local.set $user (call $ctx_user (local.get $ctx)))
-    (local.set $parent_chain (call $ctx_frame_chain (local.get $ctx)))
-
     ;; Push frame holding the body-call cont onto the chain.
     (local.set $new_frame
       (struct.new $Frame
         (local.get $body_call_cont)
-        (local.get $parent_chain)))
+        (call $ctx_frame_chain (local.get $ctx))))
     (local.set $new_ctx
-      (struct.new $Ctx
-        (local.get $user)
+      (call $ctx_with_frame_chain
+        (local.get $ctx)
         (local.get $new_frame)))
 
     ;; Replace head of args with the shared _pop_cont closure; body sees
