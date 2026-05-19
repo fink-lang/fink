@@ -16,6 +16,11 @@
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat" "Fn3"      (type $Fn3      (sub any)))
 
+  ;; Tagged-op substrate uses fink int literals (lowered to $I64) as
+  ;; op ids. Importing the type lets us cast the user-supplied value
+  ;; and read the i64 payload directly.
+  (import "std/int.wat" "I64" (type $I64 (sub final (struct (field $ival i64)))))
+
   (import "rt/apply.wat" "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
   (import "rt/apply.wat" "args_tail"
@@ -64,10 +69,13 @@
 
   ;; Per-handler-invocation slot: the verbs an active handler can use.
   ;; Set on the ctx that flows into the handler call; null elsewhere.
+  ;; Carries the matched OpFrame so `rethrow op v` can walk past it
+  ;; to reach an outer same-id handler.
   (type $OpInvocation (struct
-    (field $resume       (ref any))   ;; closure: re-enter suspension
-    (field $block_rerun  (ref any))   ;; closure: re-enter body from top
-    (field $block_return (ref any)))) ;; closure: skip to k_block_exit
+    (field $resume        (ref any))   ;; closure: re-enter suspension
+    (field $block_rerun   (ref any))   ;; closure: re-enter body from top
+    (field $block_return  (ref any))   ;; closure: skip to k_block_exit
+    (field $matched_frame (ref $OpFrame)))) ;; the frame this handler is handling
 
   (type $Ctx (struct
     (field $user           (ref null any))
@@ -1033,15 +1041,28 @@
 
   ;; ---- with_invoke2 ------------------------------------------------
   ;;
-  ;; Fink-level (compiler-emitted): `with_invoke2 op_id handler body cont`
-  ;; Pushes an OpFrame and runs body_fn under it.
+  ;; Fink-level (Fn3): `with_invoke2 op_id handler body_fn`.
+  ;; args = [cont, op_id, handler, body_fn]. cont is the with-block's
+  ;; exit cont; op_id is a fink int (boxed $I64); handler is `fn v:
+  ;; ...`; body_fn is `fn: BODY` (a zero-arg thunk; its natural-return
+  ;; value becomes the with-block's result, unless an op-handler
+  ;; uses block_return / block_rerun to redirect control flow).
+  ;;
+  ;; Pushes an OpFrame keyed by op_id, runs body_fn under it. The
+  ;; frame stays live for the with-block's dynamic extent; perform_op
+  ;; reads it; k_block_exit pops it.
 
-  (func $with_invoke2 (@pub) (@impl "std/effects.fnk:with_invoke2")
-      (param $ctx (ref null any))
-      (param $op_id (ref null any))         ;; we accept any so fink can call; cast to i31 inside
-      (param $handler (ref null any))
-      (param $body_fn (ref null any))
-      (param $cont (ref null any))
+  (elem declare func $with_invoke2_apply)
+
+  (func $with_invoke2_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref any))
+    (local $op_id_val (ref any))
+    (local $handler (ref any))
+    (local $body_fn (ref any))
 
     (local $op_id_i i32)
     (local $entry_op_chain (ref null $OpFrame))
@@ -1050,22 +1071,37 @@
     (local $new_ctx (ref $Ctx))
     (local $body_args (ref any))
 
+    ;; args = [cont, op_id, handler, body_fn]
+    (local.set $cont
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $op_id_val
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $handler
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $body_fn
+      (ref.as_non_null (call $args_head (local.get $args))))
+
+    ;; op_id is a fink int literal (boxed as $I64). Cast and read i64,
+    ;; truncate to i32 since op_id_i is just an opaque tag.
     (local.set $op_id_i
-      (i31.get_s (ref.cast (ref i31) (local.get $op_id))))
+      (i32.wrap_i64
+        (struct.get $I64 $ival
+          (ref.cast (ref $I64) (local.get $op_id_val)))))
     (local.set $entry_op_chain (call $ctx_op_frame_chain (local.get $ctx)))
 
-    ;; k_block_exit closure: pops to entry_op_chain, tail-calls cont.
     (local.set $k_block_exit
       (call $make_k_block_exit2
-        (ref.as_non_null (local.get $cont))
+        (local.get $cont)
         (local.get $entry_op_chain)))
 
-    ;; Push the new op-frame: handler + body_fn + k_block_exit.
     (local.set $new_frame
       (struct.new $OpFrame
         (local.get $op_id_i)
-        (ref.as_non_null (local.get $handler))
-        (ref.as_non_null (local.get $body_fn))
+        (local.get $handler)
+        (local.get $body_fn)
         (local.get $k_block_exit)
         (local.get $entry_op_chain)))
 
@@ -1076,14 +1112,21 @@
         (local.get $new_frame)
         (call $ctx_current_op (local.get $ctx))))
 
-    ;; Run body_fn with [k_block_exit] under the extended ctx.
     (local.set $body_args
       (call $args_prepend (local.get $k_block_exit) (call $args_empty)))
 
     (return_call $apply_3
       (local.get $body_args)
       (local.get $new_ctx)
-      (ref.as_non_null (local.get $body_fn))))
+      (local.get $body_fn)))
+
+  (global $with_invoke2_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $with_invoke2_apply)
+      (ref.null $Captures)))
+
+  (func $with_invoke2 (@pub) (@impl "std/effects.fnk:with_invoke2") (result (ref any))
+    (global.get $with_invoke2_closure))
 
 
   ;; ---- perform_op --------------------------------------------------
@@ -1133,8 +1176,12 @@
     (local.set $args (call $args_tail (local.get $args)))
     (local.set $value (call $args_head (local.get $args)))
 
+    ;; op_id is a fink int literal (boxed as $I64). Cast and read i64,
+    ;; truncate to i32 since op_id_i is just an opaque tag.
     (local.set $op_id_i
-      (i31.get_s (ref.cast (ref i31) (local.get $op_id_val))))
+      (i32.wrap_i64
+        (struct.get $I64 $ival
+          (ref.cast (ref $I64) (local.get $op_id_val)))))
 
     ;; Walk op_frame_chain looking for op_id_i.
     (local.set $cur (call $ctx_op_frame_chain (local.get $ctx)))
@@ -1170,14 +1217,18 @@
       (struct.new $OpInvocation
         (local.get $resume)
         (local.get $block_rerun)
-        (local.get $block_return)))
+        (local.get $block_return)
+        (ref.as_non_null (local.get $matched))))
 
-    ;; Handler ctx: own frame popped, current_op set.
+    ;; Handler ctx: op_frame_chain unchanged (so fresh fns called
+    ;; from the handler still find this frame on perform). To
+    ;; *forward* (re-yield to outer same-id), use `rethrow` which
+    ;; walks past current_op.matched_frame.
     (local.set $handler_ctx
       (call $ctx_make
         (call $ctx_user (local.get $ctx))
         (call $ctx_frame_chain (local.get $ctx))
-        (struct.get $OpFrame $parent (local.get $matched))
+        (call $ctx_op_frame_chain (local.get $ctx))
         (local.get $invocation)))
 
     ;; Handler args: [k_suspension, value] -- handler's "cont" is the
@@ -1304,4 +1355,109 @@
 
   (func $get_block_return (@pub) (@impl "std/effects.fnk:get_block_return") (result (ref any))
     (global.get $get_block_return_closure))
+
+
+  ;; ---- rethrow -----------------------------------------------------
+  ;;
+  ;; Fink-level: `rethrow value`. Performs the CURRENT handler's
+  ;; operation (taken from current_op.matched_frame.op_id) starting
+  ;; the chain walk PAST the matched frame -- so an outer same-id
+  ;; handler catches it. Used to forward an op the current handler
+  ;; doesn't want to fully handle.
+
+  (elem declare func $rethrow_apply)
+
+  (func $rethrow_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref any))
+    (local $value (ref null any))
+    (local $invocation (ref $OpInvocation))
+    (local $current_frame (ref $OpFrame))
+    (local $op_id_i i32)
+    (local $cur (ref null $OpFrame))
+    (local $matched (ref null $OpFrame))
+
+    (local $resume (ref $Closure))
+    (local $block_rerun (ref $Closure))
+    (local $block_return (ref $Closure))
+    (local $new_invocation (ref $OpInvocation))
+    (local $handler_ctx (ref $Ctx))
+    (local $handler_args (ref any))
+
+    ;; args = [cont, value]
+    (local.set $cont
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $value (call $args_head (local.get $args)))
+
+    ;; Find the current handler's frame and its op_id.
+    (local.set $invocation
+      (ref.as_non_null (call $ctx_current_op (local.get $ctx))))
+    (local.set $current_frame
+      (struct.get $OpInvocation $matched_frame (local.get $invocation)))
+    (local.set $op_id_i
+      (struct.get $OpFrame $op_id (local.get $current_frame)))
+
+    ;; Walk from current_frame.parent onward (skip this frame and any
+    ;; closer ones -- start strictly past it).
+    (local.set $cur (struct.get $OpFrame $parent (local.get $current_frame)))
+    (block $found
+      (loop $walk
+        (local.set $matched (ref.as_non_null (local.get $cur)))
+        (br_if $found
+          (i32.eq
+            (struct.get $OpFrame $op_id (local.get $matched))
+            (local.get $op_id_i)))
+        (local.set $cur (struct.get $OpFrame $parent (local.get $matched)))
+        (br $walk)))
+
+    ;; Build closures for the OUTER handler.
+    (local.set $resume
+      (call $make_resume_op
+        (local.get $cont)
+        (call $ctx_op_frame_chain (local.get $ctx))))
+    (local.set $block_rerun
+      (call $make_block_rerun
+        (struct.get $OpFrame $body_fn      (local.get $matched))
+        (struct.get $OpFrame $k_block_exit (local.get $matched))
+        (call $ctx_op_frame_chain (local.get $ctx))))
+    (local.set $block_return
+      (call $make_block_return
+        (struct.get $OpFrame $k_block_exit (local.get $matched))
+        (struct.get $OpFrame $parent       (local.get $matched))))
+
+    (local.set $new_invocation
+      (struct.new $OpInvocation
+        (local.get $resume)
+        (local.get $block_rerun)
+        (local.get $block_return)
+        (ref.as_non_null (local.get $matched))))
+
+    (local.set $handler_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (call $ctx_op_frame_chain (local.get $ctx))
+        (local.get $new_invocation)))
+
+    (local.set $handler_args
+      (call $args_prepend
+        (local.get $cont)
+        (call $args_prepend (local.get $value) (call $args_empty))))
+
+    (return_call $apply_3
+      (local.get $handler_args)
+      (local.get $handler_ctx)
+      (struct.get $OpFrame $handler (local.get $matched))))
+
+  (global $rethrow_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $rethrow_apply)
+      (ref.null $Captures)))
+
+  (func $rethrow (@pub) (@impl "std/effects.fnk:rethrow") (result (ref any))
+    (global.get $rethrow_closure))
 )
