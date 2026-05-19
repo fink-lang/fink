@@ -1143,6 +1143,34 @@
   ;;
   ;; resume's captured chain includes the matched frame (so the
   ;; resumed body's re-performs of the same op still route here).
+  ;;
+  ;; Handlers MUST terminate explicitly via one of:
+  ;;   (get_resume _) v        -- re-enter the op suspension with v
+  ;;   (get_block_return _) v  -- exit the with-block with v
+  ;;   (get_block_rerun _) _   -- restart the with-block body
+  ;;   rethrow v               -- forward to outer same-id handler
+  ;; Falling off the end of the handler is an error: the substrate
+  ;; gives the handler a trapping cont as its return cont.
+
+
+  ;; Trap closure: invoked if a handler fails to terminate via one
+  ;; of the explicit verbs and instead naturally returns. Traps with
+  ;; a cast failure (we just call args_head on the empty args list).
+  (elem declare func $_handler_must_terminate_fn)
+
+  (func $_handler_must_terminate_fn (type $Fn3)
+    (param $_caps (ref null any))
+    (param $_ctx (ref null any))
+    (param $_args (ref null any))
+    ;; Force a trap: cast a null ref to non-null.
+    (drop (ref.as_non_null (ref.null any)))
+    (unreachable))
+
+  (global $_handler_must_terminate_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $_handler_must_terminate_fn)
+      (ref.null $Captures)))
+
 
   (elem declare func $perform_op_apply)
 
@@ -1231,12 +1259,12 @@
         (call $ctx_op_frame_chain (local.get $ctx))
         (local.get $invocation)))
 
-    ;; Handler args: [k_suspension, value] -- handler's "cont" is the
-    ;; resume's k_suspension (the op call site). Natural-return from
-    ;; handler tail-calls this; same as `(get_resume _) v`.
+    ;; Handler args: [trap_cont, value]. trap_cont fires if the
+    ;; handler falls off the end without using one of the explicit
+    ;; terminators (resume/block_return/block_rerun/rethrow).
     (local.set $handler_args
       (call $args_prepend
-        (local.get $k_suspension)
+        (global.get $_handler_must_terminate_closure)
         (call $args_prepend (local.get $value) (call $args_empty))))
 
     (return_call $apply_3

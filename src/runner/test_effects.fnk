@@ -951,23 +951,6 @@ test 'tagged-op: single handler resumes', fn:
     105
 
 
-test 'tagged-op: handler natural-return is resume value', fn:
-  expect run ƒink:
-    {with_invoke2, perform_op} = import 'std/effects.fnk'
-
-    pause = fn v: perform_op 1, v
-    handler = fn v: v + 100
-
-    v = with_invoke2 1, handler, fn:
-      r = pause 5
-      r
-
-    '${v}'
-
-  | equals ":
-    105
-
-
 test 'tagged-op: block_return exits the with-block', fn:
   expect run ƒink:
     {with_invoke2, perform_op, get_block_return} = import 'std/effects.fnk'
@@ -989,13 +972,18 @@ test 'tagged-op: block_return exits the with-block', fn:
 
 test 'tagged-op: nested handlers with different op ids', fn:
   expect run ƒink:
-    {with_invoke2, perform_op} = import 'std/effects.fnk'
+    {with_invoke2, perform_op, get_resume} = import 'std/effects.fnk'
 
     pause = fn v: perform_op 1, v
     log = fn v: perform_op 2, v
 
-    handle_pause = fn v: 'pause-${v}'
-    handle_log = fn v: 'log-${v}'
+    handle_pause = fn v:
+      resume = get_resume _
+      resume 'pause-${v}'
+
+    handle_log = fn v:
+      resume = get_resume _
+      resume 'log-${v}'
 
     v = with_invoke2 2, handle_log, fn:
       with_invoke2 1, handle_pause, fn:
@@ -1011,11 +999,17 @@ test 'tagged-op: nested handlers with different op ids', fn:
 
 test 'tagged-op: nested same op id -- inner catches', fn:
   expect run ƒink:
-    {with_invoke2, perform_op} = import 'std/effects.fnk'
+    {with_invoke2, perform_op, get_block_return} = import 'std/effects.fnk'
 
     pause = fn v: perform_op 1, v
-    outer = fn v: 'outer-${v}'
-    inner = fn v: 'inner-${v}'
+
+    outer = fn v:
+      block_return = get_block_return _
+      block_return 'outer-${v}'
+
+    inner = fn v:
+      block_return = get_block_return _
+      block_return 'inner-${v}'
 
     v = with_invoke2 1, outer, fn:
       with_invoke2 1, inner, fn:
@@ -1029,10 +1023,15 @@ test 'tagged-op: nested same op id -- inner catches', fn:
 
 test 'tagged-op: rethrow forwards to outer same-id handler', fn:
   expect run ƒink:
-    {with_invoke2, perform_op, rethrow} = import 'std/effects.fnk'
+    {with_invoke2, perform_op, rethrow, get_block_return} = import 'std/effects.fnk'
 
     pause = fn v: perform_op 1, v
-    outer = fn v: 'outer-${v}'
+
+    outer = fn v:
+      block_return = get_block_return _
+      block_return 'outer-${v}'
+
+    # inner forwards via rethrow (which terminates this handler).
     inner = fn v: rethrow '${v}-fwd'
 
     v = with_invoke2 1, outer, fn:
@@ -1047,15 +1046,25 @@ test 'tagged-op: rethrow forwards to outer same-id handler', fn:
 
 test 'tagged-op: fresh fn called from inside handler reaches same handler', fn:
   expect run ƒink:
-    {with_invoke2, perform_op} = import 'std/effects.fnk'
+    {with_invoke2, perform_op, get_resume, get_block_return} = import 'std/effects.fnk'
 
     pause = fn v: perform_op 1, v
     helper = fn n: pause n
 
     handler = fn v:
       match v:
-        'go': helper 'inner'
-        _: '${v}-handled'
+        'go':
+          # Grab block_return BEFORE calling helper -- once helper's
+          # pause fires and gets resumed, our current_op is cleared.
+          br = get_block_return _
+          v_inner = helper 'inner'
+          br v_inner
+        _:
+          # Inner pause's handler: helper's pause routes here. Resume
+          # with the cooked value so helper's pause expression
+          # evaluates to it.
+          resume = get_resume _
+          resume '${v}-handled'
 
     v = with_invoke2 1, handler, fn:
       pause 'go'
