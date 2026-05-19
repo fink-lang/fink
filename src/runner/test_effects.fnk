@@ -898,18 +898,12 @@ test 'userland scheduler over yield2 -- single-fn drive loop', fn:
     2
 
 
-# SKIPPED: substrate gap. Body returns a closure containing yield2;
-# outer code calls that closure after the with-block has exited.
-# Today this traps at frame_pop -- yield2 only finds its destination
-# via the global frame_stack, and on a fresh fn call there's no
-# frame on the stack. The slice-1 re-push trick inside _resume_fn
-# only helps when a captured `resume` is fired; a bare fn call
-# bypasses it.
-#
-# Needed for any scheduler that spawns task fns (task bodies are
-# stored and called later, outside the spawning with-block). The
-# fix is the ctx-carried frame chain redesign tracked in
-# .brain/.scratch/effects-ctx-frame-chain.md.
+# SKIPPED: substrate gap of the untagged yield2 substrate. Body
+# returns a closure containing yield2; outer code calls the closure
+# after the with-block has exited. Untagged yield2 can't find its
+# destination (no frame in ctx, and no way to re-install one from a
+# fresh fn call). The tagged-op substrate (perform_op + bind_chain)
+# solves this -- see the with_invoke2 tests below.
 skip test 'with: body returns yield-fn, called after with exits', fn:
   expect run ƒink:
     {yield2} = import 'std/effects.fnk'
@@ -924,4 +918,150 @@ skip test 'with: body returns yield-fn, called after with exits', fn:
 
   | equals ":
     late
+
+
+# -- tagged-op substrate (perform_op / with_invoke2) ----------------
+#
+# Five primitives:
+#   with_invoke2 op_id handler body_fn
+#   perform_op op_id value
+#   get_resume / get_block_rerun / get_block_return
+#   rethrow value           -- forwards current op to outer same-id handler
+#   bind_chain fn           -- captures the chain into a closure
+#
+# Op ids are fink integer literals; tagging means a chain walk
+# routes each op to the right handler regardless of nesting.
+
+test 'tagged-op: single handler resumes', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op, get_resume} = import 'std/effects.fnk'
+
+    pause = fn v: perform_op 1, v
+    handler = fn v:
+      resume = get_resume _
+      resume v + 100
+
+    v = with_invoke2 1, handler, fn:
+      r = pause 5
+      r
+
+    '${v}'
+
+  | equals ":
+    105
+
+
+test 'tagged-op: handler natural-return is resume value', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op} = import 'std/effects.fnk'
+
+    pause = fn v: perform_op 1, v
+    handler = fn v: v + 100
+
+    v = with_invoke2 1, handler, fn:
+      r = pause 5
+      r
+
+    '${v}'
+
+  | equals ":
+    105
+
+
+test 'tagged-op: block_return exits the with-block', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op, get_block_return} = import 'std/effects.fnk'
+
+    oops = fn v: perform_op 1, v
+    handler = fn v:
+      block_return = get_block_return _
+      block_return 'caught-${v}'
+
+    v = with_invoke2 1, handler, fn:
+      oops 'boom'
+      'unreached'
+
+    '${v}'
+
+  | equals ":
+    caught-boom
+
+
+test 'tagged-op: nested handlers with different op ids', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op} = import 'std/effects.fnk'
+
+    pause = fn v: perform_op 1, v
+    log = fn v: perform_op 2, v
+
+    handle_pause = fn v: 'pause-${v}'
+    handle_log = fn v: 'log-${v}'
+
+    v = with_invoke2 2, handle_log, fn:
+      with_invoke2 1, handle_pause, fn:
+        a = pause 'A'
+        b = log 'B'
+        '${a}/${b}'
+
+    v
+
+  | equals ":
+    pause-A/log-B
+
+
+test 'tagged-op: nested same op id -- inner catches', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op} = import 'std/effects.fnk'
+
+    pause = fn v: perform_op 1, v
+    outer = fn v: 'outer-${v}'
+    inner = fn v: 'inner-${v}'
+
+    v = with_invoke2 1, outer, fn:
+      with_invoke2 1, inner, fn:
+        pause 'X'
+
+    v
+
+  | equals ":
+    inner-X
+
+
+test 'tagged-op: rethrow forwards to outer same-id handler', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op, rethrow} = import 'std/effects.fnk'
+
+    pause = fn v: perform_op 1, v
+    outer = fn v: 'outer-${v}'
+    inner = fn v: rethrow '${v}-fwd'
+
+    v = with_invoke2 1, outer, fn:
+      with_invoke2 1, inner, fn:
+        pause 'X'
+
+    v
+
+  | equals ":
+    outer-X-fwd
+
+
+test 'tagged-op: fresh fn called from inside handler reaches same handler', fn:
+  expect run ƒink:
+    {with_invoke2, perform_op} = import 'std/effects.fnk'
+
+    pause = fn v: perform_op 1, v
+    helper = fn n: pause n
+
+    handler = fn v:
+      match v:
+        'go': helper 'inner'
+        _: '${v}-handled'
+
+    v = with_invoke2 1, handler, fn:
+      pause 'go'
+
+    v
+
+  | equals ":
+    inner-handled
 
