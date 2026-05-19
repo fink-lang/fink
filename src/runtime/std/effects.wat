@@ -773,4 +773,535 @@
       (local.get $h_args)
       (local.get $ctx)
       (local.get $handler)))
+
+
+  ;; ==================================================================
+  ;; -- tagged-op substrate (new) -------------------------------------
+  ;; ==================================================================
+  ;;
+  ;; Five primitives:
+  ;;
+  ;;   with_invoke2 op_id, handler, body_fn, cont
+  ;;     Pushes an OpFrame onto ctx.op_frame_chain, then runs body_fn.
+  ;;     The frame is keyed by op_id; the handler is invoked when an
+  ;;     op with that id is performed inside body_fn's dynamic extent.
+  ;;
+  ;;   perform_op op_id, value
+  ;;     Walks op_frame_chain for the matching id, builds the three
+  ;;     control-flow closures, and tail-calls the handler with the
+  ;;     value plus a fresh ctx whose current_op slot holds those
+  ;;     closures and whose op_frame_chain has the matched frame
+  ;;     popped (so handler's own re-performs of the same op walk
+  ;;     past to an outer same-id handler).
+  ;;
+  ;;   get_resume _        -- closure that re-enters suspension cont
+  ;;   get_block_rerun _   -- closure that re-runs body_fn from start
+  ;;   get_block_return _  -- closure that jumps to k_block_exit
+  ;;
+  ;; The captured chain in resume retains the matched frame, so when
+  ;; the resumed body re-performs the op, it routes back to this
+  ;; same handler again (deep-handler semantics).
+
+
+  ;; ---- $Resume closure ---------------------------------------------
+  ;;
+  ;; Captures: [k_suspension (ref any), captured_op_chain (ref null any)]
+  ;; When called with [_k_caller, v]: tail-calls k_suspension with v
+  ;; under ctx { user: firer-user, op_chain: captured_op_chain,
+  ;; current_op: null, frame_chain: firer's (untouched) }.
+
+  (elem declare func $_resume_op_fn)
+
+  (func $_resume_op_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $k_suspension (ref any))
+    (local $captured_op_chain (ref null $OpFrame))
+    (local $v (ref null any))
+    (local $new_ctx (ref $Ctx))
+    (local $result_args (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $k_suspension
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $captured_op_chain
+      (ref.cast (ref null $OpFrame)
+        (array.get $Captures (local.get $captures) (i32.const 1))))
+
+    ;; args = [k_caller_after_resume, v]. Discard k_caller -- effects
+    ;; from the resumed body route via the captured chain back to
+    ;; the original handler.
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $v (call $args_head (local.get $args)))
+
+    (local.set $new_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (local.get $captured_op_chain)
+        (ref.null $OpInvocation)))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $v) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $new_ctx)
+      (local.get $k_suspension)))
+
+  (func $make_resume_op
+      (param $k_suspension (ref any))
+      (param $captured_op_chain (ref null $OpFrame))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_resume_op_fn)
+      (array.new_fixed $Captures 2
+        (local.get $k_suspension)
+        (local.get $captured_op_chain))))
+
+
+  ;; ---- $BlockReturn closure ----------------------------------------
+  ;;
+  ;; Captures: [k_block_exit (ref any), parent_op_chain (ref null any)]
+  ;; When called with [_k_caller, v]: tail-call k_block_exit with v
+  ;; under ctx with op_chain restored to parent (frame popped).
+
+  (elem declare func $_block_return_fn)
+
+  (func $_block_return_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $k_block_exit (ref any))
+    (local $parent_op_chain (ref null $OpFrame))
+    (local $v (ref null any))
+    (local $new_ctx (ref $Ctx))
+    (local $result_args (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $k_block_exit
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $parent_op_chain
+      (ref.cast (ref null $OpFrame)
+        (array.get $Captures (local.get $captures) (i32.const 1))))
+
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $v (call $args_head (local.get $args)))
+
+    (local.set $new_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (local.get $parent_op_chain)
+        (ref.null $OpInvocation)))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $v) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $new_ctx)
+      (local.get $k_block_exit)))
+
+  (func $make_block_return
+      (param $k_block_exit (ref any))
+      (param $parent_op_chain (ref null $OpFrame))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_block_return_fn)
+      (array.new_fixed $Captures 2
+        (local.get $k_block_exit)
+        (local.get $parent_op_chain))))
+
+
+  ;; ---- $BlockRerun closure -----------------------------------------
+  ;;
+  ;; Captures: [body_fn (ref any), k_block_exit (ref any),
+  ;;            captured_op_chain (ref null any)]
+  ;; When called with [_k_caller, _]: tail-call body_fn with [k_block_exit]
+  ;; under ctx with the captured op_chain (the matched frame still in!)
+  ;; so the with-block restarts from the top, hitting the same handler.
+
+  (elem declare func $_block_rerun_fn)
+
+  (func $_block_rerun_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $body_fn (ref any))
+    (local $k_block_exit (ref any))
+    (local $captured_op_chain (ref null $OpFrame))
+    (local $new_ctx (ref $Ctx))
+    (local $body_args (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $body_fn
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $k_block_exit
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 1))))
+    (local.set $captured_op_chain
+      (ref.cast (ref null $OpFrame)
+        (array.get $Captures (local.get $captures) (i32.const 2))))
+
+    (local.set $new_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (local.get $captured_op_chain)
+        (ref.null $OpInvocation)))
+
+    (local.set $body_args
+      (call $args_prepend (local.get $k_block_exit) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $body_args)
+      (local.get $new_ctx)
+      (local.get $body_fn)))
+
+  (func $make_block_rerun
+      (param $body_fn (ref any))
+      (param $k_block_exit (ref any))
+      (param $captured_op_chain (ref null $OpFrame))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_block_rerun_fn)
+      (array.new_fixed $Captures 3
+        (local.get $body_fn)
+        (local.get $k_block_exit)
+        (local.get $captured_op_chain))))
+
+
+  ;; ---- $KBlockExit closure -----------------------------------------
+  ;;
+  ;; Captures: [outer_cont (ref any), entry_op_chain (ref null any)]
+  ;; When called with [_k_caller, v]: tail-call outer_cont with v
+  ;; under ctx with op_chain restored to entry_op_chain (the chain
+  ;; that was active when the with-block started). The frame pushed
+  ;; by with_invoke2 gets exactly one pop here -- unless the handler
+  ;; never ran (handler returned natural value via block_return or
+  ;; the body completed and reached us directly), in which case
+  ;; restoring entry_op_chain is still correct.
+
+  (elem declare func $_k_block_exit2_fn)
+
+  (func $_k_block_exit2_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $outer_cont (ref any))
+    (local $entry_op_chain (ref null $OpFrame))
+    (local $exit_ctx (ref $Ctx))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $outer_cont
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $entry_op_chain
+      (ref.cast (ref null $OpFrame)
+        (array.get $Captures (local.get $captures) (i32.const 1))))
+
+    (local.set $exit_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (local.get $entry_op_chain)
+        (ref.null $OpInvocation)))
+
+    (return_call $apply_3
+      (local.get $args)
+      (local.get $exit_ctx)
+      (local.get $outer_cont)))
+
+  (func $make_k_block_exit2
+      (param $outer_cont (ref any))
+      (param $entry_op_chain (ref null $OpFrame))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_k_block_exit2_fn)
+      (array.new_fixed $Captures 2
+        (local.get $outer_cont)
+        (local.get $entry_op_chain))))
+
+
+  ;; ---- with_invoke2 ------------------------------------------------
+  ;;
+  ;; Fink-level (compiler-emitted): `with_invoke2 op_id handler body cont`
+  ;; Pushes an OpFrame and runs body_fn under it.
+
+  (func $with_invoke2 (@pub) (@impl "std/effects.fnk:with_invoke2")
+      (param $ctx (ref null any))
+      (param $op_id (ref null any))         ;; we accept any so fink can call; cast to i31 inside
+      (param $handler (ref null any))
+      (param $body_fn (ref null any))
+      (param $cont (ref null any))
+
+    (local $op_id_i i32)
+    (local $entry_op_chain (ref null $OpFrame))
+    (local $k_block_exit (ref $Closure))
+    (local $new_frame (ref $OpFrame))
+    (local $new_ctx (ref $Ctx))
+    (local $body_args (ref any))
+
+    (local.set $op_id_i
+      (i31.get_s (ref.cast (ref i31) (local.get $op_id))))
+    (local.set $entry_op_chain (call $ctx_op_frame_chain (local.get $ctx)))
+
+    ;; k_block_exit closure: pops to entry_op_chain, tail-calls cont.
+    (local.set $k_block_exit
+      (call $make_k_block_exit2
+        (ref.as_non_null (local.get $cont))
+        (local.get $entry_op_chain)))
+
+    ;; Push the new op-frame: handler + body_fn + k_block_exit.
+    (local.set $new_frame
+      (struct.new $OpFrame
+        (local.get $op_id_i)
+        (ref.as_non_null (local.get $handler))
+        (ref.as_non_null (local.get $body_fn))
+        (local.get $k_block_exit)
+        (local.get $entry_op_chain)))
+
+    (local.set $new_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (local.get $new_frame)
+        (call $ctx_current_op (local.get $ctx))))
+
+    ;; Run body_fn with [k_block_exit] under the extended ctx.
+    (local.set $body_args
+      (call $args_prepend (local.get $k_block_exit) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $body_args)
+      (local.get $new_ctx)
+      (ref.as_non_null (local.get $body_fn))))
+
+
+  ;; ---- perform_op --------------------------------------------------
+  ;;
+  ;; Fink-level: `perform_op op_id value`. Walks op_frame_chain for a
+  ;; frame whose op_id matches; invokes its handler with the value.
+  ;; Traps if no frame matches.
+  ;;
+  ;; The handler invocation runs under a fresh ctx with:
+  ;;   - op_frame_chain = matched_frame.parent (the handler doesn't
+  ;;     see its own frame, so its own perform of the same op walks
+  ;;     past to an outer same-id handler).
+  ;;   - current_op = OpInvocation { resume, block_rerun, block_return }
+  ;;
+  ;; resume's captured chain includes the matched frame (so the
+  ;; resumed body's re-performs of the same op still route here).
+
+  (elem declare func $perform_op_apply)
+
+  (func $perform_op_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_suspension (ref any))
+    (local $op_id_val (ref any))
+    (local $op_id_i i32)
+    (local $value (ref null any))
+
+    (local $cur (ref null $OpFrame))
+    (local $matched (ref null $OpFrame))
+
+    (local $resume (ref $Closure))
+    (local $block_rerun (ref $Closure))
+    (local $block_return (ref $Closure))
+    (local $invocation (ref $OpInvocation))
+
+    (local $handler_ctx (ref $Ctx))
+    (local $handler_args (ref any))
+
+    ;; args = [k_suspension, op_id, value]
+    (local.set $k_suspension
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $op_id_val
+      (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $value (call $args_head (local.get $args)))
+
+    (local.set $op_id_i
+      (i31.get_s (ref.cast (ref i31) (local.get $op_id_val))))
+
+    ;; Walk op_frame_chain looking for op_id_i.
+    (local.set $cur (call $ctx_op_frame_chain (local.get $ctx)))
+    (block $found
+      (loop $walk
+        ;; If cur is null, trap (no matching frame).
+        (local.set $matched (ref.as_non_null (local.get $cur)))
+        ;; If matched.op_id == op_id_i, exit loop.
+        (br_if $found
+          (i32.eq
+            (struct.get $OpFrame $op_id (local.get $matched))
+            (local.get $op_id_i)))
+        ;; Else advance to parent and continue.
+        (local.set $cur (struct.get $OpFrame $parent (local.get $matched)))
+        (br $walk)))
+
+    ;; Build the three closures and the OpInvocation.
+    (local.set $resume
+      (call $make_resume_op
+        (local.get $k_suspension)
+        (call $ctx_op_frame_chain (local.get $ctx))))
+    (local.set $block_rerun
+      (call $make_block_rerun
+        (struct.get $OpFrame $body_fn      (local.get $matched))
+        (struct.get $OpFrame $k_block_exit (local.get $matched))
+        (call $ctx_op_frame_chain (local.get $ctx))))
+    (local.set $block_return
+      (call $make_block_return
+        (struct.get $OpFrame $k_block_exit (local.get $matched))
+        (struct.get $OpFrame $parent       (local.get $matched))))
+
+    (local.set $invocation
+      (struct.new $OpInvocation
+        (local.get $resume)
+        (local.get $block_rerun)
+        (local.get $block_return)))
+
+    ;; Handler ctx: own frame popped, current_op set.
+    (local.set $handler_ctx
+      (call $ctx_make
+        (call $ctx_user (local.get $ctx))
+        (call $ctx_frame_chain (local.get $ctx))
+        (struct.get $OpFrame $parent (local.get $matched))
+        (local.get $invocation)))
+
+    ;; Handler args: [k_suspension, value] -- handler's "cont" is the
+    ;; resume's k_suspension (the op call site). Natural-return from
+    ;; handler tail-calls this; same as `(get_resume _) v`.
+    (local.set $handler_args
+      (call $args_prepend
+        (local.get $k_suspension)
+        (call $args_prepend (local.get $value) (call $args_empty))))
+
+    (return_call $apply_3
+      (local.get $handler_args)
+      (local.get $handler_ctx)
+      (struct.get $OpFrame $handler (local.get $matched))))
+
+  (global $perform_op_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $perform_op_apply)
+      (ref.null $Captures)))
+
+  (func $perform_op (@pub) (@impl "std/effects.fnk:perform_op") (result (ref any))
+    (global.get $perform_op_closure))
+
+
+  ;; ---- get_resume / get_block_rerun / get_block_return -------------
+
+  (elem declare func $get_resume_apply)
+
+  (func $get_resume_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $invocation (ref $OpInvocation))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $invocation
+      (ref.as_non_null (call $ctx_current_op (local.get $ctx))))
+
+    (local.set $result_args
+      (call $args_prepend
+        (struct.get $OpInvocation $resume (local.get $invocation))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $get_resume_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_resume_apply)
+      (ref.null $Captures)))
+
+  (func $get_resume (@pub) (@impl "std/effects.fnk:get_resume") (result (ref any))
+    (global.get $get_resume_closure))
+
+
+  (elem declare func $get_block_rerun_apply)
+
+  (func $get_block_rerun_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $invocation (ref $OpInvocation))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $invocation
+      (ref.as_non_null (call $ctx_current_op (local.get $ctx))))
+
+    (local.set $result_args
+      (call $args_prepend
+        (struct.get $OpInvocation $block_rerun (local.get $invocation))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $get_block_rerun_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_block_rerun_apply)
+      (ref.null $Captures)))
+
+  (func $get_block_rerun (@pub) (@impl "std/effects.fnk:get_block_rerun") (result (ref any))
+    (global.get $get_block_rerun_closure))
+
+
+  (elem declare func $get_block_return_apply)
+
+  (func $get_block_return_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $invocation (ref $OpInvocation))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $invocation
+      (ref.as_non_null (call $ctx_current_op (local.get $ctx))))
+
+    (local.set $result_args
+      (call $args_prepend
+        (struct.get $OpInvocation $block_return (local.get $invocation))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $get_block_return_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_block_return_apply)
+      (ref.null $Captures)))
+
+  (func $get_block_return (@pub) (@impl "std/effects.fnk:get_block_return") (result (ref any))
+    (global.get $get_block_return_closure))
 )
