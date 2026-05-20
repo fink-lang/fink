@@ -365,17 +365,13 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     //   body_fn_val = lower_module_as_fn B        ; B as a zero-param fn
     //   result     = App(WithInvoke, [h_val, body_fn_val])
     //
-    // The runtime `with_invoke` (std/effects.wat) pushes a frame
-    // holding the current cont (k_outer), then invokes the handler
-    // with `[pop_cont, body_fn]`. The handler is `fn body: ...` --
-    // when it calls `body _`, that runs B; when B returns normally,
-    // pop_cont pops the frame and tail-calls k_outer; when B aborts,
-    // `abort` itself pops the frame and tail-calls k_outer.
-    //
-    // For now: single-handler form only (`with H: B`). Multi-handler
-    // (`with H1, H2: B`) and the userland handler-registry dispatch
-    // (`with foo: B` where foo is an opname, not the handler-fn
-    // directly) land in follow-up slices.
+    // NOTE: the WithInvoke runtime primitive no longer exists -- the old
+    // wat-based `with_invoke` substrate was retired in favour of building
+    // the handler semantics in userland on top of `suspend` + ctx (see
+    // rt/apply.wat). Programs that use `with H: B` source syntax will
+    // emit-fail with a "WithInvoke not found" error until the userland
+    // handler library lands in std/effects.fnk and the desugar is
+    // re-pointed at it.
     NodeKind::With { handlers, body, .. } => {
       assert_eq!(handlers.items.len(), 1, "with: multi-handler not yet supported");
       let body_items: Vec<AstId> = body.items.to_vec();

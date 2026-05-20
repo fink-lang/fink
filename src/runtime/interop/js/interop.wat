@@ -80,9 +80,9 @@
       (param $callee (ref null any))))
   (import "rt/apply.wat" "empty_ctx"
     (func $empty_ctx_inner (result (ref any))))
-  (import "std/effects.wat" "set_ctx"
+  (import "rt/apply.wat" "set_ctx"
     (func $set_ctx_inner (result (ref any))))
-  (import "std/effects.wat" "get_ctx"
+  (import "rt/apply.wat" "get_ctx"
     (func $get_ctx_inner (result (ref any))))
 
   ;; std/dict.wat:get is typed for the concrete $RecImpl subtype; JS only

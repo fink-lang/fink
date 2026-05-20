@@ -1,9 +1,21 @@
-;; Closure dispatch — unified $Fn3 calling convention.
+;; CPS calling convention + control-flow substrate.
 ;;
 ;; All functions are $Fn3(captures, ctx, args). Conts are in captures
 ;; or in the args list (conts-first ordering ensures this after lifting).
 ;; ctx is the universe context threaded as a native wasm param so
 ;; callees don't need to peel it off the args list.
+;;
+;; This module owns the entire substrate every fink program runs on:
+;;
+;;   $Closure / $Captures / $Fn3 / $Ctx -- the value shapes.
+;;   apply_3 / apply_N / args_* / make_thunk -- the calling-convention ABI.
+;;   set_ctx / get_ctx -- thread a user-visible context through every call.
+;;   suspend -- capture the current continuation as a closure.
+;;
+;; That's the whole runtime. Effect handlers, `with` semantics, generators,
+;; coroutines, exceptions, schedulers, backtracking -- everything else --
+;; are library code in ƒink (e.g. std/effects.fnk) built on top of these
+;; primitives. See .brain/.scratch/userland_with.md for the design.
 
 (module
 
@@ -45,21 +57,39 @@
   ;; the args-list head/tail dance. Every closure func is Fn3-typed.
   (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
 
-  ;; $Ctx — universe context threaded through every Fn3 call. Frames
-  ;; field is the per-provider handler stack; null until a `with` block
-  ;; pushes its first frame. Hosts call $empty_ctx at module entry to
-  ;; mint the initial ctx; substrate primitives (register_ctx, etc.)
-  ;; land in a later increment.
+  ;; $Ctx — universe context threaded through every Fn3 call. Carries a
+  ;; single user-visible payload; userland reads/replaces it via the
+  ;; get_ctx / set_ctx primitives below. The substrate is the only place
+  ;; that pattern-matches on $Ctx; non-substrate code treats ctx opaquely
+  ;; as `(ref null any)`. Hosts call $empty_ctx at module entry to seed
+  ;; the ctx arg of $apply_3.
   (type $Ctx (@pub) (struct
-    (field $frames (mut (ref null any)))
+    (field $user (ref null any))
   ))
 
   ;; Mint an empty $Ctx. Host runners call this once per module-wrapper
   ;; entry to seed the ctx arg of $apply_3, replacing the placeholder
   ;; ref.i31 42 that lived at the host boundary during the Fn3 flip.
+  ;;
+  ;; The user payload is seeded with `ref.i31 0` (fink unit), not null,
+  ;; so `get_ctx _` before any `set_ctx` returns a real value rather
+  ;; than tripping non-null casts downstream.
   (func $empty_ctx (@pub) (result (ref $Ctx))
-    (struct.new $Ctx (ref.null any))
+    (struct.new $Ctx (ref.i31 (i32.const 0)))
   )
+
+  ;; If ctx is a $Ctx, return its user payload. Otherwise return ctx
+  ;; itself -- so callers before any set_ctx still see the bare value
+  ;; the host seeded with.
+  (func $ctx_user (param $ctx (ref null any)) (result (ref null any))
+    (local $as_ctx (ref null $Ctx))
+    (block $not_ctx
+      (block $is (result (ref $Ctx))
+        (br $not_ctx
+          (br_on_cast $is (ref null any) (ref $Ctx) (local.get $ctx))))
+      (local.set $as_ctx)
+      (return (struct.get $Ctx $user (local.get $as_ctx))))
+    (local.get $ctx))
 
 
   ;; $SpreadArgs — wrapper for spread arguments at call sites.
@@ -222,4 +252,195 @@
   (func $make_unit_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (result (ref $Closure))
     (call $make_thunk (local.get $ctx) (local.get $cont) (ref.i31 (i32.const 0)))
   )
+
+
+  ;; -- set_ctx --------------------------------------------------------
+  ;;
+  ;; Fink-level: `set_ctx new_ctx -> old_ctx`.
+  ;;
+  ;; CPS shape (Fn3): args = [cont, new_ctx]. Returns the caller's user
+  ;; payload to cont; threads a fresh $Ctx (new user) as the cont's ctx
+  ;; so every fink call downstream sees `new_ctx` as their universe.
+  ;;
+  ;; Exported as `std/effects.fnk:set_ctx`; the import path is the
+  ;; user-facing API and stays stable across substrate refactors.
+
+  (elem declare func $set_ctx_apply)
+
+  (func $set_ctx_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $new_user (ref null any))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $new_user (call $args_head (local.get $args)))
+
+    (local.set $result_args
+      (call $args_prepend
+        (call $ctx_user (local.get $ctx))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (struct.new $Ctx (local.get $new_user))
+      (local.get $cont)))
+
+  (global $set_ctx_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $set_ctx_apply)
+      (ref.null $Captures)))
+
+  (func $set_ctx (@pub) (@impl "std/effects.fnk:set_ctx") (result (ref any))
+    (global.get $set_ctx_closure))
+
+
+  ;; -- get_ctx --------------------------------------------------------
+  ;;
+  ;; Fink-level: `get_ctx _ -> ctx`.
+  ;;
+  ;; CPS shape (Fn3): args = [cont, _]. Returns the caller's user
+  ;; payload to cont without mutating it.
+
+  (elem declare func $get_ctx_apply)
+
+  (func $get_ctx_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+
+    (local.set $result_args
+      (call $args_prepend
+        (call $ctx_user (local.get $ctx))
+        (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $get_ctx_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_ctx_apply)
+      (ref.null $Captures)))
+
+  (func $get_ctx (@pub) (@impl "std/effects.fnk:get_ctx") (result (ref any))
+    (global.get $get_ctx_closure))
+
+
+  ;; -- suspend --------------------------------------------------------
+  ;;
+  ;; Fink-level: `result = suspend fn resume: ...`.
+  ;;
+  ;; Captures the suspend expression's continuation as a closure `resume`,
+  ;; then invokes the user fn with `resume` as its single argument.
+  ;; `resume v` transfers control to the captured cont (the point right
+  ;; after `suspend ...`) with `v` becoming the value of the suspend
+  ;; expression. Multi-shot: `resume` may be called any number of times
+  ;; (or zero -- if user_fn never calls resume and falls off the end,
+  ;; that thread of execution ends).
+  ;;
+  ;; Combined with set_ctx / get_ctx, this is sufficient to build effect
+  ;; handlers, generators, coroutines, schedulers, backtracking, and
+  ;; exceptions as userland library code.
+
+  ;; Internal: no-op cont. Used as the k_caller passed to user_fn so
+  ;; if user_fn falls off the end without calling resume, the thread
+  ;; of execution dies cleanly.
+  (elem declare func $_noop_cont_fn)
+
+  (func $_noop_cont_fn (type $Fn3)
+    (param $_caps (ref null any))
+    (param $_ctx (ref null any))
+    (param $_args (ref null any))
+    (return))
+
+  (global $_noop_cont (ref $Closure)
+    (struct.new $Closure
+      (ref.func $_noop_cont_fn)
+      (ref.null $Captures)))
+
+  ;; Internal: the resume closure handed to user_fn. Captures the cont
+  ;; passed to suspend. When fired with `v`, discards its own k_caller
+  ;; and tail-calls the captured cont with v under the firer's ctx.
+  (elem declare func $_suspend_resume_fn)
+
+  (func $_suspend_resume_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $captured_cont (ref any))
+    (local $v (ref null any))
+    (local $result_args (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $captured_cont
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+
+    ;; args = [k_caller, v]. Discard k_caller; tail-call captured cont.
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $v (call $args_head (local.get $args)))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $v) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $captured_cont)))
+
+  (elem declare func $suspend_apply)
+
+  (func $suspend_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref any))
+    (local $user_fn (ref any))
+    (local $args_tail (ref any))
+    (local $resume (ref $Closure))
+    (local $call_args (ref any))
+
+    ;; args = [cont, user_fn]. Capture cont inside resume; tail-call
+    ;; user_fn with resume as its single argument under a noop k_caller.
+    (local.set $cont (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $args_tail (ref.as_non_null (call $args_tail (local.get $args))))
+    (local.set $user_fn (ref.as_non_null (call $args_head (local.get $args_tail))))
+
+    (local.set $resume
+      (struct.new $Closure
+        (ref.func $_suspend_resume_fn)
+        (array.new_fixed $Captures 1 (local.get $cont))))
+
+    (local.set $call_args
+      (call $args_prepend
+        (global.get $_noop_cont)
+        (call $args_prepend
+          (local.get $resume)
+          (call $args_empty))))
+
+    (return_call $apply_3
+      (local.get $call_args)
+      (local.get $ctx)
+      (local.get $user_fn)))
+
+  (global $suspend_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $suspend_apply)
+      (ref.null $Captures)))
+
+  (func $suspend (@pub) (@impl "std/effects.fnk:suspend") (result (ref any))
+    (global.get $suspend_closure))
 )
