@@ -1074,3 +1074,80 @@ test 'tagged-op: fresh fn called from inside handler reaches same handler', fn:
   | equals ":
     inner-handled
 
+
+# -- suspend (raw cont capture, no handler) ---------------------------
+#
+# `suspend _` is the lowest-level cont primitive: it captures the
+# caller's continuation and returns it as a closure. Calling the
+# closure with v re-enters at the suspension point, with the
+# `suspend _` expression evaluating to v. No frame, no chain walk
+# -- raw delimited cont capture.
+
+# Round-trip: suspend, call cont once with a new value, observe
+# control returning. Phase guard avoids infinite loop on re-entry.
+test 'suspend: round-trip via captured cont', fn:
+  expect run ƒink:
+    {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx {phase: 'before'}
+    r = suspend _
+    {phase} = get_ctx _
+    match phase:
+      'before':
+        set_ctx {phase: 'after'}
+        r 'fired'
+      _: 'final-${r}'
+
+  | equals ":
+    final-fired
+
+
+# The first evaluation of `suspend _` returns the cont closure (a
+# fn value), distinct from any later value the cont is fired with.
+test 'suspend: first pass returns a closure, second pass receives the value', fn:
+  expect run ƒink:
+    {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx {phase: 'first'}
+    v = suspend _
+    {phase} = get_ctx _
+    match phase:
+      'first':
+        # v is a closure; fire it with 'payload'
+        set_ctx {phase: 'second'}
+        v 'payload'
+      _:
+        # v is now the fired value
+        'got: ${v}'
+
+  | equals ":
+    got: payload
+
+
+# Cont can be fired multiple times -- each fire re-enters the
+# suspension point fresh. The cont closure must be stashed in ctx
+# on first pass (re-entry overwrites `r` with the fired value).
+test 'suspend: cont can be fired more than once', fn:
+  expect run ƒink:
+    {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx {count: 0, results: [], k: false}
+    r = suspend _
+    {count, results, k} = get_ctx _
+    match count:
+      0:
+        # r is the cont -- stash it; fire with first payload.
+        set_ctx {count: 1, results: [..results, 'init'], k: r}
+        r 'a'
+      1:
+        # k holds the cont; r is 'a'. Fire k again with 'b'.
+        set_ctx {count: 2, results: [..results, r], k}
+        k 'b'
+      _:
+        # r is 'b'. Final pass.
+        new_results = [..results, r]
+        '${new_results}'
+
+  | equals ":
+    ['init', 'a', 'b']
+
