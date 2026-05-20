@@ -1089,39 +1089,18 @@ test 'suspend: round-trip via captured cont', fn:
   expect run ƒink:
     {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
 
-    set_ctx {phase: 'before'}
-    r = suspend _
+    set_ctx {phase: 'step 1'}
+    resume = suspend _
     {phase} = get_ctx _
     match phase:
-      'before':
-        set_ctx {phase: 'after'}
-        r 'fired'
-      _: 'final-${r}'
+      'step 1':
+        set_ctx {phase: '${phase} -> step 2'}
+        resume 'fired'
+      _: '${phase} -> step 3 (${resume})'
 
   | equals ":
-    final-fired
+    step 1 -> step 2 -> step 3 (fired)
 
-
-# The first evaluation of `suspend _` returns the cont closure (a
-# fn value), distinct from any later value the cont is fired with.
-test 'suspend: first pass returns a closure, second pass receives the value', fn:
-  expect run ƒink:
-    {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
-
-    set_ctx {phase: 'first'}
-    v = suspend _
-    {phase} = get_ctx _
-    match phase:
-      'first':
-        # v is a closure; fire it with 'payload'
-        set_ctx {phase: 'second'}
-        v 'payload'
-      _:
-        # v is now the fired value
-        'got: ${v}'
-
-  | equals ":
-    got: payload
 
 
 # Cont can be fired multiple times -- each fire re-enters the
