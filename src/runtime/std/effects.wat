@@ -1144,31 +1144,36 @@
   ;; resume's captured chain includes the matched frame (so the
   ;; resumed body's re-performs of the same op still route here).
   ;;
-  ;; Handlers MUST terminate explicitly via one of:
+  ;; Handlers transfer control via:
   ;;   (get_resume _) v        -- re-enter the op suspension with v
   ;;   (get_block_return _) v  -- exit the with-block with v
   ;;   (get_block_rerun _) _   -- restart the with-block body
   ;;   rethrow v               -- forward to outer same-id handler
-  ;; Falling off the end of the handler is an error: the substrate
-  ;; gives the handler a trapping cont as its return cont.
+  ;;
+  ;; Each is tail-call-only and never returns to the handler. A
+  ;; well-written handler ends in such a call. Falling off the end
+  ;; without transferring control is an error -- the substrate
+  ;; passes a trapping cont as the handler's return cont.
 
+  ;; Noop cont for the handler's return slot. A correctly written
+  ;; handler ends with an explicit terminator (resume / block_return
+  ;; / block_rerun / rethrow) and never returns to this. If the
+  ;; handler "falls off" -- e.g. it stored its resume somewhere for
+  ;; later firing and finished doing other work -- control simply
+  ;; stops here. Any remaining live continuations (stored resumes,
+  ;; pending tasks) carry the program forward on their own.
 
-  ;; Trap closure: invoked if a handler fails to terminate via one
-  ;; of the explicit verbs and instead naturally returns. Traps with
-  ;; a cast failure (we just call args_head on the empty args list).
-  (elem declare func $_handler_must_terminate_fn)
+  (elem declare func $_handler_noop_cont_fn)
 
-  (func $_handler_must_terminate_fn (type $Fn3)
+  (func $_handler_noop_cont_fn (type $Fn3)
     (param $_caps (ref null any))
     (param $_ctx (ref null any))
     (param $_args (ref null any))
-    ;; Force a trap: cast a null ref to non-null.
-    (drop (ref.as_non_null (ref.null any)))
-    (unreachable))
+    (return))
 
-  (global $_handler_must_terminate_closure (ref $Closure)
+  (global $_handler_noop_cont (ref $Closure)
     (struct.new $Closure
-      (ref.func $_handler_must_terminate_fn)
+      (ref.func $_handler_noop_cont_fn)
       (ref.null $Captures)))
 
 
@@ -1259,12 +1264,14 @@
         (call $ctx_op_frame_chain (local.get $ctx))
         (local.get $invocation)))
 
-    ;; Handler args: [trap_cont, value]. trap_cont fires if the
-    ;; handler falls off the end without using one of the explicit
-    ;; terminators (resume/block_return/block_rerun/rethrow).
+    ;; Handler args: [noop_cont, value]. Handler's "return" path
+    ;; goes nowhere; control flow is shaped by whatever explicit
+    ;; terminator the handler invokes (resume / block_return /
+    ;; block_rerun / rethrow) or by other live continuations the
+    ;; handler captured / passed elsewhere.
     (local.set $handler_args
       (call $args_prepend
-        (global.get $_handler_must_terminate_closure)
+        (global.get $_handler_noop_cont)
         (call $args_prepend (local.get $value) (call $args_empty))))
 
     (return_call $apply_3
@@ -1576,4 +1583,148 @@
 
   (func $bind_chain (@pub) (@impl "std/effects.fnk:bind_chain") (result (ref any))
     (global.get $bind_chain_closure))
+
+
+  ;; ---- suspend -----------------------------------------------------
+  ;;
+  ;; Fink-level: `suspend _ -> resume`.
+  ;;
+  ;; The lowest-level control-flow primitive. Captures the caller's
+  ;; continuation as a closure and returns it. The expression
+  ;; `suspend _` evaluates to that closure; when the closure is
+  ;; called with `v`, control transfers to the captured cont (the
+  ;; point right after the `suspend _` call) with `v` as the result
+  ;; of the expression.
+  ;;
+  ;; Example:
+  ;;   resume = suspend _    # at this point control is suspended
+  ;;   ... resume is a value, can be passed around ...
+  ;;   # eventually some code does: resume 42
+  ;;   # control jumps back here; the `suspend _` expression was 42
+  ;;
+  ;; No frames, no chain walk, no handler involvement -- just raw
+  ;; cont capture. Lower-level than perform_op / with_invoke2. The
+  ;; effect-handler primitives are built on the same mechanism but
+  ;; add structured dispatch on top.
+
+  ;; The closure produced by `suspend _`. Captures the caller's
+  ;; cont. When called with `v`, tail-calls cont with v under the
+  ;; firer's ctx (firer-wins user payload, like resume in perform_op).
+  (elem declare func $_suspend_resume_fn)
+
+  (func $_suspend_resume_fn (type $Fn3)
+    (param $caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $captured_cont (ref any))
+    (local $v (ref null any))
+    (local $result_args (ref any))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $captured_cont
+      (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+
+    ;; args = [k_caller, v]. Discard k_caller -- we tail-call into
+    ;; the captured cont, not back to the firer.
+    (local.set $args (call $args_tail (local.get $args)))
+    (local.set $v (call $args_head (local.get $args)))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $v) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $captured_cont)))
+
+  (elem declare func $suspend_apply)
+
+  (func $suspend_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref any))
+    (local $resume (ref $Closure))
+    (local $result_args (ref any))
+
+    ;; args = [cont, _]. cont is what we capture.
+    (local.set $cont (ref.as_non_null (call $args_head (local.get $args))))
+
+    (local.set $resume
+      (struct.new $Closure
+        (ref.func $_suspend_resume_fn)
+        (array.new_fixed $Captures 1 (local.get $cont))))
+
+    ;; Return the resume closure as the value of `suspend _`. Caller
+    ;; gets the closure and decides whether/when to fire it.
+    (local.set $result_args
+      (call $args_prepend (local.get $resume) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $suspend_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $suspend_apply)
+      (ref.null $Captures)))
+
+  (func $suspend (@pub) (@impl "std/effects.fnk:suspend") (result (ref any))
+    (global.get $suspend_closure))
+
+
+  ;; ---- conts -------------------------------------------------------
+  ;;
+  ;; Fink-level (inside a handler): `conts _ -> [resume, block_return, block_rerun]`.
+  ;;
+  ;; Returns a list of the three continuation closures from the
+  ;; current op invocation. Destructure with positional pattern:
+  ;;   [resume, block_return, block_rerun] = conts _
+
+  (elem declare func $conts_apply)
+
+  (func $conts_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $invocation (ref $OpInvocation))
+    (local $list (ref any))
+    (local $result_args (ref any))
+
+    (local.set $cont (call $args_head (local.get $args)))
+    (local.set $invocation
+      (ref.as_non_null (call $ctx_current_op (local.get $ctx))))
+
+    ;; Build [resume, block_return, block_rerun] using the args list
+    ;; primitives (same impl as fink list).
+    (local.set $list
+      (call $args_prepend
+        (struct.get $OpInvocation $resume (local.get $invocation))
+        (call $args_prepend
+          (struct.get $OpInvocation $block_return (local.get $invocation))
+          (call $args_prepend
+            (struct.get $OpInvocation $block_rerun (local.get $invocation))
+            (call $args_empty)))))
+
+    (local.set $result_args
+      (call $args_prepend (local.get $list) (call $args_empty)))
+
+    (return_call $apply_3
+      (local.get $result_args)
+      (local.get $ctx)
+      (local.get $cont)))
+
+  (global $conts_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $conts_apply)
+      (ref.null $Captures)))
+
+  (func $conts (@pub) (@impl "std/effects.fnk:conts") (result (ref any))
+    (global.get $conts_closure))
 )
