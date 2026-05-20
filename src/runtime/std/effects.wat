@@ -21,6 +21,29 @@
   ;; and read the i64 payload directly.
   (import "std/int.wat" "I64" (type $I64 (sub final (struct (field $ival i64)))))
 
+  ;; For `conts _` — build a fink rec with string keys. Mirrors how
+  ;; rt/modules.wat constructs records: _set_field handles the
+  ;; (ref null any) → (ref eq) casts internally.
+  (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "std/str.wat"  "Str"       (type $Str       (sub any)))
+  (import "std/str.wat"  "from_bytes"
+    (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
+  (import "std/dict.wat" "_rec_new"
+    (func $rec_new_empty (result (ref $RecImpl))))
+  (import "std/dict.wat" "_set_field"
+    (func $put_field
+      (param (ref null any)) (param (ref null any)) (param (ref null any))
+      (result (ref null any))))
+  (import "std/dict.wat" "Rec"     (type $Rec     (sub any)))
+  (import "std/dict.wat" "RecImpl" (type $RecImpl (sub $Rec)))
+
+  ;; For conts -- build a fink rec with string keys.
+  (import "std/str.wat" "Str"       (type $Str       (sub any)))
+  (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "std/str.wat" "from_bytes"
+    (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
+  (import "std/dict.wat" "Rec"     (type $Rec     (sub any)))
+
   (import "rt/apply.wat" "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
   (import "rt/apply.wat" "args_tail"
@@ -1679,11 +1702,46 @@
 
   ;; ---- conts -------------------------------------------------------
   ;;
-  ;; Fink-level (inside a handler): `conts _ -> [resume, block_return, block_rerun]`.
+  ;; Fink-level (inside a handler): `conts _ -> {resume, return, rerun}`.
   ;;
-  ;; Returns a list of the three continuation closures from the
-  ;; current op invocation. Destructure with positional pattern:
-  ;;   [resume, block_return, block_rerun] = conts _
+  ;; Returns a rec of the three continuation closures from the
+  ;; current op invocation. Destructure by field name:
+  ;;   {resume, return, rerun} = conts _
+
+  ;; Helpers minting the three rec keys as $Str values via ByteArray.
+  ;; Built per-call -- cheap and avoids needing data sections.
+  (func $_str_lit_resume (result (ref $Str))
+    (local $buf (ref $ByteArray))
+    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 6)))
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x72)) ;; r
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x65)) ;; e
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x73)) ;; s
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x75)) ;; u
+    (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x6D)) ;; m
+    (array.set $ByteArray (local.get $buf) (i32.const 5) (i32.const 0x65)) ;; e
+    (return_call $str_from_bytes (local.get $buf)))
+
+  (func $_str_lit_return (result (ref $Str))
+    (local $buf (ref $ByteArray))
+    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 6)))
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x72)) ;; r
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x65)) ;; e
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x74)) ;; t
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x75)) ;; u
+    (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x72)) ;; r
+    (array.set $ByteArray (local.get $buf) (i32.const 5) (i32.const 0x6E)) ;; n
+    (return_call $str_from_bytes (local.get $buf)))
+
+  (func $_str_lit_rerun (result (ref $Str))
+    (local $buf (ref $ByteArray))
+    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 5)))
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x72)) ;; r
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x65)) ;; e
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x72)) ;; r
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x75)) ;; u
+    (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x6E)) ;; n
+    (return_call $str_from_bytes (local.get $buf)))
+
 
   (elem declare func $conts_apply)
 
@@ -1694,26 +1752,35 @@
 
     (local $cont (ref null any))
     (local $invocation (ref $OpInvocation))
-    (local $list (ref any))
+    (local $rec (ref null any))
     (local $result_args (ref any))
 
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $invocation
       (ref.as_non_null (call $ctx_current_op (local.get $ctx))))
 
-    ;; Build [resume, block_return, block_rerun] using the args list
-    ;; primitives (same impl as fink list).
-    (local.set $list
-      (call $args_prepend
-        (struct.get $OpInvocation $resume (local.get $invocation))
-        (call $args_prepend
-          (struct.get $OpInvocation $block_return (local.get $invocation))
-          (call $args_prepend
-            (struct.get $OpInvocation $block_rerun (local.get $invocation))
-            (call $args_empty)))))
+    ;; Build { resume, return, rerun } -- same pattern as
+    ;; rt/modules.wat: _set_field returns (ref null any), feed back
+    ;; into next call.
+    (local.set $rec (call $rec_new_empty))
+    (local.set $rec
+      (call $put_field
+        (local.get $rec)
+        (call $_str_lit_resume)
+        (struct.get $OpInvocation $resume (local.get $invocation))))
+    (local.set $rec
+      (call $put_field
+        (local.get $rec)
+        (call $_str_lit_return)
+        (struct.get $OpInvocation $block_return (local.get $invocation))))
+    (local.set $rec
+      (call $put_field
+        (local.get $rec)
+        (call $_str_lit_rerun)
+        (struct.get $OpInvocation $block_rerun (local.get $invocation))))
 
     (local.set $result_args
-      (call $args_prepend (local.get $list) (call $args_empty)))
+      (call $args_prepend (local.get $rec) (call $args_empty)))
 
     (return_call $apply_3
       (local.get $result_args)
