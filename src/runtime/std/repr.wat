@@ -35,7 +35,8 @@
   ;;
   ;; num.wat owns the inner numeric dispatch ($Int / $F64 / $Decimal).
 
-  (import "std/str.wat"   "repr" (func $str_repr   (param (ref $Str))   (result (ref $Str))))
+  (import "std/str.wat"   "repr"         (func $str_repr     (param (ref $Str))     (result (ref $Str))))
+  (import "std/str.wat"   "closure_repr" (func $closure_repr (param (ref $Closure)) (result (ref $Str))))
   (import "std/num.wat"   "repr" (func $num_repr   (param (ref $Num))   (result (ref $Str))))
   (import "std/range.wat" "repr" (func $range_repr (param (ref $Range)) (result (ref $Str))))
   (import "std/list.wat"  "repr" (func $list_repr  (param (ref $List))  (result (ref $Str))))
@@ -125,6 +126,14 @@
           (br_on_cast $is_set (ref any) (ref $Set)
             (local.get $val))))
       (return_call $set_repr))
+
+    ;; Try $Closure -- placeholder "<closure>" repr.
+    (block $not_clos
+      (block $is_clos (result (ref $Closure))
+        (br $not_clos
+          (br_on_cast $is_clos (ref any) (ref $Closure)
+            (local.get $val))))
+      (return_call $closure_repr))
 
     ;; Unknown type — unreachable for now.
     (unreachable)
