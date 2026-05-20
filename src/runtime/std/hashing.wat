@@ -15,6 +15,7 @@
 
   (import "std/num.wat" "Num" (type $Num (sub any)))
   (import "std/str.wat" "Str" (type $Str (sub any)))
+  (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
 
   (import "std/num.wat" "hash_i31"
     (func $num_hash_i31 (param (ref $Num)) (result i32)))
@@ -57,6 +58,19 @@
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $key))))
       (return (call $str_hash_i31)))
+
+    ;; Try $Closure -- hash to a constant. Allows using closures as
+    ;; dict/rec keys (identity-based equality). All closures collide
+    ;; into the same hash bucket; the hamt's eq check (ref.eq via
+    ;; deep_eq) distinguishes them. O(n) lookup on bucket size; fine
+    ;; for the small dispatch tables typical of effect handlers.
+    (block $not_clos
+      (block $is_clos (result (ref $Closure))
+        (br $not_clos
+          (br_on_cast $is_clos (ref eq) (ref $Closure)
+            (local.get $key))))
+      (drop)
+      (return (i32.const 0)))
 
     ;; Unknown type — unreachable for valid keys
     (unreachable)

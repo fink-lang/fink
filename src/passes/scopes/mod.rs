@@ -502,7 +502,16 @@ fn walk_pattern_refs<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut
       walk_pattern_refs(ast, lhs, scope, ctx);
     }
     NodeKind::Arm { lhs, body, .. } => {
-      walk_pattern_refs(ast, lhs, scope, ctx);
+      // For rec-field-style Arms in destructure patterns:
+      //   {key: pat}      -- lhs is Ident, the literal field name
+      //   {(expr): pat}   -- lhs is computed (Group/etc), needs ref resolution
+      // Plain idents in pattern position are field names, not refs.
+      // Anything else is an expression to resolve normally.
+      if matches!(ast.nodes.get(lhs).kind, NodeKind::Ident(_)) {
+        walk_pattern_refs(ast, lhs, scope, ctx);
+      } else {
+        walk_node(ast, lhs, scope, ctx);
+      }
       for &item_id in body.items.iter() {
         walk_pattern_refs(ast, item_id, scope, ctx);
       }
@@ -673,8 +682,15 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       // Don't create arm scopes — these are value expressions, not pattern matches.
       for &item_id in items.items.iter() {
         match &ast.nodes.get(item_id).kind {
-          NodeKind::Arm { lhs: _, body, .. } => {
-            // Walk the field value only (not the key — it's a literal key, not a binding).
+          NodeKind::Arm { lhs, body, .. } => {
+            // Walk the key only if it's a computed expression -- a plain
+            // Ident is a literal field name and shouldn't be resolved as
+            // a reference. Anything else (Group, computed expr, ...) is
+            // a key expression that needs ref resolution.
+            let lhs = *lhs;
+            if !matches!(ast.nodes.get(lhs).kind, NodeKind::Ident(_)) {
+              walk_node(ast, lhs, scope, ctx);
+            }
             let body_items: Vec<AstId> = body.items.to_vec();
             for stmt_id in body_items {
               walk_node(ast, stmt_id, scope, ctx);
