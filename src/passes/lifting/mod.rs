@@ -751,11 +751,11 @@ fn extract_from_body<'src>(
             let cont_val = alloc.val(ValKind::ContRef(cont_id), expr_origin);
             let fn_val = alloc.val(ValKind::Ref(Ref::Synth(name_id)), expr_origin);
             let mut app_args = Vec::with_capacity(2);
-            if let Some(Param::Name(p)) = parent_params.first() {
-              if matches!(p.kind, Bind::Ctx) {
-                let ctx_val = alloc.val(ValKind::Ref(Ref::Synth(p.id)), expr_origin);
-                app_args.push(Arg::Val(ctx_val));
-              }
+            if let Some(Param::Name(p)) = parent_params.first()
+              && matches!(p.kind, Bind::Ctx)
+            {
+              let ctx_val = alloc.val(ValKind::Ref(Ref::Synth(p.id)), expr_origin);
+              app_args.push(Arg::Val(ctx_val));
             }
             app_args.push(Arg::Val(fn_val));
             alloc.expr(ExprKind::App {
