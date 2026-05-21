@@ -362,6 +362,63 @@ test 'guard combined with spread in match arm', fn:
             Wildcard
           LitSeq '[..]'
 
+test 'rec value with infix comparison guard', fn:
+  expect ast ƒink:
+    match r:
+      {foo: bar == 4}: bar
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'r'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                InfixOp '==',
+                  Ident 'bar'
+                  LitInt '4'
+          Ident 'bar'
+
+test 'rec value with predicate guard', fn:
+  expect ast ƒink:
+    match r:
+      {foo: is_even bar}: bar
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'r'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                Apply
+                  Ident 'is_even'
+                  Ident 'bar'
+          Ident 'bar'
+
+test 'list of rec with predicate guard and spread', fn:
+  expect ast ƒink:
+    match items:
+      [{k: is_even v}, ..]: v
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              LitRec '{..}',
+                Arm ':',
+                  Ident 'k'
+                  Apply
+                    Ident 'is_even'
+                    Ident 'v'
+              Spread '..'
+          Ident 'v'
+
+
 test 'nested pattern with guard in binding', fn:
   expect ast ƒink:
     [[x, y], z > 0] = foo
