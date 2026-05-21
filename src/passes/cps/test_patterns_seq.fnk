@@ -242,34 +242,35 @@ test 'seq — infix guard', fn:
   expect cps_module ƒink:
     [x, y >= 2] = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_72, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_74, ·ƒret_2:
       ·fn
-        fn ·ƒctx_74, ·v_7, ·v_8:
+        fn ·ƒctx_76, ·v_7, ·v_8:
           ·let ·v_7, fn ·x_0:
-            ·fn
-              fn ·ƒctx_75, ·y_1: ·ƒret_2 ·ƒctx_75, ·y_1
-              fn ·v_52:
-                ·fn
-                  fn ·ƒctx_77, ·ƒsucc_37, ·ƒfail_38, ·v_36:
-                    ·op_gte ·v_36, (i8 2), fn ·v_41:
-                      ·if ·v_41,
-                        fn: ·ƒsucc_37 ·ƒctx_77, ·v_36
-                        fn: ·ƒfail_38 ·ƒctx_77
-                  fn ·v_49: ·v_49 ·ƒctx_74, ·v_52, ·panic, ·v_8
-        fn ·v_65:
+            ·let ·v_8, fn ·y_1:
+              ·fn
+                fn ·ƒctx_77, ·y_1: ·ƒret_2 ·ƒctx_77, ·y_1
+                fn ·v_52:
+                  ·fn
+                    fn ·ƒctx_79, ·ƒsucc_37, ·ƒfail_38, ·v_36:
+                      ·op_gte ·v_36, (i8 2), fn ·v_41:
+                        ·if ·v_41,
+                          fn: ·ƒsucc_37 ·ƒctx_79, ·v_36
+                          fn: ·ƒfail_38 ·ƒctx_79
+                    fn ·v_49: ·v_49 ·ƒctx_76, ·v_52, ·panic, ·v_8
+        fn ·v_67:
           ·fn
-            fn ·ƒctx_81, ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            fn ·ƒctx_83, ·ƒsucc_5, ·ƒfail_6, ·v_4:
               ·is_seq_like ·v_4,
                 fn ·v_21:
                   ·seq_pop ·v_21, ·ƒfail_6, fn ·v_7, ·v_22:
                     ·seq_pop ·v_22, ·ƒfail_6, fn ·v_8, ·v_13:
                       ·empty ·v_13, fn ·v_16:
                         ·if ·v_16,
-                          fn: ·ƒsucc_5 ·ƒctx_81, ·v_7, ·v_8
-                          fn: ·ƒfail_6 ·ƒctx_81
-                fn: ·ƒfail_6 ·ƒctx_81
-            fn ·v_33: ·v_33 ·ƒctx_72, ·v_65, ·panic, ·∅foo
-    # sm:pwEAAQARAAEAESQBABEYAQAREgACAAYBABEAAQARCAAQABgBABEOAQARCgACAA4BAgEAAQABDAEBEQoACgECAQoAAgASAQYGAAEABggAHAAYAQABCgAEAQAGAAEABhQAFAAEAQAGCgAcAQAGDAACABoBAAYAAQAGCAAkABgAGgAaAQAGDAACACIBAAYAAQAGEgEABgwABgEKAQABAAEGAQABBAAKAQkGDAACACYBAAYAAQAGCgEABgwAAgAuAAQBAAYAAQAGGAAUAAQBAAYMAC4ABAEABgABAAYYABQAJAEABgwABAEABgABAAYOABQABAEABgwABAEABg4ABAEHEQoAEAEAEQwAAgAOAQARAAEAEQgAGAAYABgAGAEAEQoAAgAWAQARAAEAERwBABEKAAIAIAEAEQwAAgAeAQARAAEAERQBABEMAAQBABEUAAoBABEOAQARDAACACIBABEAAQARFAEAEQwABAEAERQACgEAEQ4BABEMAAIAJgEAEQABABEQAQARDAAKAQARDAACACoBABEAAQARCgEAEQwAAgAyAAQBABEAAQARFgAUAAQBABEKAAQBABEKADIABAEAEQABABEWABQAHgAEAQARAAEAERYAFAAYAQARDAAEAQARAAEAEQ4AFAAEAQARDAAEAQARDgAEARwD
+                          fn: ·ƒsucc_5 ·ƒctx_83, ·v_7, ·v_8
+                          fn: ·ƒfail_6 ·ƒctx_83
+                fn: ·ƒfail_6 ·ƒctx_83
+            fn ·v_33: ·v_33 ·ƒctx_74, ·v_67, ·panic, ·∅foo
+    # sm:rgEAAQARAAEAESQBABEYAQAREgACAAYBABEAAQARCAAQABgBABEOAQARCgACAA4BAgEAAQABDAEBEQoACgECAQoAAgASAQYGAAEABgwBBxEKAAoBCAEKAAIAFgEABgABAAYIACAAGAEAAQoABAEABgABAAYUABQABAEABgoAIAEABgwAAgAeAQAGAAEABggAKAAYABoAGgEABgwAAgAmAQAGAAEABhIBAAYMAAYBCgEAAQABBgEAAQQACgEJBgwAAgAqAQAGAAEABgoBAAYMAAIAMgAEAQAGAAEABhgAFAAEAQAGDAAyAAQBAAYAAQAGGAAUACgBAAYMAAQBAAYAAQAGDgAUAAQBAAYMAAQBAAYOAAQBBxEKABABABEMAAIADgEAEQABABEIABgAGAAYABgBABEKAAIAFgEAEQABABEcAQARCgACACABABEMAAIAHgEAEQABABEUAQARDAAEAQARFAAKAQARDgEAEQwAAgAiAQARAAEAERQBABEMAAQBABEUAAoBABEOAQARDAACACYBABEAAQAREAEAEQwACgEAEQwAAgAqAQARAAEAEQoBABEMAAIAMgAEAQARAAEAERYAFAAEAQARCgAEAQARCgAyAAQBABEAAQARFgAUAB4ABAEAEQABABEWABQAGAEAEQwABAEAEQABABEOABQABAEAEQwABAEAEQ4ABAEcAw
 
 
 test 'seq — predicate guard', fn:

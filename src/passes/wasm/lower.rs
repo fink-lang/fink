@@ -824,7 +824,7 @@ fn lower_expr(
       };
 
       let pre_bound_local: Option<LocalIdx> = self_alias_info.map(|(bind_id, alias_id, _)| {
-        let local = ctx.alloc_local(&format!("v_{}_self", bind_id.0));
+        let local = ctx.alloc_local(&format!(":self_{}", bind_id.0));
         ctx.bind(bind_id, local);
         ctx.bind(alias_id, local);
         local

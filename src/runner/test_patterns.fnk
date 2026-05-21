@@ -20,6 +20,62 @@ test 'seq guard second arm', fn:
   | equals ƒink:
     110
 
+
+test 'predicate guard in match — bare element', fn:
+  expect run ƒink:
+    is_even = fn n: n == 4
+
+    match [4]:
+      [is_even x]: x
+      _: 0
+  | equals ƒink:
+    4
+
+
+test 'predicate guard rec matching', fn:
+  expect run ƒink:
+    g = fn: 2
+    is_eq_g = fn v: v == g
+
+    match {k: g}:
+      {k: is_eq_g p}: true
+      _: false
+  | equals ƒink:
+    true
+
+
+test 'comparison in match — rec', fn:
+  expect run ƒink:
+    match {k: 4}:
+      {k: bar == 4}: bar
+      _: 0
+  | equals ƒink:
+    4
+
+
+test 'predicate guard in match — list of rec with spread', fn:
+  expect run ƒink:
+    is_eq_4 = fn v: v == 4
+
+    match [{k: 4}, {k: 99}]:
+      [{k: is_eq_4 p}, ..]: p
+      _: 0
+  | equals ƒink:
+    4
+
+
+skip test 'predicate guard in match — closure-valued field, 2-elem list', fn:
+  expect run ƒink:
+    g = fn: 2
+    is_eq_g = fn v: v == g
+
+    match [{k: g}, {k: 123}]:
+      [{k: is_eq_g p}, ..]: true
+      _: false
+  | equals ƒink:
+    true
+
+
 test 'list rest in middle', fn:
   expect run ƒink:
     match [1, 2, 3, 4]:

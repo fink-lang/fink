@@ -9,18 +9,19 @@ test 'irrefutable binding with guard', fn:
   expect cps_module ƒink:
     x > 2 = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_28, ·ƒret_1:
-      ·fn
-        fn ·ƒctx_30, ·x_0: ·ƒret_1 ·ƒctx_30, ·x_0
-        fn ·v_18:
-          ·fn
-            fn ·ƒctx_32, ·ƒsucc_4, ·ƒfail_5, ·v_3:
-              ·op_gt ·v_3, (i8 2), fn ·v_8:
-                ·if ·v_8,
-                  fn: ·ƒsucc_4 ·ƒctx_32, ·v_3
-                  fn: ·ƒfail_5 ·ƒctx_32
-            fn ·v_16: ·v_16 ·ƒctx_28, ·v_18, ·panic, ·∅foo
-    # sm:RQABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsIABAAGAEAAQoABAEACwABAAsUABQABAEACwoAEAEACwwAAgAOAQALAAEACwgAGAAYABgAGAEACwoAAgAWAQAFAAEABRABAAsKAAYBCAEAAQABBgEAAQQACgEHBQoAAgAaAQAFAAEABQoBAAUKAAIAIgAEAQALAAEACxYAFAAEAQALCgAiAAQBAAsAAQALFgAUABgBAAsMAAQBAAsAAQALDgAUAAQBAAsMAAQBAAsOAAQBEAM
+    ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
+      ·let ·∅foo, fn ·x_0:
+        ·fn
+          fn ·ƒctx_32, ·x_0: ·ƒret_1 ·ƒctx_32, ·x_0
+          fn ·v_18:
+            ·fn
+              fn ·ƒctx_34, ·ƒsucc_4, ·ƒfail_5, ·v_3:
+                ·op_gt ·v_3, (i8 2), fn ·v_8:
+                  ·if ·v_8,
+                    fn: ·ƒsucc_4 ·ƒctx_34, ·v_3
+                    fn: ·ƒfail_5 ·ƒctx_34
+              fn ·v_16: ·v_16 ·ƒctx_30, ·v_18, ·panic, ·∅foo
+    # sm:TAABAAsAAQALJAEACxgBAAsSAAIABgEMAQABAAEMAQQDEAAKAQ8BCgACAAoBAAsAAQALCAAUABgBAAEKAAQBAAsAAQALFAAUAAQBAAsKABQBAAsMAAIAEgEACwABAAsIABwAGAAYABgBAAsKAAIAGgEABQABAAUQAQALCgAGAQgBAAEAAQYBAAEEAAoBBwUKAAIAHgEABQABAAUKAQAFCgACACYABAEACwABAAsWABQABAEACwoAJgAEAQALAAEACxYAFAAcAQALDAAEAQALAAEACw4AFAAEAQALDAAEAQALDgAEARAD
 
 
 test 'bind right — seq pattern', fn:

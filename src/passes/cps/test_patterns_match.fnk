@@ -224,34 +224,35 @@ test 'match child ·scope — binding in arm body', fn:
         ni = a
         ni
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_59, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_61, ·ƒret_2:
       ·fn
-        fn ·ƒctx_61, ·ƒret_22:
+        fn ·ƒctx_63, ·ƒret_22, ·a_0:
           ·let ·a_0, fn ·ni_1:
-            ·ƒret_22 ·ƒctx_61, ·ni_1
+            ·ƒret_22 ·ƒctx_63, ·ni_1
         fn ·v_28:
           ·fn
-            fn ·ƒctx_63, ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            fn ·ƒctx_65, ·ƒsucc_5, ·ƒfail_6, ·v_4:
+              ·let ·v_4, fn ·a_0:
+                ·fn
+                  fn ·ƒctx_66, ·a_0: ·v_28 ·ƒctx_66, ·ƒsucc_5, ·v_4
+                  fn ·v_33:
+                    ·fn
+                      fn ·ƒctx_68, ·ƒsucc_9, ·ƒfail_10, ·v_8:
+                        ·op_gt ·v_8, (i8 1), fn ·v_13:
+                          ·if ·v_13,
+                            fn: ·ƒsucc_9 ·ƒctx_68, ·v_8
+                            fn: ·ƒfail_10 ·ƒctx_68
+                      fn ·v_21: ·v_21 ·ƒctx_65, ·v_33, ·ƒfail_6, ·v_4
+            fn ·v_42:
               ·fn
-                fn ·ƒctx_64: ·v_28 ·ƒctx_64, ·ƒsucc_5
-                fn ·v_34:
-                  ·fn
-                    fn ·ƒctx_66, ·ƒsucc_9, ·ƒfail_10, ·v_8:
-                      ·op_gt ·v_8, (i8 1), fn ·v_13:
-                        ·if ·v_13,
-                          fn: ·ƒsucc_9 ·ƒctx_66, ·v_8
-                          fn: ·ƒfail_10 ·ƒctx_66
-                    fn ·v_21: ·v_21 ·ƒctx_63, ·v_34, ·ƒfail_6, ·v_4
-            fn ·v_40:
-              ·fn
-                fn ·ƒctx_70, ·ƒret_42, ·v_41:
-                  ·v_40
-                    ·ƒctx_70
-                    ·ƒret_42
-                    fn ·ƒctx_72: ·panic _
-                    ·v_41
-                fn ·v_48: ·v_48 ·ƒctx_59, ·ƒret_2, ·∅n
-    # sm:hAEAAQAjAAEAIyQBACMYAQAjEgACAAYBFhgAAQAYCAAQABgAFAACAA4BHAEAAQABDAEEAQoACgEJAgwAAgASARYCAAEAAhYAFAAEAQACDAAQASsYDAACAA4BABgAAQAYCAAYABgAGAAYAAoAAgAWAQAYAAEAGAgAIAAUAAQBABgAAQAYDgAUAAQBABgUACABABgMAAIAHgEAGAABABgIACgAGAAYABoBAAUKAAIAJgEABQABAAUQAQAFCgAGAQgBAAEAAQYBAAEEAAoBBwUMAAIAKgEABQABAAUKAQAFDAACADIABAEABQABAAUWABQABAEABQoAMgAEAQAFAAEABRgAFAAoAQAFDAAEAQAYAAEAGA4AFAAEAQAYDAAEAQAYFAAEAQAYCgAYAQAYDAACABYBFSMAAQAjCAAgABgAGAEAIwwAAgAeAQAjAAEAIy4ANgEAIzwAFAAEAQAjAAEAIxABACMkAQAjDAAgAQAjDAAEAQAjAAEAIw4AFAAEAQAjEgAEAQwB
+                fn ·ƒctx_72, ·ƒret_44, ·v_43:
+                  ·v_42
+                    ·ƒctx_72
+                    ·ƒret_44
+                    fn ·ƒctx_74: ·panic _
+                    ·v_43
+                fn ·v_50: ·v_50 ·ƒctx_61, ·ƒret_2, ·∅n
+    # sm:jwEAAQAjAAEAIyQBACMYAQAjEgACAAYBFhgAAQAYCAAQABgAGAEAAQoAAgAOARwBAAEAAQwBBAEKAAoBCQIMAAIAEgEWAgABAAIWABQABAEAAgwAEAErGAwAAgAOAQAYAAEAGAgAGAAYABgAGAAKAAIAFgEABQABAAUMAQAFCgAKAQABCgACABoBAAUAAQAFCAAkABgBAAEKAAQBABgAAQAYDgAUAAQBABgUAAQBAAUKACQBAAUMAAIAIgEABQABAAUIACwAGAAYABoBAAUKAAIAKgEABQABAAUQAQAFCgAGAQgBAAEAAQYBAAEEAAoBBwUMAAIALgEABQABAAUKAQAFDAACADYABAEABQABAAUWABQABAEABQoANgAEAQAFAAEABRgAFAAsAQAFDAAEAQAFAAEABQ4AFAAEAQAFDAAEAQAFFAAEAQAFCgAYAQAYDAACABYBFSMAAQAjCAAgABgAGAEAIwwAAgAeAQAjAAEAIy4ANgEAIzwAFAAEAQAjAAEAIxABACMkAQAjDAAgAQAjDAAEAQAjAAEAIw4AFAAEAQAjEgAEAQwB
 
 
 ---

@@ -1,4 +1,4 @@
-{test, expect, equals, cps_module} = import '!fake'
+{test, skip, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
@@ -60,7 +60,7 @@ test 'function binding', fn:
     # sm:LAABABEAAQARJAEAERgBABESAAIABgEMCwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQAFAAEAQAD
 
 
-test '·closure over outer variable', fn:
+test 'closure over outer variable', fn:
   expect cps_module ƒink:
     foo = fn a:
       ni = fn b:
@@ -80,6 +80,24 @@ test '·closure over outer variable', fn:
             ·ƒpub ·foo_0, fn:
               ·ƒret_4 ·ƒctx_31, ·foo_0
     # sm:QgABACcAAQAnJAEAJxgBACcSAAIABgEMIQABACEIABAAGAE-AhYBNwEKAAIADgEUDwABAA8IABgAGAEUBRYBDQEKAAQBDgUAAQAFFAEAAQoABAEIAQoABAEHBRIAGAETDwoAAgAWAQMBAAEAAQwBBA8KAAoBCQIMAAIAGgEuAgABAAIUABQABAEAAgwAEAE9IQoAAgAOAQMBAAEAAQwBBCEKAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEAAwABAAMUABQABAEAAw
+
+
+
+skip test 'higher order function', fn:
+  expect cps_module ƒink:
+    foo = fn: fn: 1234
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_21, ·ƒret_1:
+      ·fn
+        fn ·ƒctx_23, ·ƒret_3:
+          ·fn
+            fn ·ƒctx_24, ·ƒret_5: ·ƒret_5 ·ƒctx_24, (i16 1234)
+            fn ·ƒctx_TODO, ·v_4: ·ƒret_3 ·ƒctx_TODO, ·v_4
+        fn ·v_2:
+          ·let ·v_2, fn ·foo_0:
+            ·ƒpub ·foo_0, fn:
+              ·ƒret_1 ·ƒctx_21, ·foo_0
+    # sm:NgABABIAAQASJAEAEhgBABISAAIABgEMDAABAAwIABAAGAEICBIAAgAOAQAIAAEACAgAGAAYAQgEEgAEAQAEAAEABBQAFAAGAQAEAAEABAgBAAQKABgBBwgKAAQBAAgAAQAIFAEACAoAEAEHDAoAAgAOAQMBAAEAAQwBBAwKAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEAAwABAAMUABQABAEAAw
 
 
 test 'three sequential bindings', fn:

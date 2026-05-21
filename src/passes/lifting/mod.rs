@@ -746,12 +746,21 @@ fn extract_from_body<'src>(
               cont_args: vec![alloc.bind(Bind::Synth, expr_origin)],
             });
             // The original cont was Cont::Ref — a tail pass of the fn value to the cont.
-            // Synthesize: cont_id fn_value  (pass the fn value to the continuation)
+            // Synthesize: cont_id ctx fn_value  (pass ctx + the fn value to the continuation)
+            // After thread_ctx, parent_params[0] is the enclosing fn's ctx bind.
             let cont_val = alloc.val(ValKind::ContRef(cont_id), expr_origin);
             let fn_val = alloc.val(ValKind::Ref(Ref::Synth(name_id)), expr_origin);
+            let mut app_args = Vec::with_capacity(2);
+            if let Some(Param::Name(p)) = parent_params.first()
+              && matches!(p.kind, Bind::Ctx)
+            {
+              let ctx_val = alloc.val(ValKind::Ref(Ref::Synth(p.id)), expr_origin);
+              app_args.push(Arg::Val(ctx_val));
+            }
+            app_args.push(Arg::Val(fn_val));
             alloc.expr(ExprKind::App {
               func: Callable::Val(cont_val),
-              args: vec![Arg::Val(fn_val)],
+              args: app_args,
             }, expr_origin)
           },
         }

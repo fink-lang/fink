@@ -127,6 +127,36 @@
   )
 
 
+  ;; hash_i31(closure) -> i32
+  ;;
+  ;; Hash policy for closure keys: constant 0. All closures collide
+  ;; into the same hamt bucket; the hamt's eq check (ref.eq via
+  ;; deep_eq) distinguishes individual closure values. O(n) lookup
+  ;; on bucket size; fine for the small dispatch tables typical of
+  ;; effect handlers. apply.wat owns this policy so the central
+  ;; dispatcher in std/hashing.wat just delegates.
+  (func $hash_i31 (@pub)
+      (param $c (ref $Closure))
+      (result i32)
+    (i32.const 0))
+
+
+  ;; op_eq / op_neq for closures: identity (ref.eq on the $Closure struct).
+  ;; apply.wat owns the equality policy so dispatchers in protocols.wat
+  ;; just delegate.
+  (func $op_eq (@pub)
+      (param $a (ref $Closure))
+      (param $b (ref $Closure))
+      (result i32)
+    (ref.eq (local.get $a) (local.get $b)))
+
+  (func $op_neq (@pub)
+      (param $a (ref $Closure))
+      (param $b (ref $Closure))
+      (result i32)
+    (i32.eqz (ref.eq (local.get $a) (local.get $b))))
+
+
   ;; -- Args calling-convention primitives -----------------------------
   ;;
   ;; These are the runtime ABI for the args list — head/tail/empty/prepend/
