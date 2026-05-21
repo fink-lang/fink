@@ -133,6 +133,34 @@ test 'mutual recursion at module scope', fn:
     true
 
 
+test 'fn equality — same fn', fn:
+  expect run ƒink:
+    foo = fn: 123
+    foo == foo
+  | equals ƒink:
+    true
+
+
+test 'fn equality — different fns', fn:
+  expect run ƒink:
+    foo = fn: 123
+    bar = fn: 456
+    foo == bar
+  | equals ƒink:
+    false
+
+
+# TODO losering issue for fn: fn: 123
+skip test 'fn equality — distinct closures from same fn', fn:
+  expect run ƒink:
+    spam = fn: fn: 789
+    f1 = spam _
+    f2 = spam _
+    f1 != f2
+  | equals ƒink:
+    true
+
+
 # Inner-let fn referencing its own binding lexically. Self-recursive
 # closures are constructed with the recursive slot patched via array.set
 # after the closure value is bound, so the captures array sees the

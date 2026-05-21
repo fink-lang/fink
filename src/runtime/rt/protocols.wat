@@ -48,6 +48,9 @@
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
+  (import "rt/apply.wat" "op_eq"  (func $clos_op_eq  (param (ref $Closure)) (param (ref $Closure)) (result i32)))
+  (import "rt/apply.wat" "op_neq" (func $clos_op_neq (param (ref $Closure)) (param (ref $Closure)) (result i32)))
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
   (import "std/list.wat" "seq_pop"
@@ -391,6 +394,20 @@
           (ref.cast (ref i31) (local.get $b))))
         (local.get $cont)))
 
+    ;; Try $Closure -- delegate to apply.wat which owns closure equality.
+    (block $not_clos
+      (drop
+        (block $is_clos (result (ref $Closure))
+          (br $not_clos
+            (br_on_cast $is_clos (ref null any) (ref $Closure)
+              (local.get $a)))))
+      (return_call $list_apply_1
+        (local.get $ctx)
+        (ref.i31 (call $clos_op_eq
+          (ref.cast (ref $Closure) (local.get $a))
+          (ref.cast (ref $Closure) (local.get $b))))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; Polymorphic !=: dispatch on $a's type.
@@ -460,6 +477,20 @@
         (ref.i31 (i32.eqz (ref.eq
           (ref.cast (ref i31) (local.get $a))
           (ref.cast (ref i31) (local.get $b)))))
+        (local.get $cont)))
+
+    ;; Try $Closure -- delegate to apply.wat which owns closure equality.
+    (block $not_clos
+      (drop
+        (block $is_clos (result (ref $Closure))
+          (br $not_clos
+            (br_on_cast $is_clos (ref null any) (ref $Closure)
+              (local.get $a)))))
+      (return_call $list_apply_1
+        (local.get $ctx)
+        (ref.i31 (call $clos_op_neq
+          (ref.cast (ref $Closure) (local.get $a))
+          (ref.cast (ref $Closure) (local.get $b))))
         (local.get $cont)))
 
     (unreachable))
