@@ -1006,6 +1006,17 @@ fn emit_instr(
       func.instruction(&Instruction::ArrayGet(resolve_type(rt, *ty, type_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
+    InstrKind::ArrayNewDefault { ty, size, into } => {
+      emit_operand(rt, func, size, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::ArrayNewDefault(resolve_type(rt, *ty, type_remap)));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::ArraySet { ty, arr, idx, val } => {
+      emit_operand(rt, func, arr, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, idx, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, val, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::ArraySet(resolve_type(rt, *ty, type_remap)));
+    }
     InstrKind::RefNull { ht, into } => {
       func.instruction(&Instruction::RefNull(HeapType::Abstract {
         shared: false,

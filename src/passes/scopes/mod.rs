@@ -542,14 +542,26 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
     NodeKind::Bind { lhs, rhs, .. } => {
       // Track which binding we're defining (for self_ref detection).
       let prev_bind = ctx.current_bind_ast_id;
-      if let NodeKind::Ident(_) = &ast.nodes.get(lhs).kind {
+      let is_ident_lhs = matches!(&ast.nodes.get(lhs).kind, NodeKind::Ident(_));
+      if is_ident_lhs {
         ctx.current_bind_ast_id = Some(lhs);
       }
-      // Walk RHS first (evaluate the value expression).
+      // Pre-register simple Ident LHS bindings in non-module scopes so the
+      // RHS can self-reference (e.g. `inner = fn n: ...inner...`). Module
+      // scope already pre-registers in phase 1.
+      let pre_registered_non_module = if !is_ident_lhs
+        || ctx.scopes.get(scope).kind == ScopeKind::Module
+      {
+        false
+      } else {
+        pre_register_pattern_binds(ast, lhs, scope, ctx);
+        true
+      };
+      // Walk RHS (evaluate the value expression).
       walk_node(ast, rhs, scope, ctx);
       ctx.current_bind_ast_id = prev_bind;
-      if ctx.scopes.get(scope).kind == ScopeKind::Module {
-        // Module scope: binding was pre-registered. Emit the event now (after RHS).
+      if ctx.scopes.get(scope).kind == ScopeKind::Module || pre_registered_non_module {
+        // Binding was pre-registered. Emit the event now (after RHS).
         // For Ident LHS: if not pre-registered (e.g. a nested Bind inside a RHS expression),
         // fall back to sequential registration.
         // For InfixOp LHS (guard pattern): emit event for the Ident inside.
@@ -561,7 +573,8 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
           register_pattern_binds(ast, lhs, scope, ctx);
         }
       } else {
-        // Non-module scopes: register the binding now (sequential).
+        // Non-module scope, non-Ident LHS (destructure pattern): register
+        // sequentially after RHS evaluation.
         register_pattern_binds(ast, lhs, scope, ctx);
       }
       // Walk guard expressions in patterns for reference resolution.

@@ -227,6 +227,14 @@ fn redirect_instr(kind: &mut InstrKind, lookup: &impl Fn(FuncSym) -> FuncSym) {
       redirect_operand(arr, lookup);
       redirect_operand(idx, lookup);
     }
+    InstrKind::ArrayNewDefault { size, .. } => {
+      redirect_operand(size, lookup);
+    }
+    InstrKind::ArraySet { arr, idx, val, .. } => {
+      redirect_operand(arr, lookup);
+      redirect_operand(idx, lookup);
+      redirect_operand(val, lookup);
+    }
     InstrKind::If { cond, .. } => redirect_operand(cond, lookup),
     InstrKind::RefNull { .. }
     | InstrKind::RefNullConcrete { .. }
@@ -426,6 +434,19 @@ fn remap_instr_kind(kind: &InstrKind, off: &Offsets) -> InstrKind {
         arr: remap_operand(arr, off),
         idx: remap_operand(idx, off),
         into: *into,
+      },
+    InstrKind::ArrayNewDefault { ty, size, into } =>
+      InstrKind::ArrayNewDefault {
+        ty: remap_type_sym(*ty, off),
+        size: remap_operand(size, off),
+        into: *into,
+      },
+    InstrKind::ArraySet { ty, arr, idx, val } =>
+      InstrKind::ArraySet {
+        ty: remap_type_sym(*ty, off),
+        arr: remap_operand(arr, off),
+        idx: remap_operand(idx, off),
+        val: remap_operand(val, off),
       },
     InstrKind::RefCastNonNull { ty, src, into } =>
       InstrKind::RefCastNonNull { ty: remap_type_sym(*ty, off), src: remap_operand(src, off), into: *into },

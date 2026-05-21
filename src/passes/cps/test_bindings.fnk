@@ -277,10 +277,10 @@ test 'shadowed binding — inner add does not affect outer', fn:
               ·fn
                 fn ·ƒctx_74, ·ƒret_19, ·a_5, ·b_6:
                   ·fn
-                    fn ·ƒctx_75, ·ƒret_21, ·foo_7: ·ƒret_21 ·ƒctx_75, ·foo_7
+                    fn ·ƒctx_75, ·ƒret_21, ·foo_8: ·ƒret_21 ·ƒctx_75, ·foo_8
                     fn ·v_20:
-                      ·let ·v_20, fn ·add_8:
-                        ·add_8
+                      ·let ·v_20, fn ·add_7:
+                        ·add_7
                           ·ƒctx_74
                           fn ·ƒctx_78, ·v_29: ·op_minus ·a_5, ·v_29, ·ƒret_19
                           ·b_6

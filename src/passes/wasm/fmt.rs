@@ -394,6 +394,17 @@ fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, ind
         pad, local_name(f, *into), type_name(frag, *ty),
         fmt_operand(frag, f, arr), fmt_operand(frag, f, idx)).unwrap();
     }
+    InstrKind::ArrayNewDefault { ty, size, into } => {
+      writeln!(out, "{}(local.set {} (array.new_default {} {}))",
+        pad, local_name(f, *into), type_name(frag, *ty),
+        fmt_operand(frag, f, size)).unwrap();
+    }
+    InstrKind::ArraySet { ty, arr, idx, val } => {
+      writeln!(out, "{}(array.set {} {} {} {})",
+        pad, type_name(frag, *ty),
+        fmt_operand(frag, f, arr), fmt_operand(frag, f, idx),
+        fmt_operand(frag, f, val)).unwrap();
+    }
     InstrKind::RefCastNonNull { ty, src, into } => {
       writeln!(out, "{}(local.set {} (ref.cast (ref {}) {}))",
         pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
