@@ -221,29 +221,30 @@ test 'rec — infix comparison guard in value position', fn:
   expect cps_module ƒink:
     {k: v == 4} = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_56, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_58, ·ƒret_1:
       ·fn
-        fn ·ƒctx_58, ·v_6:
+        fn ·ƒctx_60, ·v_6:
+          ·let ·v_6, fn ·v_0:
+            ·fn
+              fn ·ƒctx_61, ·v_0: ·ƒret_1 ·ƒctx_61, ·v_0
+              fn ·v_38:
+                ·fn
+                  fn ·ƒctx_63, ·ƒsucc_23, ·ƒfail_24, ·v_22:
+                    ·op_eq ·k_22, (i8 4), fn ·v_27:
+                      ·if ·v_27,
+                        fn: ·ƒsucc_23 ·ƒctx_63, ·k_22
+                        fn: ·ƒfail_24 ·ƒctx_63
+                  fn ·v_35: ·k_35 ·ƒctx_60, ·k_38, ·panic, ·v_6
+        fn ·v_51:
           ·fn
-            fn ·ƒctx_59, ·v_0: ·ƒret_1 ·ƒctx_59, ·v_0
-            fn ·v_38:
-              ·fn
-                fn ·ƒctx_61, ·ƒsucc_23, ·ƒfail_24, ·v_22:
-                  ·op_eq ·k_22, (i8 4), fn ·v_27:
-                    ·if ·v_27,
-                      fn: ·ƒsucc_23 ·ƒctx_61, ·k_22
-                      fn: ·ƒfail_24 ·ƒctx_61
-                fn ·v_35: ·k_35 ·ƒctx_58, ·k_38, ·panic, ·v_6
-        fn ·v_49:
-          ·fn
-            fn ·ƒctx_65, ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            fn ·ƒctx_67, ·ƒsucc_4, ·ƒfail_5, ·v_3:
               ·is_rec_like ·v_3,
                 fn ·v_11:
                   ·rec_pop ·v_11, 'k', ·ƒfail_5, fn ·v_6, ·v_10:
-                    ·ƒsucc_4 ·ƒctx_65, ·v_6
-                fn: ·ƒfail_5 ·ƒctx_65
-            fn ·v_20: ·v_20 ·ƒctx_56, ·v_49, ·panic, ·∅foo
-    # sm:hgEAAQARAAEAESQBABEYAQAREgACAAYBABEAAQARCAAQABgBABEKAAIADgECAQABAAEIABgAGAEGAQoABAEFAQABAAEUABQABAEAAQoAGAEAAQwAAgAWAQABAAEAAQgAIAAYABoAGgEAAQwAAgAeAQYGAAEABhABBQEMAAYBEAEAAQABBgEAAQQACgEJBgwAAgAiAQAGAAEABgoBAAYMAAIAKgAEAQUBAAEAARgAFAAEAQABDAAqAAQBAAEAAQABGAAUACABAAEMAAQBAAEAAQABDgAUAAQBAAEMAAQBAAEOAAQBAREKABABABEMAAIADgEAEQABABEIABgAGAAYABgBABEKAAIAFgEAEQABABEcAQARCgACACABABEMAAIAHgEAEQABABEUAQARDAAEAQARAAEAEQIBABECAQARAgAEAQARFAAKAQARDgEAEQwAAgAiAQARAAEAERYAFAAEAQARCgAeAAQBABEAAQARFgAUABgBABEMAAQBABEAAQARDgAUAAQBABEMAAQBABEOAAQBHAM
+                    ·ƒsucc_4 ·ƒctx_67, ·v_6
+                fn: ·ƒfail_5 ·ƒctx_67
+            fn ·v_20: ·v_20 ·ƒctx_58, ·v_51, ·panic, ·∅foo
+    # sm:jQEAAQARAAEAESQBABEYAQAREgACAAYBABEAAQARCAAQABgBABEKAAIADgECAQABAAEMAQERCgAKAQgBCgACABIBBQEAAQABCAAcABgBBgEKAAQBBQEAAQABFAAUAAQBAAEKABwBAAEMAAIAGgEAAQABAAEIACQAGAAaABoBAAEMAAIAIgEGBgABAAYQAQUBDAAGARABAAEAAQYBAAEEAAoBCQYMAAIAJgEABgABAAYKAQAGDAACAC4ABAEFAQABAAEYABQABAEAAQwALgAEAQABAAEAARgAFAAkAQABDAAEAQABAAEAAQ4AFAAEAQABDAAEAQABDgAEAQERCgAQAQARDAACAA4BABEAAQARCAAYABgAGAAYAQARCgACABYBABEAAQARHAEAEQoAAgAgAQARDAACAB4BABEAAQARFAEAEQwABAEAEQABABECAQARAgEAEQIABAEAERQACgEAEQ4BABEMAAIAIgEAEQABABEWABQABAEAEQoAHgAEAQARAAEAERYAFAAYAQARDAAEAQARAAEAEQ4AFAAEAQARDAAEAQARDgAEARwD
 
 
 test 'rec — closed with sub-pattern', fn:

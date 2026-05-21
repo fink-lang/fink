@@ -3042,6 +3042,11 @@ fn lower_pat_lhs(
       let bind = g.bind_name(bind_ast_id);
       let r = (bind.kind, bind.id);
 
+      // Emit a MatchBind so the user-name appears in arm-level bound_names
+      // (mb_N's params). Without this, mb_N's body references the bind as
+      // a free variable and lift cannot resolve it after hoisting.
+      pending.push(Pending::MatchBind { name: bind.clone(), val: val.clone(), origin });
+
       // Guard-expression origin: the InfixOp node itself (`a > 0`), not
       // the outer bind context. Used for the op call and the If node
       // so hovering/stepping narrows to the condition.
