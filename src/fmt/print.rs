@@ -343,12 +343,6 @@ impl<'a, 'src> Printer<'a, 'src> {
                 self.tok(&sep);
                 self.exprs(&body);
             }
-            NodeKind::With { handlers, sep, body } => {
-                self.keyword(node_loc, "with");
-                self.exprs(&handlers);
-                self.tok(&sep);
-                self.exprs(&body);
-            }
         }
     }
 

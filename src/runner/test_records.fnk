@@ -145,6 +145,16 @@ test 'rec expr key destructure', fn:
     42
 
 
+test 'rec fn as key destructure', fn:
+  expect run ƒink:
+    foo = fn: 123
+
+    {(foo): bar} = {(foo): 42}
+    bar
+  | equals ƒink:
+    42
+
+
 test 'rec destructure extra fields', fn:
   expect run ƒink:
     {a, b} = {a: 1, b: 2, c: 3}

@@ -68,13 +68,25 @@ test 'member static', fn:
     # sm:EAABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcSAQADEAAEAQgDAAEAAwIBAAMGAQADAgAEAQcH
 
 
-test 'member dynamic', fn:
+test 'member dynamic get', fn:
   expect cps_module ƒink:
     foo.(key)
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
       ·op_dot ·∅foo, ·∅key, ·ƒret_0
     # sm:DQABAAkAAQAJJAEACRYBAAkSAAIABgEACQABAAkSAQADEAAEAQoDEAAEAQkJ
+
+
+test 'member dynamic key', fn:
+  expect cps_module ƒink:
+    key = 'foo'
+    {(key): 42}
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_13, ·ƒret_1:
+      ·let 'foo', fn ·key_0:
+        ·ƒpub ·key_0, fn:
+          ·rec_put {}, ·key_0, (i8 42), ·ƒret_1
+    # sm:IwABABcAAQAXJAEAFxgBGAsSAAIABgEPAQABAAEMAQQFAAEABQIBAAUGAQAFAgAKAQsDDgACAAoBAAMAAQADEAEAAw4ACAACAA4BGgkAAQAJFAEBCwABAAsCAQALAgAEAQQDDgAGAQwCAAEAAgYBAAIGAAQBDQk
 
 
 test 'member string key shorthand', fn:

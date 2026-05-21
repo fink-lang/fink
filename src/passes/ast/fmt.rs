@@ -436,16 +436,6 @@ fn fmt_node(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
       out.push(':');
       fmt_body(ast, &body.items, out, depth, true);
     }
-    NodeKind::With { handlers, sep, body } => {
-      out.push_str("with");
-      for (i, &h_id) in handlers.items.iter().enumerate() {
-        out.push_str(if i == 0 { " " } else { ", " });
-        fmt_node(ast, h_id, out, depth);
-      }
-      out.mark(sep.loc);
-      out.push(':');
-      fmt_body(ast, &body.items, out, depth, true);
-    }
   }
 }
 

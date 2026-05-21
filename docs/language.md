@@ -763,80 +763,25 @@ bytes = read stdin, 1024
 
 ---
 
-## Effects and `with`-blocks
+## Effects
 
-A **handler** is an ordinary fn that takes a `body` and decides what to do with it. A `with` block invokes the handler with the block as its body:
+ƒink's effects substrate is intentionally minimal -- just three primitives, exposed from `std/effects.fnk`:
 
-```fink
-identity_handler = fn body:
-  body 0
+- `get_ctx _` -- read the current threaded context value.
+- `set_ctx new_ctx` -- replace the context value for all downstream calls.
+- `suspend fn resume: ...` -- capture the current continuation as `resume`, then run the user fn with `resume` as its argument. `resume v` transfers control back to the point just after `suspend ...` with `v` as the suspend expression's value. Multi-shot: `resume` may be called any number of times (or zero -- if user_fn never calls it, that thread of execution ends).
 
-with identity_handler:
-  21 + 21
-# evaluates to 42 -- handler called body, body produced 42, handler returned it
-```
-
-Handlers can ignore the body entirely:
+Combined, these are enough to express effect handlers, generators, coroutines, schedulers, backtracking, and exceptions as plain ƒink library code.
 
 ```fink
-constant_handler = fn _:
-  'always this'
+{suspend} = import 'std/effects.fnk'
 
-with constant_handler:
-  do_anything _
-# evaluates to 'always this' -- body never runs
+result = suspend fn resume:
+  resume 42
+# result == 42
 ```
 
-Or wrap / transform what the body returned:
-
-```fink
-logged = fn body:
-  result = body 0
-  log 'block produced: ${result}'
-  result
-
-with logged:
-  compute_thing _
-```
-
-### `abort` and non-local return
-
-`abort v` does a non-local return to the nearest enclosing `with` block's handler. The handler resumes at its `body args` call site as if body had returned `v`:
-
-```fink
-{abort} = import 'std/effects.fnk'
-
-with logged:
-  if user_cancelled: abort 'cancelled'
-  long_computation _
-# if cancelled: logged's `result = body 0` gets 'cancelled', the log line runs,
-# and the with-block evaluates to 'cancelled'. long_computation never runs.
-```
-
-The handler **cannot distinguish** a normal return from an abort -- it just gets a value back from `body args`. This is deliberate: a handler that wants to react differently to "errors" vs "results" matches on the value with userland tag conventions, not a substrate-level distinction.
-
-### Propagating values the handler doesn't claim
-
-A handler that wraps body should re-abort values it doesn't recognise, so outer handlers get a chance:
-
-```fink
-catch_errors = fn body:
-  match body 0:
-    Error msg: log msg; 'recovered'
-    v:         abort v   # propagate anything else
-```
-
-Without the `v: abort v` arm, this `catch_errors` would *claim* every value -- including aborts meant for outer handlers. The pass-through is the only social contract: a handler that doesn't recognise a value must re-abort it to propagate.
-
-### What the substrate ships and what it doesn't
-
-The substrate (in `std/effects.fnk`) ships:
-
-- `abort v` -- non-local return to the nearest handler.
-- The `with H: B` form -- invokes `H` with body wrapped as a fn.
-- `set_ctx new_ctx` / `get_ctx _` -- replace / read the runtime context value (used by some effects to thread per-handler state).
-
-Higher-level conventions -- named effects like `cancel` / `raise` / `find_first`, multi-operation effects like a `state` cell with `get` and `set`, resource lifecycle handlers like a `file_closing` -- are pure ƒink library code on top of the substrate. They're not yet written. The substrate exists so they can be.
+The `with H: B` syntactic form is still parsed by the language, but the **library shape on top of `suspend` is in flight**. `abort`, named handlers, retry/return semantics, and the rest of the effect-handler vocabulary are being rebuilt as userland code in `std/effects.fnk`. The substrate exists so they can be -- the surface above it is not yet stable.
 
 ---
 

@@ -77,7 +77,6 @@ pub trait Transform<'src> {
       NodeKind::Match { subjects, sep, arms } => self.transform_match(builder, src, subjects, sep, arms, loc),
       NodeKind::Arm { lhs, sep, body } => self.transform_arm(builder, src, lhs, sep, body, loc),
       NodeKind::Block { name, params, sep, body } => self.transform_block(builder, src, name, params, sep, body, loc),
-      NodeKind::With { handlers, sep, body } => self.transform_with(builder, src, handlers, sep, body, loc),
     }
   }
 
@@ -392,20 +391,6 @@ pub trait Transform<'src> {
     let params = self.transform(builder, src, params)?;
     let body = self.transform_exprs(builder, src, &body)?;
     Ok(builder.append(NodeKind::Block { name, params, sep, body }, loc))
-  }
-
-  fn transform_with(
-    &mut self,
-    builder: &mut AstBuilder<'src>,
-    src: &Ast<'src>,
-    handlers: Exprs<'src>,
-    sep: Token<'src>,
-    body: Exprs<'src>,
-    loc: Loc,
-  ) -> TransformResult {
-    let handlers = self.transform_exprs(builder, src, &handlers)?;
-    let body = self.transform_exprs(builder, src, &body)?;
-    Ok(builder.append(NodeKind::With { handlers, sep, body }, loc))
   }
 
   // --- helpers ---

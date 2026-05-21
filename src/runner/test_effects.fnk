@@ -207,276 +207,57 @@ test 'ctx survives fmt as imported fn', fn:
     fmt-ctx
 
 
-# `abort` with no enclosing `with` traps -- there's no frame to jump
-# to. The future interop wrapper will install a root frame so this
-# becomes unreachable in practice.
-
-test 'abort with no enclosing with traps', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-    abort 42
-
-  | equals ":
-    ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:  <unknown>!std/effects.wat:frame_pop
-        1:  <unknown>!std/effects.wat:abort_apply: wasm trap: null reference
-
-
-# -- with-block (substrate) -------------------------------------------
+# -- suspend (raw cont capture, no handler) ---------------------------
 #
-# `with H: B` lowers to with_invoke(ctx, H, body_fn, k_outer). The
-# runtime invokes H with [k_outer, wrapped_body]. H is a
-# `fn body: ...` handler; when it calls `body args`, the wrapper
-# pushes a frame holding the body-call cont, then runs B. When B
-# returns normally OR aborts, control lands at the same place: the
-# handler's `body args` call site, with the value. Handler is always
-# re-entered uniformly -- can run cleanup, transform the value, or
-# decide what the block evaluates to.
+# `suspend fn resume: body` is the lowest-level cont primitive: it
+# captures the suspend expression's continuation as `resume`, then
+# invokes the user fn with resume as argument. `resume v` transfers
+# control to the captured cont with v becoming the value of the
+# suspend expression. Multi-shot: resume may be called any number
+# of times. If the user fn never calls resume, that thread of
+# execution ends.
 
-test 'with: reader handler returns body value', fn:
+# Round-trip: suspend, call resume once with a value, observe
+# control returning with that value.
+test 'suspend: round-trip via captured cont', fn:
   expect run ƒink:
-    handler = fn body:
-      body _
+    {suspend} = import 'std/effects.fnk'
 
-    with handler:
-      42
+    result = suspend fn resume:
+      resume 'fired'
 
-  | equals ƒink:
-    42
-
-
-test 'with: handler ignoring body returns its own value', fn:
-  expect run ƒink:
-    handler = fn _: 'handler-result'
-
-    with handler:
-      'body-result'
+    'got: ${result}'
 
   | equals ":
-    handler-result
+    got: fired
 
 
-test 'with: abort in body lands at handler body-call site', fn:
+
+# Resume can be fired multiple times -- each fire re-enters the
+# suspension point fresh. Stash the resume in ctx so the cont's
+# downstream code can re-fire it on later phases.
+test 'suspend: cont can be fired more than once', fn:
   expect run ƒink:
-    {abort} = import 'std/effects.fnk'
+    {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
 
-    handler = fn body:
-      body _
+    set_ctx {count: 0, results: [], k: false}
+    r = suspend fn resume:
+      # Stash resume so it can be re-fired from the cont below.
+      {results} = get_ctx _
+      set_ctx {count: 1, results: [..results, 'init'], k: resume}
+      resume 'a'
 
-    with handler:
-      abort 'aborted'
-      42
+    {count, results, k} = get_ctx _
+    match count:
+      1:
+        # k holds resume; r is 'a'. Fire k again with 'b'.
+        set_ctx {count: 2, results: [..results, r], k}
+        k 'b'
+      _:
+        # r is 'b'. Final pass.
+        new_results = [..results, r]
+        '${new_results}'
 
   | equals ":
-    aborted
-
-
-# Handler resumes at `body _` site after abort, runs cleanup, then
-# returns its own transformed value. Proves abort lands *inside* the
-# handler, not at k_outer directly.
-test 'with: handler transforms aborted value after cleanup', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-
-    handler = fn body:
-      result = body _
-      'wrapped: ${result}'
-
-    with handler:
-      abort 'inner'
-      42
-
-  | equals ":
-    wrapped: inner
-
-
-# -- multishot whole-body replay -------------------------------------
-#
-# Handler can call `body _` more than once -- each call re-enters the
-# body from the top and produces its own value. No `resume` primitive
-# today, so multishot is "replay the whole body", not "resume from a
-# suspension point". Enough for tests that pin current substrate shape.
-
-test 'with: handler calls body twice, combines results', fn:
-  expect run ƒink:
-    handler = fn body:
-      a = body _
-      b = body _
-      'a=${a} b=${b}'
-
-    with handler:
-      42
-
-  | equals ":
-    a=42 b=42
-
-
-test 'with: handler calls body in a loop, collects results', fn:
-  expect run ƒink:
-    handler = fn body:
-      [
-        body _
-        body _
-        body _
-      ]
-
-    ni = with handler:
-      7
-
-    '${ni}'
-  | equals ":
-    [7, 7, 7]
-
-
-# SKIPPED: `with pick true: B` (partial-applied handler) traps at
-# std/list.wat:head_any. `with` lowering currently expects an
-# arity-1 handler expression; curried handlers aren't recognised.
-test 'with: handler chooses zero vs one shot at runtime', fn:
-  expect run ƒink:
-    pick = fn flag: fn body:
-      match flag:
-        1: body _
-        2: 'skipped'
-
-    a = with pick 1:
-      'ran 1'
-
-    b = with pick 2:
-      'ran 2'
-
-    '${a}/${b}'
-
-  | equals ":
-    ran 1/skipped
-
-
-# -- nested with ------------------------------------------------------
-#
-# Frame stack is LIFO. `with outer: with inner: B` pushes outer's frame
-# first, then inner's. abort inside B walks to the nearest frame
-# (inner). If inner re-enters cleanly, outer sees inner's value.
-
-test 'with: nested -- inner catches, outer sees transformed value', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-
-    inner = fn body:
-      x = body _
-      'inner:${x}'
-
-    outer = fn body:
-      y = body _
-      'outer:${y}'
-
-    with outer:
-      with inner:
-        abort 'boom'
-        42
-
-  | equals ":
-    outer:inner:boom
-
-
-test 'with: nested -- outer abort skips inner frame', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-
-    inner = fn body:
-      x = body _
-      'inner-saw:${x}'
-
-    outer = fn body:
-      y = body _
-      'outer-caught:${y}'
-
-    with outer:
-      with inner:
-        abort 'from-deep'
-        42
-
-  | equals ":
-    outer-caught:inner-saw:from-deep
-
-
-# -- frame-stack robustness through call depth -----------------------
-#
-# Abort from inside a nested fn call walks frames correctly. abort
-# inside a match arm likewise -- match arms are CPS conts under the
-# hood, but at language level they're just expressions in the body.
-
-test 'with: abort from inside nested fn call in body', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-
-    handler = fn body:
-      x = body _
-      'caught:${x}'
-
-    boom = fn:
-      abort 'deep'
-      0
-
-    with handler:
-      boom _
-      42
-
-  | equals ":
-    caught:deep
-
-
-test 'with: abort from inside match arm in body', fn:
-  expect run ƒink:
-    {abort} = import 'std/effects.fnk'
-
-    handler = fn body:
-      x = body _
-      'caught:${x}'
-
-    with handler:
-      match 'go':
-        'go': abort 'matched'
-        _: 0
-      42
-
-  | equals ":
-    caught:matched
-
-
-# -- handler captures outer scope ------------------------------------
-#
-# Handler is a real closure value; it captures bindings from its
-# defining scope and uses them when re-entered at the body-call site.
-
-test 'with: handler captures outer variable', fn:
-  expect run ƒink:
-    prefix = 'tag'
-
-    handler = fn body:
-      x = body _
-      '${prefix}:${x}'
-
-    with handler:
-      99
-
-  | equals ":
-    tag:99
-
-
-# -- non-scalar body value -------------------------------------------
-#
-# Body produces a record; handler passes it through via `body _`. Pins
-# that body values are not restricted to scalars.
-
-test 'with: body returns a record, handler passes it through', fn:
-  expect run ƒink:
-    handler = fn body:
-      body _
-
-    r = with handler:
-      {x: 1, y: 2}
-
-    '${r}'
-  | equals ":
-    {x: 1, y: 2}
-
+    ['init', 'a', 'b']
 

@@ -116,6 +116,9 @@ pub enum Sym {
   // as binary protocol ops). Used by `BuiltIn::SeqPrepend` for list
   // literals and pattern-match recursion.
   SeqPrepend,
+  // Seq concatenation — `(a, b, cont)`. Same ternary CPS shape. Used
+  // for `[..a, ..b]` / `[..xs, item]` / `[item, ..xs]` list literals.
+  SeqConcat,
   // Rec merge — `(dest, src, cont)`. Same ternary CPS shape. Used
   // for `{..r1, ..r2, k: v}` record spreads.
   RecMerge,
@@ -141,10 +144,6 @@ pub enum Sym {
   Yield, Spawn, Await,
   // Channels — same shape.
   Channel, Receive,
-  // Effect handlers — `with H: B` lowering target. 4-param
-  // `(ctx, handler, body_fn, cont)`. Same shape as `Fn_op_binary`
-  // but distinct role: not a protocol operator.
-  WithInvoke,
   // Rec primitives — 4-arg shape `(any, any, any, any) -> ()`. Used
   // for record construction (`rec_set`) and pattern destructure
   // (`rec_pop`).
@@ -258,8 +257,8 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Await     => &[Sym::Await],
     BuiltIn::Channel   => &[Sym::Channel],
     BuiltIn::Receive   => &[Sym::Receive],
-    BuiltIn::WithInvoke => &[Sym::WithInvoke],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
+    BuiltIn::SeqConcat  => &[Sym::SeqConcat],
     BuiltIn::RecMerge   => &[Sym::RecMerge],
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
@@ -354,6 +353,7 @@ pub struct Runtime {
   op_not:     Option<FuncSym>,
   op_empty:   Option<FuncSym>,
   seq_prepend: Option<FuncSym>,
+  seq_concat:  Option<FuncSym>,
   rec_merge:   Option<FuncSym>,
   is_seq_like: Option<FuncSym>,
   is_rec_like: Option<FuncSym>,
@@ -376,8 +376,6 @@ pub struct Runtime {
   await_:       Option<FuncSym>,
   channel:      Option<FuncSym>,
   receive:      Option<FuncSym>,
-  // Effect handlers — 4-param `(ctx, handler, body_fn, cont)`.
-  with_invoke:  Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rotl:    Option<FuncSym>,
@@ -432,7 +430,6 @@ impl Runtime {
   pub fn await_(&self)       -> FuncSym { self.await_.expect("rt: await not declared") }
   pub fn channel(&self)      -> FuncSym { self.channel.expect("rt: channel not declared") }
   pub fn receive(&self)      -> FuncSym { self.receive.expect("rt: receive not declared") }
-  pub fn with_invoke(&self)  -> FuncSym { self.with_invoke.expect("rt: with_invoke not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
   pub fn apply_3(&self)      -> FuncSym { self.apply_3.expect("rt: apply_3 not declared") }
   pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
@@ -464,6 +461,7 @@ impl Runtime {
       Sym::OpNot    => self.op_not,
       Sym::OpEmpty  => self.op_empty,
       Sym::SeqPrepend => self.seq_prepend,
+      Sym::SeqConcat  => self.seq_concat,
       Sym::RecMerge   => self.rec_merge,
       Sym::IsSeqLike  => self.is_seq_like,
       Sym::IsRecLike  => self.is_rec_like,
@@ -485,7 +483,6 @@ impl Runtime {
       Sym::Await    => self.await_,
       Sym::Channel  => self.channel,
       Sym::Receive  => self.receive,
-      Sym::WithInvoke => self.with_invoke,
       _ => panic!("rt.op: {:?} is not a protocol-operator Sym", sym),
     };
     f.unwrap_or_else(|| panic!("rt: {:?} not declared", sym))
@@ -567,6 +564,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Decimal         => "std/decimal.wat:Decimal",
 
     Sym::SeqPrepend      => "std/seq.fnk:prepend",
+    Sym::SeqConcat       => "std/seq.fnk:concat",
     Sym::SeqPop          => "std/seq.fnk:pop",
     Sym::SeqPopBack      => "std/seq.fnk:pop_back",
 
@@ -591,8 +589,6 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
 
     Sym::Channel         => "std/channel.fnk:channel",
     Sym::Receive         => "std/channel.fnk:receive",
-
-    Sym::WithInvoke      => "std/effects.fnk:with_invoke",
 
     Sym::ModulesPub        => "std/modules.fnk:pub",
     Sym::ModulesImport     => "std/modules.fnk:import",
@@ -706,11 +702,6 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       set_sched_primitive(&mut rt, *sym, FuncSym::Runtime(*sym));
     }
   }
-  for sym in EFFECT_PRIMITIVES {
-    if needed.contains(sym) {
-      set_effect_primitive(&mut rt, *sym, FuncSym::Runtime(*sym));
-    }
-  }
 
   if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecPut)); }
   if needed.contains(&Sym::RecPop)  { rt.rec_pop = Some(FuncSym::Runtime(Sym::RecPop)); }
@@ -785,22 +776,11 @@ fn set_sched_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   *slot = Some(f);
 }
 
-/// Effect-handler primitive(s) — distinct signature shape from
-/// SCHED (4-param `(ctx, h, body_fn, cont)`).
-const EFFECT_PRIMITIVES: &[Sym] = &[Sym::WithInvoke];
-
-fn set_effect_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
-  let slot = match sym {
-    Sym::WithInvoke => &mut rt.with_invoke,
-    _ => panic!("set_effect_primitive: {:?} is not an effect primitive", sym),
-  };
-  *slot = Some(f);
-}
-
 /// Seq/rec primitives that share the `Fn_op_binary` signature shape
 /// (`(any, any, any) -> ()`). Each is a 3-arg CPS function.
 const TERNARY_PRIMITIVES: &[Sym] = &[
   Sym::SeqPrepend,
+  Sym::SeqConcat,
   Sym::RecMerge,
   Sym::IsSeqLike, Sym::IsRecLike,
   Sym::SeqPop, Sym::SeqPopBack,
@@ -809,6 +789,7 @@ const TERNARY_PRIMITIVES: &[Sym] = &[
 fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   let slot = match sym {
     Sym::SeqPrepend => &mut rt.seq_prepend,
+    Sym::SeqConcat  => &mut rt.seq_concat,
     Sym::RecMerge   => &mut rt.rec_merge,
     Sym::IsSeqLike  => &mut rt.is_seq_like,
     Sym::IsRecLike  => &mut rt.is_rec_like,

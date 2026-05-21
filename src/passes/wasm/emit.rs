@@ -177,7 +177,6 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
       ("std/hashing.wat",  include_str!("../../runtime/std/hashing.wat")),
       ("std/channel.wat",  include_str!("../../runtime/std/channel.wat")),
       ("std/async.wat",    include_str!("../../runtime/std/async.wat")),
-      ("std/effects.wat",  include_str!("../../runtime/std/effects.wat")),
     ];
     let result = crate::wat_linker::link(modules);
     let mut parser = wat_crate::Parser::new();

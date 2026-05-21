@@ -1643,6 +1643,14 @@
             (local.get $val))))
       (return_call $set_fmt))
 
+    ;; Try $Closure -- placeholder "<closure>" fmt.
+    (block $not_clos
+      (block $is_clos (result (ref $Closure))
+        (br $not_clos
+          (br_on_cast $is_clos (ref any) (ref $Closure)
+            (local.get $val))))
+      (return_call $closure_fmt))
+
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
@@ -2111,5 +2119,30 @@
 
   (func $fmt (@pub) (@impl "std/str.fnk:fmt") (result (ref any))
     (global.get $fmt_closure))
+
+
+  ;; Closure repr -- prints "<closure>". Useful when a list/rec/etc.
+  ;; contains a fn value and we want to format the container without
+  ;; tripping a missing-impl trap. Doesn't reveal anything about the
+  ;; closure (the funcref / captures are opaque to fink).
+  (func $closure_repr (@pub) (@impl "std/repr.fnk:repr" $Closure)
+    (param $_clos (ref $Closure)) (result (ref $Str))
+    (local $buf (ref $ByteArray))
+    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 9)))
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x3C)) ;; <
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x63)) ;; c
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x6C)) ;; l
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x6F)) ;; o
+    (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x73)) ;; s
+    (array.set $ByteArray (local.get $buf) (i32.const 5) (i32.const 0x75)) ;; u
+    (array.set $ByteArray (local.get $buf) (i32.const 6) (i32.const 0x72)) ;; r
+    (array.set $ByteArray (local.get $buf) (i32.const 7) (i32.const 0x65)) ;; e
+    (array.set $ByteArray (local.get $buf) (i32.const 8) (i32.const 0x3E)) ;; >
+    (return_call $from_bytes (local.get $buf)))
+
+  ;; Closure fmt -- same as repr.
+  (func $closure_fmt (@pub) (@impl "std/str.fnk:fmt" $Closure)
+    (param $clos (ref $Closure)) (result (ref $Str))
+    (return_call $closure_repr (local.get $clos)))
 
 )

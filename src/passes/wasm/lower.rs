@@ -641,16 +641,6 @@ fn lower_expr(
     // same as `BuiltIn::Not` / `BuiltIn::Empty`. Side effects happen in
     // the runtime function (queue manipulation, host channel I/O); the
     // user-facing call shape is plain unary.
-    // Effect-handler `with H: B` lowering target — 4-param
-    // `(ctx, handler, body_fn, cont)`. Compiler-emitted only; users
-    // never type the builtin name.
-    ExprKind::App { func: Callable::BuiltIn(BuiltIn::WithInvoke), args } => {
-      let (h, body_fn, cont) = split_binary_args(args);
-      let h_op = emit_arg_as_operand(lcx, ctx, h);
-      let body_fn_op = emit_arg_as_operand(lcx, ctx, body_fn);
-      emit_op_tail_call(lcx, ctx, Sym::WithInvoke, vec![h_op, body_fn_op], cont, expr.id);
-    }
-
     ExprKind::App { func: Callable::BuiltIn(b), args }
       if matches!(b, BuiltIn::Yield | BuiltIn::Spawn | BuiltIn::Await
                    | BuiltIn::Channel | BuiltIn::Receive) =>
@@ -710,6 +700,15 @@ fn lower_expr(
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
       emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
+    }
+
+    // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
+    // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {
+      let (a, b, cont) = split_binary_args(args);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let b_op = emit_arg_as_operand(lcx, ctx, b);
+      emit_op_tail_call(lcx, ctx, Sym::SeqConcat, vec![a_op, b_op], cont, expr.id);
     }
 
     // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.

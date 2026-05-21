@@ -29,7 +29,7 @@ Compile-time AST manipulation — `macro` definitions, `eval`, `gen_ast`-style A
 
 ## Effect-handler libraries
 
-The substrate (`with H: B` form + `abort v` primitive) ships today. The conventional libraries on top of it -- `cancel` / `catch` for error short-circuiting, `find` for early-return search, `state` for scoped mutable state, `cleanup` for resource lifecycle, transactional `commit`/`rollback`, etc. -- are not yet written. Each is pure ƒink code against the substrate; see [execution-model.md](execution-model.md) §7 for the shape.
+The substrate (`suspend` + threaded ctx) ships today. The user-facing handler library on top of it -- `with`-block semantics, `abort` / `retry`, named handlers, op dispatch -- is being rebuilt as userland code in `std/effects.fnk`. Conventional libraries above that -- `cancel` / `catch` for error short-circuiting, `find` for early-return search, `state` for scoped mutable state, `cleanup` for resource lifecycle, transactional `commit`/`rollback`, etc. -- are pure ƒink code against the userland handler library once it lands. See [execution-model.md](execution-model.md) §7 for the shape.
 
 ## Float exponentiation
 

@@ -480,7 +480,7 @@
       (local.get $cont)))
 
   ;; seq_concat(list_a, list_b, cont) — concatenate two lists, pass result to cont.
-  (func $seq_concat (@impl "std/seq.fnk:concat" $List)
+  (func $seq_concat (@pub) (@impl "std/seq.fnk:concat" $List)
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (ref.null any)

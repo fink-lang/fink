@@ -131,3 +131,21 @@ test 'mutual recursion at module scope', fn:
     is_even 4
   | equals ƒink:
     true
+
+
+# Inner-let fn referencing its own binding lexically. Module-scope
+# self-recursion works (see above), but the same pattern inside a
+# fn body fails to lower with "unbound CpsId" -- the scopes pass
+# doesn't pre-declare the inner binding before walking its body.
+skip test 'self-recursive fn defined inside another fn', fn:
+  expect run ƒink:
+    outer = fn x:
+      inner = fn n:
+        match n:
+          0: x
+          _: inner n - 1
+      inner 3
+
+    outer 42
+  | equals ƒink:
+    42

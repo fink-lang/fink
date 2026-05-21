@@ -63,9 +63,9 @@
       (param $callee (ref null any))))
   (import "rt/apply.wat"    "empty_ctx"
     (func $empty_ctx (result (ref any))))
-  (import "std/effects.wat" "set_ctx"
+  (import "rt/apply.wat" "set_ctx"
     (func $set_ctx (result (ref any))))
-  (import "std/effects.wat" "get_ctx"
+  (import "rt/apply.wat" "get_ctx"
     (func $get_ctx (result (ref any))))
 
   (import "std/str.wat"     "_str_wrap_bytes"
