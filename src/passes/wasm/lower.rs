@@ -789,6 +789,47 @@ fn lower_expr(
         panic!("lower: FnClosure missing fn arg");
       };
       let fn_sym = ctx.lookup_fn_sym(cps_id_of_ref(fn_val));
+
+      // Self-recursion: if the cont aliases the closure result to a
+      // user-bind via `LetVal { val: Ref(bind), name: alias, ... }` AND
+      // one of the captures references that alias's CpsId, this is a
+      // self-recursive closure. Pre-allocate one local and bind BOTH
+      // bind.id and alias.id to it. Then when cap_operands resolves the
+      // self-capture CpsId, it gets the (currently-uninitialised) local;
+      // the subsequent struct.new $Closure writes the closure value into
+      // that local, and the capture slot holds the closure pointer
+      // (whose first read is the local that just got the closure).
+      // Detect self-recursive closure: cont aliases bind.id to alias_name.id
+      // via a LetVal, and one of the captures references alias_name.id.
+      // Returns (bind_id, alias_id, self_cap_idx).
+      let self_alias_info: Option<(CpsId, CpsId, usize)> = match &cont {
+        Cont::Expr { args: cont_args, body } => {
+          if let Some(bind) = cont_args.first()
+            && let ExprKind::LetVal { name: alias_name, val: alias_val, .. } = &body.kind
+            && let ValKind::Ref(r) = &alias_val.kind
+            && ref_cps_id(*r) == bind.id
+          {
+            non_cont[1..].iter().position(|a| match a {
+              Arg::Val(v) => match &v.kind {
+                ValKind::Ref(rr) => ref_cps_id(*rr) == alias_name.id,
+                _ => false,
+              },
+              _ => false,
+            }).map(|i| (bind.id, alias_name.id, i))
+          } else {
+            None
+          }
+        }
+        _ => None,
+      };
+
+      let pre_bound_local: Option<LocalIdx> = self_alias_info.map(|(bind_id, alias_id, _)| {
+        let local = ctx.alloc_local(&format!("v_{}_self", bind_id.0));
+        ctx.bind(bind_id, local);
+        ctx.bind(alias_id, local);
+        local
+      });
+
       // Remaining non-cont args are the captures.
       let cap_operands: Vec<Operand> = non_cont[1..].iter()
         .map(|a| {
@@ -800,6 +841,8 @@ fn lower_expr(
         })
         .collect();
 
+      let self_cap_idx: Option<usize> = self_alias_info.map(|(_, _, i)| i);
+
       // FnClosure has two cont shapes:
       // * `Cont::Expr { args: [new_bind], body }` — the closure value
       //   is bound to a local in the parent scope and execution
@@ -809,9 +852,14 @@ fn lower_expr(
       match cont {
         Cont::Expr { args: cont_args, body } => {
           let bind = cont_args.first().expect("FnClosure cont has no bind");
-          let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
-          ctx.bind(bind.id, local);
-          emit_closure_construction(lcx, ctx, fn_sym, cap_operands, local);
+          let local = if let Some(l) = pre_bound_local {
+            l
+          } else {
+            let l = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
+            ctx.bind(bind.id, l);
+            l
+          };
+          emit_closure_construction_inner(lcx, ctx, fn_sym, cap_operands, local, self_cap_idx);
           lower_expr(lcx, ctx, body);
         }
         Cont::Ref(cont_id) => {
@@ -1784,22 +1832,51 @@ fn emit_closure_construction(
   cap_operands: Vec<Operand>,
   into: LocalIdx,
 ) {
-  // 1. Build the captures operand — either a null ref or a freshly
-  //    allocated array. Local is typed `(ref null $Captures)` so
-  //    `struct.new $Closure` validates against its second field's
-  //    declared type.
+  emit_closure_construction_inner(lcx, ctx, fn_sym, cap_operands, into, None)
+}
+
+/// Emit closure construction with optional self-capture support. If
+/// `self_cap_idx` is Some(i), capture slot `i` is a self-reference to
+/// the closure being constructed: we use `array.new_default` + per-slot
+/// `array.set` so the self slot can be patched with the closure value
+/// after struct.new.
+fn emit_closure_construction_inner(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  fn_sym: FuncSym,
+  cap_operands: Vec<Operand>,
+  into: LocalIdx,
+  self_cap_idx: Option<usize>,
+) {
   let caps_local = ctx.alloc_local_typed(
     ":caps_arg",
     val_ref(lcx.rt.captures(), /*nullable*/ true),
   );
-  let caps_instr = if cap_operands.is_empty() {
-    push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local)
+  if cap_operands.is_empty() {
+    let i = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
+    ctx.instrs.push(i);
+  } else if self_cap_idx.is_some() {
+    // Build the array with default-null, then array.set each non-self
+    // slot. Self slot is left null; patched after struct.new.
+    let i_arr = push_array_new_default(
+      lcx.frag, lcx.rt.captures(),
+      lit_i32(cap_operands.len() as i32), caps_local,
+    );
+    ctx.instrs.push(i_arr);
+    for (i, op) in cap_operands.iter().enumerate() {
+      if self_cap_idx == Some(i) { continue; }
+      let i_set = push_array_set(
+        lcx.frag, lcx.rt.captures(),
+        op_local(caps_local), lit_i32(i as i32), op.clone(),
+      );
+      ctx.instrs.push(i_set);
+    }
   } else {
-    push_array_new_fixed(lcx.frag, lcx.rt.captures(), cap_operands, caps_local)
-  };
-  ctx.instrs.push(caps_instr);
+    let i = push_array_new_fixed(lcx.frag, lcx.rt.captures(), cap_operands.clone(), caps_local);
+    ctx.instrs.push(i);
+  }
 
-  // 2. struct.new $Closure (ref.func $fn, local.get $:caps_arg).
+  // struct.new $Closure (ref.func $fn, local.get $:caps_arg).
   let struct_instr = push_struct_new(
     lcx.frag,
     lcx.rt.closure(),
@@ -1807,6 +1884,15 @@ fn emit_closure_construction(
     into,
   );
   ctx.instrs.push(struct_instr);
+
+  // Patch the self slot with the now-built closure.
+  if let Some(idx) = self_cap_idx {
+    let i_set = push_array_set(
+      lcx.frag, lcx.rt.captures(),
+      op_local(caps_local), lit_i32(idx as i32), op_local(into),
+    );
+    ctx.instrs.push(i_set);
+  }
 }
 
 // FnCtx extension: track LetFn bindings that are used later in

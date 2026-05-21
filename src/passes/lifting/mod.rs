@@ -170,6 +170,67 @@ pub fn lift<'src>(
 /// position. The lower pass resolves these names statically via
 /// `fn_syms`, so refs to them must remain direct fn-id refs and never
 /// become closure captures.
+/// Given a LetFn's cont and the LetFn's synth name CpsId, find the user-
+/// binding CpsId that the cont aliases the synth name to via a LetVal of
+/// `Ref(synth_arg)`. Returns (user_bind_id, kind) if found.
+///
+/// The CPS transform lowers `inner = fn n: ...` to:
+///   LetFn { name: synth, cont: Cont::Expr { args: [synth_arg],
+///     body: LetVal { name: user_bind, val: Ref::Synth(synth_arg), ...} } }
+/// The body's recursive refs resolve via scope analysis to user_bind, so
+/// capture analysis must treat user_bind as in-scope inside the fn body.
+fn find_user_bind_alias_of(cont: &Cont, fn_name_id: CpsId) -> Option<(CpsId, Bind)> {
+  let Cont::Expr { args, body } = cont else { return None };
+  let arg_ids: std::collections::HashSet<CpsId> = args.iter().map(|b| b.id).collect();
+  let mut expr = body.as_ref();
+  let mut found_alias: Option<(CpsId, Bind)> = None;
+  // Two-step walk: find the alias's LetVal; then check whether the user-bind
+  // gets ·ƒpub'd nearby. If it does, this is a module-level binding -- skip
+  // (caller will treat it as None) so we don't trigger self-cap analysis
+  // for top-level fns that resolve via pub_globals.
+  for _ in 0..8 {
+    match &expr.kind {
+      ExprKind::LetVal { name, val, cont } => {
+        if found_alias.is_none()
+          && let ValKind::Ref(Ref::Synth(src_id)) = &val.kind
+          && (arg_ids.contains(src_id) || *src_id == fn_name_id)
+        {
+          found_alias = Some((name.id, name.kind));
+        }
+        if let Cont::Expr { body: next, .. } = cont {
+          expr = next.as_ref();
+        } else {
+          break;
+        }
+      }
+      ExprKind::App { func, args } => {
+        // Pub check: ·ƒpub(Ref(found_alias_id), ...) means module-scope -> skip.
+        if let Some((uid, _)) = found_alias
+          && matches!(func, Callable::BuiltIn(BuiltIn::Pub))
+          && args.iter().any(|a| match a {
+            Arg::Val(v) => match &v.kind {
+              ValKind::Ref(r) => ref_cps_id_of(r) == uid,
+              _ => false,
+            },
+            _ => false,
+          })
+        {
+          return None;
+        }
+        break;
+      }
+      _ => break,
+    }
+  }
+  found_alias
+}
+
+fn ref_cps_id_of(r: &Ref) -> CpsId {
+  match r {
+    Ref::Synth(id) | Ref::Unresolved(id) => *id,
+  }
+}
+
 fn collect_letfn_names(expr: &Expr) -> std::collections::HashSet<CpsId> {
   let mut names = std::collections::HashSet::new();
   walk_letfn_names(expr, &mut names);
@@ -466,7 +527,15 @@ fn lift_expr<'src>(
       // Inside the LetFn being processed, fn_body is always a fn scope.
       if contains_letfn_or_inline_cont(&fn_body, true) {
         let mut hoisted: Vec<HoistedFn> = Vec::new();
-        let new_fn_body = extract_from_body(*fn_body, &params, &[], ast, alloc, &mut hoisted);
+        // Self-recursion: thread the LetFn's user-binding alias into
+        // scope_binds so body fragments hoisted as siblings can capture
+        // self-references rather than leaving them dangling.
+        let self_bind_id = find_user_bind_alias_of(&cont, name.id);
+        let self_binds: Vec<(CpsId, Bind)> = match self_bind_id {
+          Some((id, kind)) => vec![(name.id, name.kind), (id, kind)],
+          None => vec![(name.id, name.kind)],
+        };
+        let new_fn_body = extract_from_body(*fn_body, &params, &self_binds, ast, alloc, &mut hoisted);
 
         // Build the LetFn with the cleaned fn_body.
         let mut result = Expr {
@@ -634,7 +703,16 @@ fn extract_from_body<'src>(
       // Also exclude refs to ANY LetFn name in the tree — the lower pass resolves
       // those statically via fn_syms; threading them through closure captures
       // dangles after the sibling itself is re-hoisted to a fresh id.
-      let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, alloc)
+      // Self-recursion: expose the user-binding alias of this LetFn so the
+      // body's recursive refs are picked up as captures. find_user_bind_alias_of
+      // returns None for module-scope LetFns (those resolve via pub_globals).
+      let self_bind_id = find_user_bind_alias_of(&cont, name.id);
+      let mut extended_binds: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+      extended_binds.push((name.id, name.kind));
+      if let Some((uid, ukind)) = self_bind_id {
+        extended_binds.push((uid, ukind));
+      }
+      let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, &extended_binds, alloc)
         .into_iter()
         .filter(|(cap_id, _)| !is_hoisted_fn_ref(*cap_id, hoisted, alloc))
         .filter(|(cap_id, _)| !alloc.letfn_names.contains(cap_id))

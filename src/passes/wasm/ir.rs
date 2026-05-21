@@ -343,6 +343,12 @@ pub enum InstrKind {
   /// array.get — read element `idx` from array `arr`. Element type
   /// follows the array type's element decl.
   ArrayGet { ty: TypeSym, arr: Operand, idx: Operand, into: LocalIdx },
+  /// array.new — `array.new_default` followed by `local.set`. Element
+  /// fields are initialised to their default value (null for refs).
+  ArrayNewDefault { ty: TypeSym, size: Operand, into: LocalIdx },
+  /// array.set — write `val` into `arr[idx]`. Requires the array type
+  /// to declare mutable elements.
+  ArraySet { ty: TypeSym, arr: Operand, idx: Operand, val: Operand },
   /// ref.cast (non-null concrete).
   RefCastNonNull { ty: TypeSym, src: Operand, into: LocalIdx },
   /// ref.cast (nullable concrete).
@@ -736,6 +742,25 @@ pub fn push_array_get(
   into: LocalIdx,
 ) -> InstrId {
   push(frag, InstrKind::ArrayGet { ty, arr, idx, into })
+}
+
+pub fn push_array_new_default(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  size: Operand,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::ArrayNewDefault { ty, size, into })
+}
+
+pub fn push_array_set(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  arr: Operand,
+  idx: Operand,
+  val: Operand,
+) -> InstrId {
+  push(frag, InstrKind::ArraySet { ty, arr, idx, val })
 }
 
 pub fn push_ref_null_concrete(
