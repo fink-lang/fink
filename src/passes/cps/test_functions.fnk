@@ -71,10 +71,10 @@ test '·closure over outer variable', fn:
       ·fn
         fn ·ƒctx_33, ·ƒret_6, ·a_1:
           ·fn
-            fn ·ƒctx_34, ·ƒret_8, ·b_2: ·op_plus ·a_1, ·b_2, ·ƒret_8
+            fn ·ƒctx_34, ·ƒret_8, ·b_3: ·op_plus ·a_1, ·b_3, ·ƒret_8
             fn ·v_7:
-              ·let ·v_7, fn ·ni_3:
-                ·ƒret_6 ·ƒctx_33, ·ni_3
+              ·let ·v_7, fn ·ni_2:
+                ·ƒret_6 ·ƒctx_33, ·ni_2
         fn ·v_5:
           ·let ·v_5, fn ·foo_0:
             ·ƒpub ·foo_0, fn:
