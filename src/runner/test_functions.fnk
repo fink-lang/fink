@@ -150,7 +150,7 @@ test 'fn equality — different fns', fn:
     false
 
 
-# TODO losering issue for fn: fn: 123
+# TODO lowering issue for fn: fn: 123
 skip test 'fn equality — distinct closures from same fn', fn:
   expect run ƒink:
     spam = fn: fn: 789

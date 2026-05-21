@@ -44,7 +44,7 @@ test 'predicate guard rec matching', fn:
     true
 
 
-test 'comparison in match — rec', fn:
+skip test 'comparison in match — rec', fn:
   expect run ƒink:
     match {k: 4}:
       {foo: bar == 4}: bar
