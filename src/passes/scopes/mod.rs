@@ -56,8 +56,6 @@ pub enum ScopeKind {
   Fn,
   /// Match arm — pattern bindings visible in arm body.
   Arm,
-  /// `with` block — sequential bindings; nothing leaks to enclosing scope.
-  With,
 }
 
 // ---------------------------------------------------------------------------
@@ -740,16 +738,6 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       walk_pattern_refs(ast, rhs, scope, ctx);
     }
 
-    NodeKind::With { handlers, body, .. } => {
-      // Handlers are evaluated in the enclosing scope (they pick out the
-      // registry/handler value). The body runs in a fresh `With` scope so
-      // bindings introduced inside do not leak to the enclosing scope.
-      for &h_id in handlers.items.iter() { walk_node(ast, h_id, scope, ctx); }
-      let with_scope = ctx.push_scope(ScopeKind::With, Some(scope), id);
-      let body_items: Vec<AstId> = body.items.to_vec();
-      walk_stmts(ast, &body_items, with_scope, ctx);
-      ctx.pop_scope_binds(with_scope);
-    }
   }
 }
 
@@ -773,7 +761,6 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
     ScopeKind::Module => "module".to_string(),
     ScopeKind::Fn => "fn".to_string(),
     ScopeKind::Arm => "arm".to_string(),
-    ScopeKind::With => "with".to_string(),
   };
 
   write_indent(out, indent);

@@ -413,8 +413,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Yield        => "·yield".into(),
     BuiltIn::Spawn        => "·spawn".into(),
     BuiltIn::Await        => "·await".into(),
-    // Effect handlers
-    BuiltIn::WithInvoke   => "·with_invoke".into(),
     // Channels
     BuiltIn::Channel      => "·channel".into(),
     BuiltIn::Receive      => "·receive".into(),

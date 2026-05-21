@@ -357,38 +357,6 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Patterns(_) => panic!("Patterns node lowered via fn/match"),
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
-    // ---- with: `with H: B` ----
-    //
-    // Lowers as:
-    //
-    //   h_val      = lower H                      ; the handler value
-    //   body_fn_val = lower_module_as_fn B        ; B as a zero-param fn
-    //   result     = App(WithInvoke, [h_val, body_fn_val])
-    //
-    // NOTE: the WithInvoke runtime primitive no longer exists -- the old
-    // wat-based `with_invoke` substrate was retired in favour of building
-    // the handler semantics in userland on top of `suspend` + ctx (see
-    // rt/apply.wat). Programs that use `with H: B` source syntax will
-    // emit-fail with a "WithInvoke not found" error until the userland
-    // handler library lands in std/effects.fnk and the desugar is
-    // re-pointed at it.
-    NodeKind::With { handlers, body, .. } => {
-      assert_eq!(handlers.items.len(), 1, "with: multi-handler not yet supported");
-      let body_items: Vec<AstId> = body.items.to_vec();
-      assert!(!body_items.is_empty(), "with: empty body not yet supported");
-      let (h_val, mut pending) = lower(g, handlers.items[0]);
-      let (body_fn_val, body_pending) = lower_module_as_fn(g, &body_items, o);
-      pending.extend(body_pending);
-      let result = g.fresh_result(o);
-      let (result_kind, result_id) = (result.kind, result.id);
-      pending.push(Pending::App {
-        func: Callable::BuiltIn(BuiltIn::WithInvoke),
-        args: args_val(vec![h_val, body_fn_val]),
-        result,
-        origin: o,
-      });
-      (ref_val(g, result_kind, result_id, o), pending)
-    }
   }
 }
 
@@ -3285,5 +3253,4 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_effects.fnk");
 }

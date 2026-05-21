@@ -291,15 +291,6 @@ pub enum BuiltIn {
   // Spawn(task_fn, cont) — create new task from task_fn; cont receives future.
   // Await(future, cont) — wait for future to settle; cont receives settled value.
   Yield, Spawn, Await,
-  // Effect handlers — `with H: B` lowering target. Compiler-emitted
-  // (no source-level name); WithInvoke(handler_val, body_fn_val, cont).
-  // The wat-based with_invoke runtime primitive was retired with the
-  // substrate collapse to suspend + ctx (see rt/apply.wat); this
-  // builtin still gets emitted by transform.rs for `with H: B` source
-  // syntax, and emit-fails because nothing resolves it. Will be
-  // re-pointed at the userland handler library once it lands in
-  // std/effects.fnk.
-  WithInvoke,
   // Channels — multi-message async communication between tasks (point-to-point).
   // Channel(tag, cont) — create new channel; cont receives channel value.
   // Receive(channel, cont) — park receiver; cont receives message when matched.

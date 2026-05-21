@@ -173,14 +173,11 @@ impl Threader<'_> {
     // runtime builtin invokes its cont with `(value)` not `(ctx, value)`.
     // The cont inherits ctx from the enclosing scope, just like a
     // LetVal/LetFn inline cont.
-    // Callable::Val (user fn / cont) is always ctx-aware. WithInvoke
-    // is a builtin but its runtime invokes a user-defined handler and
-    // tail-calls a user cont (k_outer) -- so its result-cont needs
-    // ctx-prepended treatment too. Other builtins (op_plus, etc.) are
-    // not ctx-aware: they're fixed-arity runtime fns whose result-cont
-    // is invoked directly with (value), no ctx slot.
-    let call_is_ctx_aware = matches!(func, Callable::Val(_))
-      || matches!(func, Callable::BuiltIn(super::ir::BuiltIn::WithInvoke));
+    // Callable::Val (user fn / cont) is always ctx-aware. Other
+    // builtins (op_plus, etc.) are not ctx-aware: they're fixed-arity
+    // runtime fns whose result-cont is invoked directly with (value),
+    // no ctx slot.
+    let call_is_ctx_aware = matches!(func, Callable::Val(_));
     if call_is_ctx_aware
       && matches!(func, Callable::Val(_))
       && let Some(ctx_id) = self.current_ctx() {
