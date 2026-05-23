@@ -325,7 +325,7 @@
       (ref.func $set_ctx_apply)
       (ref.null $Captures)))
 
-  (func $set_ctx (@pub) (@impl "std/effects.fnk:set_ctx") (result (ref any))
+  (func $set_ctx (@pub) (result (ref any))
     (global.get $set_ctx_closure))
 
 
@@ -363,7 +363,7 @@
       (ref.func $get_ctx_apply)
       (ref.null $Captures)))
 
-  (func $get_ctx (@pub) (@impl "std/effects.fnk:get_ctx") (result (ref any))
+  (func $get_ctx (@pub) (result (ref any))
     (global.get $get_ctx_closure))
 
 
@@ -471,6 +471,6 @@
       (ref.func $suspend_apply)
       (ref.null $Captures)))
 
-  (func $suspend (@pub) (@impl "std/effects.fnk:suspend") (result (ref any))
+  (func $suspend (@pub) (result (ref any))
     (global.get $suspend_closure))
 )

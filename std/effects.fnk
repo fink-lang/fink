@@ -1,0 +1,55 @@
+{stdout, write} = import 'std/io.fnk'
+
+
+{suspend: _suspend, get_ctx: _get_ctx, set_ctx: _set_ctx} = import 'rt/apply.wat'
+# TODO: reexport will be made easier
+suspend = _suspend
+get_ctx = _get_ctx
+set_ctx = _set_ctx
+
+
+has_handler = fn perform, frames:
+  match frames:
+    []: false
+    [f, ..rest]: match f.perform == perform:
+      true: true
+      false: has_handler perform, rest
+
+
+get_perform = fn handler:
+  perform = fn ..args:
+    {frames} = get_ctx _
+
+    match has_handler perform, frames:
+      true: handler ..args
+      # TODO false: ?!?!?
+
+  perform
+
+
+with_register = fn handler:
+  # {with_reg, ..ctx} = get_ctx _
+  perform = get_perform handler
+  # set_ctx {..ctx1, with_reg: {..with_reg, (perform): handler}}
+  perform
+
+
+push_frame = fn frame:
+  {frames, ..ctx} = get_ctx _
+  set_ctx {..ctx, frames: [frame, ..frames]}
+
+
+pop_frame = fn:
+  {frames: [frame, ..frames], ..ctx} = get_ctx _
+  set_ctx {..ctx, frames}
+  frame
+
+
+with3 = fn perform, body:
+  result = suspend fn return:
+    push_frame {retry: body, return, perform}
+    return body _
+  pop_frame _
+  result
+
+

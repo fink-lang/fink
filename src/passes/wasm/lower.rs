@@ -1151,7 +1151,9 @@ fn lower_import(
     _ => None,
   }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing cont"));
 
-  if is_virtual_stdlib_path(url) {
+  if crate::passes::wasm::compile_package::MIGRATED_STDLIB_FNK.contains(&url) {
+    lower_import_user_fragment(lcx, ctx, url, cont_id);
+  } else if is_virtual_stdlib_path(url) || url.ends_with(".wat") {
     lower_import_virtual_stdlib(lcx, ctx, url, cont_id);
   } else {
     lower_import_user_fragment(lcx, ctx, url, cont_id);
@@ -1311,6 +1313,7 @@ fn lower_import_user_fragment(
 fn is_virtual_stdlib_path(url: &str) -> bool {
   url.starts_with("std/") && url.ends_with(".fnk")
 }
+
 
 /// Emit a 4-arg primitive with shape `(any, any, any, any) -> ()`.
 /// Used by `RecPut(rec, key, val, cont)` and

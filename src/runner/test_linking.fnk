@@ -88,3 +88,25 @@ test 'diamond with two paths to same dep', fn:
   | equals ":
     stdout == ":
       33
+
+
+test 'wat file importable', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'rt/apply.wat'
+
+    set_ctx {x: 42}
+    ctx = get_ctx _
+    ctx.x
+  | equals ƒink:
+    42
+
+
+test 'std .fnk file importable', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx {x: 42}
+    ctx = get_ctx _
+    ctx.x
+  | equals ƒink:
+    42

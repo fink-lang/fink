@@ -1758,8 +1758,19 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
     let item_ids: Vec<AstId> = items.items.to_vec();
     let entry: &mut Vec<String> = result.entry(url).or_default();
     for item_id in item_ids {
-      if let NodeKind::Ident(field) = &ast.nodes.get(item_id).kind {
-        let s = field.to_string();
+      // Plain field `{foo}` — source name is the ident.
+      // Renamed `{foo: bar}` — parsed as Arm{lhs: Ident(foo), body: Ident(bar)};
+      // source name (what we import) is the Arm's lhs ident.
+      let src_name: Option<String> = match &ast.nodes.get(item_id).kind {
+        NodeKind::Ident(field) => Some(field.to_string()),
+        NodeKind::Arm { lhs, .. } => {
+          if let NodeKind::Ident(field) = &ast.nodes.get(*lhs).kind {
+            Some(field.to_string())
+          } else { None }
+        },
+        _ => None,
+      };
+      if let Some(s) = src_name {
         if !entry.contains(&s) { entry.push(s); }
       }
     }

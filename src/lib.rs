@@ -96,8 +96,9 @@ pub fn to_wasm_for(
   path: &str,
   interop: passes::wasm::emit::Interop,
 ) -> Result<passes::Wasm, String> {
-  use passes::modules::InMemorySourceLoader;
-  let mut loader = InMemorySourceLoader::single(path, src);
+  use passes::modules::{InMemorySourceLoader, StdlibLoader};
+  let inner = InMemorySourceLoader::single(path, src);
+  let mut loader = StdlibLoader::new(inner);
   compile_package(std::path::Path::new(path), &mut loader, interop)
 }
 

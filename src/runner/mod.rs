@@ -67,7 +67,9 @@ pub fn run_file(
   }
 
   if path.ends_with(".fnk") {
-    let mut loader = crate::passes::modules::FileSourceLoader::new();
+    let mut loader = crate::passes::modules::StdlibLoader::new(
+      crate::passes::modules::FileSourceLoader::new(),
+    );
     let wasm = crate::compile_package(std::path::Path::new(path), &mut loader, crate::passes::wasm::emit::Interop::Rust)?;
     return wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr);
   }
@@ -704,13 +706,17 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_patterns.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_effects.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_main.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_io.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_sets.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_lists.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_math.fnk", skip-ir);
+
+  mod stdlib {
+    use super::*;
+    test_macros::include_fink_tests!("std/effects.test.fnk", skip-ir);
+  }
 }
 
 /// End-to-end tests for `run_source` — exercise `wasmtime_runner::run`
@@ -774,5 +780,24 @@ main = fn ..args:
     assert_eq!(exit, 0);
     assert_eq!(out, "hello");
     assert_eq!(err, "");
+  }
+
+  /// Migrated stdlib `.fnk` files (e.g. `std/effects.fnk`) must resolve
+  /// from the embedded copy that `StdlibLoader` ships, not from the
+  /// in-memory loader the CLI hands to `compile_package`. Without the
+  /// loader wiring, the BFS hits the stdlib URL and errors with
+  /// "no such source in loader".
+  #[test]
+  fn migrated_stdlib_fnk_resolves_via_embedded_loader() {
+    let src = "\
+{set_ctx, get_ctx} = import 'std/effects.fnk'
+
+main = fn ..args:
+  set_ctx {x: 42}
+  ctx = get_ctx _
+  ctx.x
+";
+    let (exit, _out, err) = run(src, &["test"]).expect("run_source");
+    assert_eq!(exit, 42, "stderr: {err}");
   }
 }
