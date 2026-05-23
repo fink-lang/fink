@@ -716,6 +716,7 @@ mod tests {
   mod stdlib {
     use super::*;
     test_macros::include_fink_tests!("std/effects.test.fnk", skip-ir);
+    test_macros::include_fink_tests!("std/tasks.test.fnk", skip-ir);
   }
 }
 

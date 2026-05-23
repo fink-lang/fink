@@ -27,7 +27,7 @@ get_perform = fn handler:
   perform
 
 
-with_register = fn handler:
+effect = fn handler:
   # {with_reg, ..ctx} = get_ctx _
   perform = get_perform handler
   # set_ctx {..ctx1, with_reg: {..with_reg, (perform): handler}}

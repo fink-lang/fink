@@ -1,0 +1,67 @@
+{stdout, write} = import 'std/io.fnk'
+
+{suspend, get_ctx, set_ctx, with3} = import 'std/effects.fnk'
+
+# TODO: for now we are not going through with-block frames, tasks are global
+effect = fn handler: handler
+
+
+log = fn msg:
+  write stdout, '${msg}\n'
+
+
+has_more = fn:
+  {queue} = get_ctx _
+  match queue:
+    []: false
+    [..]: true
+
+
+dequeue = fn:
+  {queue: [head, ..rest],  ..ctx} = get_ctx _
+  set_ctx { ..ctx, queue: rest}
+
+  head
+
+
+enqueue = fn t:
+  {queue, ..ctx} = get_ctx _
+  set_ctx { ..ctx, queue: [..queue, t]}
+
+
+resume_scheduler = fn:
+  match has_more _:
+    true:
+      {n, task} = dequeue _
+      task '${n} tick'
+    false:
+      {waiter} = get_ctx _
+      waiter 'foo'
+
+
+pause = effect fn v:
+  suspend fn resume:
+    enqueue {n: 'pause ${v}', task: resume}
+    resume_scheduler _
+
+
+done = effect fn v:
+  resume_scheduler _
+
+
+spawn = effect fn n, task_fn:
+  wrapped = fn a:
+    result = task_fn a
+    done {t:n, result}
+
+  enqueue {n, task: wrapped}
+
+
+
+wait_all = effect fn:
+  ctx = get_ctx _
+
+  suspend fn resume:
+    set_ctx {..ctx, waiter: resume}
+    resume_scheduler _
+

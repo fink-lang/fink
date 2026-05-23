@@ -317,6 +317,7 @@ pub fn finalize_marks(
 /// + @impl alias resolution. Hand-maintained during migration.
 pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/effects.fnk",
+  "std/tasks.fnk",
 ];
 
 #[cfg(feature = "compile")]

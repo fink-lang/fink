@@ -1,0 +1,51 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'spawning', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {spawn, pause, wait_all} = import 'std/tasks.fnk'
+
+    set_ctx {queue: [], foo: 'start'}
+
+    pause_with_update = fn msg:
+      pause msg
+      {foo, ..ctx} = get_ctx _
+      set_ctx {..ctx, foo: '${foo} -> ${msg}'}
+
+    spawn 'A', fn t:
+      pause_with_update 'A1'
+      pause_with_update 'A2'
+      pause_with_update 'A3'
+      'A-done'
+
+    spawn 'B', fn t:
+      pause_with_update 'B1'
+      pause_with_update 'B1'
+      'B-done'
+
+    wait_all _
+
+    {foo} = get_ctx _
+    foo
+
+  | equals ":
+    start -> A1 -> B1 -> A2 -> B1 -> A3
+
+
+# test 'awaiting future', fn:
+#   expect run ƒink:
+#     {set_ctx} = import 'std/effects.fnk'
+#     {spawn, pause, await2} = import 'std/tasks.fnk'
+
+#     set_ctx {queue: [], pending_futures:{}}
+
+#     fut = spawn 'A', fn t:
+#       pause 'A pause'
+#       42
+
+#     await2 fut
+
+#   | equals ƒink:
+#     42
