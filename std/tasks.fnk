@@ -1,6 +1,6 @@
 {stdout, write} = import 'std/io.fnk'
 
-{suspend, get_ctx, set_ctx, with3} = import 'std/effects.fnk'
+{suspend, get_ctx_for, set_ctx_for, upd_ctx_for, with3} = import 'std/effects.fnk'
 
 # TODO: for now we are not going through with-block frames, tasks are global
 effect = fn handler: handler
@@ -10,23 +10,33 @@ log = fn msg:
   write stdout, '${msg}\n'
 
 
+tasks = effect fn:
+  suspend fn resume:
+    set_ctx_for tasks, {queue: [], futures: {}}
+    resume _
+
+
+with_tasks = fn body:
+  set_ctx_for tasks, {queue: [], futures: {}}
+  body _
+
+
 has_more = fn:
-  {queue} = get_ctx _
+  {queue} = get_ctx_for tasks
   match queue:
     []: false
     [..]: true
 
 
 dequeue = fn:
-  {queue: [head, ..rest],  ..ctx} = get_ctx _
-  set_ctx { ..ctx, queue: rest}
-
+  {queue: [head, ..rest]} = get_ctx_for tasks
+  upd_ctx_for tasks, {queue: rest}
   head
 
 
 enqueue = fn t:
-  {queue, ..ctx} = get_ctx _
-  set_ctx { ..ctx, queue: [..queue, t]}
+  {queue} = get_ctx_for tasks
+  upd_ctx_for tasks, {queue: [..queue, t]}
 
 
 resume_scheduler = fn:
@@ -35,7 +45,7 @@ resume_scheduler = fn:
       {n, task} = dequeue _
       task '${n} tick'
     false:
-      {waiter} = get_ctx _
+      {waiter} = get_ctx_for tasks
       waiter 'foo'
 
 
@@ -46,10 +56,10 @@ pause = effect fn v:
 
 
 settle_future = effect fn fut, result:
-  {futures, ..ctx} = get_ctx _
+  {futures} = get_ctx_for tasks
   match futures:
     {(fut): settle, ..rest}:
-      set_ctx {..ctx, futures: rest}
+      upd_ctx_for tasks, {futures: rest}
       enqueue {n: 'settle',  task: fn: settle result}
     _: false
 
@@ -67,17 +77,15 @@ spawn = effect fn n, task_fn:
   fut
 
 
-await2 = fn fut:
+await = fn fut:
   suspend fn resume:
-    {futures, ..ctx} = get_ctx _
-    set_ctx {..ctx, futures: {..futures, (fut): resume}}
+    {futures} = get_ctx_for tasks
+    upd_ctx_for tasks, {futures: {..futures, (fut): resume}}
     resume_scheduler _
 
 
 wait_all = effect fn:
-  ctx = get_ctx _
-
   suspend fn resume:
-    set_ctx {..ctx, waiter: resume}
+    upd_ctx_for tasks, {waiter: resume}
     resume_scheduler _
 

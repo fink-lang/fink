@@ -8,6 +8,26 @@ get_ctx = _get_ctx
 set_ctx = _set_ctx
 
 
+upd_ctx = fn updates:
+  ctx = get_ctx _
+  set_ctx {..ctx, ..updates}
+
+
+set_ctx_for = fn eff, value:
+  upd_ctx {(eff): value}
+
+
+get_ctx_for = fn eff:
+  {(eff): ctx} = get_ctx _
+  ctx
+
+
+upd_ctx_for = fn eff, updates:
+  ctx = get_ctx_for eff
+  set_ctx_for eff, {..ctx, ..updates}
+
+
+
 has_handler = fn perform, frames:
   match frames:
     []: false

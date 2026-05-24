@@ -4,28 +4,29 @@
 
 test 'spawning', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
-    {spawn, pause, wait_all} = import 'std/tasks.fnk'
+    {upd_ctx, get_ctx, set_ctx} = import 'std/effects.fnk'
+    {spawn, pause, with_tasks, wait_all} = import 'std/tasks.fnk'
 
-    set_ctx {queue: [], futures: {}, foo: 'start'}
+    set_ctx {foo: 'start'}
 
     pause_with_update = fn msg:
       pause msg
-      {foo, ..ctx} = get_ctx _
-      set_ctx {..ctx, foo: '${foo} -> ${msg}'}
+      {foo} = get_ctx _
+      upd_ctx {foo: '${foo} -> ${msg}'}
 
-    spawn 'A', fn t:
-      pause_with_update 'A1'
-      pause_with_update 'A2'
-      pause_with_update 'A3'
-      'A-done'
+    with_tasks fn:
+      spawn 'A', fn t:
+        pause_with_update 'A1'
+        pause_with_update 'A2'
+        pause_with_update 'A3'
+        'A-done'
 
-    spawn 'B', fn t:
-      pause_with_update 'B1'
-      pause_with_update 'B1'
-      'B-done'
-
-    wait_all _
+      spawn 'B', fn t:
+        pause_with_update 'B1'
+        pause_with_update 'B1'
+        'B-done'
+      # TODO move into with_tasks
+      wait_all _
 
     {foo} = get_ctx _
     foo
@@ -37,15 +38,16 @@ test 'spawning', fn:
 test 'awaiting future', fn:
   expect run ƒink:
     {set_ctx} = import 'std/effects.fnk'
-    {spawn, pause, await2, wait_all} = import 'std/tasks.fnk'
+    {spawn, pause, with_tasks, await} = import 'std/tasks.fnk'
 
-    set_ctx {queue: [], futures: {}}
+    set_ctx {}
 
-    fut = spawn 'A', fn t:
-      pause 'A pause'
-      42
+    with_tasks fn:
+      fut = spawn 'A', fn t:
+        pause 'A pause'
+        42
 
-    await2 fut
+      await fut
 
   | equals ƒink:
     42
