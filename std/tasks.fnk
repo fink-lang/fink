@@ -45,17 +45,33 @@ pause = effect fn v:
     resume_scheduler _
 
 
-done = effect fn v:
+settle_future = effect fn fut, result:
+  {futures, ..ctx} = get_ctx _
+  match futures:
+    {(fut): settle, ..rest}:
+      set_ctx {..ctx, futures: rest}
+      enqueue {n: 'settle',  task: fn: settle result}
+    _: false
+
   resume_scheduler _
 
 
 spawn = effect fn n, task_fn:
+  fut = fn: 123
+
   wrapped = fn a:
     result = task_fn a
-    done {t:n, result}
+    settle_future fut, result
 
   enqueue {n, task: wrapped}
+  fut
 
+
+await2 = fn fut:
+  suspend fn resume:
+    {futures, ..ctx} = get_ctx _
+    set_ctx {..ctx, futures: {..futures, (fut): resume}}
+    resume_scheduler _
 
 
 wait_all = effect fn:

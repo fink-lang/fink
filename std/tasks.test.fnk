@@ -7,7 +7,7 @@ test 'spawning', fn:
     {set_ctx, get_ctx} = import 'std/effects.fnk'
     {spawn, pause, wait_all} = import 'std/tasks.fnk'
 
-    set_ctx {queue: [], foo: 'start'}
+    set_ctx {queue: [], futures: {}, foo: 'start'}
 
     pause_with_update = fn msg:
       pause msg
@@ -34,18 +34,18 @@ test 'spawning', fn:
     start -> A1 -> B1 -> A2 -> B1 -> A3
 
 
-# test 'awaiting future', fn:
-#   expect run ƒink:
-#     {set_ctx} = import 'std/effects.fnk'
-#     {spawn, pause, await2} = import 'std/tasks.fnk'
+test 'awaiting future', fn:
+  expect run ƒink:
+    {set_ctx} = import 'std/effects.fnk'
+    {spawn, pause, await2, wait_all} = import 'std/tasks.fnk'
 
-#     set_ctx {queue: [], pending_futures:{}}
+    set_ctx {queue: [], futures: {}}
 
-#     fut = spawn 'A', fn t:
-#       pause 'A pause'
-#       42
+    fut = spawn 'A', fn t:
+      pause 'A pause'
+      42
 
-#     await2 fut
+    await2 fut
 
-#   | equals ƒink:
-#     42
+  | equals ƒink:
+    42
