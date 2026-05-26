@@ -66,7 +66,7 @@ pop_frame = fn:
 
 
 
-with3 = fn perform, body:
+with = fn perform, body:
   result = suspend fn return:
     push_frame {retry: body, return, perform}
     return body _

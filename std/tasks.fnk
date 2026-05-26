@@ -1,7 +1,7 @@
 {stdout, write} = import 'std/io.fnk'
 
 {interop_yield} = import 'interop.wat'
-{suspend, get_ctx_for, set_ctx_for, upd_ctx_for, with3} = import 'std/effects.fnk'
+{suspend, get_ctx_for, set_ctx_for, upd_ctx_for, with} = import 'std/effects.fnk'
 
 # TODO: for now we are not going through with-block frames, tasks are global
 effect = fn handler: handler
