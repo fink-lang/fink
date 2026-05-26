@@ -330,10 +330,7 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
       })
     }
     ExprKind::If { then, else_, .. } => needs_lifting(then, in_fn) || needs_lifting(else_, in_fn),
-    // LetRec from CPS-0: lifting treats the group as terminal — it does
-    // not try to hoist anything in or out of the defn bodies because
-    // doing so would break the mutual-rec semantics of the group.
-    // Only the cont (downstream of the LetRec) can still need lifting.
+    // LetRec is terminal for lifting — only the cont can need further work.
     ExprKind::LetRec { cont, .. } => cont_needs_lifting(cont, in_fn),
   }
 }
@@ -476,8 +473,7 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
     ExprKind::If { then, else_, .. } => {
       contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
     }
-    // LetRec is terminal for lifting (see needs_lifting); only the cont
-    // beyond the group can contribute.
+    // LetRec is terminal — only the cont matters.
     ExprKind::LetRec { cont, .. } => match cont {
       Cont::Ref(_) => false,
       Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body, in_fn),
@@ -680,10 +676,12 @@ fn lift_expr<'src>(
       let else_ = lift_expr(*else_, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
-    // LetRec is terminal for lifting — leave defns untouched; only recurse
-    // into the cont. The group's mutual scope means we can't hoist anything
-    // in or out of the defn bodies. Closure-convert will properly handle the
-    // converted form; lifting just preserves the wrapper unchanged.
+    // LetRec is terminal for lifting (see needs_lifting); preserve unchanged.
+    // The defn body's nested LetFns get captures computed inline by codegen
+    // because lifting can't hoist them out without breaking the group's
+    // mutual scope. This means lower.rs's LetRec arm must do its own
+    // capture analysis for the nested fns (or rely on the codegen path
+    // that handles untagged params).
     ExprKind::LetRec { group, no_self_edge, cont } => {
       let cont = lift_cont(cont, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::LetRec { group, no_self_edge, cont } }

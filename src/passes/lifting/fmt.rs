@@ -583,10 +583,41 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let app_id = b_apply_loc(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc);
       out.push(app_id);
     }
-    // LetRec not yet emitted; render placeholder so partial-migration debugging works.
-    ExprKind::LetRec { .. } => {
-      let placeholder = b_ident_loc(b, "·letrec_unimpl", expr_loc);
-      out.push(placeholder);
+    // LetRec from CPS-0: render each defn as `name = fn ...: body` and
+    // continue into the cont. Placeholder formatting; proper `letrec ...`
+    // surface syntax lands in a later step.
+    ExprKind::LetRec { group, cont, .. } => {
+      use crate::passes::cps::ir::LetRecDefn;
+      for d in group {
+        match d {
+          LetRecDefn::Fn { name, params, body, .. } => {
+            let name_str = render_bind(name, fc);
+            let fn_params = render_fn_params_grouped(b, params, fc);
+            let body_stmts = collect_stmts(b, body, fc);
+            let fn_rhs = b_fn_loc(b, fn_params, body_stmts, expr_loc);
+            let name_loc = {
+              let pa = phase_a_loc(name.id, fc);
+              if pa.start.line == 0 { expr_loc } else { pa }
+            };
+            let name_id = b_ident_loc(b, &name_str, name_loc);
+            let bind_id = b_bind_loc(b, name_id, fn_rhs, expr_loc);
+            out.push(bind_id);
+          }
+          LetRecDefn::Val { name, val } => {
+            let name_str = render_bind(name, fc);
+            let val_id = render_val(b, val, fc);
+            let name_loc = {
+              let pa = phase_a_loc(name.id, fc);
+              if pa.start.line == 0 { expr_loc } else { pa }
+            };
+            let name_id = b_ident_loc(b, &name_str, name_loc);
+            let bind_id = b_bind_loc(b, name_id, val_id, expr_loc);
+            out.push(bind_id);
+          }
+        }
+      }
+      // Continue into the cont — its body's statements get appended to `out`.
+      collect_cont_into(b, cont, "·letrec_tail", fc, out);
     }
   }
 }

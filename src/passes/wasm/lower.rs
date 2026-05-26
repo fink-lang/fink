@@ -957,7 +957,251 @@ fn lower_expr(
       ctx.instrs.push(i_if);
     }
 
+    // LetRec from CPS-0 (currently only emitted for nested mutual rec; see
+    // .brain/.scratch/closure-convert-design.md §5). Each defn becomes a
+    // separate Fn3 just like LetFn, then closures are constructed with
+    // sibling slots back-patched after struct.new — generalising the
+    // self-rec patch loop to N siblings.
+    ExprKind::LetRec { group, cont, .. } => {
+      use crate::passes::cps::ir::LetRecDefn;
+
+      // 1. Collect defn fn entries (skip Val defns for now — none are
+      //    currently emitted by CPS-0).
+      let fn_defns: Vec<(&BindNode, &[Param], &Expr)> = group.iter().filter_map(|d| match d {
+        LetRecDefn::Fn { name, params, body, .. } => Some((name, params.as_slice(), body.as_ref())),
+        LetRecDefn::Val { .. } => None,
+      }).collect();
+      let group_name_ids: std::collections::HashSet<CpsId> = fn_defns.iter().map(|(n, _, _)| n.id).collect();
+
+      // 2. Pre-bind each defn name to a fresh local. Sibling captures
+      //    will resolve to these locals; the locals are written by
+      //    struct.new and then read back when array.set patches sibling
+      //    cap slots in step 5.
+      let group_locals: Vec<LocalIdx> = fn_defns.iter().map(|(name, _, _)| {
+        let display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
+        let l = ctx.alloc_local(&display);
+        ctx.bind(name.id, l);
+        l
+      }).collect();
+
+      // 3. For each defn: compute captures (free vars in body that are
+      //    either in-scope at the LetRec site OR sibling group names),
+      //    split user params (excluding caps), call lower_fn.
+      //    Sibling-cap slots get recorded as patch_slots for step 4.
+      let mut defn_info: Vec<(FuncSym, Vec<Operand>, Vec<usize>, LocalIdx)> = Vec::new();
+      // ^ (fn_sym, cap_operands, patch_slots, closure_local)
+      for (i, (name, params, body)) in fn_defns.iter().enumerate() {
+        // The defn's user params are the existing params slice. Compute
+        // their CpsIds + spread flag for lower_fn.
+        let user_params: Vec<(CpsId, bool)> = params.iter().map(|p| match p {
+          Param::Name(b) => (b.id, false),
+          Param::Spread(b) => (b.id, true),
+        }).collect();
+        let user_param_ids: std::collections::HashSet<CpsId> =
+          user_params.iter().map(|(id, _)| *id).collect();
+
+        // Compute captures: walk body, collect every Ref CpsId that's
+        // NOT defined inside the body (we approximate "defined inside"
+        // by removing any id that's also a binding in the body — see
+        // `bound_in` helper). Then intersect with "in scope at LetRec":
+        // currently-bound CpsIds in ctx + sibling names.
+        let mut free_in_body: std::collections::HashSet<CpsId> = std::collections::HashSet::new();
+        collect_refs_in_expr(body, &mut free_in_body);
+        let mut bound_in_body: std::collections::HashSet<CpsId> = std::collections::HashSet::new();
+        collect_binds_in_expr(body, &mut bound_in_body);
+        let in_scope: std::collections::HashSet<CpsId> = ctx.binds.keys().copied().collect();
+
+        let mut caps_for_this: Vec<CpsId> = free_in_body.iter()
+          .filter(|&id| {
+            // free = ref - defined-in-body - own-user-params
+            !bound_in_body.contains(id)
+              && !user_param_ids.contains(id)
+              // captured if visible in parent's binds (incl. siblings just pre-bound)
+              && (in_scope.contains(id) || group_name_ids.contains(id))
+          })
+          .copied()
+          .collect();
+        caps_for_this.sort_by_key(|id| id.0);  // stable order
+
+        let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
+        let display = format!("{}{}", lcx.fqn_prefix, raw_display);
+        let fn_sym = lower_fn(
+          lcx,
+          &caps_for_this, &user_params, body, &display,
+          &ctx.fn_syms,
+        );
+        ctx.fn_sym_for_bind(name.id, fn_sym);
+
+        // Build cap_operands and record sibling-cap slots for patching.
+        let mut cap_operands: Vec<Operand> = Vec::with_capacity(caps_for_this.len());
+        let mut patch_slots: Vec<usize> = Vec::new();
+        for (slot, &cid) in caps_for_this.iter().enumerate() {
+          if group_name_ids.contains(&cid) {
+            // Sibling: pre-bound but the closure value is not yet built
+            // (or is built but the order may differ). Mark for patching.
+            // The operand we put here doesn't actually matter — the slot
+            // is left null and patched in step 4 — but we still need a
+            // placeholder Operand. Use op_local of the pre-bound local;
+            // the array.set for non-patch slots will skip this index.
+            cap_operands.push(op_local(ctx.lookup(cid)));
+            patch_slots.push(slot);
+          } else {
+            // Outer capture: look up the value from ctx.
+            let op = resolve_id_as_operand(lcx, ctx, cid);
+            cap_operands.push(op);
+          }
+        }
+        defn_info.push((fn_sym, cap_operands, patch_slots, group_locals[i]));
+      }
+
+      // 4. Build each closure with sibling slots left null. Save the
+      //    caps_local for each so step 5 can array.set into it.
+      let caps_locals: Vec<LocalIdx> = defn_info.iter().map(|(fn_sym, cap_operands, patch_slots, into)| {
+        emit_closure_construction_with_patches(
+          lcx, ctx, *fn_sym, cap_operands.clone(), *into, patch_slots,
+        )
+      }).collect();
+
+      // 5. Cross-patch: for each defn, for each sibling-cap slot, write
+      //    the sibling's closure local into that slot.
+      for (i, (_, cap_operands, patch_slots, _)) in defn_info.iter().enumerate() {
+        let _ = cap_operands;
+        for &slot in patch_slots {
+          // The cap_operand at this slot was a placeholder — we know the
+          // CpsId via re-deriving from defn_info[i]'s caps_for_this. But
+          // we didn't keep caps_for_this around. Instead, look up the
+          // sibling by checking which group_locals match: the cap operand
+          // at this slot was op_local(group_locals[k]) for some sibling k.
+          // Recover k from the Operand.
+          let sibling_local = match &cap_operands[slot] {
+            Operand::Local(l) => *l,
+            _ => panic!("lower: LetRec patch slot has non-local cap operand"),
+          };
+          let i_set = push_array_set(
+            lcx.frag, lcx.rt.captures(),
+            op_local(caps_locals[i]), lit_i32(slot as i32), op_local(sibling_local),
+          );
+          ctx.instrs.push(i_set);
+        }
+      }
+
+      // 6. Recurse into the cont.
+      lower_cont(lcx, ctx, cont);
+    }
+
     _ => panic!("lower: unsupported expr shape: {:?}", short_kind(&expr.kind)),
+  }
+}
+
+/// Walk an Expr and collect every CpsId that appears as a Ref / ContRef.
+/// Used by the LetRec arm in lower_expr to compute captures.
+fn collect_refs_in_expr(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetVal { val, cont, .. } => {
+      collect_refs_in_val(val, out);
+      collect_refs_in_cont(cont, out);
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      collect_refs_in_expr(fn_body, out);
+      collect_refs_in_cont(cont, out);
+    }
+    ExprKind::App { func, args } => {
+      if let Callable::Val(v) = func { collect_refs_in_val(v, out); }
+      for a in args {
+        match a {
+          Arg::Val(v) | Arg::Spread(v) => collect_refs_in_val(v, out),
+          Arg::Cont(c) => collect_refs_in_cont(c, out),
+          Arg::Expr(e) => collect_refs_in_expr(e, out),
+        }
+      }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      collect_refs_in_val(cond, out);
+      collect_refs_in_expr(then, out);
+      collect_refs_in_expr(else_, out);
+    }
+    ExprKind::LetRec { group, cont, .. } => {
+      use crate::passes::cps::ir::LetRecDefn;
+      for d in group {
+        match d {
+          LetRecDefn::Fn { body, .. } => collect_refs_in_expr(body, out),
+          LetRecDefn::Val { val, .. } => collect_refs_in_val(val, out),
+        }
+      }
+      collect_refs_in_cont(cont, out);
+    }
+  }
+}
+
+fn collect_refs_in_val(val: &Val, out: &mut std::collections::HashSet<CpsId>) {
+  match &val.kind {
+    ValKind::Ref(Ref::Synth(id)) | ValKind::ContRef(id) => { out.insert(*id); }
+    _ => {}
+  }
+}
+
+fn collect_refs_in_cont(cont: &Cont, out: &mut std::collections::HashSet<CpsId>) {
+  match cont {
+    Cont::Ref(id) => { out.insert(*id); }
+    Cont::Expr { body, .. } => collect_refs_in_expr(body, out),
+  }
+}
+
+/// Walk an Expr and collect every CpsId that's a binding site (LetVal name,
+/// LetFn name + params, LetFn body's nested binds, Cont::Expr args).
+/// Used to subtract from `collect_refs_in_expr` to compute free vars.
+fn collect_binds_in_expr(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetVal { name, cont, .. } => {
+      out.insert(name.id);
+      collect_binds_in_cont(cont, out);
+    }
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
+      out.insert(name.id);
+      for p in params {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        out.insert(b.id);
+      }
+      collect_binds_in_expr(fn_body, out);
+      collect_binds_in_cont(cont, out);
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(c) => collect_binds_in_cont(c, out),
+          Arg::Expr(e) => collect_binds_in_expr(e, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_binds_in_expr(then, out);
+      collect_binds_in_expr(else_, out);
+    }
+    ExprKind::LetRec { group, cont, .. } => {
+      use crate::passes::cps::ir::LetRecDefn;
+      for d in group {
+        match d {
+          LetRecDefn::Fn { name, params, body, .. } => {
+            out.insert(name.id);
+            for p in params {
+              let b = match p { Param::Name(b) | Param::Spread(b) => b };
+              out.insert(b.id);
+            }
+            collect_binds_in_expr(body, out);
+          }
+          LetRecDefn::Val { name, .. } => { out.insert(name.id); }
+        }
+      }
+      collect_binds_in_cont(cont, out);
+    }
+  }
+}
+
+fn collect_binds_in_cont(cont: &Cont, out: &mut std::collections::HashSet<CpsId>) {
+  if let Cont::Expr { args, body } = cont {
+    for a in args { out.insert(a.id); }
+    collect_binds_in_expr(body, out);
   }
 }
 
@@ -1829,6 +2073,67 @@ fn emit_closure_construction(
   into: LocalIdx,
 ) {
   emit_closure_construction_inner(lcx, ctx, fn_sym, cap_operands, into, None)
+}
+
+/// Emit closure construction where any subset of capture slots may need
+/// post-`struct.new` patching. Returns the caps local so the caller can
+/// patch sibling slots later for a LetRec group.
+///
+/// When `patch_slots` is non-empty:
+///   - allocate the array with `array.new_default` (all slots null)
+///   - emit `array.set` for every slot NOT in `patch_slots`
+///   - emit `struct.new` to write the closure into `into`
+///   - return without patching `patch_slots` slots — caller does that
+///     after all sibling closures are constructed
+///
+/// When `patch_slots` is empty: behaves like the standard path
+/// (`array.new_fixed` for non-empty captures, or `ref.null` for empty).
+///
+/// Used by both the single-self-rec arm and the LetRec arm. The caps
+/// local is needed by LetRec for the cross-patch step.
+fn emit_closure_construction_with_patches(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  fn_sym: FuncSym,
+  cap_operands: Vec<Operand>,
+  into: LocalIdx,
+  patch_slots: &[usize],
+) -> LocalIdx {
+  let caps_local = ctx.alloc_local_typed(
+    ":caps_arg",
+    val_ref(lcx.rt.captures(), /*nullable*/ true),
+  );
+  if cap_operands.is_empty() {
+    let i = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
+    ctx.instrs.push(i);
+  } else if !patch_slots.is_empty() {
+    // Build the array with default-null, then array.set each non-patch slot.
+    let i_arr = push_array_new_default(
+      lcx.frag, lcx.rt.captures(),
+      lit_i32(cap_operands.len() as i32), caps_local,
+    );
+    ctx.instrs.push(i_arr);
+    for (i, op) in cap_operands.iter().enumerate() {
+      if patch_slots.contains(&i) { continue; }
+      let i_set = push_array_set(
+        lcx.frag, lcx.rt.captures(),
+        op_local(caps_local), lit_i32(i as i32), op.clone(),
+      );
+      ctx.instrs.push(i_set);
+    }
+  } else {
+    let i = push_array_new_fixed(lcx.frag, lcx.rt.captures(), cap_operands.clone(), caps_local);
+    ctx.instrs.push(i);
+  }
+
+  let struct_instr = push_struct_new(
+    lcx.frag,
+    lcx.rt.closure(),
+    vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
+    into,
+  );
+  ctx.instrs.push(struct_instr);
+  caps_local
 }
 
 /// Emit closure construction with optional self-capture support. If

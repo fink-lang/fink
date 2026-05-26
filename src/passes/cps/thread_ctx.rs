@@ -127,8 +127,26 @@ impl Threader<'_> {
           else_: Box::new(new_else),
         }
       }
-      // LetRec not yet emitted by CPS-0; pass-through unchanged.
-      ExprKind::LetRec { .. } => kind,
+      // LetRec from CPS-0: thread ctx through each fn defn body the same
+      // way LetFn does — prepend a Bind::Ctx param, push it on the stack,
+      // walk the body, pop. Cont is inlined into the surrounding scope.
+      ExprKind::LetRec { group, no_self_edge, cont } => {
+        use crate::passes::cps::ir::LetRecDefn;
+        let new_group: Vec<LetRecDefn> = group.into_iter().map(|d| match d {
+          LetRecDefn::Fn { name, mut params, fn_kind, body } => {
+            let body_origin = self.origin.try_get(body.id).and_then(|o| *o);
+            let ctx_bind = self.fresh_ctx_bind(body_origin);
+            params.insert(0, Param::Name(ctx_bind.clone()));
+            self.ctx_stack.push(ctx_bind.id);
+            let new_body = self.thread_expr(*body);
+            self.ctx_stack.pop();
+            LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
+          }
+          LetRecDefn::Val { name, val } => LetRecDefn::Val { name, val },
+        }).collect();
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::LetRec { group: new_group, no_self_edge, cont: new_cont }
+      }
     };
     Expr { id, kind: new_kind }
   }
