@@ -366,7 +366,19 @@ fn lower_seq(g: &mut Gen, exprs: &[AstId]) -> Expr {
   lower_seq_with_tail(g, exprs, Cont::Ref(g.cont))
 }
 
+/// Like lower_seq but skips the LetRec SCC post-pass. Use for module-scope
+/// bodies where mutual rec is handled by the legacy `global.set` late-bind
+/// machinery; emitting LetRec at module scope would break lifting today.
+/// This is a transitional toggle for step 2 of the closure-convert migration.
+fn lower_seq_no_letrec(g: &mut Gen, exprs: &[AstId]) -> Expr {
+  lower_seq_with_tail_opts(g, exprs, Cont::Ref(g.cont), /*detect_letrec=*/ false)
+}
+
 fn lower_seq_with_tail(g: &mut Gen, exprs: &[AstId], tail: Cont) -> Expr {
+  lower_seq_with_tail_opts(g, exprs, tail, /*detect_letrec=*/ true)
+}
+
+fn lower_seq_with_tail_opts(g: &mut Gen, exprs: &[AstId], tail: Cont, detect_letrec: bool) -> Expr {
   assert!(!exprs.is_empty(), "empty expression sequence");
   let mut all_pending: Vec<Pending> = vec![];
   let n = exprs.len();
@@ -402,6 +414,12 @@ fn lower_seq_with_tail(g: &mut Gen, exprs: &[AstId], tail: Cont) -> Expr {
       } else {
         tail
       };
+      // Post-pass: detect mutually-recursive fn binding groups in `all_pending`
+      // and collapse them into Pending::LetRec entries. Singletons and non-fn
+      // pendings pass through unchanged. See .brain/.scratch/closure-convert-design.md.
+      // Skipped at module scope while the legacy global-late-bind path still
+      // owns module-level mutual rec.
+      let all_pending = if detect_letrec { detect_letrec_groups(all_pending) } else { all_pending };
       return wrap(g, all_pending, explicit_tail);
     } else {
       let kind = g.node(expr_id).kind.clone();
@@ -522,7 +540,10 @@ fn lower_module_as_fn(
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let cont_origin = body.last().copied().map(Some).unwrap_or(origin);
   let (cont, prev_cont) = g.push_cont(cont_origin);
-  let fn_body = lower_seq(g, body);
+  // Module-scope bodies skip LetRec detection — mutual rec at module scope is
+  // still handled by the legacy global.set/global.get late-bind path until
+  // codegen learns LetRec. See .brain/.scratch/closure-convert-progress.md.
+  let fn_body = lower_seq_no_letrec(g, body);
   g.pop_cont(prev_cont);
   let pending = vec![Pending::Fn { name: fn_name, params: vec![Param::Name(cont)], fn_kind: CpsFnKind::CpsFunction, fn_body, origin }];
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
@@ -1405,6 +1426,13 @@ enum Pending {
     matcher_body: Expr,
     origin: Option<AstId>,
   },
+  /// A mutually-recursive group of fn bindings — emitted by the post-pass over
+  /// `all_pending` when nested fn bindings reference each other. Replaces a
+  /// run of `Pending::Fn { name: $synth, .. } + Pending::MatchBind { name: $user, val: Ref(synth) }`
+  /// pairs with a single LetRec whose group uses the *user* names directly,
+  /// resolving the forward-ref problem at the IR level.
+  /// See .brain/.scratch/closure-convert-design.md §5.
+  LetRec { group: Vec<crate::passes::cps::ir::LetRecDefn>, origin: Option<AstId> },
 }
 
 impl Pending {
@@ -1413,7 +1441,8 @@ impl Pending {
       Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
       | Pending::MatchBind { origin, .. }
       | Pending::MatchGuard { origin, .. }
-      | Pending::PatternMatch { origin, .. } => *origin,
+      | Pending::PatternMatch { origin, .. }
+      | Pending::LetRec { origin, .. } => *origin,
     }
   }
 }
@@ -1428,6 +1457,217 @@ fn cont_with_result(cont: Cont, result: BindNode) -> Cont {
   }
 }
 
+/// Walk an Expr and collect every CpsId that appears as a Ref / ContRef.
+/// Used by the LetRec post-pass to detect mutual recursion between sibling
+/// fn bindings: each fn's body refs are checked against the user-bind ids
+/// of other sibling fns to build the SCC graph.
+fn collect_refs(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetVal { val, cont, .. } => {
+      collect_refs_val(val, out);
+      collect_refs_cont(cont, out);
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      collect_refs(fn_body, out);
+      collect_refs_cont(cont, out);
+    }
+    ExprKind::App { func, args } => {
+      if let Callable::Val(v) = func { collect_refs_val(v, out); }
+      for a in args {
+        match a {
+          Arg::Val(v) | Arg::Spread(v) => collect_refs_val(v, out),
+          Arg::Cont(c) => collect_refs_cont(c, out),
+          Arg::Expr(e) => collect_refs(e, out),
+        }
+      }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      collect_refs_val(cond, out);
+      collect_refs(then, out);
+      collect_refs(else_, out);
+    }
+    ExprKind::LetRec { group, cont, .. } => {
+      for defn in group {
+        match defn {
+          crate::passes::cps::ir::LetRecDefn::Fn { body, .. } => collect_refs(body, out),
+          crate::passes::cps::ir::LetRecDefn::Val { val, .. } => collect_refs_val(val, out),
+        }
+      }
+      collect_refs_cont(cont, out);
+    }
+  }
+}
+
+fn collect_refs_val(val: &Val, out: &mut std::collections::HashSet<CpsId>) {
+  match &val.kind {
+    ValKind::Ref(Ref::Synth(id)) => { out.insert(*id); }
+    ValKind::ContRef(id) => { out.insert(*id); }
+    _ => {}
+  }
+}
+
+fn collect_refs_cont(cont: &Cont, out: &mut std::collections::HashSet<CpsId>) {
+  match cont {
+    Cont::Ref(id) => { out.insert(*id); }
+    Cont::Expr { body, .. } => collect_refs(body, out),
+  }
+}
+
+/// Detect mutually-recursive sibling fn-binding groups in `pending` and
+/// collapse each SCC into a single `Pending::LetRec`. Only acts on adjacent
+/// `Pending::Fn { name: synth } + Pending::MatchBind { name: user, val: Ref(synth) }`
+/// pairs — the standard shape produced by lowering `name = fn ...`.
+///
+/// Singleton fns (no mutual rec, no self-cycle in body refs) are left as
+/// LetFn for now. Self-rec via the synth-name alias still works the same.
+/// This is the minimal step 2 emission: targets nested mutual rec, leaves
+/// everything else untouched. See .brain/.scratch/closure-convert-progress.md.
+fn detect_letrec_groups(pending: Vec<Pending>) -> Vec<Pending> {
+  // First scan: identify adjacent Fn+MatchBind alias pairs and their CpsIds.
+  // Then compute SCCs within each run. Finally, walk `pending` once more,
+  // moving entries into output, grouping SCC members of size >= 2.
+
+  // Step 1: find pairs.
+  // pair_info[i] = Some((user_id, synth_id)) if pending[i] is a Fn and pending[i+1] is its
+  // user-bind alias.
+  let n = pending.len();
+  let mut pair_info: Vec<Option<(CpsId, CpsId)>> = vec![None; n];
+  let mut i = 0;
+  while i + 1 < n {
+    let aliased = match (&pending[i], &pending[i + 1]) {
+      (Pending::Fn { name: fn_name, .. }, Pending::MatchBind { name: user_name, val, .. }) => {
+        let synth_id = fn_name.id;
+        let user_id = user_name.id;
+        if matches!(val.kind, ValKind::Ref(Ref::Synth(s)) if s == synth_id) {
+          Some((user_id, synth_id))
+        } else { None }
+      }
+      _ => None,
+    };
+    if aliased.is_some() {
+      pair_info[i] = aliased;
+      i += 2;
+    } else {
+      i += 1;
+    }
+  }
+
+  // Step 2: group adjacent pairs into runs and compute SCCs within each run.
+  // run_scc[i] = Some(scc_id) for each pending index that is the *Fn* part of a pair,
+  // identifying the SCC it belongs to. Singleton SCCs map to None (leave as-is).
+  let mut run_scc: Vec<Option<usize>> = vec![None; n];
+  let mut next_scc = 0usize;
+
+  let mut k = 0;
+  while k < n {
+    if pair_info[k].is_none() { k += 1; continue; }
+    // Greedy run of consecutive pairs.
+    let mut run: Vec<usize> = Vec::new();
+    let mut j = k;
+    while j < n && pair_info[j].is_some() {
+      run.push(j);
+      j += 2;
+    }
+    if run.len() == 1 {
+      k = j;
+      continue;
+    }
+    // Build edges within the run. Edge a -> b if pending[a].fn_body refs pending[b]'s user_id.
+    let user_ids: Vec<CpsId> = run.iter().map(|&q| pair_info[q].unwrap().0).collect();
+    let id_to_idx: std::collections::HashMap<CpsId, usize> =
+      user_ids.iter().enumerate().map(|(idx, &id)| (id, idx)).collect();
+    let m = run.len();
+    let mut reach = vec![vec![false; m]; m];
+    for (i_, &fn_idx) in run.iter().enumerate() {
+      let body = match &pending[fn_idx] {
+        Pending::Fn { fn_body, .. } => fn_body,
+        _ => unreachable!(),
+      };
+      let mut refs = std::collections::HashSet::new();
+      collect_refs(body, &mut refs);
+      for r in refs {
+        if let Some(&j_) = id_to_idx.get(&r) { reach[i_][j_] = true; }
+      }
+      reach[i_][i_] = true;
+    }
+    // Floyd-Warshall transitive closure.
+    for kk in 0..m {
+      for ii in 0..m {
+        for jj in 0..m {
+          if reach[ii][kk] && reach[kk][jj] { reach[ii][jj] = true; }
+        }
+      }
+    }
+    // SCCs: a and b in same SCC iff reach[a][b] && reach[b][a].
+    let mut scc_of = vec![usize::MAX; m];
+    for ii in 0..m {
+      if scc_of[ii] != usize::MAX { continue; }
+      let sc = next_scc;
+      next_scc += 1;
+      for jj in ii..m {
+        if reach[ii][jj] && reach[jj][ii] { scc_of[jj] = sc; }
+      }
+    }
+    // Mark each Fn-pending index with its SCC, but only if the SCC has size >= 2.
+    let mut scc_sizes: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    for &sc in &scc_of { *scc_sizes.entry(sc).or_insert(0) += 1; }
+    for (i_, &fn_idx) in run.iter().enumerate() {
+      let sc = scc_of[i_];
+      if scc_sizes[&sc] >= 2 { run_scc[fn_idx] = Some(sc); }
+    }
+    k = j;
+  }
+
+  // Step 3: walk pending, consuming entries. For each Fn-index marked with an SCC,
+  // gather the full group (all Fn+MatchBind pairs in the same SCC) and emit a
+  // single Pending::LetRec. Other entries pass through.
+  let mut emitted_scc: std::collections::HashSet<usize> = std::collections::HashSet::new();
+  let mut pending_iter: Vec<Option<Pending>> = pending.into_iter().map(Some).collect();
+  let mut out: Vec<Pending> = Vec::with_capacity(pending_iter.len());
+
+  for idx in 0..n {
+    if pending_iter[idx].is_none() { continue; } // already consumed by a group
+
+    match run_scc[idx] {
+      Some(sc) if !emitted_scc.contains(&sc) => {
+        emitted_scc.insert(sc);
+        // Collect all (fn_idx, user_id) pairs in this SCC in source order.
+        let members: Vec<usize> = (0..n).filter(|&q| run_scc[q] == Some(sc)).collect();
+        let group_origin = pending_iter[idx].as_ref().and_then(|p| p.origin());
+        let mut group: Vec<crate::passes::cps::ir::LetRecDefn> = Vec::with_capacity(members.len());
+        for &m_idx in &members {
+          // Take the Fn and the MatchBind (m_idx + 1).
+          let fn_pending = pending_iter[m_idx].take().unwrap();
+          let alias_pending = pending_iter[m_idx + 1].take().unwrap();
+          let (user_id, _synth_id) = pair_info[m_idx].unwrap();
+          let (params, fn_kind, fn_body) = match fn_pending {
+            Pending::Fn { params, fn_kind, fn_body, .. } => (params, fn_kind, fn_body),
+            _ => unreachable!(),
+          };
+          let user_name = match alias_pending {
+            Pending::MatchBind { name, .. } => name,
+            _ => unreachable!(),
+          };
+          debug_assert_eq!(user_name.id, user_id);
+          group.push(crate::passes::cps::ir::LetRecDefn::Fn {
+            name: user_name,
+            params,
+            fn_kind,
+            body: Box::new(fn_body),
+          });
+        }
+        out.push(Pending::LetRec { group, origin: group_origin });
+      }
+      _ => {
+        // Pass through unchanged.
+        if let Some(p) = pending_iter[idx].take() {
+          out.push(p);
+        }
+      }
+    }
+  }
+  out
+}
 
 fn wrap(g: &mut Gen, bindings: Vec<Pending>, tail: Cont) -> Expr {
   wrap_with_fail(g, bindings, tail, None)
@@ -1609,6 +1849,10 @@ fn wrap_with_fail(
           origin,
         )
       },
+      Pending::LetRec { group, origin } => g.expr(
+        ExprKind::LetRec { group, no_self_edge: false, cont },
+        origin,
+      ),
     })
   });
   match acc {
@@ -1908,7 +2152,9 @@ pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeRe
     }, module_origin)
   } else {
     // Lower the module body as a sequence — same as any function body.
-    let body = lower_seq_with_tail(&mut g, exprs, Cont::Ref(cont_id));
+    // Skip LetRec detection at module scope while the legacy global-late-bind
+    // path still owns module-level mutual rec (see closure-convert-progress.md).
+    let body = lower_seq_with_tail_opts(&mut g, exprs, Cont::Ref(cont_id), /*detect_letrec=*/ false);
     // Post-process: inject ·ƒpub calls after each exported LetVal binding.
     // TODO: move export detection to an AST desugaring pass; the CPS
     // transform shouldn't know about implicit module-level pub semantics.
