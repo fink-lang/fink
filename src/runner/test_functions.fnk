@@ -133,6 +133,71 @@ test 'mutual recursion at module scope', fn:
     true
 
 
+skip test 'mutual recursion nested inside fn', fn:
+  expect run ƒink:
+    outer = fn n:
+      is_even = fn k:
+        match k:
+          0: true
+          _: is_odd  k - 1
+
+      is_odd = fn k:
+        match k:
+          0: false
+          _: is_even k - 1
+
+      is_even n
+
+    outer 4
+  | equals ƒink:
+    true
+
+
+skip test 'mutual recursion nested — closed-over outer var', fn:
+  expect run ƒink:
+    outer = fn base:
+      ping = fn k:
+        match k:
+          0: base
+          _: pong k - 1
+
+      pong = fn k:
+        match k:
+          0: base
+          _: ping k - 1
+
+      ping 4
+
+    outer 42
+  | equals ƒink:
+    42
+
+
+skip test 'three-way mutual recursion nested', fn:
+  expect run ƒink:
+    outer = fn n:
+      a = fn k:
+        match k:
+          0: 'a'
+          _: b k - 1
+
+      b = fn k:
+        match k:
+          0: 'b'
+          _: c k - 1
+
+      c = fn k:
+        match k:
+          0: 'c'
+          _: a k - 1
+
+      a n
+
+    outer 5
+  | equals ƒink:
+    'c'
+
+
 test 'fn equality — same fn', fn:
   expect run ƒink:
     foo = fn: 123
