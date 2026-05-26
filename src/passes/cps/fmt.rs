@@ -409,15 +409,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::RecPop       => "·rec_pop".into(),
     BuiltIn::Empty        => "·empty".into(),
     BuiltIn::StrMatch     => "·str_match".into(),
-    // Scheduling
-    BuiltIn::Yield        => "·yield".into(),
-    BuiltIn::Spawn        => "·spawn".into(),
-    BuiltIn::Await        => "·await".into(),
-    // Channels
-    BuiltIn::Channel      => "·channel".into(),
-    BuiltIn::Receive      => "·receive".into(),
-    BuiltIn::Read         => "·read".into(),
-    // IO
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),

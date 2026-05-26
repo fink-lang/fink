@@ -3262,7 +3262,6 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_scheduling.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
