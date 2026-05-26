@@ -1770,9 +1770,8 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
         },
         _ => None,
       };
-      if let Some(s) = src_name {
-        if !entry.contains(&s) { entry.push(s); }
-      }
+      if let Some(s) = src_name
+        && !entry.contains(&s) { entry.push(s); }
     }
   }
   result
