@@ -55,14 +55,15 @@ effect = fn handler:
 
 
 push_frame = fn frame:
-  {frames, ..ctx} = get_ctx _
-  set_ctx {..ctx, frames: [frame, ..frames]}
+  {frames} = get_ctx _
+  upd_ctx {frames: [frame, ..frames]}
 
 
 pop_frame = fn:
-  {frames: [frame, ..frames], ..ctx} = get_ctx _
-  set_ctx {..ctx, frames}
+  {frames: [frame, ..frames]} = get_ctx _
+  upd_ctx {frames}
   frame
+
 
 
 with3 = fn perform, body:
@@ -71,5 +72,7 @@ with3 = fn perform, body:
     return body _
   pop_frame _
   result
+
+
 
 

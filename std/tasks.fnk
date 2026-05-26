@@ -10,15 +10,8 @@ log = fn msg:
   write stdout, '${msg}\n'
 
 
-tasks = effect fn:
-  suspend fn resume:
-    set_ctx_for tasks, {queue: [], futures: {}}
-    resume _
-
-
-with_tasks = fn body:
-  set_ctx_for tasks, {queue: [], futures: {}}
-  body _
+tasks = fn TODO:
+  TODO
 
 
 has_more = fn:
@@ -29,29 +22,38 @@ has_more = fn:
 
 
 dequeue = fn:
-  {queue: [head, ..rest]} = get_ctx_for tasks
-  upd_ctx_for tasks, {queue: rest}
-  head
+  {queue: [resume, ..queue]} = get_ctx_for tasks
+  upd_ctx_for tasks, {queue}
+  resume
 
 
-enqueue = fn t:
+enqueue = fn resume:
   {queue} = get_ctx_for tasks
-  upd_ctx_for tasks, {queue: [..queue, t]}
+  upd_ctx_for tasks, {queue: [..queue, resume]}
 
 
 resume_scheduler = fn:
   match has_more _:
     true:
-      {n, task} = dequeue _
-      task '${n} tick'
+      resume = dequeue _
+      resume _
     false:
-      {waiter} = get_ctx_for tasks
-      waiter 'foo'
+      false
+
+
+with_tasks = fn body:
+  set_ctx_for tasks, {queue: [], futures: {}}
+  result = body _
+  resume_scheduler _
+  result
+
 
 
 pause = effect fn v:
   suspend fn resume:
-    enqueue {n: 'pause ${v}', task: resume}
+    # TODO `enqueue fn: resume v` does not work
+    todo = fn: resume v
+    enqueue todo
     resume_scheduler _
 
 
@@ -60,20 +62,21 @@ settle_future = effect fn fut, result:
   match futures:
     {(fut): settle, ..rest}:
       upd_ctx_for tasks, {futures: rest}
-      enqueue {n: 'settle',  task: fn: settle result}
+      todo = fn: settle result
+      enqueue todo
     _: false
 
   resume_scheduler _
 
 
-spawn = effect fn n, task_fn:
+spawn = effect fn task_fn:
   fut = fn: 123
 
-  wrapped = fn a:
-    result = task_fn a
+  wrapped = fn:
+    result = task_fn _
     settle_future fut, result
 
-  enqueue {n, task: wrapped}
+  enqueue wrapped
   fut
 
 
@@ -83,9 +86,4 @@ await = fn fut:
     upd_ctx_for tasks, {futures: {..futures, (fut): resume}}
     resume_scheduler _
 
-
-wait_all = effect fn:
-  suspend fn resume:
-    upd_ctx_for tasks, {waiter: resume}
-    resume_scheduler _
 
