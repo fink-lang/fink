@@ -342,6 +342,179 @@ fn walk_cont_for_discovery(
 mod tests {
   use super::*;
 
+  use super::super::cps::ir::*;
+  use std::collections::HashSet;
+
+  // Helper: minimal Expr builders for tests.
+
+  fn synth_bind(id: u32) -> BindNode {
+    BindNode { id: CpsId(id), kind: Bind::Synth }
+  }
+
+  fn cps_id(n: u32) -> CpsId { CpsId(n) }
+
+  fn ref_val(id: u32) -> Val {
+    Val { id: CpsId(1000 + id), kind: ValKind::Ref(Ref::Synth(CpsId(id))) }
+  }
+
+  // Build a tiny LetFn:  inner = fn p: ref_to_outer_x
+  // (no captures from caller perspective — depends on what's in scope).
+  fn letfn_using(name_id: u32, param_id: u32, body_ref_id: u32) -> Expr {
+    let body_val = ref_val(body_ref_id);
+    let body = Expr {
+      id: cps_id(2000 + name_id),
+      kind: ExprKind::App {
+        func: Callable::Val(body_val),
+        args: vec![],
+      },
+    };
+    Expr {
+      id: cps_id(3000 + name_id),
+      kind: ExprKind::LetFn {
+        name: synth_bind(name_id),
+        params: vec![Param::Name(synth_bind(param_id))],
+        fn_kind: CpsFnKind::CpsFunction,
+        fn_body: Box::new(body),
+        cont: Cont::Expr {
+          args: vec![],
+          body: Box::new(Expr {
+            id: cps_id(4000 + name_id),
+            kind: ExprKind::App {
+              func: Callable::Val(ref_val(name_id)),
+              args: vec![],
+            },
+          }),
+        },
+      },
+    }
+  }
+
+  #[test]
+  fn t_collect_refs_basic() {
+    // body: f(x, y)  -- 3 refs
+    let body = Expr {
+      id: cps_id(100),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(1)),
+        args: vec![Arg::Val(ref_val(2)), Arg::Val(ref_val(3))],
+      },
+    };
+    let mut refs = HashSet::new();
+    collect_refs(&body, &mut refs);
+    let expected: HashSet<CpsId> = [cps_id(1), cps_id(2), cps_id(3)].into_iter().collect();
+    assert_eq!(refs, expected);
+  }
+
+  #[test]
+  fn t_free_vars_subtracts_local_binds() {
+    // LetFn local = fn p: ref(p)  -- p is bound, refs locally
+    // Body refs cps#10 (local).
+    let inner_body = Expr {
+      id: cps_id(200),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(10)),  // p
+        args: vec![],
+      },
+    };
+    let expr = Expr {
+      id: cps_id(300),
+      kind: ExprKind::LetFn {
+        name: synth_bind(11),
+        params: vec![Param::Name(BindNode { id: cps_id(10), kind: Bind::Synth })],
+        fn_kind: CpsFnKind::CpsFunction,
+        fn_body: Box::new(inner_body),
+        cont: Cont::Expr {
+          args: vec![],
+          body: Box::new(Expr {
+            id: cps_id(400),
+            kind: ExprKind::App {
+              func: Callable::Val(ref_val(11)),
+              args: vec![],
+            },
+          }),
+        },
+      },
+    };
+    let free = free_vars(&expr);
+    // p (cps#10) and 11 (the fn name) are bound inside the expr. No free vars.
+    assert_eq!(free.len(), 0, "free vars were: {:?}", free);
+  }
+
+  #[test]
+  fn t_discover_fns_captures_outer_scope() {
+    // outer = fn x: inner = fn y: x + y; inner 5
+    // Model just: inner = fn y: x   (body refs x, outer's param)
+    // discover_fns should report inner with captures=[x].
+    let inner = letfn_using(/*name*/ 20, /*param*/ 21, /*body refs*/ 100);
+    let mut scope: HashSet<CpsId> = HashSet::new();
+    // Pretend cps#100 (x) is visible at this site (outer's param).
+    scope.insert(cps_id(100));
+    let fns = discover_fns(&inner, &scope);
+    assert_eq!(fns.len(), 1, "fns: {:?}", fns);
+    assert_eq!(fns[0].name_id, cps_id(20));
+    assert_eq!(fns[0].captures, vec![cps_id(100)]);
+    assert!(!fns[0].in_letrec);
+  }
+
+  #[test]
+  fn t_discover_fns_letrec_sibling_capture() {
+    // LetRec { is_even = fn k: is_odd, is_odd = fn k: is_even } in cont
+    // discover_fns should report is_even captures [is_odd], is_odd captures [is_even].
+    // (Siblings are in scope of each other.)
+    let is_even_body = Expr {
+      id: cps_id(500),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(31)),  // is_odd
+        args: vec![],
+      },
+    };
+    let is_odd_body = Expr {
+      id: cps_id(600),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(30)),  // is_even
+        args: vec![],
+      },
+    };
+    let expr = Expr {
+      id: cps_id(700),
+      kind: ExprKind::LetRec {
+        group: vec![
+          LetRecDefn::Fn {
+            name: synth_bind(30),  // is_even
+            params: vec![Param::Name(synth_bind(40))],  // k
+            fn_kind: CpsFnKind::CpsFunction,
+            body: Box::new(is_even_body),
+          },
+          LetRecDefn::Fn {
+            name: synth_bind(31),  // is_odd
+            params: vec![Param::Name(synth_bind(41))],  // k
+            fn_kind: CpsFnKind::CpsFunction,
+            body: Box::new(is_odd_body),
+          },
+        ],
+        no_self_edge: false,
+        cont: Cont::Expr {
+          args: vec![],
+          body: Box::new(Expr {
+            id: cps_id(800),
+            kind: ExprKind::App {
+              func: Callable::Val(ref_val(30)),
+              args: vec![],
+            },
+          }),
+        },
+      },
+    };
+    let fns = discover_fns(&expr, &HashSet::new());
+    assert_eq!(fns.len(), 2, "fns: {:?}", fns);
+    let is_even = fns.iter().find(|f| f.name_id == cps_id(30)).unwrap();
+    let is_odd  = fns.iter().find(|f| f.name_id == cps_id(31)).unwrap();
+    assert!(is_even.in_letrec);
+    assert!(is_odd.in_letrec);
+    assert_eq!(is_even.captures, vec![cps_id(31)], "is_even should capture is_odd");
+    assert_eq!(is_odd.captures, vec![cps_id(30)], "is_odd should capture is_even");
+  }
+
   // Basic sanity: convert is a no-op for now.
   #[test]
   fn t_convert_is_noop_for_empty() {
