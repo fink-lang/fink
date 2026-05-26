@@ -264,6 +264,8 @@ fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
       walk_letfn_names(then, out);
       walk_letfn_names(else_, out);
     }
+    // LetRec only emitted post-closure-convert migration; lifting will not see it.
+    ExprKind::LetRec { .. } => unreachable!("lifting: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -312,6 +314,8 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
       })
     }
     ExprKind::If { then, else_, .. } => needs_lifting(then, in_fn) || needs_lifting(else_, in_fn),
+    // LetRec only emitted post-closure-convert migration; lifting will not see it.
+    ExprKind::LetRec { .. } => unreachable!("lifting::needs_lifting: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -385,6 +389,7 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
     ExprKind::If { then, else_, .. } => {
       module_body_needs_lifting(then) || module_body_needs_lifting(else_)
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::module_body_needs_lifting: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -448,6 +453,7 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
     ExprKind::If { then, else_, .. } => {
       contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::contains_letfn_or_inline_cont: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -646,6 +652,7 @@ fn lift_expr<'src>(
       let else_ = lift_expr(*else_, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::lift_expr: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -1055,6 +1062,7 @@ fn extract_from_body<'src>(
       let else_ = extract_from_body(*else_, parent_params, scope_binds, _ast, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::extract_from_body: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -1112,6 +1120,7 @@ fn rewrite_refs_split(
       let else_ = rewrite_refs_split(*else_, value_map, fn_id_map);
       Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::rewrite_refs_split: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -1166,6 +1175,7 @@ fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Ex
       let else_ = rewrite_refs(*else_, map);
       Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::rewrite_refs: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -1286,6 +1296,7 @@ fn collect_captured_refs(
       collect_captured_refs(then, parent_ids, out, seen);
       collect_captured_refs(else_, parent_ids, out, seen);
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::collect_captured_refs: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -1370,6 +1381,7 @@ fn classify_untagged_params(expr: &Expr, param_info: &mut PropGraph<CpsId, Optio
       classify_untagged_params(then, param_info);
       classify_untagged_params(else_, param_info);
     }
+    ExprKind::LetRec { .. } => unreachable!("lifting::classify_untagged_params: LetRec not yet emitted by CPS-0"),
   }
 }
 

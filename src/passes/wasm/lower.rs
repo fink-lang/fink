@@ -1777,6 +1777,7 @@ fn find_pub_apps(
       find_pub_apps(then, cps, ast, out);
       find_pub_apps(else_, cps, ast, out);
     }
+    ExprKind::LetRec { .. } => unreachable!("wasm::lower::find_pub_apps: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -1786,6 +1787,7 @@ fn short_kind(k: &ExprKind) -> &'static str {
     ExprKind::LetFn { .. } => "LetFn",
     ExprKind::App { .. } => "App",
     ExprKind::If { .. } => "If",
+    ExprKind::LetRec { .. } => "LetRec",
   }
 }
 

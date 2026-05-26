@@ -275,6 +275,12 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
+  // Closure construction in the new (closure-converted) IR.
+  // Operand shape (rendered): MkClosure { funcref, captures: {name_1: ref_1, ..., name_n: ref_n} }
+  // Captures are name-keyed (matching Fn3's caps rec). Result bound by the cont.
+  // Not yet emitted by any pass — added in step 1 of the closure-convert migration.
+  // See .brain/.scratch/closure-convert-design.md §3.3.
+  MkClosure,
   // Collection primitives — used inside pattern matchers for seq/rec destructuring.
   // IsSeqLike(value, succ(value), fail()) — type guard; succ if seq-like (list)
   // IsRecLike(value, succ(value), fail()) — type guard; succ if rec-like (rec, dict)
@@ -541,6 +547,27 @@ pub enum ExprKind {
     else_: Box<Expr>,
   },
 
+  /// A group of bindings that may reference each other.
+  ///
+  /// Emitted by CPS-0 (post-migration) for every fn-like binding and any SCC
+  /// of sibling bindings (LetVal + LetFn). In the degenerate non-recursive
+  /// case the group has a single defn and `no_self_edge: true`; the formatter
+  /// renders this as a plain `name = ...` binding. Multi-element groups
+  /// (or single-element groups with a self back-ref) render with an
+  /// explicit `letrec ... in ...` block.
+  ///
+  /// All names in `group` are in scope of all defn bodies AND of `cont`,
+  /// resolving the forward-reference problem that CPS-0 today papers over
+  /// with a synth-name + user-bind alias hack.
+  ///
+  /// Not yet emitted by any pass — added in step 1 of the closure-convert
+  /// migration. See .brain/.scratch/closure-convert-design.md §3.2.
+  LetRec {
+    group: Vec<LetRecDefn>,
+    no_self_edge: bool,
+    cont: Cont,
+  },
+
   // ---------------------------------------------------------------------------
   // Pattern matching — all patterns lower to PatternMatch (LetFn + App).
   // Type guards (IsSeqLike, IsRecLike) wrap matcher entries; collection primitives
@@ -552,6 +579,30 @@ pub enum ExprKind {
   // the body's params give them user-visible names.
   // ---------------------------------------------------------------------------
 
+}
+
+/// One member of a `LetRec` group.
+///
+/// In the common case a defn is fn-shaped: it carries the same fields as
+/// `LetFn` minus the trailing `cont` (the cont is owned by the enclosing
+/// `LetRec`). A value-shaped defn (rare — only emitted when a non-fn
+/// participates in an SCC, e.g. `x = x + 1`) carries a `val` instead of
+/// the fn fields.
+///
+/// Not yet emitted by any pass — added in step 1 of the closure-convert
+/// migration. See .brain/.scratch/closure-convert-design.md §3.2.
+#[derive(Debug, Clone)]
+pub enum LetRecDefn {
+  Fn {
+    name: BindNode,
+    params: Vec<Param>,
+    fn_kind: CpsFnKind,
+    body: Box<Expr>,
+  },
+  Val {
+    name: BindNode,
+    val: Box<Val>,
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -596,6 +647,24 @@ fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Opti
     ExprKind::If { then, else_, .. } => {
       collect_bk_expr(then, bk);
       collect_bk_expr(else_, bk);
+    }
+    ExprKind::LetRec { group, cont, .. } => {
+      for defn in group {
+        match defn {
+          LetRecDefn::Fn { name, params, body, .. } => {
+            collect_bk_bind(name, bk);
+            for p in params {
+              let b = match p { Param::Name(b) | Param::Spread(b) => b };
+              collect_bk_bind(b, bk);
+            }
+            collect_bk_expr(body, bk);
+          }
+          LetRecDefn::Val { name, .. } => {
+            collect_bk_bind(name, bk);
+          }
+        }
+      }
+      collect_bk_cont(cont, bk);
     }
   }
 }

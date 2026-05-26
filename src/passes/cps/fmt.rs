@@ -400,6 +400,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
+    BuiltIn::MkClosure => "·mkclosure".into(),
     // Type guards
     BuiltIn::IsSeqLike    => "·is_seq_like".into(),
     BuiltIn::IsRecLike    => "·is_rec_like".into(),
@@ -573,6 +574,11 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
       let else_fn = b_state_fn(b, else_id);
       let if_keyword = b_ident(b, "·if", expr_loc);
       b_apply(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc)
+    }
+    // LetRec is reserved for the closure-convert migration; CPS-0 does not
+    // emit it yet. Render placeholder so partial-migration debugging works.
+    ExprKind::LetRec { .. } => {
+      b_ident(b, "·letrec_unimpl", expr_loc)
     }
   }
 }

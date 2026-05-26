@@ -2029,6 +2029,8 @@ fn inject_pub_calls(
       let else_ = inject_pub_calls(g, *else_, export_ids);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
+    // LetRec not yet emitted by CPS-0; pass-through unchanged.
+    ExprKind::LetRec { .. } => expr,
   }
 }
 

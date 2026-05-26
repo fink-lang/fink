@@ -127,6 +127,8 @@ impl Threader<'_> {
           else_: Box::new(new_else),
         }
       }
+      // LetRec not yet emitted by CPS-0; pass-through unchanged.
+      ExprKind::LetRec { .. } => kind,
     };
     Expr { id, kind: new_kind }
   }

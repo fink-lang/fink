@@ -583,6 +583,11 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let app_id = b_apply_loc(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc);
       out.push(app_id);
     }
+    // LetRec not yet emitted; render placeholder so partial-migration debugging works.
+    ExprKind::LetRec { .. } => {
+      let placeholder = b_ident_loc(b, "·letrec_unimpl", expr_loc);
+      out.push(placeholder);
+    }
   }
 }
 

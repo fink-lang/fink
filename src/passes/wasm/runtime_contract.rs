@@ -877,6 +877,7 @@ fn walk_fn_bodies(expr: &Expr, pred: &mut dyn FnMut(&Expr) -> bool) -> bool {
     ExprKind::If { then, else_, .. } => {
       walk_fn_bodies(then, pred) || walk_fn_bodies(else_, pred)
     }
+    ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::walk_fn_bodies: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -920,6 +921,7 @@ fn tail_is_apply_path(expr: &Expr) -> bool {
     ExprKind::App { func: Callable::Val(_), .. } => true,
     ExprKind::App { func: Callable::BuiltIn(_), .. } => false,
     ExprKind::If { .. } => true, // conservative — apply on at least one branch
+    ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::tail_is_apply_path: LetRec not yet emitted by CPS-0"),
   }
 }
 
@@ -977,6 +979,7 @@ fn scan_expr(expr: &Expr, cps: &CpsResult, usage: &mut RuntimeUsage) {
       scan_expr(then, cps, usage);
       scan_expr(else_, cps, usage);
     }
+    ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::scan_expr: LetRec not yet emitted by CPS-0"),
   }
 }
 
