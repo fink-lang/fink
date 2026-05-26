@@ -55,11 +55,19 @@ pub fn convert<'src>(cps: CpsResult, _ast: &Ast<'src>) -> CpsResult {
     root, origin, bind_to_cps, synth_alias, param_info, module_locals, module_imports,
   } = cps;
 
+  // Pre-collect LetFn names so we can exclude them from capture analysis.
+  // LetFn names resolve statically via fn_syms in codegen; threading them
+  // through closure captures creates spurious caps.
+  let mut letfn_names: std::collections::HashSet<super::cps::ir::CpsId>
+    = std::collections::HashSet::new();
+  collect_letfn_names(&root, &mut letfn_names);
+
   // Bootstrap state from current PropGraphs.
   let mut state = ConvertState {
     origin,
     synth_alias,
     param_info,
+    letfn_names,
   };
 
   // Initial scope: all module-local CpsIds.
@@ -368,6 +376,52 @@ fn walk_cont_for_discovery(
 }
 
 // ---------------------------------------------------------------------------
+// LetFn name collection
+// ---------------------------------------------------------------------------
+
+/// Walk an Expr tree and collect every LetFn / LetRecDefn::Fn name CpsId.
+/// These names are RESOLVED STATICALLY by lower.rs's fn_syms machinery —
+/// refs to them must not become closure captures.
+pub fn collect_letfn_names(
+  expr: &super::cps::ir::Expr,
+  out: &mut std::collections::HashSet<super::cps::ir::CpsId>,
+) {
+  use super::cps::ir::{Arg, Cont, ExprKind, LetRecDefn};
+  match &expr.kind {
+    ExprKind::LetVal { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont { collect_letfn_names(body, out); }
+    }
+    ExprKind::LetFn { name, fn_body, cont, .. } => {
+      out.insert(name.id);
+      collect_letfn_names(fn_body, out);
+      if let Cont::Expr { body, .. } = cont { collect_letfn_names(body, out); }
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(Cont::Expr { body, .. }) => collect_letfn_names(body, out),
+          Arg::Expr(e) => collect_letfn_names(e, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_letfn_names(then, out);
+      collect_letfn_names(else_, out);
+    }
+    ExprKind::LetRec { group, cont, .. } => {
+      for d in group {
+        if let LetRecDefn::Fn { name, body, .. } = d {
+          out.insert(name.id);
+          collect_letfn_names(body, out);
+        }
+      }
+      if let Cont::Expr { body, .. } = cont { collect_letfn_names(body, out); }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Mutable state for the conversion pass
 // ---------------------------------------------------------------------------
 
@@ -384,14 +438,24 @@ pub struct ConvertState {
   /// Param info map — CpsId -> Option<ParamInfo>. New cap params get
   /// ParamInfo::Cap(orig_id).
   pub param_info: crate::propgraph::PropGraph<super::cps::ir::CpsId, Option<super::cps::ir::ParamInfo>>,
+  /// LetFn names reachable anywhere in the input tree. Refs to these
+  /// must NOT become closure captures — the lower pass resolves LetFn
+  /// names statically via fn_syms / fn refs. Without this exclusion,
+  /// nested fns ref'ing a sibling LetFn name (lifted/hoisted) would
+  /// get spurious cap params.
+  pub letfn_names: std::collections::HashSet<super::cps::ir::CpsId>,
 }
 
 impl ConvertState {
   pub fn from_result(result: &super::cps::ir::CpsResult) -> Self {
+    let mut letfn_names: std::collections::HashSet<super::cps::ir::CpsId>
+      = std::collections::HashSet::new();
+    collect_letfn_names(&result.root, &mut letfn_names);
     Self {
       origin: result.origin.clone(),
       synth_alias: result.synth_alias.clone(),
       param_info: result.param_info.clone(),
+      letfn_names,
     }
   }
 
@@ -605,10 +669,13 @@ pub fn convert_expr(
       ExprKind::LetVal { name, val, cont }
     }
     ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
-      // Compute captures for this fn.
+      // Compute captures for this fn. Exclude LetFn names — those resolve
+      // statically via lower.rs's fn_syms; threading them as captures
+      // produces spurious cap params.
       let body_free = free_vars(&fn_body);
       let captures: Vec<super::cps::ir::CpsId> = body_free.iter()
         .filter(|id| scope.contains(id))
+        .filter(|id| !state.letfn_names.contains(id))
         .copied()
         .collect();
       // Rewrite the fn with cap params + body ref rewriting if captures non-empty.
@@ -682,8 +749,13 @@ pub fn convert_expr(
       let new_group: Vec<LetRecDefn> = group.into_iter().map(|d| match d {
         LetRecDefn::Fn { name, params, fn_kind, body } => {
           let body_free = free_vars(&body);
+          // For LetRec defns, siblings are part of the scope at this site.
+          // We DO want sibling refs as captures (that's the whole point of
+          // LetRec). Don't filter out via letfn_names — sibling defn names
+          // are NOT in letfn_names (only LetFn names are).
           let captures: Vec<super::cps::ir::CpsId> = body_free.iter()
             .filter(|id| scope.contains(id))
+            .filter(|id| !state.letfn_names.contains(id))
             .copied()
             .collect();
           let (new_params, new_body, _cap_ids) = if captures.is_empty() {
@@ -1033,6 +1105,7 @@ mod tests {
       origin: crate::propgraph::PropGraph::with_size(200, None),
       synth_alias: crate::propgraph::PropGraph::with_size(200, None),
       param_info: crate::propgraph::PropGraph::with_size(200, None),
+      letfn_names: HashSet::new(),
     };
 
     let (new_params, new_body, cap_ids) = rewrite_fn_for_captures(
@@ -1116,6 +1189,7 @@ mod tests {
       origin: crate::propgraph::PropGraph::with_size(500, None),
       synth_alias: crate::propgraph::PropGraph::with_size(500, None),
       param_info: crate::propgraph::PropGraph::with_size(500, None),
+      letfn_names: HashSet::new(),
     };
     let mut scope: HashSet<CpsId> = [outer_x].into_iter().collect();
 
@@ -1199,6 +1273,7 @@ mod tests {
       origin: crate::propgraph::PropGraph::with_size(900, None),
       synth_alias: crate::propgraph::PropGraph::with_size(900, None),
       param_info: crate::propgraph::PropGraph::with_size(900, None),
+      letfn_names: HashSet::new(),
     };
     let mut scope: HashSet<CpsId> = HashSet::new();
 
@@ -1250,6 +1325,7 @@ mod tests {
       origin: crate::propgraph::PropGraph::with_size(200, None),
       synth_alias: crate::propgraph::PropGraph::with_size(200, None),
       param_info: crate::propgraph::PropGraph::with_size(200, None),
+      letfn_names: HashSet::new(),
     };
 
     let (new_params, new_body, cap_ids) = rewrite_fn_for_captures(
