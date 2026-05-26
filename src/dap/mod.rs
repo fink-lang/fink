@@ -649,7 +649,63 @@ pub fn run<R: Read, W: Write + Send + 'static>(
             })
           }).map_err(|e| e.to_string())?;
         }
-        "host_read" => {
+        "host_write" => {
+          let out = server.output.clone();
+          linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
+            let fd = match params[0].unwrap_anyref() {
+              Some(a) => {
+                if let Ok(Some(i)) = a.as_i31(&caller) {
+                  i.get_i32()
+                } else if let Ok(Some(s)) = a.as_struct(&caller) {
+                  match s.field(&mut caller, 0) {
+                    Ok(wasmtime::Val::I64(v)) => v as i32,
+                    _ => return Err(wasmtime::Error::msg("host_write: fd struct field0 unreadable")),
+                  }
+                } else {
+                  return Err(wasmtime::Error::msg("host_write: fd not i31 or numeric"));
+                }
+              }
+              None => return Err(wasmtime::Error::msg("host_write: null fd")),
+            };
+            let bytes_any = params[1].unwrap_anyref()
+              .ok_or_else(|| wasmtime::Error::msg("host_write: null bytes"))?;
+            let arr = bytes_any.unwrap_array(&mut caller)?;
+            let len = arr.len(&caller)? as usize;
+            let mut buf = Vec::with_capacity(len);
+            for v in arr.elems(&mut caller)? {
+              buf.push(v.unwrap_i32() as u8);
+            }
+            let text = String::from_utf8_lossy(&buf).into_owned();
+            let category = if fd == 2 {
+              OutputEventCategory::Stderr
+            } else {
+              OutputEventCategory::Stdout
+            };
+            let event = Event::Output(dap::events::OutputEventBody {
+              category: Some(category),
+              output: text,
+              group: None,
+              variables_reference: None,
+              source: None,
+              line: None,
+              column: None,
+              data: None,
+            });
+            if let Ok(mut o) = out.lock() {
+              let _ = o.send_event(event);
+            }
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_yield" => {
+          // DAP currently runs everything sync; just no-op accept the
+          // yield (loses the resume, but no userland code in DAP tests
+          // depends on it firing today).
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_read_sync" | "host_read" => {
           // `read stdin` cannot work in the current DAP topology: `fink
           // dap` is *both* DAP adapter (talks DAP on its own stdin/
           // stdout to VSCode) and debuggee (runs the WASM program in

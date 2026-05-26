@@ -1,0 +1,14 @@
+{io_write, io_read} = import 'interop.wat'
+
+
+stdin = 0
+stdout = 1
+stderr = 2
+
+
+read = fn fd, size:
+  io_read fd, size
+
+write = fn fd, bytes_or_str:
+  io_write fd, bytes_or_str
+  fd

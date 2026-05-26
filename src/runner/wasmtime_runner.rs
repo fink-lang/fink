@@ -39,6 +39,11 @@ struct ExitState {
   /// Set when one of the cont callbacks captures a final exit code.
   /// Defaults to 0 if no main / no numeric result.
   exit_code: i64,
+  /// Closures handed to `host_yield` from wasm. The outer driver pops
+  /// them after the entry call returns and feeds each into
+  /// `_invoke_resume` to re-enter the scheduler. Rooted across the
+  /// callback boundary via `ManuallyRooted`.
+  pending_resumes: Vec<(wasmtime::OwnedRooted<wasmtime::AnyRef>, Option<wasmtime::OwnedRooted<wasmtime::AnyRef>>)>,
 }
 
 /// Execute a compiled Fink module via its host-facing wrapper export.
@@ -125,6 +130,78 @@ pub fn run(
               .and_then(|e| e.into_func())
               .ok_or_else(|| Error::msg("no _settle_future export"))?;
             settle.call(&mut caller, &[future_ref, str_val], &mut [])?;
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_read_sync" => {
+          let input = stdin.clone();
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            let size = extract_i32(&mut caller, &params[1])?;
+            let mut buf = vec![0u8; size as usize];
+            let n = {
+              let mut r = input.lock().unwrap();
+              r.read(&mut buf).unwrap_or(0)
+            };
+            buf.truncate(n);
+            // Build a ByteArray (i8 array) to return.
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = buf.iter().map(|&b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_read_sync byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_write" => {
+          let out = stdout.clone();
+          let err = stderr.clone();
+          linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+            let fd = match params[0].unwrap_anyref() {
+              Some(a) => {
+                if let Ok(Some(i)) = a.as_i31(&caller) {
+                  i.get_i32()
+                } else if let Ok(Some(s)) = a.as_struct(&caller) {
+                  match s.field(&mut caller, 0) {
+                    Ok(Val::I64(v)) => v as i32,
+                    _ => return Err(Error::msg("host_write: fd struct field0 unreadable")),
+                  }
+                } else {
+                  return Err(Error::msg("host_write: fd not i31 or numeric struct"));
+                }
+              }
+              None => return Err(Error::msg("host_write: null fd")),
+            };
+            let bytes_any = params[1].unwrap_anyref();
+            if let Some(r) = bytes_any
+              && let Some(arr) = r.as_array(&caller).ok().flatten() {
+              let len = arr.len(&caller).unwrap_or(0);
+              let mut buf = Vec::with_capacity(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  buf.push(b as u8);
+                }
+              }
+              let writer: &super::IoStream = if fd == 2 { &err } else { &out };
+              writer.lock().unwrap().write_all(&buf).ok();
+            }
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_yield" => {
+          let state = exit_state.clone();
+          linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+            let resume = params[0].unwrap_anyref()
+              .ok_or_else(|| Error::msg("host_yield: null resume"))?;
+            let resume_owned = resume.to_owned_rooted(&mut caller)?;
+            let ctx_owned = match params[1].unwrap_anyref() {
+              Some(c) => Some(c.to_owned_rooted(&mut caller)?),
+              None => None,
+            };
+            state.lock().unwrap().pending_resumes.push((resume_owned, ctx_owned));
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
@@ -217,6 +294,33 @@ pub fn run(
     .call(&mut store, &[entry_cont], &mut [])
     .map_err(|e| crate::passes::wasm::annotate_func_indices(
       &format!("entry wrapper: {e}"), bytes))?;
+
+  // Drive any resumes the wasm scheduler handed off via host_yield.
+  // Each call may itself yield further resumes, so loop until the
+  // queue is empty.
+  let invoke_resume = instance.get_func(&mut store, "invoke_resume");
+  if let Some(invoke) = invoke_resume {
+    loop {
+      let pending = std::mem::take(&mut exit_state.lock().unwrap().pending_resumes);
+      if pending.is_empty() {
+        break;
+      }
+      for (resume_owned, ctx_owned) in pending {
+        let resume_rooted = resume_owned.to_rooted(&mut store);
+        let ctx_val = match ctx_owned {
+          Some(c) => Val::AnyRef(Some(c.to_rooted(&mut store))),
+          None => Val::AnyRef(None),
+        };
+        // Placeholder value for yield-style resume (unit). For io,
+        // host would substitute the actual io result.
+        let unit_val = Val::AnyRef(Some(AnyRef::from_i31(&mut store, I31::wrapping_i32(0))));
+        invoke
+          .call(&mut store, &[Val::AnyRef(Some(resume_rooted)), unit_val, ctx_val], &mut [])
+          .map_err(|e| crate::passes::wasm::annotate_func_indices(
+            &format!("invoke_resume: {e}"), bytes))?;
+      }
+    }
+  }
 
   Ok(exit_state.lock().unwrap().exit_code)
 }

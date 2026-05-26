@@ -1,5 +1,6 @@
 {stdout, write} = import 'std/io.fnk'
 
+{interop_yield} = import 'interop.wat'
 {suspend, get_ctx_for, set_ctx_for, upd_ctx_for, with3} = import 'std/effects.fnk'
 
 # TODO: for now we are not going through with-block frames, tasks are global
@@ -32,13 +33,23 @@ enqueue = fn resume:
   upd_ctx_for tasks, {queue: [..queue, resume]}
 
 
+yield_to_host = fn:
+  interop_yield _
+
+  match has_more _:
+    true:
+      resume_scheduler _
+    false:
+      false
+
+
 resume_scheduler = fn:
   match has_more _:
     true:
       resume = dequeue _
       resume _
     false:
-      false
+      yield_to_host _
 
 
 with_tasks = fn body:

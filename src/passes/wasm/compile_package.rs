@@ -318,6 +318,7 @@ pub fn finalize_marks(
 pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/effects.fnk",
   "std/tasks.fnk",
+  "std/io.fnk",
 ];
 
 #[cfg(feature = "compile")]

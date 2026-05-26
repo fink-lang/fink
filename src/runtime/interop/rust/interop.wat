@@ -56,6 +56,10 @@
     (func $args_empty (result (ref any))))
   (import "rt/apply.wat"    "args_prepend"
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
+  (import "rt/apply.wat"    "args_head"
+    (func $args_head (param $args (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat"    "args_tail"
+    (func $args_tail (param $args (ref null any)) (result (ref null any))))
   (import "rt/apply.wat"    "apply_3"
     (func $apply_3
       (param $args (ref null any))
@@ -97,7 +101,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
+  (elem declare func $host_cont_adapter_3 $read_apply $write_apply $panic_apply $interop_yield_apply $io_write_apply $io_read_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -112,6 +116,183 @@
   ;; for `id` with the given args list. See `$host_cont_adapter` and
   ;; `wrap_host_cont` for how WASM-side callable refs into this.
   (import "env" "host_invoke_cont" (func $host_invoke_cont (param i32 (ref null any))))
+
+  ;; Host yields control to the userland scheduler when its queue is
+  ;; empty. The host stores the `resume` closure and decides when to
+  ;; invoke it back via the `_invoke_resume` export (e.g. after an
+  ;; epoll/poll cycle, after stdin has bytes, after a timer fires).
+  ;; Returns immediately — wasm execution unwinds back to whichever
+  ;; export call the host made, and the host then drives.
+  (import "env" "host_yield" (func $host_yield (param (ref any)) (param (ref null any))))
+
+  ;; Sync write: host writes the bytes and returns. The wasm-side
+  ;; `io_write_apply` continues by tail-calling its k_caller — no
+  ;; callback, no future. (Async variant will defer via host_yield
+  ;; when needed.)
+  (import "env" "host_write" (func $host_write
+    (param $fd (ref null any))
+    (param $bytes (ref $ByteArray))))
+
+  ;; Sync read: host reads up to size bytes from fd, returns ByteArray.
+  (import "env" "host_read_sync" (func $host_read_sync
+    (param $fd (ref null any))
+    (param $size (ref null any))
+    (result (ref $ByteArray))))
+
+
+  ;; Host-callable entry point: fire a previously-yielded resume
+  ;; closure under the ctx that was active at yield time. Both are
+  ;; stashed host-side by `host_yield`; this export re-threads ctx
+  ;; back into apply_3 so the resumed code sees the same ctx that
+  ;; was current at suspend.
+  (func $interop_invoke_resume (@pub) (export "env:invoke_resume")
+    (param $resume (ref any))
+    (param $value (ref any))
+    (param $ctx (ref null any))
+    (local $args (ref any))
+    ;; Fire the resume/callback closure with one arg = value, under ctx.
+    ;; - yield case: value is unit/placeholder; resume is the post-yield cont.
+    ;; - io callback case: value is the io result; resume is the userland
+    ;;   callback closure (e.g. `fn bytes: settle_future fut, bytes`).
+    (local.set $args (call $args_empty))
+    (local.set $args (call $args_prepend (local.get $value) (local.get $args)))
+    (return_call $apply_3
+      (local.get $args)
+      (local.get $ctx)
+      (local.get $resume)))
+
+
+  ;; Userland-callable yield: hands `resume` to the host and returns.
+  ;; The wasm-side caller (e.g. `tasks.fnk:yield_to_host`) will see
+  ;; control return immediately; the host re-fires `resume` later via
+  ;; `_invoke_resume`.
+  ;;
+  ;; Exposed as a `$Closure` so user code applies it via `apply_3` like
+  ;; any other ƒink fn. The Fn3 body pulls `resume` out of the args
+  ;; list and forwards to the host import.
+  (elem declare func $interop_yield_apply)
+
+  (func $interop_yield_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    ;; CPS convention: args[0] is the caller's continuation. Hand it
+    ;; to the host as the resume value — host fires it later via
+    ;; `invoke_resume` under the same ctx. User-level surface is
+    ;; `interop_yield _`; the `_` is a placeholder, the real resume
+    ;; comes from the compiler's CPS lowering.
+    (local $resume (ref any))
+    (local.set $resume (ref.as_non_null
+      (call $args_head (local.get $args))))
+    (return_call $host_yield (local.get $resume) (local.get $ctx)))
+
+  (global $interop_yield_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $interop_yield_apply)
+      (ref.null $Captures)))
+
+  (func $interop_yield (@pub) (@impl "interop.fnk:yield")
+    (result (ref any))
+    (global.get $interop_yield_closure))
+
+
+  ;; -- io_write -----------------------------------------------------------
+  ;;
+  ;; User-level call: `io_write fd, bytes, callback`.
+  ;; CPS-lowered args = [k_caller, fd, bytes, callback].
+  ;; Body hands (fd, bytes, callback, ctx) to the host; the host writes
+  ;; and later fires the callback via `invoke_resume`. We tail-call
+  ;; k_caller with unit (the write call has no synchronous return value).
+  (elem declare func $io_write_apply)
+
+  (func $io_write_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $msg (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $fd (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $msg (call $args_head (local.get $rest)))
+
+    ;; Extract raw ByteArray from the $Str so host can read it directly.
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+
+    (call $host_write
+      (local.get $fd)
+      (local.get $bytes))
+
+    ;; Tail-call k_caller with unit (placeholder i31).
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (ref.i31 (i32.const 0)) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_write_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_write_apply)
+      (ref.null $Captures)))
+
+  (func $io_write (@pub) (@impl "interop.fnk:io_write")
+    (result (ref any))
+    (global.get $io_write_closure))
+
+
+  ;; -- io_read -----------------------------------------------------------
+  ;; Sync read: args = [k_caller, fd, size]. Calls host_read_sync, wraps
+  ;; the returned ByteArray as a $Str, tail-calls k_caller with the Str.
+  (elem declare func $io_read_apply)
+
+  (func $io_read_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $size (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $fd (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $size (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $host_read_sync (local.get $fd) (local.get $size)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_read_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_read_apply)
+      (ref.null $Captures)))
+
+  (func $io_read (@pub) (@impl "interop.fnk:io_read")
+    (result (ref any))
+    (global.get $io_read_closure))
 
 
   ;; -- Host callable (inbound contract) --------------------------------------
@@ -305,17 +486,17 @@
       (call $list_empty)
       (ref.i31 (local.get $tag))))
 
-  (func $get_stdout (@pub) (@impl "std/io.fnk:stdout") (result (ref any))
+  (func $get_stdout (@pub) (result (ref any))
     (if (ref.is_null (global.get $stdout))
       (then (global.set $stdout (call $_make_host_channel (i32.const 1)))))
     (ref.as_non_null (global.get $stdout)))
 
-  (func $get_stderr (@pub) (@impl "std/io.fnk:stderr") (result (ref any))
+  (func $get_stderr (@pub) (result (ref any))
     (if (ref.is_null (global.get $stderr))
       (then (global.set $stderr (call $_make_host_channel (i32.const 2)))))
     (ref.as_non_null (global.get $stderr)))
 
-  (func $get_stdin (@pub) (@impl "std/io.fnk:stdin") (result (ref any))
+  (func $get_stdin (@pub) (result (ref any))
     (if (ref.is_null (global.get $stdin))
       (then (global.set $stdin (call $_make_host_channel (i32.const 0)))))
     (ref.as_non_null (global.get $stdin)))
@@ -363,7 +544,7 @@
       (ref.func $read_apply)
       (ref.null $Captures)))
 
-  (func $get_read (@pub) (@impl "std/io.fnk:read") (result (ref any))
+  (func $get_read (@pub) (result (ref any))
     (global.get $read_closure))
 
 
@@ -434,7 +615,7 @@
       (ref.func $write_apply)
       (ref.null $Captures)))
 
-  (func $get_write (@pub) (@impl "std/io.fnk:write") (result (ref any))
+  (func $get_write (@pub) (result (ref any))
     (global.get $write_closure))
 
 

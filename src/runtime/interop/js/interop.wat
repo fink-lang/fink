@@ -73,6 +73,10 @@
   (import "rt/apply.wat" "args_prepend"
     (func $args_prepend_inner
       (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
+  (import "rt/apply.wat" "args_head"
+    (func $args_head_inner (param $args (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "args_tail"
+    (func $args_tail_inner (param $args (ref null any)) (result (ref null any))))
   (import "rt/apply.wat" "apply_3"
     (func $apply_3_inner
       (param $args (ref null any))
@@ -119,6 +123,141 @@
   ;; uses it directly (call it, look it up, whatever) to find the
   ;; callback. No wasm-side id table.
   (import "env" "host_invoke_cont"  (func $host_invoke_cont  (param externref (ref null any))))
+
+  ;; Host yields control to the userland scheduler when its queue is
+  ;; empty. JS host stashes the `resume` closure (rooted) and calls
+  ;; `_invoke_resume` later when ready to re-enter the scheduler.
+  (import "env" "host_yield" (func $host_yield (param (ref any)) (param (ref null any))))
+
+  (import "env" "host_write" (func $host_write
+    (param $fd (ref null any))
+    (param $bytes (ref $ByteArray))))
+
+  (import "env" "host_read_sync" (func $host_read_sync
+    (param $fd (ref null any))
+    (param $size (ref null any))
+    (result (ref $ByteArray))))
+
+
+  (func $interop_invoke_resume (@pub) (export "env:invoke_resume")
+    (param $resume (ref any))
+    (param $value (ref any))
+    (param $ctx (ref null any))
+    (local $args (ref any))
+    (local.set $args (call $args_empty_inner))
+    (local.set $args (call $args_prepend_inner (local.get $value) (local.get $args)))
+    (return_call $apply_3_inner
+      (local.get $args)
+      (local.get $ctx)
+      (local.get $resume)))
+
+
+  (elem declare func $interop_yield_apply)
+
+  (func $interop_yield_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $resume (ref any))
+    (local.set $resume (ref.as_non_null
+      (call $args_head_inner (local.get $args))))
+    (return_call $host_yield (local.get $resume) (local.get $ctx)))
+
+  (global $interop_yield_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $interop_yield_apply)
+      (ref.null $Captures)))
+
+  (func $interop_yield (@pub) (@impl "interop.fnk:yield")
+    (result (ref any))
+    (global.get $interop_yield_closure))
+
+
+  (elem declare func $io_write_apply)
+
+  (func $io_write_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $msg (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head_inner (local.get $args))))
+    (local.set $rest (call $args_tail_inner (local.get $args)))
+    (local.set $fd (call $args_head_inner (local.get $rest)))
+    (local.set $rest (call $args_tail_inner (local.get $rest)))
+    (local.set $msg (call $args_head_inner (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+
+    (call $host_write
+      (local.get $fd)
+      (local.get $bytes))
+
+    (local.set $k_args (call $args_empty_inner))
+    (local.set $k_args (call $args_prepend_inner (ref.i31 (i32.const 0)) (local.get $k_args)))
+    (return_call $apply_3_inner
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_write_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_write_apply)
+      (ref.null $Captures)))
+
+  (func $io_write (@pub) (@impl "interop.fnk:io_write")
+    (result (ref any))
+    (global.get $io_write_closure))
+
+
+  (elem declare func $io_read_apply)
+
+  (func $io_read_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $size (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head_inner (local.get $args))))
+    (local.set $rest (call $args_tail_inner (local.get $args)))
+    (local.set $fd (call $args_head_inner (local.get $rest)))
+    (local.set $rest (call $args_tail_inner (local.get $rest)))
+    (local.set $size (call $args_head_inner (local.get $rest)))
+
+    (local.set $bytes
+      (call $host_read_sync (local.get $fd) (local.get $size)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty_inner))
+    (local.set $k_args (call $args_prepend_inner (local.get $str) (local.get $k_args)))
+    (return_call $apply_3_inner
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_read_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_read_apply)
+      (ref.null $Captures)))
+
+  (func $io_read (@pub) (@impl "interop.fnk:io_read")
+    (result (ref any))
+    (global.get $io_read_closure))
 
 
   ;; HostChannel — same shape as in rust/interop.wat. Concrete instances
@@ -535,17 +674,17 @@
       (call $list_empty_inner)
       (ref.i31 (local.get $tag))))
 
-  (func $get_stdout (@pub) (@impl "std/io.fnk:stdout") (result (ref any))
+  (func $get_stdout (@pub) (result (ref any))
     (if (ref.is_null (global.get $stdout))
       (then (global.set $stdout (call $_make_host_channel (i32.const 1)))))
     (ref.as_non_null (global.get $stdout)))
 
-  (func $get_stderr (@pub) (@impl "std/io.fnk:stderr") (result (ref any))
+  (func $get_stderr (@pub) (result (ref any))
     (if (ref.is_null (global.get $stderr))
       (then (global.set $stderr (call $_make_host_channel (i32.const 2)))))
     (ref.as_non_null (global.get $stderr)))
 
-  (func $get_stdin (@pub) (@impl "std/io.fnk:stdin") (result (ref any))
+  (func $get_stdin (@pub) (result (ref any))
     unreachable)
 
 
@@ -625,10 +764,10 @@
       (ref.func $write_apply)
       (ref.null $Captures)))
 
-  (func $get_write (@pub) (@impl "std/io.fnk:write") (result (ref any))
+  (func $get_write (@pub) (result (ref any))
     (global.get $write_closure))
 
-  (func $get_read (@pub) (@impl "std/io.fnk:read") (result (ref any))
+  (func $get_read (@pub) (result (ref any))
     unreachable)
 
 )

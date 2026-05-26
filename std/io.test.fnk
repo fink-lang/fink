@@ -9,6 +9,7 @@ test 'stdout single message no main', fn:
 
     write stdout, 'hello'
   | equals ":
+    1
     stdout == ":
       hello
 

@@ -117,6 +117,10 @@ mod tests {
     stderr: Vec<u8>,
     /// Cursor into TEST_STDIN — advances as `host_read` is called.
     stdin_cursor: usize,
+    /// Resume closures handed off by `host_yield`. Drained after the
+    /// entry call returns; each is fed to `_invoke_resume` to re-enter
+    /// the userland scheduler.
+    pending_resumes: Vec<(wasmtime::OwnedRooted<AnyRef>, Option<wasmtime::OwnedRooted<AnyRef>>)>,
   }
 
   impl IoCapture {
@@ -441,6 +445,87 @@ mod tests {
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
+          "host_yield" => {
+            let cap = io_capture.clone();
+            linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+              let resume = params[0].unwrap_anyref()
+                .ok_or_else(|| Error::msg("host_yield: null resume"))?;
+              let resume_owned = resume.to_owned_rooted(&mut caller)?;
+              let ctx_owned = match params[1].unwrap_anyref() {
+                Some(c) => Some(c.to_owned_rooted(&mut caller)?),
+                None => None,
+              };
+              cap.lock().unwrap().pending_resumes.push((resume_owned, ctx_owned));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_read_sync" => {
+            let cap = io_capture.clone();
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [fd, size]. fd ignored for tests (only stdin).
+              let size = match params[1].unwrap_anyref() {
+                Some(a) => {
+                  if let Ok(Some(i)) = a.as_i31(&caller) {
+                    i.get_i32() as usize
+                  } else if let Ok(Some(s)) = a.as_struct(&caller) {
+                    match s.field(&mut caller, 0) {
+                      Ok(Val::I64(v)) => v as usize,
+                      _ => return Err(Error::msg("host_read_sync: size struct field0 unreadable")),
+                    }
+                  } else {
+                    return Err(Error::msg("host_read_sync: size not i31 or numeric struct"));
+                  }
+                }
+                None => return Err(Error::msg("host_read_sync: null size")),
+              };
+              let bytes: Vec<u8> = cap.lock().unwrap().read_stdin(size).to_vec();
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_read_sync byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_write" => {
+            let cap = io_capture.clone();
+            linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+              // params = [fd, bytes]
+              let fd = match params[0].unwrap_anyref() {
+                Some(a) => {
+                  if let Ok(Some(i)) = a.as_i31(&caller) {
+                    i.get_i32()
+                  } else if let Ok(Some(s)) = a.as_struct(&caller) {
+                    match s.field(&mut caller, 0) {
+                      Ok(Val::I64(v)) => v as i32,
+                      _ => return Err(Error::msg("host_write: fd struct field0 unreadable")),
+                    }
+                  } else {
+                    return Err(Error::msg("host_write: fd neither i31 nor numeric struct"));
+                  }
+                }
+                None => return Err(Error::msg("host_write: null fd")),
+              };
+              let bytes_any = params[1].unwrap_anyref();
+              if let Some(r) = bytes_any {
+                if let Some(arr) = r.as_array(&caller).ok().flatten() {
+                  let len = arr.len(&caller).unwrap_or(0);
+                  let mut buf = Vec::with_capacity(len as usize);
+                  for i in 0..len {
+                    if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                      buf.push(b as u8);
+                    }
+                  }
+                  cap.lock().unwrap().append(fd, &buf);
+                }
+              }
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
           _ => {
             let name_for_msg = name.clone();
             linker.func_new("env", &name, ft, move |_c, _p, _r| {
@@ -484,6 +569,28 @@ mod tests {
       .call(&mut store, &[entry_cont], &mut [])
       .map_err(|e| crate::passes::wasm::annotate_func_indices(
         &format!("entry wrapper: {e:#}"), &bytes))?;
+
+    // Drive resumes the wasm scheduler handed off via host_yield.
+    if let Some(invoke) = instance.get_func(&mut store, "invoke_resume") {
+      loop {
+        let pending = std::mem::take(&mut io_capture.lock().unwrap().pending_resumes);
+        if pending.is_empty() {
+          break;
+        }
+        for (resume_owned, ctx_owned) in pending {
+          let resume_rooted = resume_owned.to_rooted(&mut store);
+          let ctx_val = match ctx_owned {
+            Some(c) => Val::AnyRef(Some(c.to_rooted(&mut store))),
+            None => Val::AnyRef(None),
+          };
+          let unit_val = Val::AnyRef(Some(AnyRef::from_i31(&mut store, I31::wrapping_i32(0))));
+          invoke
+            .call(&mut store, &[Val::AnyRef(Some(resume_rooted)), unit_val, ctx_val], &mut [])
+            .map_err(|e| crate::passes::wasm::annotate_func_indices(
+              &format!("invoke_resume: {e:#}"), &bytes))?;
+        }
+      }
+    }
 
     Ok(captured.lock().unwrap().take().unwrap_or(TestResult::None))
   }
@@ -707,7 +814,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_main.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_io.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_sets.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_lists.fnk", skip-ir);
@@ -717,6 +823,7 @@ mod tests {
     use super::*;
     test_macros::include_fink_tests!("std/effects.test.fnk", skip-ir);
     test_macros::include_fink_tests!("std/tasks.test.fnk", skip-ir);
+    test_macros::include_fink_tests!("std/io.test.fnk", skip-ir);
   }
 }
 
@@ -768,37 +875,4 @@ mod cli_runner_tests {
     assert_eq!(err, "");
   }
 
-  #[test]
-  fn main_writes_to_stdout() {
-    let src = "\
-{stdout} = import 'std/io.fnk'
-
-main = fn ..args:
-  'hello' >> stdout
-  0
-";
-    let (exit, out, err) = run(src, &["test"]).expect("run_source");
-    assert_eq!(exit, 0);
-    assert_eq!(out, "hello");
-    assert_eq!(err, "");
-  }
-
-  /// Migrated stdlib `.fnk` files (e.g. `std/effects.fnk`) must resolve
-  /// from the embedded copy that `StdlibLoader` ships, not from the
-  /// in-memory loader the CLI hands to `compile_package`. Without the
-  /// loader wiring, the BFS hits the stdlib URL and errors with
-  /// "no such source in loader".
-  #[test]
-  fn migrated_stdlib_fnk_resolves_via_embedded_loader() {
-    let src = "\
-{set_ctx, get_ctx} = import 'std/effects.fnk'
-
-main = fn ..args:
-  set_ctx {x: 42}
-  ctx = get_ctx _
-  ctx.x
-";
-    let (exit, _out, err) = run(src, &["test"]).expect("run_source");
-    assert_eq!(exit, 42, "stderr: {err}");
-  }
 }
