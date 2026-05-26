@@ -118,7 +118,6 @@
   (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
   (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
-  ;; Func imports — channel
   ;; Func imports — interop (host bridge)
   ;; ctx-aware: each leading (ref null any) is the caller's $Ctx.
 
@@ -1123,13 +1122,6 @@
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
-
-
-  ;; =========================================================================
-  ;; receive — drain a runtime channel
-  ;; =========================================================================
-
-
 
 
 )

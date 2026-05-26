@@ -41,5 +41,5 @@ Reads DAP requests on stdin, writes events and responses on stdout. Useful if yo
 
 ## Known gaps
 
-- **Stdin inside the debugger isn't implemented.** A program that reads from its `stdin` channel while running under `fink dap` will trap. `fink run` works normally.
+- **Stdin inside the debugger isn't implemented.** A program that calls `read stdin, ...` while running under `fink dap` will trap with a friendly error pointing at `fink <file>`. `fink run` works normally.
 - **Panic messages carry no source location.** A runtime panic (e.g. an irrefutable pattern failing) traps with a generic message rather than pointing at the line.

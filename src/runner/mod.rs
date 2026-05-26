@@ -115,7 +115,7 @@ mod tests {
   struct IoCapture {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
-    /// Cursor into TEST_STDIN — advances as `host_read` is called.
+    /// Cursor into TEST_STDIN — advances as `host_read_sync` is called.
     stdin_cursor: usize,
     /// Resume closures handed off by `host_yield`. Drained after the
     /// entry call returns; each is fed to `_invoke_resume` to re-enter
@@ -378,70 +378,6 @@ mod tests {
 
               run_main_in_callback(&mut caller, main_clo)?;
 
-              Ok(())
-            }).map_err(|e| e.to_string())?;
-          }
-          "host_read" => {
-            let cap = io_capture.clone();
-            linker.func_new("env", &name, ft, move |mut caller, params, _results| {
-              let size = {
-                let any = params[1].unwrap_anyref()
-                  .ok_or_else(|| Error::msg("host_read: null size"))?;
-                if let Ok(Some(i31)) = any.as_i31(&caller) {
-                  i31.get_i32()
-                } else if let Ok(Some(s)) = any.as_struct(&caller) {
-                  match s.field(&mut caller, 0) {
-                    Ok(Val::I64(v)) => v as i32,
-                    Ok(Val::F64(bits)) => f64::from_bits(bits) as i32,
-                    _ => return Err(Error::msg("host_read: size struct field unreadable")),
-                  }
-                } else {
-                  return Err(Error::msg("host_read: size is neither i31 nor numeric struct"));
-                }
-              };
-              let bytes: Vec<u8> = cap.lock().unwrap().read_stdin(size as usize).to_vec();
-
-              let str_wrap = caller.get_export("str_wrap_bytes")
-                .and_then(|e| e.into_func())
-                .ok_or_else(|| Error::msg("host_read: no _str_wrap_bytes export"))?;
-              let array_ty = ArrayType::new(
-                caller.engine(),
-                FieldType::new(Mutability::Var, StorageType::I8),
-              );
-              let alloc = ArrayRefPre::new(&mut caller, array_ty);
-              let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
-              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
-                .map_err(|e| Error::msg(format!("host_read byte array: {e}")))?;
-              let mut wrapped = [Val::AnyRef(None)];
-              str_wrap.call(&mut caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
-
-              let settle = caller.get_export("_settle_future")
-                .and_then(|e| e.into_func())
-                .ok_or_else(|| Error::msg("host_read: no _settle_future export"))?;
-              let future_ref = params[2];
-              settle.call(&mut caller, &[future_ref, wrapped[0]], &mut [])?;
-              Ok(())
-            }).map_err(|e| e.to_string())?;
-          }
-          "host_channel_send" => {
-            let cap = io_capture.clone();
-            linker.func_new("env", &name, ft, move |mut caller, params, _results| {
-              let tag = params[0].unwrap_i32();
-              let bytes_any = match &params[1] {
-                Val::AnyRef(Some(r)) => *r,
-                _ => return Ok(()),
-              };
-              let arr = bytes_any.as_array(&caller)
-                .map_err(|e| Error::msg(format!("host_channel_send: bytes not an array: {e}")))?
-                .ok_or_else(|| Error::msg("host_channel_send: bytes array null"))?;
-              let len = arr.len(&caller).unwrap_or(0);
-              let mut buf = Vec::with_capacity(len as usize);
-              for i in 0..len {
-                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
-                  buf.push(b as u8);
-                }
-              }
-              cap.lock().unwrap().append(tag, &buf);
               Ok(())
             }).map_err(|e| e.to_string())?;
           }

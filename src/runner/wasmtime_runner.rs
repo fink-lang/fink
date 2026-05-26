@@ -91,48 +91,6 @@ pub fn run(
             Err(Error::msg("fink panic: irrefutable pattern failed"))
           }).map_err(|e| e.to_string())?;
         }
-        "host_channel_send" => {
-          let out = stdout.clone();
-          let err = stderr.clone();
-          linker.func_new("env", &name, ft, move |mut caller, params, _results| {
-            let tag = params[0].unwrap_i32();
-            let bytes_any = params[1].unwrap_anyref()
-              .ok_or_else(|| Error::msg("host_channel_send: null bytes ref"))?;
-            let arr = bytes_any.unwrap_array(&mut caller)?;
-            let len = arr.len(&caller)? as usize;
-            let mut buf = Vec::with_capacity(len);
-            for v in arr.elems(&mut caller)? {
-              buf.push(v.unwrap_i32() as u8);
-            }
-            let writer: &super::IoStream = if tag == 1 { &out } else { &err };
-            writer.lock().unwrap().write_all(&buf).ok();
-            Ok(())
-          }).map_err(|e| e.to_string())?;
-        }
-        "host_read" => {
-          // Synchronous read: pull `size` bytes from stdin, wrap into
-          // a fink `$Str`, and immediately settle the future. No
-          // threading — host_resume is gone with the new wrapper API.
-          let input = stdin.clone();
-          linker.func_new("env", &name, ft, move |mut caller, params, _results| {
-            let size = extract_i32(&mut caller, &params[1])?;
-            let mut buf = vec![0u8; size as usize];
-            let n = {
-              let mut r = input.lock().unwrap();
-              r.read(&mut buf).unwrap_or(0)
-            };
-            buf.truncate(n);
-
-            let str_val = bytes_to_str(&mut caller, &buf)?;
-            let future_ref = params[2];
-
-            let settle = caller.get_export("_settle_future")
-              .and_then(|e| e.into_func())
-              .ok_or_else(|| Error::msg("no _settle_future export"))?;
-            settle.call(&mut caller, &[future_ref, str_val], &mut [])?;
-            Ok(())
-          }).map_err(|e| e.to_string())?;
-        }
         "host_read_sync" => {
           let input = stdin.clone();
           linker.func_new("env", &name, ft, move |mut caller, params, results| {
@@ -485,22 +443,3 @@ fn extract_i32(caller: &mut Caller<'_, ()>, val: &Val) -> Result<i32, Error> {
   Err(Error::msg("cannot extract i32 from value"))
 }
 
-/// Build a `$Str` from raw bytes via `_str_wrap_bytes`. Allocates a
-/// `$ByteArray` on the GC heap and wraps it.
-fn bytes_to_str(caller: &mut Caller<'_, ()>, data: &[u8]) -> Result<Val, Error> {
-  let array_ty = ArrayType::new(
-    caller.engine(),
-    FieldType::new(Mutability::Var, StorageType::I8),
-  );
-  let alloc = ArrayRefPre::new(&mut *caller, array_ty);
-  let elems: Vec<Val> = data.iter().map(|&b| Val::I32(b as i32)).collect();
-  let array = ArrayRef::new_fixed(&mut *caller, &alloc, &elems)?;
-
-  let wrap_fn = caller.get_export("str_wrap_bytes")
-    .and_then(|e| e.into_func())
-    .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
-
-  let mut result = [Val::AnyRef(None)];
-  wrap_fn.call(&mut *caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut result)?;
-  Ok(result[0])
-}

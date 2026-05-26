@@ -11,10 +11,11 @@
 ;;     driver loop uses to fire a yielded continuation.
 ;;   * `panic` — delegates to host_panic, then traps.
 ;;
-;; Orchestration of `main` (build args list, apply, drain scheduler,
-;; exit) is the runner's responsibility, not this file's. There is no
-;; `_run_main` here — the test harness inlines the dispatch today; a
-;; future production runner will provide its own entry point.
+;; Orchestration of `main` (build args list, apply, drive any pending
+;; resumes from `invoke_resume`, exit) is the runner's responsibility,
+;; not this file's. There is no `_run_main` here — the test harness
+;; inlines the dispatch today; a future production runner will provide
+;; its own entry point.
 
 (module
 
@@ -280,7 +281,7 @@
   ;; Instead, the host registers its callback under an i32 id on its
   ;; side, calls `wrap_host_cont_3(id)` to get an opaque (ref null any),
   ;; and hands that anyref to WASM wherever a continuation is
-  ;; expected (done, await cont, scheduler trampolines, etc.).
+  ;; expected (the wrapper-done cont, main-done cont, etc.).
   ;;
   ;; When fink-side code eventually fires the continuation via
   ;; `apply_3`, it casts the value to $Closure, pulls the funcref

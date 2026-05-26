@@ -23,12 +23,12 @@ Every `.fnk` expression that the [debug_marks](../passes/debug_marks/mod.rs) pas
 - `Continue` runs to the next user breakpoint or termination.
 - `stopOnEntry: false` runs from start to the first user breakpoint.
 - `Next` / `StepIn` / `StepOut` all resume until the next mark (no call-depth-aware stepping — every ƒink call is a `return_call`, so WASM has no call stack to walk).
-- Program output (`>> stdout` / `>> stderr`) surfaces in the editor's debug console via DAP `Output` events.
+- Program output (`write stdout, ...` / `write stderr, ...`) surfaces in the editor's debug console via DAP `Output` events.
 - Clean session end: `Exited` + `Terminated` events, process exits so the editor's UI updates.
 
 ## Known gaps
 
-- `host_read` is stubbed — programs that read from stdin under the debugger will fail.
+- `host_read_sync` is stubbed — programs that read from stdin under the debugger will fail with a friendly error pointing at `fink <file>` instead.
 - No user-placed breakpoint auto-snap: a breakpoint on a line with no mark stays unverified rather than moving to the nearest valid line.
 - Panic messages don't carry source locations yet.
 - Runner bootstrap is duplicated from [../runner/wasmtime_runner.rs](../runner/wasmtime_runner.rs). Unifying sync and async paths is planned.

@@ -1,16 +1,11 @@
-;; JS host interop — minimal scaffold.
+;; JS host interop.
 ;;
-;; First slice: link the runtime against a JS-target interop module
-;; without yet implementing host-bridge behaviour. Every contract-side
-;; function is `unreachable`; calling them traps the instance. The
-;; runtime contract surface (host imports, the named @impl bindings) is
-;; preserved so the linker and validator are happy.
+;; Counterpart to rust/interop.wat — same fink-facing surface
+;; (interop_yield, io_write, io_read, invoke_resume, marshalling
+;; helpers), but host imports use linear-memory ptr+len bridging
+;; because JS can't read GC arrays directly.
 ;;
-;; Real bodies land in subsequent slices per
-;; .brain/.scratch/plans/js-interop-plan.md.
-;;
-;; type_of is the one already-real export — JS hosts use it to
-;; discriminate values.
+;; type_of is exported so JS hosts can discriminate values.
 ;;
 ;; Type-of enum (matches fink.js):
 ;;   Fn    = 100
@@ -98,13 +93,9 @@
 
   ;; Host imports — stubbed by fink.js. Signatures must match
   ;; rust/interop.wat so runtime modules importing this contract see
-  ;; the same shapes regardless of target.
-  ;; host_channel_send(tag, ptr, len): JS reads `len` UTF-8 bytes
-  ;; starting at offset `ptr` in linear memory. Tag selects routing
-  ;; (1 = stdout/console.log, 2 = stderr/console.error). Differs from
-  ;; the rust-side import (which passes a $ByteArray ref) because JS
-  ;; can't read GC arrays directly — copying into linear memory first
-  ;; gives JS a TextDecoder-friendly window.
+  ;; the same shapes regardless of target. JS-side imports use
+  ;; linear-memory ptr+len conventions because JS can't read GC arrays
+  ;; directly; rust-side imports pass $ByteArray refs.
   ;; host_invoke_cont: dispatch a JS-side cont. The first arg is the
   ;; opaque externref the host originally handed to wrap_host_cont — JS
   ;; uses it directly (call it, look it up, whatever) to find the
