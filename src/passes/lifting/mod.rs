@@ -264,8 +264,24 @@ fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
       walk_letfn_names(then, out);
       walk_letfn_names(else_, out);
     }
-    // LetRec only emitted post-closure-convert migration; lifting will not see it.
-    ExprKind::LetRec { .. } => unreachable!("lifting: LetRec not yet emitted by CPS-0"),
+    // LetRec defn names act like LetFn names — record them so they're
+    // excluded from capture analysis. Recurse into each defn body and the cont.
+    ExprKind::LetRec { group, cont, .. } => {
+      for d in group {
+        match d {
+          crate::passes::cps::ir::LetRecDefn::Fn { name, body, .. } => {
+            out.insert(name.id);
+            walk_letfn_names(body, out);
+          }
+          crate::passes::cps::ir::LetRecDefn::Val { name, .. } => {
+            out.insert(name.id);
+          }
+        }
+      }
+      if let Cont::Expr { body, .. } = cont {
+        walk_letfn_names(body, out);
+      }
+    }
   }
 }
 
@@ -314,8 +330,11 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
       })
     }
     ExprKind::If { then, else_, .. } => needs_lifting(then, in_fn) || needs_lifting(else_, in_fn),
-    // LetRec only emitted post-closure-convert migration; lifting will not see it.
-    ExprKind::LetRec { .. } => unreachable!("lifting::needs_lifting: LetRec not yet emitted by CPS-0"),
+    // LetRec from CPS-0: lifting treats the group as terminal — it does
+    // not try to hoist anything in or out of the defn bodies because
+    // doing so would break the mutual-rec semantics of the group.
+    // Only the cont (downstream of the LetRec) can still need lifting.
+    ExprKind::LetRec { cont, .. } => cont_needs_lifting(cont, in_fn),
   }
 }
 
@@ -389,7 +408,11 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
     ExprKind::If { then, else_, .. } => {
       module_body_needs_lifting(then) || module_body_needs_lifting(else_)
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::module_body_needs_lifting: LetRec not yet emitted by CPS-0"),
+    // LetRec at module-body level: terminal for lifting (see needs_lifting).
+    ExprKind::LetRec { cont, .. } => match cont {
+      Cont::Ref(_) => false,
+      Cont::Expr { body, .. } => module_body_needs_lifting(body),
+    },
   }
 }
 
@@ -453,7 +476,12 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
     ExprKind::If { then, else_, .. } => {
       contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::contains_letfn_or_inline_cont: LetRec not yet emitted by CPS-0"),
+    // LetRec is terminal for lifting (see needs_lifting); only the cont
+    // beyond the group can contribute.
+    ExprKind::LetRec { cont, .. } => match cont {
+      Cont::Ref(_) => false,
+      Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body, in_fn),
+    },
   }
 }
 
@@ -652,7 +680,14 @@ fn lift_expr<'src>(
       let else_ = lift_expr(*else_, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::lift_expr: LetRec not yet emitted by CPS-0"),
+    // LetRec is terminal for lifting — leave defns untouched; only recurse
+    // into the cont. The group's mutual scope means we can't hoist anything
+    // in or out of the defn bodies. Closure-convert will properly handle the
+    // converted form; lifting just preserves the wrapper unchanged.
+    ExprKind::LetRec { group, no_self_edge, cont } => {
+      let cont = lift_cont(cont, ast, alloc, outer_params);
+      Expr { id: expr.id, kind: ExprKind::LetRec { group, no_self_edge, cont } }
+    }
   }
 }
 
@@ -1062,7 +1097,28 @@ fn extract_from_body<'src>(
       let else_ = extract_from_body(*else_, parent_params, scope_binds, _ast, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::extract_from_body: LetRec not yet emitted by CPS-0"),
+    // LetRec passthrough inside extract_from_body: don't hoist defns; just
+    // recurse into their bodies and the cont.
+    ExprKind::LetRec { group, no_self_edge, cont } => {
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => Cont::Expr {
+          args,
+          body: Box::new(extract_from_body(*body, parent_params, scope_binds, _ast, alloc, hoisted)),
+        },
+      };
+      let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
+          // The defn's body is a fn scope — leave it alone here; the recursive
+          // lift_expr pass will descend in via the outer iteration.
+          crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body }
+        }
+        crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
+          crate::passes::cps::ir::LetRecDefn::Val { name, val }
+        }
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::LetRec { group, no_self_edge, cont } }
+    }
   }
 }
 
@@ -1120,7 +1176,20 @@ fn rewrite_refs_split(
       let else_ = rewrite_refs_split(*else_, value_map, fn_id_map);
       Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::rewrite_refs_split: LetRec not yet emitted by CPS-0"),
+    ExprKind::LetRec { group, no_self_edge, cont } => {
+      let cont = rewrite_refs_cont_split(cont, value_map, fn_id_map);
+      let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
+          let body = rewrite_refs_split(*body, value_map, fn_id_map);
+          crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(body) }
+        }
+        crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
+          let val = rewrite_refs_val(*val, value_map);
+          crate::passes::cps::ir::LetRecDefn::Val { name, val: Box::new(val) }
+        }
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::LetRec { group, no_self_edge, cont } }
+    }
   }
 }
 
@@ -1175,7 +1244,20 @@ fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Ex
       let else_ = rewrite_refs(*else_, map);
       Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::rewrite_refs: LetRec not yet emitted by CPS-0"),
+    ExprKind::LetRec { group, no_self_edge, cont } => {
+      let cont = rewrite_refs_cont(cont, map);
+      let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
+          let body = rewrite_refs(*body, map);
+          crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(body) }
+        }
+        crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
+          let val = rewrite_refs_val(*val, map);
+          crate::passes::cps::ir::LetRecDefn::Val { name, val: Box::new(val) }
+        }
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::LetRec { group, no_self_edge, cont } }
+    }
   }
 }
 
@@ -1296,7 +1378,19 @@ fn collect_captured_refs(
       collect_captured_refs(then, parent_ids, out, seen);
       collect_captured_refs(else_, parent_ids, out, seen);
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::collect_captured_refs: LetRec not yet emitted by CPS-0"),
+    ExprKind::LetRec { group, cont, .. } => {
+      for d in group {
+        match d {
+          crate::passes::cps::ir::LetRecDefn::Fn { body, .. } => {
+            collect_captured_refs(body, parent_ids, out, seen);
+          }
+          crate::passes::cps::ir::LetRecDefn::Val { val, .. } => {
+            collect_captured_refs_val(val, parent_ids, out, seen);
+          }
+        }
+      }
+      collect_captured_refs_cont(cont, parent_ids, out, seen);
+    }
   }
 }
 
@@ -1381,7 +1475,31 @@ fn classify_untagged_params(expr: &Expr, param_info: &mut PropGraph<CpsId, Optio
       classify_untagged_params(then, param_info);
       classify_untagged_params(else_, param_info);
     }
-    ExprKind::LetRec { .. } => unreachable!("lifting::classify_untagged_params: LetRec not yet emitted by CPS-0"),
+    ExprKind::LetRec { group, cont, .. } => {
+      for d in group {
+        if let crate::passes::cps::ir::LetRecDefn::Fn { params, body, .. } = d {
+          // Classify params of each LetRec defn like a top-level LetFn.
+          let last_is_cont = params.last().is_some_and(|p| {
+            let b = match p { Param::Name(b) | Param::Spread(b) => b };
+            b.kind.is_cont()
+          });
+          for (i, p) in params.iter().enumerate() {
+            let b = match p { Param::Name(b) | Param::Spread(b) => b };
+            let already = param_info.try_get(b.id).and_then(|o| *o);
+            if already.is_none() {
+              let info = if last_is_cont && i == params.len() - 1 {
+                ParamInfo::Cont
+              } else {
+                ParamInfo::Param(b.id)
+              };
+              param_info.set(b.id, Some(info));
+            }
+          }
+          classify_untagged_params(body, param_info);
+        }
+      }
+      classify_untagged_params_cont(cont, param_info);
+    }
   }
 }
 

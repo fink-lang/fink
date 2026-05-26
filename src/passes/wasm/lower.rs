@@ -1777,7 +1777,19 @@ fn find_pub_apps(
       find_pub_apps(then, cps, ast, out);
       find_pub_apps(else_, cps, ast, out);
     }
-    ExprKind::LetRec { .. } => unreachable!("wasm::lower::find_pub_apps: LetRec not yet emitted by CPS-0"),
+    // LetRec from CPS-0: recurse into defn bodies and cont. LetRec defns
+    // can't be Pub-exported at module scope (Pub only wraps LetVals there),
+    // so no Pub-binding detection inside the group itself.
+    ExprKind::LetRec { group, cont, .. } => {
+      for d in group {
+        if let crate::passes::cps::ir::LetRecDefn::Fn { body, .. } = d {
+          find_pub_apps(body, cps, ast, out);
+        }
+      }
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
   }
 }
 

@@ -877,7 +877,14 @@ fn walk_fn_bodies(expr: &Expr, pred: &mut dyn FnMut(&Expr) -> bool) -> bool {
     ExprKind::If { then, else_, .. } => {
       walk_fn_bodies(then, pred) || walk_fn_bodies(else_, pred)
     }
-    ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::walk_fn_bodies: LetRec not yet emitted by CPS-0"),
+    // LetRec from CPS-0: recurse into each defn body (each is a fn) and the cont.
+    ExprKind::LetRec { group, cont, .. } => {
+      for d in group {
+        if let crate::passes::cps::ir::LetRecDefn::Fn { body, .. } = d
+          && (pred(body) || walk_fn_bodies(body, pred)) { return true; }
+      }
+      walk_cont_fns(cont, pred)
+    }
   }
 }
 
@@ -921,7 +928,11 @@ fn tail_is_apply_path(expr: &Expr) -> bool {
     ExprKind::App { func: Callable::Val(_), .. } => true,
     ExprKind::App { func: Callable::BuiltIn(_), .. } => false,
     ExprKind::If { .. } => true, // conservative — apply on at least one branch
-    ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::tail_is_apply_path: LetRec not yet emitted by CPS-0"),
+    // LetRec is transparent for the tail check — recurse into cont.
+    ExprKind::LetRec { cont, .. } => match cont {
+      Cont::Ref(_) => true,
+      Cont::Expr { body, .. } => tail_is_apply_path(body),
+    },
   }
 }
 
@@ -979,7 +990,41 @@ fn scan_expr(expr: &Expr, cps: &CpsResult, usage: &mut RuntimeUsage) {
       scan_expr(then, cps, usage);
       scan_expr(else_, cps, usage);
     }
-    ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::scan_expr: LetRec not yet emitted by CPS-0"),
+    // LetRec: each fn defn implies a Closure value at runtime, same as LetFn.
+    // Mark Closure + Captures types; recurse into bodies + cont.
+    ExprKind::LetRec { group, cont, .. } => {
+      let mut has_fn = false;
+      for d in group {
+        if let crate::passes::cps::ir::LetRecDefn::Fn { params, body, .. } = d {
+          has_fn = true;
+          // Mark ArgsTail when prologue needs to peel multiple unpack slots,
+          // matching the LetFn arm above.
+          let mut unpack_count = 0usize;
+          let mut has_spread = false;
+          for p in params {
+            let (pid, is_spread) = match p {
+              Param::Name(b) => (b.id, false),
+              Param::Spread(b) => (b.id, true),
+            };
+            let info = cps.param_info.try_get(pid).and_then(|o| *o);
+            let is_cap = matches!(info, Some(ParamInfo::Cap(_)));
+            if !is_cap {
+              unpack_count += 1;
+              if is_spread { has_spread = true; }
+            }
+          }
+          if unpack_count > 1 || has_spread {
+            usage.mark(Sym::ArgsTail);
+          }
+          scan_expr(body, cps, usage);
+        }
+      }
+      if has_fn {
+        usage.mark(Sym::Closure);
+        usage.mark(Sym::Captures);
+      }
+      scan_cont(cont, cps, usage);
+    }
   }
 }
 
