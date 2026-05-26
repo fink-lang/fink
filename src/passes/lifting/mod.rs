@@ -712,6 +712,11 @@ fn lift_expr<'src>(
     // as the body's outer_params. Push siblings onto the alloc's
     // letrec_sibling_binds stack so capture analysis in nested LetFns picks
     // them up as captures.
+    //
+    // Use extract_from_body (not lift_expr) so the TOP-LEVEL LetFns of the
+    // defn body also get hoisted with Cap params — lift_expr's LetFn arm
+    // only adds caps to fns *nested inside* a fn_body, not the top fn of
+    // the body itself.
     ExprKind::LetRec { group, no_self_edge, cont } => {
       let cont = lift_cont(cont, ast, alloc, outer_params);
       let sibling_binds: Vec<(CpsId, Bind)> = group.iter().map(|d| match d {
@@ -723,7 +728,31 @@ fn lift_expr<'src>(
           let mut others = sibling_binds.clone();
           others.retain(|(id, _)| *id != name.id);
           alloc.letrec_sibling_binds.push(others);
-          let new_body = lift_expr(*body, ast, alloc, &params);
+          // Extract top-of-body LetFns as hoisted wrappers, then run lift_expr
+          // on the result to handle any nested structure inside the wrappers.
+          // extract_from_body's parent_params is the defn's params (the body
+          // is a fn_body scope of its own).
+          let mut hoisted: Vec<HoistedFn> = Vec::new();
+          let body_after_extract = extract_from_body(*body, &params, &[], ast, alloc, &mut hoisted);
+          // Build the body with hoisted fns wrapped around the residual.
+          let mut new_body = body_after_extract;
+          for h in hoisted.into_iter().rev() {
+            let wrapper_origin = alloc.origin.try_get(h.name.id).and_then(|o| *o)
+              .or_else(|| alloc.origin.try_get(h.fn_body.id).and_then(|o| *o));
+            let wrapper_id = alloc.next(wrapper_origin);
+            new_body = Expr {
+              id: wrapper_id,
+              kind: ExprKind::LetFn {
+                name: h.name,
+                params: h.params,
+                fn_kind: h.fn_kind,
+                fn_body: Box::new(h.fn_body),
+                cont: Cont::Expr { args: h.cont_args, body: Box::new(new_body) },
+              },
+            };
+          }
+          // Now run lift_expr to lift any deeper structure that extract didn't catch.
+          let new_body = lift_expr(new_body, ast, alloc, &params);
           alloc.letrec_sibling_binds.pop();
           crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
         }
@@ -1176,7 +1205,29 @@ fn extract_from_body<'src>(
           let mut others = sibling_binds.clone();
           others.retain(|(id, _)| *id != name.id);
           alloc.letrec_sibling_binds.push(others);
-          let new_body = lift_expr(*body, _ast, alloc, &params);
+          // Run extract_from_body on the defn body so top-level LetFns get
+          // Cap params (analogous to how hoisted fns inside a fn_body get
+          // them). Then wrap the hoisted fns around the residual body, then
+          // run lift_expr on the result to handle deeper structure.
+          let mut local_hoisted: Vec<HoistedFn> = Vec::new();
+          let body_after = extract_from_body(*body, &params, &[], _ast, alloc, &mut local_hoisted);
+          let mut new_body = body_after;
+          for h in local_hoisted.into_iter().rev() {
+            let wrapper_origin = alloc.origin.try_get(h.name.id).and_then(|o| *o)
+              .or_else(|| alloc.origin.try_get(h.fn_body.id).and_then(|o| *o));
+            let wrapper_id = alloc.next(wrapper_origin);
+            new_body = Expr {
+              id: wrapper_id,
+              kind: ExprKind::LetFn {
+                name: h.name,
+                params: h.params,
+                fn_kind: h.fn_kind,
+                fn_body: Box::new(h.fn_body),
+                cont: Cont::Expr { args: h.cont_args, body: Box::new(new_body) },
+              },
+            };
+          }
+          let new_body = lift_expr(new_body, _ast, alloc, &params);
           alloc.letrec_sibling_binds.pop();
           crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
         }
