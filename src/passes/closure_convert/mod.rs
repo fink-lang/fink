@@ -43,8 +43,41 @@ use crate::ast::Ast;
 /// 5. [TODO] Switch default pipeline (replace lift's call to lifting::lift)
 /// 6. [TODO] Delete lifting/
 pub fn convert<'src>(cps: CpsResult, _ast: &Ast<'src>) -> CpsResult {
-  // Step 1: scaffolding only. Real conversion lands in next steps.
-  cps
+  // Drive the IR walk from the root with an initial scope of module-level
+  // CpsIds (module-local binds + pre-allocated scope binds).
+  //
+  // NOTE: this rewrites fn DEFINITIONS to have Cap params + rewritten body
+  // refs. It does NOT yet emit FnClosure construction at use sites. Without
+  // those, codegen would build no-capture closures and the cap-param reads
+  // would be undefined at runtime. End-to-end pipeline switch requires
+  // closure-construction emission, which is the next step.
+  let CpsResult {
+    root, origin, bind_to_cps, synth_alias, param_info, module_locals, module_imports,
+  } = cps;
+
+  // Bootstrap state from current PropGraphs.
+  let mut state = ConvertState {
+    origin,
+    synth_alias,
+    param_info,
+  };
+
+  // Initial scope: all module-local CpsIds.
+  let initial_scope: std::collections::HashSet<super::cps::ir::CpsId> =
+    module_locals.iter().map(|(id, _)| *id).collect();
+  let mut scope = initial_scope;
+
+  let new_root = convert_expr(&mut state, &mut scope, root);
+
+  CpsResult {
+    root: new_root,
+    origin: state.origin,
+    bind_to_cps,
+    synth_alias: state.synth_alias,
+    param_info: state.param_info,
+    module_locals,
+    module_imports,
+  }
 }
 
 // ---------------------------------------------------------------------------
