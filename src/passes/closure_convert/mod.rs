@@ -335,6 +335,205 @@ fn walk_cont_for_discovery(
 }
 
 // ---------------------------------------------------------------------------
+// Mutable state for the conversion pass
+// ---------------------------------------------------------------------------
+
+/// State the conversion pass mutates: PropGraph indexed by CpsId, plus
+/// fresh-id allocation. Mirrors lifting's `Alloc` but only carries what
+/// closure_convert needs.
+pub struct ConvertState {
+  /// Origin map — CpsId -> Option<AstId>. New CpsIds (for fresh cap params)
+  /// get pushed here with the captured bind's origin.
+  pub origin: crate::propgraph::PropGraph<super::cps::ir::CpsId, Option<crate::ast::AstId>>,
+  /// Synth alias map — CpsId -> Option<CpsId>. For each fresh cap param,
+  /// records the captured-bind id so name_res can resolve refs.
+  pub synth_alias: crate::propgraph::PropGraph<super::cps::ir::CpsId, Option<super::cps::ir::CpsId>>,
+  /// Param info map — CpsId -> Option<ParamInfo>. New cap params get
+  /// ParamInfo::Cap(orig_id).
+  pub param_info: crate::propgraph::PropGraph<super::cps::ir::CpsId, Option<super::cps::ir::ParamInfo>>,
+}
+
+impl ConvertState {
+  pub fn from_result(result: &super::cps::ir::CpsResult) -> Self {
+    Self {
+      origin: result.origin.clone(),
+      synth_alias: result.synth_alias.clone(),
+      param_info: result.param_info.clone(),
+    }
+  }
+
+  /// Allocate a fresh CpsId with the given AstId origin.
+  fn next(&mut self, ast_origin: Option<crate::ast::AstId>) -> super::cps::ir::CpsId {
+    self.origin.push(ast_origin)
+  }
+
+  /// Allocate a fresh BindNode with the given Bind kind and origin.
+  fn bind(&mut self, kind: super::cps::ir::Bind, ast_origin: Option<crate::ast::AstId>) -> super::cps::ir::BindNode {
+    let id = self.next(ast_origin);
+    super::cps::ir::BindNode { id, kind }
+  }
+
+  /// Record param info for a cap-tagged param.
+  fn tag_cap(&mut self, param_id: super::cps::ir::CpsId, orig_cap_id: super::cps::ir::CpsId) {
+    use super::cps::ir::ParamInfo;
+    self.param_info.set(param_id, Some(ParamInfo::Cap(orig_cap_id)));
+  }
+
+  /// Record synth_alias for a cap param so name_res can resolve refs to
+  /// the original CpsId via the new param.
+  fn record_alias(&mut self, new_param_id: super::cps::ir::CpsId, orig_cap_id: super::cps::ir::CpsId) {
+    let idx: usize = new_param_id.into();
+    while self.synth_alias.len() <= idx { self.synth_alias.push(None); }
+    self.synth_alias.set(new_param_id, Some(orig_cap_id));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ref rewriting
+// ---------------------------------------------------------------------------
+
+/// Rewrite every `Ref::Synth(old_id)` and `ContRef(old_id)` in `expr`
+/// using `map: old_id -> new_id`. Unmapped ids are left unchanged.
+/// Recurses through the full Expr tree.
+///
+/// Used after closure conversion to redirect body refs from the original
+/// outer-scope CpsId to the new fresh Cap-param CpsId.
+pub fn rewrite_refs(
+  expr: super::cps::ir::Expr,
+  map: &std::collections::HashMap<super::cps::ir::CpsId, super::cps::ir::CpsId>,
+) -> super::cps::ir::Expr {
+  use super::cps::ir::{Arg, Callable, Expr, ExprKind, LetRecDefn};
+  let Expr { id, kind } = expr;
+  let new_kind = match kind {
+    ExprKind::LetVal { name, val, cont } => {
+      let val = rewrite_refs_val(*val, map);
+      let cont = rewrite_refs_cont(cont, map);
+      ExprKind::LetVal { name, val: Box::new(val), cont }
+    }
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      let fn_body = rewrite_refs(*fn_body, map);
+      let cont = rewrite_refs_cont(cont, map);
+      ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont }
+    }
+    ExprKind::App { func, args } => {
+      let func = match func {
+        Callable::Val(v) => Callable::Val(rewrite_refs_val(v, map)),
+        other => other,
+      };
+      let args = args.into_iter().map(|a| match a {
+        Arg::Val(v) => Arg::Val(rewrite_refs_val(v, map)),
+        Arg::Spread(v) => Arg::Spread(rewrite_refs_val(v, map)),
+        Arg::Cont(c) => Arg::Cont(rewrite_refs_cont(c, map)),
+        Arg::Expr(e) => Arg::Expr(Box::new(rewrite_refs(*e, map))),
+      }).collect();
+      ExprKind::App { func, args }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let cond = rewrite_refs_val(*cond, map);
+      let then = rewrite_refs(*then, map);
+      let else_ = rewrite_refs(*else_, map);
+      ExprKind::If {
+        cond: Box::new(cond),
+        then: Box::new(then),
+        else_: Box::new(else_),
+      }
+    }
+    ExprKind::LetRec { group, no_self_edge, cont } => {
+      let cont = rewrite_refs_cont(cont, map);
+      let group = group.into_iter().map(|d| match d {
+        LetRecDefn::Fn { name, params, fn_kind, body } => {
+          let body = rewrite_refs(*body, map);
+          LetRecDefn::Fn { name, params, fn_kind, body: Box::new(body) }
+        }
+        LetRecDefn::Val { name, val } => {
+          let val = rewrite_refs_val(*val, map);
+          LetRecDefn::Val { name, val: Box::new(val) }
+        }
+      }).collect();
+      ExprKind::LetRec { group, no_self_edge, cont }
+    }
+  };
+  Expr { id, kind: new_kind }
+}
+
+fn rewrite_refs_val(
+  val: super::cps::ir::Val,
+  map: &std::collections::HashMap<super::cps::ir::CpsId, super::cps::ir::CpsId>,
+) -> super::cps::ir::Val {
+  use super::cps::ir::{Ref, Val, ValKind};
+  let Val { id, kind } = val;
+  let new_kind = match kind {
+    ValKind::Ref(Ref::Synth(old)) => {
+      let new_id = map.get(&old).copied().unwrap_or(old);
+      ValKind::Ref(Ref::Synth(new_id))
+    }
+    ValKind::ContRef(old) => {
+      let new_id = map.get(&old).copied().unwrap_or(old);
+      ValKind::ContRef(new_id)
+    }
+    other => other,
+  };
+  Val { id, kind: new_kind }
+}
+
+fn rewrite_refs_cont(
+  cont: super::cps::ir::Cont,
+  map: &std::collections::HashMap<super::cps::ir::CpsId, super::cps::ir::CpsId>,
+) -> super::cps::ir::Cont {
+  use super::cps::ir::Cont;
+  match cont {
+    Cont::Ref(old) => {
+      let new_id = map.get(&old).copied().unwrap_or(old);
+      Cont::Ref(new_id)
+    }
+    Cont::Expr { args, body } => {
+      let body = rewrite_refs(*body, map);
+      Cont::Expr { args, body: Box::new(body) }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fn rewriting — add Cap params, rewrite body refs
+// ---------------------------------------------------------------------------
+
+/// Add Cap-tagged params for the given capture CpsIds to a fn, rewriting
+/// body refs to use the new params. Returns (new_params, new_body, cap_param_ids).
+///
+/// Side effects on `state`:
+/// - Allocates fresh CpsIds for each cap param
+/// - Records `synth_alias[new_param_id] = orig_cap_id` so name_res can
+///   resolve refs in the body that escaped the rewrite
+/// - Tags `param_info[new_param_id] = ParamInfo::Cap(orig_cap_id)`
+pub fn rewrite_fn_for_captures(
+  state: &mut ConvertState,
+  captures: &[super::cps::ir::CpsId],
+  original_params: Vec<super::cps::ir::Param>,
+  body: super::cps::ir::Expr,
+) -> (Vec<super::cps::ir::Param>, super::cps::ir::Expr, Vec<super::cps::ir::CpsId>) {
+  use super::cps::ir::{Bind, Param};
+  let mut cap_param_ids: Vec<super::cps::ir::CpsId> = Vec::with_capacity(captures.len());
+  let mut new_params: Vec<Param> = Vec::with_capacity(captures.len() + original_params.len());
+  let mut rewrite_map: std::collections::HashMap<super::cps::ir::CpsId, super::cps::ir::CpsId>
+    = std::collections::HashMap::new();
+  for &cap_id in captures {
+    // Determine the captured bind's AstId origin (best-effort).
+    let ast_origin = state.origin.try_get(cap_id).and_then(|o| *o);
+    let new_bind = state.bind(Bind::Synth, ast_origin);
+    cap_param_ids.push(new_bind.id);
+    state.tag_cap(new_bind.id, cap_id);
+    state.record_alias(new_bind.id, cap_id);
+    rewrite_map.insert(cap_id, new_bind.id);
+    new_params.push(Param::Name(new_bind));
+  }
+  // Append original params after the cap params.
+  new_params.extend(original_params);
+  // Rewrite the body using the map.
+  let new_body = rewrite_refs(body, &rewrite_map);
+  (new_params, new_body, cap_param_ids)
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -521,5 +720,113 @@ mod tests {
     // The default no-op convert just returns input. A fuller test suite
     // arrives once steps 2-4 land.
     let _ = convert;  // silence unused warning during scaffold phase
+  }
+
+  #[test]
+  fn t_rewrite_fn_adds_caps_and_rewrites_refs() {
+    // fn p: ref(outer_x)  -- p is local, outer_x is captured.
+    // Capture set = [outer_x].
+    // After rewrite: fn cap0, p: ref(cap0)
+    // ParamInfo[cap0] = Cap(outer_x).
+    let outer_x = cps_id(50);
+    let p = cps_id(60);
+
+    let body = Expr {
+      id: cps_id(100),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(50)),  // ref outer_x
+        args: vec![],
+      },
+    };
+    let original_params = vec![Param::Name(BindNode { id: p, kind: Bind::Synth })];
+    let captures = vec![outer_x];
+
+    let mut state = ConvertState {
+      origin: crate::propgraph::PropGraph::with_size(200, None),
+      synth_alias: crate::propgraph::PropGraph::with_size(200, None),
+      param_info: crate::propgraph::PropGraph::with_size(200, None),
+    };
+
+    let (new_params, new_body, cap_ids) = rewrite_fn_for_captures(
+      &mut state, &captures, original_params, body,
+    );
+
+    // First param should be the cap, second should be the original p.
+    assert_eq!(new_params.len(), 2);
+    let cap_id = match &new_params[0] {
+      Param::Name(b) => b.id,
+      _ => panic!("expected Name param"),
+    };
+    assert_eq!(cap_ids, vec![cap_id]);
+    let p_again = match &new_params[1] {
+      Param::Name(b) => b.id,
+      _ => panic!("expected Name param"),
+    };
+    assert_eq!(p_again, p);
+
+    // ParamInfo for the new cap should be Cap(outer_x).
+    let info = state.param_info.try_get(cap_id).cloned().flatten();
+    assert_eq!(info, Some(ParamInfo::Cap(outer_x)));
+
+    // synth_alias[cap_id] should be Some(outer_x).
+    let alias = state.synth_alias.try_get(cap_id).cloned().flatten();
+    assert_eq!(alias, Some(outer_x));
+
+    // The body's ref to outer_x should now ref cap_id.
+    let refs = {
+      let mut s = HashSet::new();
+      collect_refs(&new_body, &mut s);
+      s
+    };
+    assert!(refs.contains(&cap_id), "body should ref cap_id={:?}, refs={:?}", cap_id, refs);
+    assert!(!refs.contains(&outer_x), "body should no longer ref outer_x={:?}", outer_x);
+  }
+
+  #[test]
+  fn t_rewrite_fn_handles_multiple_captures() {
+    // fn p: f(a, b)   captures [a, b]
+    // After rewrite: fn cap_a, cap_b, p: f(cap_a, cap_b)
+    let a = cps_id(70);
+    let b = cps_id(71);
+    let p = cps_id(72);
+    let body = Expr {
+      id: cps_id(100),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(0)),  // some other fn
+        args: vec![Arg::Val(ref_val(70)), Arg::Val(ref_val(71))],
+      },
+    };
+    let original_params = vec![Param::Name(BindNode { id: p, kind: Bind::Synth })];
+    let captures = vec![a, b];
+
+    let mut state = ConvertState {
+      origin: crate::propgraph::PropGraph::with_size(200, None),
+      synth_alias: crate::propgraph::PropGraph::with_size(200, None),
+      param_info: crate::propgraph::PropGraph::with_size(200, None),
+    };
+
+    let (new_params, new_body, cap_ids) = rewrite_fn_for_captures(
+      &mut state, &captures, original_params, body,
+    );
+
+    assert_eq!(new_params.len(), 3);
+    assert_eq!(cap_ids.len(), 2);
+
+    // ParamInfo set for both caps.
+    let info_0 = state.param_info.try_get(cap_ids[0]).cloned().flatten();
+    let info_1 = state.param_info.try_get(cap_ids[1]).cloned().flatten();
+    assert_eq!(info_0, Some(ParamInfo::Cap(a)));
+    assert_eq!(info_1, Some(ParamInfo::Cap(b)));
+
+    // Body refs both cap ids and not the originals.
+    let refs = {
+      let mut s = HashSet::new();
+      collect_refs(&new_body, &mut s);
+      s
+    };
+    assert!(refs.contains(&cap_ids[0]));
+    assert!(refs.contains(&cap_ids[1]));
+    assert!(!refs.contains(&a));
+    assert!(!refs.contains(&b));
   }
 }
