@@ -240,22 +240,24 @@ export const init_wasm = async (bytes, host = {}) => {
   // global `console` and throw on panic.
   const { stdout_write, stderr_write, panic } = { ...default_host, ...host };
 
-  // Forward decl — `host_channel_send` reads from linear memory, so it
-  // needs `exports` (set after instantiation). Fill it in below.
+  // Forward decl — host_write reads from linear memory, so it needs
+  // `exports` (set after instantiation). Fill it in below.
   let exports;
-  const host_channel_send = (tag, ptr, len) => {
+  const host_write = (fd_ref, ptr, len) => {
+    // fd_ref is a fink $Num (heap-boxed); unwrap to a JS number.
+    // (1=stdout, 2=stderr per std/io.fnk conventions.)
+    const fd = exports.num_to_js(fd_ref);
     const bytes = new Uint8Array(exports.memory.buffer, ptr, len);
     const text = text_decoder.decode(bytes);
-    // Tag matches js/interop.wat:_make_host_channel: 1 = stdout, 2 = stderr.
-    if (tag === 2) stderr_write(text);
+    if (fd === 2) stderr_write(text);
     else           stdout_write(text);
   };
 
   const env = {
-    host_resume:       () => {},
     host_panic:        panic,
-    host_read:         (_a, _b, _c) => {},
-    host_channel_send,
+    host_yield:        (_resume, _ctx) => {},
+    host_write,
+    host_read_sync:    (_fd, _size, _ptr) => 0,
     host_invoke_cont:  (resolver, args) => resolver(args),
   };
 

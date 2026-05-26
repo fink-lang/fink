@@ -1,0 +1,100 @@
+{stdout, write} = import 'std/io.fnk'
+
+{interop_yield} = import 'interop.wat'
+{suspend, get_ctx_for, set_ctx_for, upd_ctx_for, with} = import 'std/effects.fnk'
+
+# TODO: for now we are not going through with-block frames, tasks are global
+effect = fn handler: handler
+
+
+log = fn msg:
+  write stdout, '${msg}\n'
+
+
+tasks = fn TODO:
+  TODO
+
+
+has_more = fn:
+  {queue} = get_ctx_for tasks
+  match queue:
+    []: false
+    [..]: true
+
+
+dequeue = fn:
+  {queue: [resume, ..queue]} = get_ctx_for tasks
+  upd_ctx_for tasks, {queue}
+  resume
+
+
+enqueue = fn resume:
+  {queue} = get_ctx_for tasks
+  upd_ctx_for tasks, {queue: [..queue, resume]}
+
+
+yield_to_host = fn:
+  interop_yield _
+
+  match has_more _:
+    true:
+      resume_scheduler _
+    false:
+      false
+
+
+resume_scheduler = fn:
+  match has_more _:
+    true:
+      resume = dequeue _
+      resume _
+    false:
+      yield_to_host _
+
+
+with_tasks = fn body:
+  set_ctx_for tasks, {queue: [], futures: {}}
+  result = body _
+  resume_scheduler _
+  result
+
+
+
+pause = effect fn v:
+  suspend fn resume:
+    # TODO `enqueue fn: resume v` does not work
+    todo = fn: resume v
+    enqueue todo
+    resume_scheduler _
+
+
+settle_future = effect fn fut, result:
+  {futures} = get_ctx_for tasks
+  match futures:
+    {(fut): settle, ..rest}:
+      upd_ctx_for tasks, {futures: rest}
+      todo = fn: settle result
+      enqueue todo
+    _: false
+
+  resume_scheduler _
+
+
+spawn = effect fn task_fn:
+  fut = fn: 123
+
+  wrapped = fn:
+    result = task_fn _
+    settle_future fut, result
+
+  enqueue wrapped
+  fut
+
+
+await = fn fut:
+  suspend fn resume:
+    {futures} = get_ctx_for tasks
+    upd_ctx_for tasks, {futures: {..futures, (fut): resume}}
+    resume_scheduler _
+
+

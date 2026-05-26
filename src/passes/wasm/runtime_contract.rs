@@ -139,11 +139,6 @@ pub enum Sym {
   // `(subj, prefix, suffix, fail, succ)`. 5-arg shape; used by
   // `BuiltIn::StrMatch` for `'foo${x}bar' = 'fooBARbar'` patterns.
   StrMatch,
-  // Cooperative-multitasking primitives — all `(any, any) -> ()`,
-  // same shape as Fn_op_unary.
-  Yield, Spawn, Await,
-  // Channels — same shape.
-  Channel, Receive,
   // Rec primitives — 4-arg shape `(any, any, any, any) -> ()`. Used
   // for record construction (`rec_set`) and pattern destructure
   // (`rec_pop`).
@@ -252,11 +247,6 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Empty     => &[Sym::OpEmpty],
     BuiltIn::StrFmt    => &[Sym::StrFmt, Sym::VarArgs],
     BuiltIn::StrMatch  => &[Sym::StrMatch],
-    BuiltIn::Yield     => &[Sym::Yield],
-    BuiltIn::Spawn     => &[Sym::Spawn],
-    BuiltIn::Await     => &[Sym::Await],
-    BuiltIn::Channel   => &[Sym::Channel],
-    BuiltIn::Receive   => &[Sym::Receive],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
     BuiltIn::SeqConcat  => &[Sym::SeqConcat],
     BuiltIn::RecMerge   => &[Sym::RecMerge],
@@ -370,12 +360,6 @@ pub struct Runtime {
   panic:        Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
   str_match:    Option<FuncSym>,
-  // Scheduling — all `(any, any) -> ()` (Fn_op_unary shape).
-  yield_:       Option<FuncSym>,
-  spawn:        Option<FuncSym>,
-  await_:       Option<FuncSym>,
-  channel:      Option<FuncSym>,
-  receive:      Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rotl:    Option<FuncSym>,
@@ -425,11 +409,6 @@ impl Runtime {
   pub fn panic(&self)        -> FuncSym { self.panic.expect("rt: panic not declared") }
   pub fn str_fmt(&self)      -> FuncSym { self.str_fmt.expect("rt: str_fmt not declared") }
   pub fn str_match(&self)    -> FuncSym { self.str_match.expect("rt: str_match not declared") }
-  pub fn yield_(&self)       -> FuncSym { self.yield_.expect("rt: yield not declared") }
-  pub fn spawn(&self)        -> FuncSym { self.spawn.expect("rt: spawn not declared") }
-  pub fn await_(&self)       -> FuncSym { self.await_.expect("rt: await not declared") }
-  pub fn channel(&self)      -> FuncSym { self.channel.expect("rt: channel not declared") }
-  pub fn receive(&self)      -> FuncSym { self.receive.expect("rt: receive not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
   pub fn apply_3(&self)      -> FuncSym { self.apply_3.expect("rt: apply_3 not declared") }
   pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
@@ -478,11 +457,6 @@ impl Runtime {
       Sym::OpNotIn  => self.op_notin,
       Sym::OpDot    => self.op_dot,
       Sym::StrFmt   => self.str_fmt,
-      Sym::Yield    => self.yield_,
-      Sym::Spawn    => self.spawn,
-      Sym::Await    => self.await_,
-      Sym::Channel  => self.channel,
-      Sym::Receive  => self.receive,
       _ => panic!("rt.op: {:?} is not a protocol-operator Sym", sym),
     };
     f.unwrap_or_else(|| panic!("rt: {:?} not declared", sym))
@@ -582,13 +556,6 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::StrEmpty        => "std/str.fnk:str_empty",
     Sym::StrFmt          => "std/str.wat:_fmt_inner",
     Sym::StrMatch        => "std/str.fnk:match",
-
-    Sym::Yield           => "std/async.fnk:yield",
-    Sym::Spawn           => "std/async.fnk:spawn",
-    Sym::Await           => "std/async.fnk:await",
-
-    Sym::Channel         => "std/channel.fnk:channel",
-    Sym::Receive         => "std/channel.fnk:receive",
 
     Sym::ModulesPub        => "std/modules.fnk:pub",
     Sym::ModulesImport     => "std/modules.fnk:import",
@@ -697,13 +664,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::StrFmt)   { rt.str_fmt   = Some(FuncSym::Runtime(Sym::StrFmt)); }
   if needed.contains(&Sym::StrMatch) { rt.str_match = Some(FuncSym::Runtime(Sym::StrMatch)); }
 
-  for sym in SCHED_PRIMITIVES {
-    if needed.contains(sym) {
-      set_sched_primitive(&mut rt, *sym, FuncSym::Runtime(*sym));
-    }
-  }
-
-  if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecPut)); }
+if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecPut)); }
   if needed.contains(&Sym::RecPop)  { rt.rec_pop = Some(FuncSym::Runtime(Sym::RecPop)); }
   if needed.contains(&Sym::Panic)   { rt.panic   = Some(FuncSym::Runtime(Sym::Panic)); }
 
@@ -754,27 +715,6 @@ const BINARY_OPS: &[Sym] = &[
 
 /// All unary-protocol Syms — share `Fn_op_unary` signature.
 const UNARY_OPS: &[Sym] = &[Sym::OpNot, Sym::OpEmpty, Sym::OpRngFrom];
-
-/// Scheduling / channel primitives — all `(any, any) -> ()` shape,
-/// same as `Fn_op_unary`. Distinct from operator unaries because they
-/// have side effects (queue manipulation, host channel I/O) rather
-/// than pure dispatch.
-const SCHED_PRIMITIVES: &[Sym] = &[
-  Sym::Yield, Sym::Spawn, Sym::Await,
-  Sym::Channel, Sym::Receive,
-];
-
-fn set_sched_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
-  let slot = match sym {
-    Sym::Yield   => &mut rt.yield_,
-    Sym::Spawn   => &mut rt.spawn,
-    Sym::Await   => &mut rt.await_,
-    Sym::Channel => &mut rt.channel,
-    Sym::Receive => &mut rt.receive,
-    _ => panic!("set_sched_primitive: {:?} is not a sched primitive", sym),
-  };
-  *slot = Some(f);
-}
 
 /// Seq/rec primitives that share the `Fn_op_binary` signature shape
 /// (`(any, any, any) -> ()`). Each is a 3-arg CPS function.

@@ -1758,10 +1758,20 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
     let item_ids: Vec<AstId> = items.items.to_vec();
     let entry: &mut Vec<String> = result.entry(url).or_default();
     for item_id in item_ids {
-      if let NodeKind::Ident(field) = &ast.nodes.get(item_id).kind {
-        let s = field.to_string();
-        if !entry.contains(&s) { entry.push(s); }
-      }
+      // Plain field `{foo}` — source name is the ident.
+      // Renamed `{foo: bar}` — parsed as Arm{lhs: Ident(foo), body: Ident(bar)};
+      // source name (what we import) is the Arm's lhs ident.
+      let src_name: Option<String> = match &ast.nodes.get(item_id).kind {
+        NodeKind::Ident(field) => Some(field.to_string()),
+        NodeKind::Arm { lhs, .. } => {
+          if let NodeKind::Ident(field) = &ast.nodes.get(*lhs).kind {
+            Some(field.to_string())
+          } else { None }
+        },
+        _ => None,
+      };
+      if let Some(s) = src_name
+        && !entry.contains(&s) { entry.push(s); }
     }
   }
   result
@@ -3251,7 +3261,6 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_scheduling.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");

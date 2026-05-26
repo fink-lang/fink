@@ -327,7 +327,7 @@ pub fn analyse<'src>(ast: &Ast<'src>, builtins: &[&str]) -> ScopeResult {
   let module_scope = ctx.push_scope(ScopeKind::Module, None, ast.root);
 
   // Language builtins (always in scope) + caller-provided extras.
-  ctx.builtins = ["import", "yield", "spawn", "await", "channel", "receive", "read"].iter().chain(builtins.iter()).map(|s| s.to_string()).collect();
+  ctx.builtins = ["import"].iter().chain(builtins.iter()).map(|s| s.to_string()).collect();
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
   if let NodeKind::Module { exprs: items, .. } = &ast.nodes.get(ast.root).kind {

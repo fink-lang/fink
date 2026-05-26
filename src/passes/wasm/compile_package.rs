@@ -246,10 +246,11 @@ fn enqueue_dep(
   queue: &mut VecDeque<(String, PathBuf)>,
   visited: &BTreeSet<String>,
 ) {
-  // Skip non-relative imports — virtual stdlib namespaces
-  // (`std/io.fnk`), bare identifiers, future remote schemes —
-  // they're not user fragments and don't need package-compile.
-  if !is_relative_url(raw_url) {
+  // Skip non-relative imports unless they're in the migrated stdlib
+  // list. Bare identifiers, future remote schemes, and unmigrated
+  // virtual stdlib URLs aren't user fragments and don't need
+  // package-compile.
+  if !is_relative_url(raw_url) && !is_migrated_stdlib_fnk(raw_url) {
     return;
   }
 
@@ -307,6 +308,25 @@ pub fn finalize_marks(
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Stdlib migration list
+// ──────────────────────────────────────────────────────────────────
+
+/// Stdlib `.fnk` URLs that have a real ƒink-source file at
+/// `<repo>/std/<...>.fnk`. These compile through the user-fragment
+/// path; everything else under `std/` keeps its current virtual-rec
+/// + @impl alias resolution. Hand-maintained during migration.
+pub const MIGRATED_STDLIB_FNK: &[&str] = &[
+  "std/effects.fnk",
+  "std/tasks.fnk",
+  "std/io.fnk",
+];
+
+#[cfg(feature = "compile")]
+fn is_migrated_stdlib_fnk(url: &str) -> bool {
+  MIGRATED_STDLIB_FNK.contains(&url)
+}
+
+// ──────────────────────────────────────────────────────────────────
 // URL canonicalisation — string-only, lifted from wasm-link/mod.rs.
 // ──────────────────────────────────────────────────────────────────
 
@@ -318,6 +338,9 @@ pub fn finalize_marks(
 /// the result themselves.
 #[cfg(feature = "compile")]
 pub fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
+  if is_migrated_stdlib_fnk(canonical_url) {
+    return Path::new(env!("CARGO_MANIFEST_DIR")).join(canonical_url);
+  }
   let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);
   entry_dir.join(rest)
 }

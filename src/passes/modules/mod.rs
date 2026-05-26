@@ -105,6 +105,46 @@ impl SourceLoader for InMemorySourceLoader {
   }
 }
 
+/// Wraps any `SourceLoader` and intercepts requests for migrated stdlib
+/// `.fnk` files, serving them from sources embedded at compile time via
+/// `include_str!`. Anything else delegates to the inner loader.
+///
+/// The match is by filename suffix against `STDLIB_EMBED` — a hand-
+/// maintained table of `(suffix, contents)`. Suffix matching keeps the
+/// loader agnostic of the resolver's absolute-path conventions: as long
+/// as the disk path ends in e.g. `/std/effects.fnk`, the embedded
+/// source is returned.
+pub struct StdlibLoader<L: SourceLoader> {
+  inner: L,
+}
+
+impl<L: SourceLoader> StdlibLoader<L> {
+  pub fn new(inner: L) -> Self {
+    Self { inner }
+  }
+}
+
+/// Migrated stdlib files embedded into the binary. Add one line per
+/// `MIGRATED_STDLIB_FNK` entry. Order: most-specific suffix first if
+/// there's any overlap risk.
+const STDLIB_EMBED: &[(&str, &str)] = &[
+  ("/std/effects.fnk", include_str!("../../../std/effects.fnk")),
+  ("/std/tasks.fnk",   include_str!("../../../std/tasks.fnk")),
+  ("/std/io.fnk",      include_str!("../../../std/io.fnk")),
+];
+
+impl<L: SourceLoader> SourceLoader for StdlibLoader<L> {
+  fn load(&mut self, path: &Path) -> Result<String, String> {
+    let p = path.to_string_lossy();
+    for (suffix, content) in STDLIB_EMBED {
+      if p.ends_with(suffix) {
+        return Ok((*content).to_string());
+      }
+    }
+    self.inner.load(path)
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

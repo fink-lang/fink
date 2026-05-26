@@ -42,8 +42,6 @@
   (import "std/dict.wat"     "RecImpl"     (type $RecImpl     (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
-  (import "std/channel.wat"  "Channel"     (type $Channel     (sub any)))
-  (import "interop.wat" "HostChannel" (type $HostChannel (sub any)))
 
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
@@ -120,13 +118,8 @@
   (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
   (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
-  ;; Func imports — channel
-  (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "std/channel.wat" "receive" (func $channel_receive (param (ref null any)) (param (ref null any)) (param (ref null any))))
   ;; Func imports — interop (host bridge)
   ;; ctx-aware: each leading (ref null any) is the caller's $Ctx.
-  (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
@@ -1100,45 +1093,13 @@
     (unreachable))
 
   ;; =========================================================================
-  ;; Shift left: `<<` — polymorphic ($Num → bitwise, $Channel → send)
+  ;; Shift left: `<<` — numeric bitwise shift
   ;; =========================================================================
 
-  ;; op_shl(a, b, cont):
-  ;;   $HostChannel on a → interop_channel_send(a, b, cont)
-  ;;   $Channel on a     → channel_op_shr(a, b, cont)  [ch << msg]
-  ;;   otherwise         → int_op_shl(a, b)  [numeric shift]
-  ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shl (@pub) (@impl "std/operators.fnk:op_shl")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
-    ;; Try $HostChannel on a → host channel send
-    (block $not_host_channel
-      (block $is_host_channel (result (ref $HostChannel))
-        (br $not_host_channel
-          (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
-            (local.get $a))))
-      (drop)
-      (return_call $interop_channel_send
-        (local.get $ctx)
-        (local.get $a)
-        (local.get $b)
-        (local.get $cont)))
-
-    ;; Try $Channel on a → channel send
-    (block $not_channel
-      (block $is_channel (result (ref $Channel))
-        (br $not_channel
-          (br_on_cast $is_channel (ref null any) (ref $Channel)
-            (local.get $a))))
-      (drop)
-      (return_call $channel_op_shr
-        (local.get $ctx)
-        (local.get $a)
-        (local.get $b)
-        (local.get $cont)))
-
-    ;; Fallback: numeric shift left
     (return_call $list_apply_1
       (local.get $ctx)
       (call $num_op_shl
@@ -1147,43 +1108,12 @@
       (local.get $cont)))
 
   ;; =========================================================================
-  ;; Shift right: `>>` — polymorphic ($Num → bitwise, $Channel → send)
+  ;; Shift right: `>>` — numeric bitwise shift
   ;; =========================================================================
 
-  ;; op_shr(a, b, cont):
-  ;;   $HostChannel on b → interop_channel_send(b, a, cont)
-  ;;   $Channel on b     → channel_op_shr(b, a, cont)  [msg >> ch]
-  ;;   otherwise         → int_op_shr(a, b)  [numeric shift]
-  ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shr (@pub) (@impl "std/operators.fnk:op_shr")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-
-    ;; Try $HostChannel on b → host channel send
-    (block $not_host_channel
-      (block $is_host_channel (result (ref $HostChannel))
-        (br $not_host_channel
-          (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
-            (local.get $b))))
-      (drop)
-      (return_call $interop_channel_send
-        (local.get $ctx)
-        (local.get $b)
-        (local.get $a)
-        (local.get $cont)))
-
-    ;; Try $Channel on b → channel send
-    (block $not_channel
-      (block $is_channel (result (ref $Channel))
-        (br $not_channel
-          (br_on_cast $is_channel (ref null any) (ref $Channel)
-            (local.get $b))))
-      (drop)
-      (return_call $channel_op_shr
-        (local.get $ctx)
-        (local.get $b)
-        (local.get $a)
-        (local.get $cont)))
 
     ;; Fallback: numeric shift right
     (return_call $list_apply_1
@@ -1191,44 +1121,6 @@
       (call $num_op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
-      (local.get $cont)))
-
-
-  ;; =========================================================================
-  ;; receive — drain a runtime channel
-  ;; =========================================================================
-
-  ;; receive(ch, cont): tail-call into channel.wat's receive impl.
-  ;; Host-channel reads no longer reach this path — `read` is the
-  ;; host-coupled alternative (see std/io.fnk:read in interop/rust.wat).
-  ;; The user-facing dispatcher is std/channel.wat's `receive` directly;
-  ;; this trampoline exists only as the cross-wat handle (typed impl
-  ;; on $Channel) for protocol-table consumers.
-  (func $channels_receive (@pub) (@impl "std/channel.fnk:receive" $Channel)
-      (param $ctx (ref null any))
-    (param $ch (ref null any)) (param $cont (ref null any))
-    (return_call $channel_receive
-      (local.get $ctx)
-      (local.get $ch)
-      (local.get $cont)))
-
-
-  ;; =========================================================================
-  ;; read — async read from a stream
-  ;; =========================================================================
-
-  ;; op_read(ctx, stream, size, cont):
-  ;;   Dispatches to interop_op_read for host channels.
-  (func $op_read (@pub) (@impl "rt/protocols.wat:op_read")
-    (param $ctx (ref null any))
-    (param $stream (ref null any))
-    (param $size (ref null any))
-    (param $cont (ref null any))
-
-    (return_call $interop_op_read
-      (local.get $ctx)
-      (local.get $stream)
-      (local.get $size)
       (local.get $cont)))
 
 

@@ -199,7 +199,9 @@ fn main() {
       {
         let entry_abs = std::path::Path::new(path).canonicalize()
           .unwrap_or_else(|e| die(&format!("canonicalize {path}: {e}")));
-        let mut loader = fink::passes::modules::FileSourceLoader::new();
+        let mut loader = fink::passes::modules::StdlibLoader::new(
+          fink::passes::modules::FileSourceLoader::new(),
+        );
         let pkg = fink::passes::wasm::compile_package::compile_package(
           &entry_abs, &mut loader,
         ).unwrap_or_else(|e| die(&e));

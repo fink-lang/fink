@@ -62,11 +62,12 @@ test 'nested import minimal', fn:
 
 test 'multi module import', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
     {shrub} = import './test_modules/entry.fnk'
 
-    stdout << '${shrub 21}'
+    write stdout, '${shrub 21}'
   | equals ":
+    1
     stdout == ":
       42
 
@@ -81,10 +82,33 @@ must see the same `base = 10`, and the program must actually execute.
 ---
 test 'diamond with two paths to same dep', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
     {total} = import './test_modules/diamond/entry.fnk'
 
-    stdout << '${total}'
+    write stdout, '${total}'
   | equals ":
+    1
     stdout == ":
       33
+
+
+test 'wat file importable', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'rt/apply.wat'
+
+    set_ctx {x: 42}
+    ctx = get_ctx _
+    ctx.x
+  | equals ƒink:
+    42
+
+
+test 'std .fnk file importable', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx {x: 42}
+    ctx = get_ctx _
+    ctx.x
+  | equals ƒink:
+    42

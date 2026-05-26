@@ -1,6 +1,6 @@
 # ƒink Language
 
-ƒink is a small, functional, indentation-based language. Values are immutable, types are inferred, IO goes through channels.
+ƒink is a small, functional, indentation-based language. Values are immutable, types are inferred, IO is done through `std/io.fnk`.
 
 Features not yet reachable in the compiler live in [roadmap.md](roadmap.md). For the execution model — what effects are, how modules run, how mutual recursion and IO fit — see [execution-model.md](execution-model.md).
 
@@ -26,7 +26,7 @@ fink hello.fnk
 
 `fink <file>` is shorthand for `fink run <file>` — `run` is the default subcommand.
 
-You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success. For more on `write`, channels, `spawn` / `await` and the rest, see [Concurrency and IO](#concurrency-and-io).
+You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success. For more on `read` / `write`, see [IO](#io).
 
 ---
 
@@ -704,13 +704,13 @@ Path resolution:
 
 ---
 
-## Concurrency and IO
+## IO
 
-ƒink programs are cooperative — tasks yield at I/O and scheduler points. Values flow between tasks through channels. stdio behaves like channels.
+stdio uses simple `read` / `write` calls on file descriptors imported from `std/io.fnk`. Cooperative scheduling, futures, and channels are userland constructs built on the [effects substrate](#effects) — they live in `std/*.fnk`, not as language keywords.
 
-### `main` and the IO channels
+### `main` and stdio
 
-The runner calls `main` with `..args` — CLI argv. `main` returns an exit code. The IO channels (`stdin`, `stdout`, `stderr`) and the IO functions (`read`, `write`) come from `import 'std/io.fnk'`, not as positional parameters.
+The runner calls `main` with `..args` — CLI argv. `main` returns an exit code. The fd constants (`stdin`, `stdout`, `stderr`) and the IO functions (`read`, `write`) come from `import 'std/io.fnk'`.
 
 ```fink
 {stdout, write} = import 'std/io.fnk'
@@ -722,7 +722,7 @@ main = fn ..args:
 
 ### Writing to a stream
 
-`write stream, value` sends `value` to `stream` and returns `stream`. The return value enables chaining via the pipeline operator:
+`write fd, value` writes `value` to `fd` and returns `fd`. The return value enables chaining via the pipeline operator:
 
 ```fink
 stdout
@@ -730,32 +730,11 @@ stdout
 | write ?, 'bar'
 ```
 
-This writes `foobar` to stdout. `write` is the recommended way to send to streams.
-
-> **Low-level operators.** `>>` and `<<` are channel-send operators (`x >> stream` and `stream << x`) that also serve as bitwise shifts; dispatch is by value type. They remain available but `write` is preferred for stream IO.
-
-### Receiving from a channel
-
-`receive` parks the current task until a message arrives:
-
-```fink
-line = receive stdin
-```
-
-### Spawning and awaiting
-
-`spawn` creates a task from a zero-arg function; `await` blocks on its result.
-
-```fink
-future = spawn fn:
-  compute_something
-
-result = await future
-```
+This writes `foobar` to stdout.
 
 ### Reading raw bytes
 
-`read stream, n` reads up to `n` bytes from a host stream (stdin, typically):
+`read fd, n` reads up to `n` bytes from `fd` (synchronously today):
 
 ```fink
 bytes = read stdin, 1024

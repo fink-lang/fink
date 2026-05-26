@@ -4,19 +4,18 @@
 ;;   * `wrap_host_cont(id) -> anyref` — opaque WASM-side handle for a
 ;;     host-registered callback. Fired via `_apply`, dispatches to
 ;;     `env.host_invoke_cont(id, args)`.
-;;   * `interop_channel_send` / `interop_op_read` /
-;;     `interop_panic` — host-bridge ops invoked by the runtime
-;;     protocols (rt/protocols.wat) when a value is a $HostChannel
-;;     or a panic is raised.
+;;   * `interop_yield` / `io_write` / `io_read` — Fn3-shaped ƒink
+;;     primitives that bridge userland calls to host imports
+;;     (host_yield, host_write, host_read_sync).
+;;   * `invoke_resume(resume, value, ctx)` — host-callable export the
+;;     driver loop uses to fire a yielded continuation.
+;;   * `panic` — delegates to host_panic, then traps.
 ;;
-;; Owns $HostChannel — a subtype of $Channel for host-managed IO.
-;; send/recv on host channels delegate to host imports instead of using
-;; the internal message queue.
-;;
-;; Orchestration of `main` (build args list, apply, drain scheduler,
-;; exit) is the runner's responsibility, not this file's. There is no
-;; `_run_main` here — the test harness inlines the dispatch today; a
-;; future production runner will provide its own entry point.
+;; Orchestration of `main` (build args list, apply, drive any pending
+;; resumes from `invoke_resume`, exit) is the runner's responsibility,
+;; not this file's. There is no `_run_main` here — the test harness
+;; inlines the dispatch today; a future production runner will provide
+;; its own entry point.
 
 (module
 
@@ -33,10 +32,7 @@
   (import "std/num.wat"     "Num"       (type $Num      (sub any)))
   (import "std/str.wat"     "Str"       (type $Str      (sub any)))
   (import "std/str.wat"     "ByteArray" (type $ByteArray (sub any)))
-  (import "std/channel.wat" "Channel"   (type $Channel  (sub any)))
   (import "std/list.wat"    "List"      (type $List     (sub any)))
-  (import "std/async.wat"   "Future"    (type $Future   (sub any)))
-  (import "std/async.wat"   "Waiter"    (type $Waiter   (sub any)))
   (import "std/int.wat"     "Int"       (type $Int      (sub $Num (struct))))
   (import "std/int.wat"     "I64"       (type $I64      (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "U64"       (type $U64      (sub $Int (struct (field $ival i64)))))
@@ -56,6 +52,10 @@
     (func $args_empty (result (ref any))))
   (import "rt/apply.wat"    "args_prepend"
     (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
+  (import "rt/apply.wat"    "args_head"
+    (func $args_head (param $args (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat"    "args_tail"
+    (func $args_tail (param $args (ref null any)) (result (ref null any))))
   (import "rt/apply.wat"    "apply_3"
     (func $apply_3
       (param $args (ref null any))
@@ -76,34 +76,14 @@
   ;; the `$bytes` local in this file).
   (import "std/str.wat"     "bytes"
     (func $str_bytes (param $s (ref $Str)) (result (ref $ByteArray))))
-  (import "std/async.wat"   "queue_push"
-    (func $queue_push (param $task (ref any))))
-  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
-  (import "std/async.wat"   "resume"
-    (func $resume))
-
-
-  ;; -- $HostChannel type ----------------------------------------------------
-  ;;
-  ;; Host-managed IO channel (stdin, stdout, stderr). Subtype of $Channel
-  ;; so `>>` and `<<` work uniformly. The runtime dispatches to host
-  ;; imports for host channels instead of using the internal message queue.
-  (type $HostChannel (@pub) (sub final $Channel (struct
-    (field $messages  (mut (ref $List)))
-    (field $receivers (mut (ref $List)))
-    (field $tag       (ref any))
-  )))
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $read_apply $write_apply $panic_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
 
-  (import "env" "host_channel_send" (func $host_channel_send (param i32) (param (ref null any))))
-  (import "env" "host_read" (func $host_read (param (ref any) (ref any) (ref any))))
   ;; Irrefutable pattern failure — traps the instance with a diagnostic.
   ;; TODO: pass reason / source location (offset+length into linear memory)
   ;; so the host can render a useful message.
@@ -112,6 +92,183 @@
   ;; for `id` with the given args list. See `$host_cont_adapter` and
   ;; `wrap_host_cont` for how WASM-side callable refs into this.
   (import "env" "host_invoke_cont" (func $host_invoke_cont (param i32 (ref null any))))
+
+  ;; Host yields control to the userland scheduler when its queue is
+  ;; empty. The host stores the `resume` closure and decides when to
+  ;; invoke it back via the `_invoke_resume` export (e.g. after an
+  ;; epoll/poll cycle, after stdin has bytes, after a timer fires).
+  ;; Returns immediately — wasm execution unwinds back to whichever
+  ;; export call the host made, and the host then drives.
+  (import "env" "host_yield" (func $host_yield (param (ref any)) (param (ref null any))))
+
+  ;; Sync write: host writes the bytes and returns. The wasm-side
+  ;; `io_write_apply` continues by tail-calling its k_caller — no
+  ;; callback, no future. (Async variant will defer via host_yield
+  ;; when needed.)
+  (import "env" "host_write" (func $host_write
+    (param $fd (ref null any))
+    (param $bytes (ref $ByteArray))))
+
+  ;; Sync read: host reads up to size bytes from fd, returns ByteArray.
+  (import "env" "host_read_sync" (func $host_read_sync
+    (param $fd (ref null any))
+    (param $size (ref null any))
+    (result (ref $ByteArray))))
+
+
+  ;; Host-callable entry point: fire a previously-yielded resume
+  ;; closure under the ctx that was active at yield time. Both are
+  ;; stashed host-side by `host_yield`; this export re-threads ctx
+  ;; back into apply_3 so the resumed code sees the same ctx that
+  ;; was current at suspend.
+  (func $interop_invoke_resume (@pub) (export "env:invoke_resume")
+    (param $resume (ref any))
+    (param $value (ref any))
+    (param $ctx (ref null any))
+    (local $args (ref any))
+    ;; Fire the resume/callback closure with one arg = value, under ctx.
+    ;; - yield case: value is unit/placeholder; resume is the post-yield cont.
+    ;; - io callback case: value is the io result; resume is the userland
+    ;;   callback closure (e.g. `fn bytes: settle_future fut, bytes`).
+    (local.set $args (call $args_empty))
+    (local.set $args (call $args_prepend (local.get $value) (local.get $args)))
+    (return_call $apply_3
+      (local.get $args)
+      (local.get $ctx)
+      (local.get $resume)))
+
+
+  ;; Userland-callable yield: hands `resume` to the host and returns.
+  ;; The wasm-side caller (e.g. `tasks.fnk:yield_to_host`) will see
+  ;; control return immediately; the host re-fires `resume` later via
+  ;; `_invoke_resume`.
+  ;;
+  ;; Exposed as a `$Closure` so user code applies it via `apply_3` like
+  ;; any other ƒink fn. The Fn3 body pulls `resume` out of the args
+  ;; list and forwards to the host import.
+  (elem declare func $interop_yield_apply)
+
+  (func $interop_yield_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    ;; CPS convention: args[0] is the caller's continuation. Hand it
+    ;; to the host as the resume value — host fires it later via
+    ;; `invoke_resume` under the same ctx. User-level surface is
+    ;; `interop_yield _`; the `_` is a placeholder, the real resume
+    ;; comes from the compiler's CPS lowering.
+    (local $resume (ref any))
+    (local.set $resume (ref.as_non_null
+      (call $args_head (local.get $args))))
+    (return_call $host_yield (local.get $resume) (local.get $ctx)))
+
+  (global $interop_yield_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $interop_yield_apply)
+      (ref.null $Captures)))
+
+  (func $interop_yield (@pub) (@impl "interop.fnk:yield")
+    (result (ref any))
+    (global.get $interop_yield_closure))
+
+
+  ;; -- io_write -----------------------------------------------------------
+  ;;
+  ;; User-level call: `io_write fd, bytes, callback`.
+  ;; CPS-lowered args = [k_caller, fd, bytes, callback].
+  ;; Body hands (fd, bytes, callback, ctx) to the host; the host writes
+  ;; and later fires the callback via `invoke_resume`. We tail-call
+  ;; k_caller with unit (the write call has no synchronous return value).
+  (elem declare func $io_write_apply)
+
+  (func $io_write_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $msg (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $fd (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $msg (call $args_head (local.get $rest)))
+
+    ;; Extract raw ByteArray from the $Str so host can read it directly.
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+
+    (call $host_write
+      (local.get $fd)
+      (local.get $bytes))
+
+    ;; Tail-call k_caller with unit (placeholder i31).
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (ref.i31 (i32.const 0)) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_write_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_write_apply)
+      (ref.null $Captures)))
+
+  (func $io_write (@pub) (@impl "interop.fnk:io_write")
+    (result (ref any))
+    (global.get $io_write_closure))
+
+
+  ;; -- io_read -----------------------------------------------------------
+  ;; Sync read: args = [k_caller, fd, size]. Calls host_read_sync, wraps
+  ;; the returned ByteArray as a $Str, tail-calls k_caller with the Str.
+  (elem declare func $io_read_apply)
+
+  (func $io_read_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $size (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $fd (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $size (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $host_read_sync (local.get $fd) (local.get $size)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_read_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_read_apply)
+      (ref.null $Captures)))
+
+  (func $io_read (@pub) (@impl "interop.fnk:io_read")
+    (result (ref any))
+    (global.get $io_read_closure))
 
 
   ;; -- Host callable (inbound contract) --------------------------------------
@@ -124,7 +281,7 @@
   ;; Instead, the host registers its callback under an i32 id on its
   ;; side, calls `wrap_host_cont_3(id)` to get an opaque (ref null any),
   ;; and hands that anyref to WASM wherever a continuation is
-  ;; expected (done, await cont, scheduler trampolines, etc.).
+  ;; expected (the wrapper-done cont, main-done cont, etc.).
   ;;
   ;; When fink-side code eventually fires the continuation via
   ;; `apply_3`, it casts the value to $Closure, pulls the funcref
@@ -171,84 +328,6 @@
   )
 
 
-  ;; -- host_channel_send -----------------------------------------------------
-  ;;
-  ;; host_channel_send(ctx, ch, msg, cont):
-  ;;   1. Write msg to the host via the appropriate host_write import
-  ;;   2. Queue unit_thunk(cont) to resume the sender under its ctx
-  ;;   3. Resume scheduler
-  ;;
-  ;; Dispatches stdout vs stderr by channel tag (i31ref: 1=stdout, 2=stderr).
-
-  (func $channel_send (@pub)
-    (param $ctx (ref null any))
-    (param $ch (ref null any))
-    (param $msg (ref null any))
-    (param $cont (ref null any))
-
-    (local $tag i32)
-    (local $bytes (ref $ByteArray))
-
-    ;; Extract raw bytes from the $Str (handles all subtypes).
-    (local.set $bytes
-      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
-
-    ;; Read channel tag (i31ref).
-    (local.set $tag
-      (i31.get_s (ref.cast (ref i31)
-        (struct.get $Channel $tag
-          (ref.cast (ref $Channel) (local.get $ch))))))
-
-    ;; Send to host — host reads bytes directly from the GC array.
-    (call $host_channel_send (local.get $tag) (local.get $bytes))
-
-    ;; Sender continues with unit, under its captured ctx.
-    (call $queue_push
-      (call $make_unit_thunk
-        (local.get $ctx) (ref.as_non_null (local.get $cont))))
-
-    (return_call $resume)
-  )
-
-
-  ;; -- interop_op_read --------------------------------------------------------
-  ;;
-  ;; interop_op_read(stream, size, cont):
-  ;;   1. Create a pending $Future with cont as waiter
-  ;;   2. Call host_read(stream, size, future) — host starts async read
-  ;;   3. Resume scheduler — task is parked on the future
-  ;;
-  ;; The host settles the future during host_resume when data arrives.
-
-  (func $op_read (@pub)
-    (param $ctx (ref null any))
-    (param $stream (ref null any))
-    (param $size (ref null any))
-    (param $cont (ref null any))
-
-    (local $future (ref $Future))
-
-    ;; Create pending future with (ctx, cont) parked as a $Waiter so
-    ;; the reader resumes under its caller's universe once data arrives.
-    (local.set $future (struct.new $Future
-      (ref.null any)
-      (call $list_prepend
-        (struct.new $Waiter
-          (local.get $ctx)
-          (ref.as_non_null (local.get $cont)))
-        (call $list_empty))))
-
-    ;; Tell host to start async read. Host captures the future ref.
-    (call $host_read
-      (ref.as_non_null (local.get $stream))
-      (ref.as_non_null (local.get $size))
-      (local.get $future))
-
-    ;; Resume scheduler — this task is parked on the future.
-    (return_call $resume)
-  )
-
-
   ;; -- interop_panic ---------------------------------------------------------
   ;;
   ;; Called from runtime `panic` (operators.wat). Delegates to the host which
@@ -276,166 +355,6 @@
     (param $_args (ref null any))
     (return_call $panic))
 
-
-  ;; -- stdio channels --------------------------------------------------------
-  ;;
-  ;; Constant-init `$HostChannel` globals — created once at instantiation,
-  ;; never reassigned. Tags (i31ref) follow POSIX fd numbers:
-  ;;   0 = stdin, 1 = stdout, 2 = stderr.
-  ;;
-  ;; `interop_channel_send` reads the tag to dispatch to the right host
-  ;; sink. The tag is also how the test harness keys per-channel capture
-  ;; buffers.
-  ;;
-  ;; The accessor functions are what `rt/protocols.wat` exports as the
-  ;; protocol dispatchers `std/io.fnk:stdout` etc. Keeping the channel
-  ;; values behind accessors preserves the layering invariant: nothing
-  ;; outside `interop/*` reads these globals directly.
-
-  ;; Lazy-init: globals start null, populated on first access.
-  ;; Required because const init can't call functions ($list_empty) and
-  ;; we want to avoid leaking $Nil across the channel boundary.
-  (global $stdout (mut (ref null $HostChannel)) (ref.null $HostChannel))
-  (global $stderr (mut (ref null $HostChannel)) (ref.null $HostChannel))
-  (global $stdin  (mut (ref null $HostChannel)) (ref.null $HostChannel))
-
-  (func $_make_host_channel (param $tag i32) (result (ref $HostChannel))
-    (struct.new $HostChannel
-      (call $list_empty)
-      (call $list_empty)
-      (ref.i31 (local.get $tag))))
-
-  (func $get_stdout (@pub) (@impl "std/io.fnk:stdout") (result (ref any))
-    (if (ref.is_null (global.get $stdout))
-      (then (global.set $stdout (call $_make_host_channel (i32.const 1)))))
-    (ref.as_non_null (global.get $stdout)))
-
-  (func $get_stderr (@pub) (@impl "std/io.fnk:stderr") (result (ref any))
-    (if (ref.is_null (global.get $stderr))
-      (then (global.set $stderr (call $_make_host_channel (i32.const 2)))))
-    (ref.as_non_null (global.get $stderr)))
-
-  (func $get_stdin (@pub) (@impl "std/io.fnk:stdin") (result (ref any))
-    (if (ref.is_null (global.get $stdin))
-      (then (global.set $stdin (call $_make_host_channel (i32.const 0)))))
-    (ref.as_non_null (global.get $stdin)))
-
-
-  ;; -- read closure ----------------------------------------------------------
-  ;;
-  ;; `std/io.fnk:read` returns a $Closure value (callable via _apply),
-  ;; not a bare reference. The closure construction lives here because
-  ;; it bridges between two ABIs:
-  ;;   * user calling convention via _apply → args list = [cont, ...user_args]
-  ;;   * interop_op_read fixed-arg ABI       → (stream, size, cont)
-  ;; That translation is host-bridge plumbing, hence belongs alongside
-  ;; the rest of the interop_* primitives.
-  ;;
-  ;; Singleton — same closure instance every access; captures null
-  ;; (nothing per-instance).
-
-  (func $read_apply (type $Fn3)
-    (param $_caps (ref null any))
-    (param $ctx (ref null any))
-    (param $args (ref null any))
-
-    (local $cursor (ref null any))
-    (local $cont (ref null any))
-    (local $stream (ref null any))
-    (local $size (ref null any))
-
-    (local.set $cursor (local.get $args))
-    ;; TODO this needs to got through args_* protocol!
-    (local.set $cont (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $stream (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $size (call $list_head_any (local.get $cursor)))
-
-    (return_call $op_read
-      (local.get $ctx)
-      (local.get $stream)
-      (local.get $size)
-      (local.get $cont)))
-
-  (global $read_closure (ref $Closure)
-    (struct.new $Closure
-      (ref.func $read_apply)
-      (ref.null $Captures)))
-
-  (func $get_read (@pub) (@impl "std/io.fnk:read") (result (ref any))
-    (global.get $read_closure))
-
-
-  ;; -- write closure ---------------------------------------------------------
-  ;;
-  ;; `std/io.fnk:write` returns a $Closure that, when applied as
-  ;; `write stream, value`, sends `value` to the host stream tagged by
-  ;; `stream` and resumes the caller with `stream` (so `write` returns the
-  ;; stream — enables chaining like `s | write ?, 'a' | write ?, 'b'`).
-  ;;
-  ;; Differs from `channel_send` only in that the cont is resumed with
-  ;; the stream value (via `make_thunk`) instead of unit.
-
-  (func $channel_send_stream
-    (param $ctx (ref null any))
-    (param $ch (ref null any))
-    (param $msg (ref null any))
-    (param $cont (ref null any))
-
-    (local $tag i32)
-    (local $bytes (ref $ByteArray))
-
-    (local.set $bytes
-      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
-
-    (local.set $tag
-      (i31.get_s (ref.cast (ref i31)
-        (struct.get $Channel $tag
-          (ref.cast (ref $Channel) (local.get $ch))))))
-
-    (call $host_channel_send (local.get $tag) (local.get $bytes))
-
-    ;; Sender continues with the stream itself, under its captured ctx.
-    (call $queue_push
-      (call $make_thunk
-        (local.get $ctx)
-        (ref.as_non_null (local.get $cont))
-        (ref.as_non_null (local.get $ch))))
-
-    (return_call $resume)
-  )
-
-  (func $write_apply (type $Fn3)
-    (param $_caps (ref null any))
-    (param $ctx (ref null any))
-    (param $args (ref null any))
-
-    (local $cursor (ref null any))
-    (local $cont (ref null any))
-    (local $stream (ref null any))
-    (local $value (ref null any))
-
-    (local.set $cursor (local.get $args))
-    (local.set $cont (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $stream (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $value (call $list_head_any (local.get $cursor)))
-
-    (return_call $channel_send_stream
-      (local.get $ctx)
-      (local.get $stream)
-      (local.get $value)
-      (local.get $cont)))
-
-  (global $write_closure (ref $Closure)
-    (struct.new $Closure
-      (ref.func $write_apply)
-      (ref.null $Captures)))
-
-  (func $get_write (@pub) (@impl "std/io.fnk:write") (result (ref any))
-    (global.get $write_closure))
 
 
   ;; -- Host bootstrap delegates ---------------------------------------

@@ -121,9 +121,9 @@ The mechanism described here is **algebraic effects**. At the concept level it's
 
 The three defining pieces of algebraic effects are present:
 
-- **Operations.** Protocol uses (`a + b`, `log x`, `yield`) resolve against the current context. They are operations in the Koka/Frank/OCaml-5 sense — their meaning is given by what's registered, not by declaration-site semantics.
-- **Handlers.** Any ƒink construct that produces a new context is a handler: impl registration, mutual-recursive binding, host capability registration, user-defined context blocks (see below), and the scheduler (which parks and resumes continuations at `yield`).
-- **Resumable continuations.** At the concept level, an effectful call receives an explicit rest-of-computation that the handler can resume, run multiple times, or discard. The current compiler represents this directly via CPS: every call site has an explicit continuation value, the scheduler parks and resumes continuations, `yield` is a language-level suspend point. A non-CPS compiler would represent the same continuations differently.
+- **Operations.** Protocol uses (`a + b`, `log x`, `suspend ...`) resolve against the current context. They are operations in the Koka/Frank/OCaml-5 sense — their meaning is given by what's registered, not by declaration-site semantics.
+- **Handlers.** Any ƒink construct that produces a new context is a handler: impl registration, mutual-recursive binding, host capability registration, user-defined context blocks (see below), and userland schedulers (`std/tasks.fnk` etc., which park and resume continuations captured via `suspend`).
+- **Resumable continuations.** At the concept level, an effectful call receives an explicit rest-of-computation that the handler can resume, run multiple times, or discard. The current compiler represents this directly via CPS: every call site has an explicit continuation value, and the `suspend` substrate primitive hands the current continuation to userland as a first-class value. A non-CPS compiler would represent the same continuations differently.
 
 **User handlers** are the only place context scoping shows up in ƒink source. The runtime substrate is `suspend` (delimited continuation capture) plus threaded ctx:
 

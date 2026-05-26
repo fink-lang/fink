@@ -113,7 +113,7 @@ Both compile to the same `$Fn3`. The distinction only affects how continuations 
 
 ## Thunks and async resumption
 
-Suspended continuations (channel receivers, future awaiters, `yield`) are parked as `$Closure` thunks whose captures hold `[cont, value, ctx]`. When the scheduler later pops a thunk, the thunk's body calls `apply_3` with the **captured ctx** — restoring the suspender's universe rather than running under the scheduler's. See [`rt/apply.wat`](../../runtime/rt/apply.wat) `$_thunk_fn` and the `$Waiter` types in `std/channel.wat` and `std/async.wat`.
+Suspended continuations are parked as `$Closure` thunks whose captures hold `[cont, value, ctx]`. When userland later fires a thunk, the thunk's body calls `apply_3` with the **captured ctx** — restoring the suspender's universe rather than running under the resumer's. The `suspend` primitive hands the current continuation to userland as such a thunk-closure; userland (e.g. `std/tasks.fnk`) decides when to resume it. See [`rt/apply.wat`](../../runtime/rt/apply.wat) `$_thunk_fn`, `$make_thunk`, and `$suspend_apply`.
 
 ## See also
 

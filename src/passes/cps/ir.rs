@@ -286,22 +286,6 @@ pub enum BuiltIn {
   // StrMatch(subj, prefix, suffix, fail(), succ(capture)) — string template pattern matching.
   // Checks subj starts with prefix, ends with suffix (non-overlapping), binds the middle slice.
   StrMatch,
-  // Scheduling — cooperative multitasking primitives.
-  // Yield(value, cont) — suspend current task, switch to next; value for future message passing.
-  // Spawn(task_fn, cont) — create new task from task_fn; cont receives future.
-  // Await(future, cont) — wait for future to settle; cont receives settled value.
-  Yield, Spawn, Await,
-  // Channels — multi-message async communication between tasks (point-to-point).
-  // Channel(tag, cont) — create new channel; cont receives channel value.
-  // Receive(channel, cont) — park receiver; cont receives message when matched.
-  // Send is not a builtin — `msg >> ch` dispatches via op_shr to channel.wat's $send.
-  Channel, Receive,
-  // IO — host-mediated async read. Used by the OLD pipeline only.
-  // The IR pipeline imports `read` from `std/io.fnk` instead; an
-  // ident named `read` resolves to this builtin only when not
-  // shadowed by an import. Plan: remove once the old pipeline goes
-  // away. See [.brain/.scratch/read-as-imported-fn.md].
-  Read,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
   // Legacy: replaced by Pub for new CPS shape. TODO: remove.
@@ -368,17 +352,8 @@ impl BuiltIn {
       "not in" => BuiltIn::NotIn,
       // Member access
       "."   => BuiltIn::Get,
-      // Scheduling
-      "yield" => BuiltIn::Yield,
-      "spawn" => BuiltIn::Spawn,
-      "await" => BuiltIn::Await,
-      // Channels
-      "channel" => BuiltIn::Channel,
-      "receive" => BuiltIn::Receive,
-      // IO
       // Module
       "import" => BuiltIn::Import,
-      "read" => BuiltIn::Read,
       _     => panic!("BuiltIn::from_builtin_str: unknown name {:?}", s),
     }
   }

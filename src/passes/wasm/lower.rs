@@ -637,28 +637,7 @@ fn lower_expr(
       emit_op_tail_call(lcx, ctx, Sym::OpRngFrom, vec![v_op], cont, expr.id);
     }
 
-    // Cooperative-multitasking + channels — all `(value, cont)` shape,
-    // same as `BuiltIn::Not` / `BuiltIn::Empty`. Side effects happen in
-    // the runtime function (queue manipulation, host channel I/O); the
-    // user-facing call shape is plain unary.
-    ExprKind::App { func: Callable::BuiltIn(b), args }
-      if matches!(b, BuiltIn::Yield | BuiltIn::Spawn | BuiltIn::Await
-                   | BuiltIn::Channel | BuiltIn::Receive) =>
-    {
-      let sym = match b {
-        BuiltIn::Yield   => Sym::Yield,
-        BuiltIn::Spawn   => Sym::Spawn,
-        BuiltIn::Await   => Sym::Await,
-        BuiltIn::Channel => Sym::Channel,
-        BuiltIn::Receive => Sym::Receive,
-        _ => unreachable!(),
-      };
-      let (v, cont) = split_unary_args(args);
-      let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, sym, vec![v_op], cont, expr.id);
-    }
-
-    // StrMatch: `(subj, prefix, suffix, fail, succ)` — 5-arg template
+// StrMatch: `(subj, prefix, suffix, fail, succ)` — 5-arg template
     // pattern dispatch. All five are anyref operands at the WASM level
     // (the latter two are continuations resolved as closures).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrMatch), args } => {
@@ -1151,7 +1130,9 @@ fn lower_import(
     _ => None,
   }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing cont"));
 
-  if is_virtual_stdlib_path(url) {
+  if crate::passes::wasm::compile_package::MIGRATED_STDLIB_FNK.contains(&url) {
+    lower_import_user_fragment(lcx, ctx, url, cont_id);
+  } else if is_virtual_stdlib_path(url) || url.ends_with(".wat") {
     lower_import_virtual_stdlib(lcx, ctx, url, cont_id);
   } else {
     lower_import_user_fragment(lcx, ctx, url, cont_id);
@@ -1311,6 +1292,7 @@ fn lower_import_user_fragment(
 fn is_virtual_stdlib_path(url: &str) -> bool {
   url.starts_with("std/") && url.ends_with(".fnk")
 }
+
 
 /// Emit a 4-arg primitive with shape `(any, any, any, any) -> ()`.
 /// Used by `RecPut(rec, key, val, cont)` and

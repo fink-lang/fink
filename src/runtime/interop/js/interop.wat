@@ -1,16 +1,11 @@
-;; JS host interop — minimal scaffold.
+;; JS host interop.
 ;;
-;; First slice: link the runtime against a JS-target interop module
-;; without yet implementing host-bridge behaviour. Every contract-side
-;; function is `unreachable`; calling them traps the instance. The
-;; runtime contract surface (HostChannel type, host imports, the named
-;; @impl bindings) is preserved so the linker and validator are happy.
+;; Counterpart to rust/interop.wat — same fink-facing surface
+;; (interop_yield, io_write, io_read, invoke_resume, marshalling
+;; helpers), but host imports use linear-memory ptr+len bridging
+;; because JS can't read GC arrays directly.
 ;;
-;; Real bodies land in subsequent slices per
-;; .brain/.scratch/plans/js-interop-plan.md.
-;;
-;; type_of is the one already-real export — JS hosts use it to
-;; discriminate values.
+;; type_of is exported so JS hosts can discriminate values.
 ;;
 ;; Type-of enum (matches fink.js):
 ;;   Fn    = 100
@@ -45,7 +40,6 @@
   (import "std/decimal.wat" "Decimal"   (type $Decimal   (sub $Num)))
   (import "std/str.wat"     "Str"       (type $Str       (sub any)))
   (import "std/str.wat"     "ByteArray" (type $ByteArray (sub any)))
-  (import "std/channel.wat" "Channel"   (type $Channel   (sub any)))
   (import "std/list.wat"    "List"      (type $List      (sub any)))
   (import "std/dict.wat"    "Rec"       (type $Rec       (sub any)))
 
@@ -73,6 +67,10 @@
   (import "rt/apply.wat" "args_prepend"
     (func $args_prepend_inner
       (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
+  (import "rt/apply.wat" "args_head"
+    (func $args_head_inner (param $args (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "args_tail"
+    (func $args_tail_inner (param $args (ref null any)) (result (ref null any))))
   (import "rt/apply.wat" "apply_3"
     (func $apply_3_inner
       (param $args (ref null any))
@@ -93,41 +91,182 @@
     (func $rec_get_inner (param $rec (ref $RecImpl)) (param $key (ref eq))
       (result (ref null eq))))
 
-  ;; Async/scheduler — needed by channel_send to queue cont resumption
-  ;; and yield back to the scheduler.
-  (import "rt/apply.wat" "make_unit_thunk" (func $make_unit_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (result (ref $Closure))))
-  (import "rt/apply.wat" "make_thunk" (func $make_thunk (;apply-ctx;) (param (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "std/async.wat" "queue_push"
-    (func $queue_push (param $task (ref any))))
-  (import "std/async.wat" "resume"
-    (func $resume))
-
-
   ;; Host imports — stubbed by fink.js. Signatures must match
   ;; rust/interop.wat so runtime modules importing this contract see
-  ;; the same shapes regardless of target.
-  ;; host_channel_send(tag, ptr, len): JS reads `len` UTF-8 bytes
-  ;; starting at offset `ptr` in linear memory. Tag selects routing
-  ;; (1 = stdout/console.log, 2 = stderr/console.error). Differs from
-  ;; the rust-side import (which passes a $ByteArray ref) because JS
-  ;; can't read GC arrays directly — copying into linear memory first
-  ;; gives JS a TextDecoder-friendly window.
-  (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
-  (import "env" "host_read"         (func $host_read         (param (ref any) (ref any) (ref any))))
+  ;; the same shapes regardless of target. JS-side imports use
+  ;; linear-memory ptr+len conventions because JS can't read GC arrays
+  ;; directly; rust-side imports pass $ByteArray refs.
   ;; host_invoke_cont: dispatch a JS-side cont. The first arg is the
   ;; opaque externref the host originally handed to wrap_host_cont — JS
   ;; uses it directly (call it, look it up, whatever) to find the
   ;; callback. No wasm-side id table.
   (import "env" "host_invoke_cont"  (func $host_invoke_cont  (param externref (ref null any))))
 
+  ;; Host yields control to the userland scheduler when its queue is
+  ;; empty. JS host stashes the `resume` closure (rooted) and calls
+  ;; `_invoke_resume` later when ready to re-enter the scheduler.
+  (import "env" "host_yield" (func $host_yield (param (ref any)) (param (ref null any))))
 
-  ;; HostChannel — same shape as in rust/interop.wat. Concrete instances
-  ;; are never built in this scaffold (the stdio accessors trap).
-  (type $HostChannel (@pub) (sub final $Channel (struct
-    (field $messages  (mut (ref $List)))
-    (field $receivers (mut (ref $List)))
-    (field $tag       (ref any))
-  )))
+  ;; JS-side host imports: linear-memory bridging (JS can't read GC
+  ;; arrays directly).
+  ;; host_write(fd, ptr, len): JS reads bytes from linear memory.
+  (import "env" "host_write" (func $host_write
+    (param $fd (ref null any))
+    (param $ptr i32)
+    (param $len i32)))
+
+  ;; host_read_sync(fd, size, ptr): JS writes up to `size` bytes into
+  ;; linear memory at `ptr`, returns actual bytes-read.
+  (import "env" "host_read_sync" (func $host_read_sync
+    (param $fd (ref null any))
+    (param $size i32)
+    (param $ptr i32)
+    (result i32)))
+
+
+  (func $interop_invoke_resume (@pub) (export "env:invoke_resume")
+    (param $resume (ref any))
+    (param $value (ref any))
+    (param $ctx (ref null any))
+    (local $args (ref any))
+    (local.set $args (call $args_empty_inner))
+    (local.set $args (call $args_prepend_inner (local.get $value) (local.get $args)))
+    (return_call $apply_3_inner
+      (local.get $args)
+      (local.get $ctx)
+      (local.get $resume)))
+
+
+  (elem declare func $interop_yield_apply)
+
+  (func $interop_yield_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $resume (ref any))
+    (local.set $resume (ref.as_non_null
+      (call $args_head_inner (local.get $args))))
+    (return_call $host_yield (local.get $resume) (local.get $ctx)))
+
+  (global $interop_yield_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $interop_yield_apply)
+      (ref.null $Captures)))
+
+  (func $interop_yield (@pub) (@impl "interop.fnk:yield")
+    (result (ref any))
+    (global.get $interop_yield_closure))
+
+
+  (elem declare func $io_write_apply)
+
+  (func $io_write_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $msg (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $len i32)
+    (local $i i32)
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head_inner (local.get $args))))
+    (local.set $rest (call $args_tail_inner (local.get $args)))
+    (local.set $fd (call $args_head_inner (local.get $rest)))
+    (local.set $rest (call $args_tail_inner (local.get $rest)))
+    (local.set $msg (call $args_head_inner (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+    (local.set $len (array.len (local.get $bytes)))
+
+    ;; Copy GC bytes -> linear memory window at SCRATCH_BASE for JS.
+    (local.set $i (i32.const 0))
+    (block $done (loop $copy
+      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
+      (i32.store8
+        (i32.add (global.get $SCRATCH_BASE) (local.get $i))
+        (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $copy)))
+
+    (call $host_write
+      (local.get $fd)
+      (global.get $SCRATCH_BASE)
+      (local.get $len))
+
+    (local.set $k_args (call $args_empty_inner))
+    (local.set $k_args (call $args_prepend_inner (ref.i31 (i32.const 0)) (local.get $k_args)))
+    (return_call $apply_3_inner
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_write_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_write_apply)
+      (ref.null $Captures)))
+
+  (func $io_write (@pub) (@impl "interop.fnk:io_write")
+    (result (ref any))
+    (global.get $io_write_closure))
+
+
+  (elem declare func $io_read_apply)
+
+  (func $io_read_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $fd (ref null any))
+    (local $size_ref (ref null any))
+    (local $size_i32 i32)
+    (local $n_read i32)
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head_inner (local.get $args))))
+    (local.set $rest (call $args_tail_inner (local.get $args)))
+    (local.set $fd (call $args_head_inner (local.get $rest)))
+    (local.set $rest (call $args_tail_inner (local.get $rest)))
+    (local.set $size_ref (call $args_head_inner (local.get $rest)))
+
+    ;; Extract size as i32 from i31ref (assumes small int).
+    (local.set $size_i32
+      (i31.get_s (ref.cast (ref i31) (local.get $size_ref))))
+
+    ;; JS writes up to size_i32 bytes at SCRATCH_BASE, returns actual count.
+    (local.set $n_read
+      (call $host_read_sync
+        (local.get $fd)
+        (local.get $size_i32)
+        (global.get $SCRATCH_BASE)))
+
+    ;; TODO: wrap (SCRATCH_BASE, n_read) into a $Str — needs a
+    ;; linear-memory-to-Str helper that doesn't exist yet on JS side.
+    ;; For now tail-call with unit placeholder.
+    (local.set $k_args (call $args_empty_inner))
+    (local.set $k_args (call $args_prepend_inner (ref.i31 (i32.const 0)) (local.get $k_args)))
+    (return_call $apply_3_inner
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $io_read_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $io_read_apply)
+      (ref.null $Captures)))
+
+  (func $io_read (@pub) (@impl "interop.fnk:io_read")
+    (result (ref any))
+    (global.get $io_read_closure))
 
 
   ;; -- type_of -----------------------------------------------------------
@@ -410,7 +549,7 @@
 
   (type $ExternBox (sub final (struct (field externref))))
 
-  (elem declare func $host_cont_adapter $panic_apply $write_apply)
+  (elem declare func $host_cont_adapter $panic_apply)
 
   (func $host_cont_adapter (type $Fn3)
     (param $caps (ref null any))
@@ -450,67 +589,6 @@
         (struct.new $ExternBox (local.get $handle))))
   )
 
-  ;; -- channel_send (stdout/stderr) -------------------------------------
-  ;;
-  ;; Same shape as rust/interop.wat:channel_send: extract bytes from the
-  ;; $Str msg, read the channel tag (i31ref: 1 = stdout, 2 = stderr),
-  ;; hand to host, queue unit_thunk to resume sender, yield to scheduler.
-  ;;
-  ;; The host-side signature differs (linear-memory window vs. raw GC
-  ;; ByteArray) — see the host_channel_send import comment above. We
-  ;; copy the GC bytes into linear memory at offset 0 here so JS can
-  ;; decode via TextDecoder.
-
-  (func $channel_send (@pub)
-    (param $ctx (ref null any))
-    (param $ch (ref null any))
-    (param $msg (ref null any))
-    (param $cont (ref null any))
-
-    (local $tag i32)
-    (local $bytes (ref $ByteArray))
-    (local $len i32)
-    (local $i i32)
-
-    ;; Extract raw bytes from the $Str.
-    (local.set $bytes
-      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
-    (local.set $len (array.len (local.get $bytes)))
-
-    ;; Read channel tag (i31ref).
-    (local.set $tag
-      (i31.get_s (ref.cast (ref i31)
-        (struct.get $Channel $tag
-          (ref.cast (ref $Channel) (local.get $ch))))))
-
-    ;; Copy bytes into linear memory at offset 0 — same window the
-    ;; str_to_js helper uses; reused on every send. JS reads it
-    ;; synchronously inside host_channel_send before this call returns.
-    (local.set $i (i32.const 0))
-    (block $done (loop $copy
-      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
-      (i32.store8
-        (i32.add (global.get $SCRATCH_BASE) (local.get $i))
-        (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $copy)))
-
-    (call $host_channel_send (local.get $tag) (global.get $SCRATCH_BASE) (local.get $len))
-
-    ;; Sender continues with unit, under its captured ctx.
-    (call $queue_push
-      (call $make_unit_thunk
-        (local.get $ctx) (ref.as_non_null (local.get $cont))))
-
-    (return_call $resume))
-
-  (func $op_read (@pub)
-    (param $ctx (ref null any))
-    (param $stream (ref null any))
-    (param $size (ref null any))
-    (param $cont (ref null any))
-    unreachable)
-
   (func $panic (@pub)
     unreachable)
 
@@ -518,117 +596,6 @@
     (param $_caps (ref null any))
     (param $_ctx  (ref null any))
     (param $_args (ref null any))
-    unreachable)
-
-
-  ;; -- $HostChannel globals + accessors ----------------------------------
-  ;;
-  ;; Same lazy-init pattern as rust/interop.wat. Tags: 1 = stdout,
-  ;; 2 = stderr. stdin / read are still unimplemented for the JS side.
-
-  (global $stdout (mut (ref null $HostChannel)) (ref.null $HostChannel))
-  (global $stderr (mut (ref null $HostChannel)) (ref.null $HostChannel))
-
-  (func $_make_host_channel (param $tag i32) (result (ref $HostChannel))
-    (struct.new $HostChannel
-      (call $list_empty_inner)
-      (call $list_empty_inner)
-      (ref.i31 (local.get $tag))))
-
-  (func $get_stdout (@pub) (@impl "std/io.fnk:stdout") (result (ref any))
-    (if (ref.is_null (global.get $stdout))
-      (then (global.set $stdout (call $_make_host_channel (i32.const 1)))))
-    (ref.as_non_null (global.get $stdout)))
-
-  (func $get_stderr (@pub) (@impl "std/io.fnk:stderr") (result (ref any))
-    (if (ref.is_null (global.get $stderr))
-      (then (global.set $stderr (call $_make_host_channel (i32.const 2)))))
-    (ref.as_non_null (global.get $stderr)))
-
-  (func $get_stdin (@pub) (@impl "std/io.fnk:stdin") (result (ref any))
-    unreachable)
-
-
-  ;; -- write -----------------------------------------------------------
-  ;;
-  ;; `std/io.fnk:write` returns a $Closure applied as `write stream, val`.
-  ;; Sends `val` to the host stream tagged by `stream` and resumes the
-  ;; caller with `stream` (chainable: `s | write ?, 'a' | write ?, 'b'`).
-  ;;
-  ;; Same shape as channel_send but resumes with the stream (make_thunk)
-  ;; rather than unit (make_unit_thunk).
-
-  (func $channel_send_stream
-    (param $ctx (ref null any))
-    (param $ch (ref null any))
-    (param $msg (ref null any))
-    (param $cont (ref null any))
-
-    (local $tag i32)
-    (local $bytes (ref $ByteArray))
-    (local $len i32)
-    (local $i i32)
-
-    (local.set $bytes
-      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
-    (local.set $len (array.len (local.get $bytes)))
-
-    (local.set $tag
-      (i31.get_s (ref.cast (ref i31)
-        (struct.get $Channel $tag
-          (ref.cast (ref $Channel) (local.get $ch))))))
-
-    (local.set $i (i32.const 0))
-    (block $done (loop $copy
-      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
-      (i32.store8
-        (i32.add (global.get $SCRATCH_BASE) (local.get $i))
-        (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $copy)))
-
-    (call $host_channel_send (local.get $tag) (global.get $SCRATCH_BASE) (local.get $len))
-
-    (call $queue_push
-      (call $make_thunk
-        (local.get $ctx)
-        (ref.as_non_null (local.get $cont))
-        (ref.as_non_null (local.get $ch))))
-
-    (return_call $resume))
-
-  (func $write_apply (type $Fn3)
-    (param $_caps (ref null any))
-    (param $ctx (ref null any))
-    (param $args (ref null any))
-
-    (local $cursor (ref null any))
-    (local $cont (ref null any))
-    (local $stream (ref null any))
-    (local $value (ref null any))
-
-    (local.set $cursor (local.get $args))
-    (local.set $cont (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $stream (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $value (call $list_head_any (local.get $cursor)))
-
-    (return_call $channel_send_stream
-      (local.get $ctx)
-      (local.get $stream)
-      (local.get $value)
-      (local.get $cont)))
-
-  (global $write_closure (ref $Closure)
-    (struct.new $Closure
-      (ref.func $write_apply)
-      (ref.null $Captures)))
-
-  (func $get_write (@pub) (@impl "std/io.fnk:write") (result (ref any))
-    (global.get $write_closure))
-
-  (func $get_read (@pub) (@impl "std/io.fnk:read") (result (ref any))
     unreachable)
 
 )

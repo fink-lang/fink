@@ -238,21 +238,22 @@
   ;; -- Thunks ----------------------------------------------------------
   ;;
   ;; A thunk is a zero-arg $Closure that, when applied, calls a saved
-  ;; continuation with a saved value: thunk() = cont(value). Used by the
-  ;; async scheduler (queued tasks) and by channel/host-cont resumption.
+  ;; continuation with a saved value: thunk() = cont(value). Used by
+  ;; `suspend` to hand the current continuation to userland as a
+  ;; resumable value, and by host-cont resumption (`invoke_resume`).
 
   ;; Declarative element segment — required by WASM spec for ref.func.
   (elem declare func $_thunk_fn)
 
   ;; Thunk body. Captures: [cont, value, ctx]. When applied: cont(value)
-  ;; resumes under the *captured* ctx, not whatever ctx the scheduler
-  ;; hands in via $_sched_ctx. The captured ctx is what was active when
-  ;; this thunk was built (e.g. when the sender yielded a value into a
-  ;; channel). Using the captured ctx is how ctx survives the async/
-  ;; channel suspension boundary.
+  ;; resumes under the *captured* ctx, not whatever ctx the caller
+  ;; hands in via $_caller_ctx. The captured ctx is what was active
+  ;; when this thunk was built (typically at the `suspend` site that
+  ;; produced it). Using the captured ctx is how ctx survives a
+  ;; suspend/resume boundary.
   (func $_thunk_fn (type $Fn3)
       (param $caps (ref null any))
-      (param $_sched_ctx (ref null any))
+      (param $_caller_ctx (ref null any))
       (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
@@ -268,9 +269,9 @@
       (local.get $cont))
   )
 
-  ;; Build a thunk that captures the caller's ctx. When the scheduler
-  ;; later applies this thunk, the cont resumes under THIS ctx — not the
-  ;; scheduler's. That is the whole point of the extra capture slot.
+  ;; Build a thunk that captures the caller's ctx. When userland later
+  ;; applies this thunk, the cont resumes under THIS ctx — not the
+  ;; resumer's. That is the whole point of the extra capture slot.
   (func $make_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
     (struct.new $Closure
       (ref.func $_thunk_fn)
@@ -325,7 +326,7 @@
       (ref.func $set_ctx_apply)
       (ref.null $Captures)))
 
-  (func $set_ctx (@pub) (@impl "std/effects.fnk:set_ctx") (result (ref any))
+  (func $set_ctx (@pub) (result (ref any))
     (global.get $set_ctx_closure))
 
 
@@ -363,7 +364,7 @@
       (ref.func $get_ctx_apply)
       (ref.null $Captures)))
 
-  (func $get_ctx (@pub) (@impl "std/effects.fnk:get_ctx") (result (ref any))
+  (func $get_ctx (@pub) (result (ref any))
     (global.get $get_ctx_closure))
 
 
@@ -471,6 +472,6 @@
       (ref.func $suspend_apply)
       (ref.null $Captures)))
 
-  (func $suspend (@pub) (@impl "std/effects.fnk:suspend") (result (ref any))
+  (func $suspend (@pub) (result (ref any))
     (global.get $suspend_closure))
 )

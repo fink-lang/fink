@@ -37,10 +37,6 @@ unified lifting tests
   ·seq_prepend
   ·rec_put
   ·rec_pop
-  ·spawn
-  ·await
-  ·channel
-  ·receive
 } = import '@fink/compile/builtins'
 
 
@@ -1051,42 +1047,4 @@ test 'multiple top-level fns with bound call results', fn:
 
 
 
-test 'spawn with closure over channel', fn:
-  expect lift ƒink:
-    ch = channel 0
-    fut = spawn fn:
-      receive ch
-    77 >> ch
-    result = await fut
-    result
-
-  | equals ƒink:
-    ·ƒink_module fn ·ƒctx_58, ·ƒret_7:
-      ·v_73 = fn {·ch_74}, [·ƒctx_60, ·ƒret_14]:
-        ·receive ·ch_74, ·ƒret_14
-      ·v_120 = fn {·ƒret_121, ·v_123}, [·v_30]:
-        ·result_2 = ·v_30
-        ·ƒpub ·result_2
-        ·ƒret_121 ·ƒctx_123, ·result_2
-      ·v_102 = fn {·fut_103, ·ƒret_105, ·v_107}, [·v_25]:
-        ·v_27 = ·v_25
-        ·v_127 = ·closure ·v_120, ·ƒret_105, ·ƒctx_107
-        ·await ·fut_103, ·v_127
-      ·v_85 = fn {·ch_86, ·ƒret_88, ·v_90}, [·v_21]:
-        ·fut_1 = ·v_21
-        ·ƒpub ·fut_1
-        ·v_111 = ·closure ·v_102, ·fut_1, ·ƒret_88, ·ƒctx_90
-        ·op_shr (i8 77), ·ch_86, ·v_111
-      ·v_62 = fn {·ƒret_63, ·v_65}, [·v_10]:
-        ·ch_0 = ·v_10
-        ·ƒpub ·ch_0
-        ·v_76 = ·closure ·v_73, ·ch_0
-        ·v_94 = ·closure ·v_85, ·ch_0, ·ƒret_63, ·ƒctx_65
-        ·spawn ·v_76, ·v_94
-      ·ƒret_80 = fn [·v_69]:
-        ·channel (i8 0), ·v_69
-      ·closure ·v_62, ·ƒret_7, ·ƒctx_58, ·ƒret_80
-    # sm:8AEAAQBOAAEATiQAGAASAAIABgE2EAABABAOAAQBABAGAAAAAgE1Ag4AAAAGAAAAAgAUAAQAFAAAAAIAAgAKAUIKAAEAChQBEAIOAAQAFAAGASoJAAEACRAABAEACQYAAAACABYABAAOAAAABgAAAAIADAAAAAIAAgAKARESAAEABhYABAESCQwACgERBgABAAYQAQAGFAAKASYGAAEABhgAFgAEAQAGFAAGATcIAAEACBAABAEACAYAAAACATkDEgAEABYABAAOAAAABgAAAAIADAAAAAIAAgAKAToIAAEACA4ABAEACAwACgEkCQAAEAAEAQAJAAEACRQBAAkOAAQBFAYWAAQBjwFOFgAKAXwJAAEACRABDAMSAAQADgAGAV0WAAEAFg4ABAEAFgYAAAACASkCDgAEABQABAAMAAAABgAAAAIADAAAAAIAAgAKAR4cAAEAAxAABAEMFgwACgELAwABAAMQAQADDgAKAToIAAAQAAQBAAgAAQAIFAEACA4ABAE5Aw4ABAFyBhQABAGPAU4UAAoBWAgAAQAIFAEAAgABAAIGAQACBgAEAQwCDgAEAA4ABgFZCQABAAkOAAQBAAkGAAAAAgAUAAQADAAAAAYAAAACAAwAAAACAAIACgEJDgABAAIOAAQBCgkMAAoBCQIAAQACEAEAAgwACgE2EAAADgAEAQAQAAEAEBQBABAMAAQBNQIMAAoBKhYAAA4ABAEAFgABABYUAQAWDAAEASkCDAAEAZABBhQABAGPAU4UAAoBKhYAAQAWEAEMEAwABAAMAAYBKwkAAQAJFgAEAQAJBgAAAAIADAAAAAIAAgAKAQAJAAEACRYBEAEAAQABBgEAAQQABAAMAAYBDwkAAQAJFAEACQwABAGGAQYSAAQBjwFOFAAEAA
-
-AA
 

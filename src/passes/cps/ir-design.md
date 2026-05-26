@@ -93,9 +93,6 @@ BuiltIn                         -- resolved statically, not by scope lookup
   IsSeqLike, IsRecLike,
   SeqPop, RecPop, Empty         -- pattern-match primitives
   StrMatch                      -- string-template pattern matching
-  Yield, Spawn, Await           -- scheduling
-  Channel, Receive              -- channels
-  Read                          -- host IO
   Pub, Import, FinkModule       -- module-level markers
   Panic                         -- irrefutable-pattern failure sentinel
   Export                        -- legacy; see ir.rs
@@ -224,9 +221,9 @@ All three are output conventions — none are part of the analysis IR:
 - **Env** — runtime concept; heap record a lifted closure carries; synthesised during lifting.
 - **State** — effect/mutation threading; synthesised by the pretty-printer and codegen.
 
-### Yield as a first-class primitive
+### Suspension is a runtime primitive
 
-`Yield` is a core `BuiltIn`, not sugar. It's the foundation for async IO (implicit futures via yield to the scheduler), generators / producers / transducers, channels, and tasks (spawn, join, race, cancel reduce to yield + scheduler). Later passes can color the continuation graph from `Yield` nodes — every continuation reachable from a `Yield` is "suspendable".
+Suspension and resume live in the runtime (`rt/apply.wat`'s `$suspend` / `$set_ctx` / `$get_ctx`), not in the CPS IR. Scheduling, async IO, channels, generators, and tasks are userland constructs built on top of those substrate primitives (see `std/effects.fnk`, `std/tasks.fnk`). The CPS IR is unaware of suspension — every continuation is potentially suspendable because `suspend` hands the current continuation to userland from any call site.
 
 ---
 
