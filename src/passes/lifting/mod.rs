@@ -60,6 +60,12 @@ struct Alloc {
   /// closure capture and end up dangling after the sibling itself is
   /// re-hoisted to a fresh id.
   letfn_names: std::collections::HashSet<CpsId>,
+  /// Stack of LetRec sibling-name sets — pushed on entry to a LetRec
+  /// defn body, popped on exit. The top of the stack is consulted by
+  /// extract_from_body's capture analysis so refs to sibling defns
+  /// from within a defn body get hoisted as captures rather than left
+  /// as unbound free refs at codegen.
+  letrec_sibling_binds: Vec<Vec<(CpsId, Bind)>>,
 }
 
 impl Alloc {
@@ -69,7 +75,7 @@ impl Alloc {
     param_info: PropGraph<CpsId, Option<ParamInfo>>,
     letfn_names: std::collections::HashSet<CpsId>,
   ) -> Self {
-    Alloc { origin, synth_alias, param_info, letfn_names }
+    Alloc { origin, synth_alias, param_info, letfn_names, letrec_sibling_binds: Vec::new() }
   }
 
   fn next(&mut self, ast_origin: Option<AstId>) -> CpsId {
@@ -270,12 +276,15 @@ fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
     ExprKind::LetRec { group, cont, .. } => {
       for d in group {
         match d {
-          crate::passes::cps::ir::LetRecDefn::Fn { name, body, .. } => {
-            out.insert(name.id);
+          crate::passes::cps::ir::LetRecDefn::Fn { body, .. } => {
+            // Do NOT add the defn name to letfn_names — LetRec defn names
+            // are closure VALUES (bound to a local at the LetRec site),
+            // not static fn refs. Adding them would cause capture analysis
+            // to exclude them, leaving sibling refs unbound at codegen.
             walk_letfn_names(body, out);
           }
-          crate::passes::cps::ir::LetRecDefn::Val { name, .. } => {
-            out.insert(name.id);
+          crate::passes::cps::ir::LetRecDefn::Val { .. } => {
+            // Same reasoning — LetRec Val defns aren't static fn refs.
           }
         }
       }
@@ -700,13 +709,22 @@ fn lift_expr<'src>(
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
     // LetRec from CPS-0: recurse into each defn body, treating defn params
-    // as the body's outer_params. This lifts nested LetFns inside the body
-    // (hoisting them as siblings WITHIN the body spine, not out to parent).
+    // as the body's outer_params. Push siblings onto the alloc's
+    // letrec_sibling_binds stack so capture analysis in nested LetFns picks
+    // them up as captures.
     ExprKind::LetRec { group, no_self_edge, cont } => {
       let cont = lift_cont(cont, ast, alloc, outer_params);
+      let sibling_binds: Vec<(CpsId, Bind)> = group.iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, .. } => (name.id, name.kind),
+        crate::passes::cps::ir::LetRecDefn::Val { name, .. } => (name.id, name.kind),
+      }).collect();
       let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
         crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
+          let mut others = sibling_binds.clone();
+          others.retain(|(id, _)| *id != name.id);
+          alloc.letrec_sibling_binds.push(others);
           let new_body = lift_expr(*body, ast, alloc, &params);
+          alloc.letrec_sibling_binds.pop();
           crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
         }
         crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
@@ -780,6 +798,12 @@ fn extract_from_body<'src>(
       extended_binds.push((name.id, name.kind));
       if let Some((uid, ukind)) = self_bind_id {
         extended_binds.push((uid, ukind));
+      }
+      // LetRec siblings: when this LetFn is inside a LetRec defn body, the
+      // sibling defn names are mutually in scope and must be detected as
+      // captures, not left as unbound free refs.
+      if let Some(siblings) = alloc.letrec_sibling_binds.last() {
+        extended_binds.extend(siblings.iter().copied());
       }
       let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, &extended_binds, alloc)
         .into_iter()
@@ -962,7 +986,13 @@ fn extract_from_body<'src>(
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
           // Filter out LetFn-name refs — those are resolved statically by lower.
-          let cap_entries: Vec<_> = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc)
+          // LetRec siblings appended to scope_binds for the same reason as the
+          // LetFn arm above.
+          let mut scope_binds_extended: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+          if let Some(siblings) = alloc.letrec_sibling_binds.last() {
+            scope_binds_extended.extend(siblings.iter().copied());
+          }
+          let cap_entries: Vec<_> = compute_captures_for_lift(&body, &cont_params, parent_params, &scope_binds_extended, alloc)
             .into_iter()
             .filter(|(cap_id, _)| !alloc.letfn_names.contains(cap_id))
             .collect();
@@ -1125,11 +1155,9 @@ fn extract_from_body<'src>(
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
     // LetRec inside extract_from_body: don't hoist defns themselves (the
-    // group's mutual scope is load-bearing), but DO apply lift_expr to each
-    // defn body so nested LetFns within them are normalized. Sibling names
-    // are folded into the defn body's outer_params so capture analysis
-    // (which checks refs against outer_params + scope_binds) picks up
-    // sibling refs as captures.
+    // group's mutual scope is load-bearing). Push siblings onto the alloc's
+    // letrec_sibling_binds stack so capture analysis in nested LetFns picks
+    // them up as captures.
     ExprKind::LetRec { group, no_self_edge, cont } => {
       let cont = match cont {
         Cont::Ref(_) => cont,
@@ -1138,26 +1166,18 @@ fn extract_from_body<'src>(
           body: Box::new(extract_from_body(*body, parent_params, scope_binds, _ast, alloc, hoisted)),
         },
       };
-      // Build fake "params" for sibling names — they're not actual params of
-      // the defn but they ARE in scope (mutual rec). Capture analysis treats
-      // them like params for the purpose of free-var detection.
-      let sibling_params: Vec<Param> = group.iter().map(|d| match d {
-        crate::passes::cps::ir::LetRecDefn::Fn { name, .. } => Param::Name(name.clone()),
-        crate::passes::cps::ir::LetRecDefn::Val { name, .. } => Param::Name(name.clone()),
+      let sibling_binds: Vec<(CpsId, Bind)> = group.iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, .. } => (name.id, name.kind),
+        crate::passes::cps::ir::LetRecDefn::Val { name, .. } => (name.id, name.kind),
       }).collect();
       let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
         crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
-          // outer_params for the body: defn's own params + sibling names.
-          // Sibling refs in nested LetFns get treated as captures.
-          let mut body_outer = params.clone();
-          for sp in &sibling_params {
-            // Skip our own name (no self-capture via this path; existing
-            // self-rec alias machinery handles that).
-            let sp_id = match sp { Param::Name(b) | Param::Spread(b) => b.id };
-            if sp_id == name.id { continue; }
-            body_outer.push(sp.clone());
-          }
-          let new_body = lift_expr(*body, _ast, alloc, &body_outer);
+          // Push siblings minus self so the body's nested fns capture them.
+          let mut others = sibling_binds.clone();
+          others.retain(|(id, _)| *id != name.id);
+          alloc.letrec_sibling_binds.push(others);
+          let new_body = lift_expr(*body, _ast, alloc, &params);
+          alloc.letrec_sibling_binds.pop();
           crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
         }
         crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
