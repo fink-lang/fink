@@ -19,6 +19,7 @@
 //! `Ast` must uphold the arena contract in `ast/arena-contract.md`.
 
 pub mod ast;
+pub mod closure_convert;
 pub mod cps;
 pub mod debug_marks;
 pub mod lifting;
