@@ -27,8 +27,12 @@ clean:
 build:
 	cargo build
 
+# RUST_MIN_STACK=32MB: the lifting pass can recurse deeply on realistic
+# userland code (nested fns + match arms in std/tasks.fnk etc.). Default
+# 8MB overflows. Tracked as a real perf bug to fix; until then, raise the
+# stack for all test runs so CI matches local.
 test:
-	cargo test
+	RUST_MIN_STACK=33554432 cargo test
 
 # BLESS must run single-threaded (-j1) — the proc macro rewrites the .fnk
 # test file in place, so concurrent test threads race on the same file.
@@ -36,7 +40,7 @@ test:
 # picks up any .fnk fixture changes (proc macros don't track those as inputs).
 bless:
 	@touch crates/test-macros/src/lib.rs
-	BLESS=1 cargo test -j1
+	BLESS=1 RUST_MIN_STACK=33554432 cargo test -j1
 
 test-full: test
 	cargo clippy -- -D warnings
