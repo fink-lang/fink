@@ -98,13 +98,8 @@ pub fn lift<'src>(
   desugared: &'src DesugaredAst<'src>,
 ) -> LiftedCps {
   let threaded = cps::thread_ctx::thread_ctx(cps.result);
-  let result = lifting::lift(threaded, &desugared.ast);
-  // NOTE: closure_convert::convert() is wired in passes/closure_convert/
-  // but not yet in the default pipeline — its output (Cap params + FnClosure
-  // App emission) re-processes capturing fns and produces a different IR
-  // shape than lifting alone. Switching the pipeline requires re-blessing
-  // many lifting snapshot tests. Deferred until the lifting -> closure_convert
-  // swap can land as a single coordinated PR.
+  let lifted = lifting::lift(threaded, &desugared.ast);
+  let result = closure_convert::convert(lifted, &desugared.ast);
   LiftedCps { result }
 }
 

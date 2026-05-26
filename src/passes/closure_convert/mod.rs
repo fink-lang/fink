@@ -379,16 +379,27 @@ fn walk_cont_for_discovery(
 // LetFn name collection
 // ---------------------------------------------------------------------------
 
-/// Walk an Expr tree and collect every LetFn / LetRecDefn::Fn name CpsId.
-/// These names are RESOLVED STATICALLY by lower.rs's fn_syms machinery —
+/// Walk an Expr tree and collect every LetFn / LetRecDefn::Fn name CpsId
+/// PLUS user-bind aliases (LetVal { name, val: Ref(letfn_name_id) }).
+/// These names all resolve STATICALLY by lower.rs's fn_syms machinery —
 /// refs to them must not become closure captures.
+///
+/// CPS-0 emits LetFn with a synth name, then a sibling LetVal that aliases
+/// a user-friendly name to the synth fn-id. Both names refer to the same
+/// fn and must be excluded from capture analysis.
 pub fn collect_letfn_names(
   expr: &super::cps::ir::Expr,
   out: &mut std::collections::HashSet<super::cps::ir::CpsId>,
 ) {
-  use super::cps::ir::{Arg, Cont, ExprKind, LetRecDefn};
+  use super::cps::ir::{Arg, Cont, ExprKind, LetRecDefn, Ref, ValKind};
   match &expr.kind {
-    ExprKind::LetVal { cont, .. } => {
+    ExprKind::LetVal { name, val, cont } => {
+      // If this LetVal aliases a known LetFn name, treat its name as a LetFn name too.
+      if let ValKind::Ref(Ref::Synth(target_id)) = val.kind
+        && out.contains(&target_id)
+      {
+        out.insert(name.id);
+      }
       if let Cont::Expr { body, .. } = cont { collect_letfn_names(body, out); }
     }
     ExprKind::LetFn { name, fn_body, cont, .. } => {
@@ -672,12 +683,25 @@ pub fn convert_expr(
       // Compute captures for this fn. Exclude LetFn names — those resolve
       // statically via lower.rs's fn_syms; threading them as captures
       // produces spurious cap params.
+      //
+      // Skip fns lifting has already processed. Detected by ANY param
+      // having a ParamInfo entry (lifting's classify_untagged_params tags
+      // every param). Re-processing produces duplicate FnClosure wrappers
+      // and spurious captures.
+      let already_converted = params.iter().any(|p| {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        state.param_info.try_get(b.id).cloned().flatten().is_some()
+      });
       let body_free = free_vars(&fn_body);
-      let captures: Vec<super::cps::ir::CpsId> = body_free.iter()
-        .filter(|id| scope.contains(id))
-        .filter(|id| !state.letfn_names.contains(id))
-        .copied()
-        .collect();
+      let captures: Vec<super::cps::ir::CpsId> = if already_converted {
+        Vec::new()
+      } else {
+        body_free.iter()
+          .filter(|id| scope.contains(id))
+          .filter(|id| !state.letfn_names.contains(id))
+          .copied()
+          .collect()
+      };
       // Rewrite the fn with cap params + body ref rewriting if captures non-empty.
       let (new_params, new_body, _cap_ids) = if captures.is_empty() {
         (params, *fn_body, Vec::new())
@@ -753,11 +777,21 @@ pub fn convert_expr(
           // We DO want sibling refs as captures (that's the whole point of
           // LetRec). Don't filter out via letfn_names — sibling defn names
           // are NOT in letfn_names (only LetFn names are).
-          let captures: Vec<super::cps::ir::CpsId> = body_free.iter()
-            .filter(|id| scope.contains(id))
-            .filter(|id| !state.letfn_names.contains(id))
-            .copied()
-            .collect();
+          //
+          // Skip if any param is already tagged by lifting (already-processed).
+          let already_converted = params.iter().any(|p| {
+            let b = match p { Param::Name(b) | Param::Spread(b) => b };
+            state.param_info.try_get(b.id).cloned().flatten().is_some()
+          });
+          let captures: Vec<super::cps::ir::CpsId> = if already_converted {
+            Vec::new()
+          } else {
+            body_free.iter()
+              .filter(|id| scope.contains(id))
+              .filter(|id| !state.letfn_names.contains(id))
+              .copied()
+              .collect()
+          };
           let (new_params, new_body, _cap_ids) = if captures.is_empty() {
             (params, *body, Vec::new())
           } else {
