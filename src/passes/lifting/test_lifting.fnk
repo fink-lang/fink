@@ -37,10 +37,6 @@ unified lifting tests
   ·seq_prepend
   ·rec_put
   ·rec_pop
-  ·spawn
-  ·await
-  ·channel
-  ·receive
 } = import '@fink/compile/builtins'
 
 

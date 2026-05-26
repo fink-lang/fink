@@ -4,14 +4,12 @@
 ;;   * `wrap_host_cont(id) -> anyref` — opaque WASM-side handle for a
 ;;     host-registered callback. Fired via `_apply`, dispatches to
 ;;     `env.host_invoke_cont(id, args)`.
-;;   * `interop_channel_send` / `interop_op_read` /
-;;     `interop_panic` — host-bridge ops invoked by the runtime
-;;     protocols (rt/protocols.wat) when a value is a $HostChannel
-;;     or a panic is raised.
-;;
-;; Owns $HostChannel — a subtype of $Channel for host-managed IO.
-;; send/recv on host channels delegate to host imports instead of using
-;; the internal message queue.
+;;   * `interop_yield` / `io_write` / `io_read` — Fn3-shaped ƒink
+;;     primitives that bridge userland calls to host imports
+;;     (host_yield, host_write, host_read_sync).
+;;   * `invoke_resume(resume, value, ctx)` — host-callable export the
+;;     driver loop uses to fire a yielded continuation.
+;;   * `panic` — delegates to host_panic, then traps.
 ;;
 ;; Orchestration of `main` (build args list, apply, drain scheduler,
 ;; exit) is the runner's responsibility, not this file's. There is no

@@ -3,8 +3,8 @@
 ;; First slice: link the runtime against a JS-target interop module
 ;; without yet implementing host-bridge behaviour. Every contract-side
 ;; function is `unreachable`; calling them traps the instance. The
-;; runtime contract surface (HostChannel type, host imports, the named
-;; @impl bindings) is preserved so the linker and validator are happy.
+;; runtime contract surface (host imports, the named @impl bindings) is
+;; preserved so the linker and validator are happy.
 ;;
 ;; Real bodies land in subsequent slices per
 ;; .brain/.scratch/plans/js-interop-plan.md.
@@ -105,7 +105,6 @@
   ;; the rust-side import (which passes a $ByteArray ref) because JS
   ;; can't read GC arrays directly — copying into linear memory first
   ;; gives JS a TextDecoder-friendly window.
-  (import "env" "host_read"         (func $host_read         (param (ref any) (ref any) (ref any))))
   ;; host_invoke_cont: dispatch a JS-side cont. The first arg is the
   ;; opaque externref the host originally handed to wrap_host_cont — JS
   ;; uses it directly (call it, look it up, whatever) to find the
@@ -117,14 +116,21 @@
   ;; `_invoke_resume` later when ready to re-enter the scheduler.
   (import "env" "host_yield" (func $host_yield (param (ref any)) (param (ref null any))))
 
+  ;; JS-side host imports: linear-memory bridging (JS can't read GC
+  ;; arrays directly).
+  ;; host_write(fd, ptr, len): JS reads bytes from linear memory.
   (import "env" "host_write" (func $host_write
     (param $fd (ref null any))
-    (param $bytes (ref $ByteArray))))
+    (param $ptr i32)
+    (param $len i32)))
 
+  ;; host_read_sync(fd, size, ptr): JS writes up to `size` bytes into
+  ;; linear memory at `ptr`, returns actual bytes-read.
   (import "env" "host_read_sync" (func $host_read_sync
     (param $fd (ref null any))
-    (param $size (ref null any))
-    (result (ref $ByteArray))))
+    (param $size i32)
+    (param $ptr i32)
+    (result i32)))
 
 
   (func $interop_invoke_resume (@pub) (export "env:invoke_resume")
@@ -173,6 +179,8 @@
     (local $fd (ref null any))
     (local $msg (ref null any))
     (local $bytes (ref $ByteArray))
+    (local $len i32)
+    (local $i i32)
     (local $rest (ref null any))
     (local $k_args (ref any))
 
@@ -184,10 +192,22 @@
 
     (local.set $bytes
       (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+    (local.set $len (array.len (local.get $bytes)))
+
+    ;; Copy GC bytes -> linear memory window at SCRATCH_BASE for JS.
+    (local.set $i (i32.const 0))
+    (block $done (loop $copy
+      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
+      (i32.store8
+        (i32.add (global.get $SCRATCH_BASE) (local.get $i))
+        (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $copy)))
 
     (call $host_write
       (local.get $fd)
-      (local.get $bytes))
+      (global.get $SCRATCH_BASE)
+      (local.get $len))
 
     (local.set $k_args (call $args_empty_inner))
     (local.set $k_args (call $args_prepend_inner (ref.i31 (i32.const 0)) (local.get $k_args)))
@@ -215,9 +235,9 @@
 
     (local $k_caller (ref any))
     (local $fd (ref null any))
-    (local $size (ref null any))
-    (local $bytes (ref $ByteArray))
-    (local $str (ref any))
+    (local $size_ref (ref null any))
+    (local $size_i32 i32)
+    (local $n_read i32)
     (local $rest (ref null any))
     (local $k_args (ref any))
 
@@ -225,14 +245,24 @@
     (local.set $rest (call $args_tail_inner (local.get $args)))
     (local.set $fd (call $args_head_inner (local.get $rest)))
     (local.set $rest (call $args_tail_inner (local.get $rest)))
-    (local.set $size (call $args_head_inner (local.get $rest)))
+    (local.set $size_ref (call $args_head_inner (local.get $rest)))
 
-    (local.set $bytes
-      (call $host_read_sync (local.get $fd) (local.get $size)))
-    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+    ;; Extract size as i32 from i31ref (assumes small int).
+    (local.set $size_i32
+      (i31.get_s (ref.cast (ref i31) (local.get $size_ref))))
 
+    ;; JS writes up to size_i32 bytes at SCRATCH_BASE, returns actual count.
+    (local.set $n_read
+      (call $host_read_sync
+        (local.get $fd)
+        (local.get $size_i32)
+        (global.get $SCRATCH_BASE)))
+
+    ;; TODO: wrap (SCRATCH_BASE, n_read) into a $Str — needs a
+    ;; linear-memory-to-Str helper that doesn't exist yet on JS side.
+    ;; For now tail-call with unit placeholder.
     (local.set $k_args (call $args_empty_inner))
-    (local.set $k_args (call $args_prepend_inner (local.get $str) (local.get $k_args)))
+    (local.set $k_args (call $args_prepend_inner (ref.i31 (i32.const 0)) (local.get $k_args)))
     (return_call $apply_3_inner
       (local.get $k_args)
       (local.get $ctx)
