@@ -534,6 +534,156 @@ pub fn rewrite_fn_for_captures(
 }
 
 // ---------------------------------------------------------------------------
+// Top-level driver
+// ---------------------------------------------------------------------------
+
+/// Walk the CPS tree top-down, computing captures and rewriting every fn
+/// (LetFn and LetRecDefn::Fn) that has any captures from outer scope.
+///
+/// `initial_scope` is the set of CpsIds visible at the root of `expr`
+/// (typically empty at module root, or the module's exports for fragments).
+///
+/// Output: an Expr with:
+/// - Every capturing fn rewritten: Cap-tagged params prepended, body refs
+///   rewritten to use the new cap-param ids.
+/// - Non-capturing fns unchanged.
+/// - LetRec wrappers preserved.
+/// - state.synth_alias / state.param_info updated accordingly.
+///
+/// NOT YET DONE: FnClosure construction sites at the LetFn cont chain.
+/// Today's lifting produces those via extract_from_body. closure_convert
+/// will emit them in a follow-up step. Without that emission, the resulting
+/// IR has cap params on fn defs but no closure construction at use sites
+/// — codegen would build no-capture closures and the body's cap-param
+/// reads would be undefined. End-to-end pipeline switch is a separate
+/// step from this driver.
+pub fn convert_expr(
+  state: &mut ConvertState,
+  scope: &mut std::collections::HashSet<super::cps::ir::CpsId>,
+  expr: super::cps::ir::Expr,
+) -> super::cps::ir::Expr {
+  use super::cps::ir::{Arg, Callable, Cont, Expr, ExprKind, LetRecDefn, Param};
+  let Expr { id, kind } = expr;
+  let new_kind = match kind {
+    ExprKind::LetVal { name, val, cont } => {
+      let added = scope.insert(name.id);
+      let cont = convert_cont(state, scope, cont);
+      if added { scope.remove(&name.id); }
+      ExprKind::LetVal { name, val, cont }
+    }
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      // Compute captures for this fn.
+      let body_free = free_vars(&fn_body);
+      let captures: Vec<super::cps::ir::CpsId> = body_free.iter()
+        .filter(|id| scope.contains(id))
+        .copied()
+        .collect();
+      // Rewrite the fn with cap params + body ref rewriting if captures non-empty.
+      let (new_params, new_body, _cap_ids) = if captures.is_empty() {
+        (params, *fn_body, Vec::new())
+      } else {
+        rewrite_fn_for_captures(state, &captures, params, *fn_body)
+      };
+      // Descend into the body with its own scope.
+      let mut body_scope = scope.clone();
+      for p in &new_params {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        body_scope.insert(b.id);
+      }
+      let new_body = convert_expr(state, &mut body_scope, new_body);
+      // The fn's name is in scope for the cont.
+      let added = scope.insert(name.id);
+      let cont = convert_cont(state, scope, cont);
+      if added { scope.remove(&name.id); }
+      ExprKind::LetFn {
+        name,
+        params: new_params,
+        fn_kind,
+        fn_body: Box::new(new_body),
+        cont,
+      }
+    }
+    ExprKind::App { func, args } => {
+      let new_args: Vec<Arg> = args.into_iter().map(|a| match a {
+        Arg::Cont(c) => Arg::Cont(convert_cont(state, scope, c)),
+        Arg::Expr(e) => Arg::Expr(Box::new(convert_expr(state, scope, *e))),
+        other => other,
+      }).collect();
+      let _ = Callable::BuiltIn;  // silence unused-variant warning
+      ExprKind::App { func, args: new_args }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let then = convert_expr(state, scope, *then);
+      let else_ = convert_expr(state, scope, *else_);
+      ExprKind::If {
+        cond,
+        then: Box::new(then),
+        else_: Box::new(else_),
+      }
+    }
+    ExprKind::LetRec { group, no_self_edge, cont } => {
+      // All sibling names are mutually in scope of all defn bodies + cont.
+      let sibling_ids: Vec<super::cps::ir::CpsId> = group.iter().map(|d| match d {
+        LetRecDefn::Fn { name, .. } => name.id,
+        LetRecDefn::Val { name, .. } => name.id,
+      }).collect();
+      for id in &sibling_ids { scope.insert(*id); }
+      // Process each defn.
+      let new_group: Vec<LetRecDefn> = group.into_iter().map(|d| match d {
+        LetRecDefn::Fn { name, params, fn_kind, body } => {
+          let body_free = free_vars(&body);
+          let captures: Vec<super::cps::ir::CpsId> = body_free.iter()
+            .filter(|id| scope.contains(id))
+            .copied()
+            .collect();
+          let (new_params, new_body, _cap_ids) = if captures.is_empty() {
+            (params, *body, Vec::new())
+          } else {
+            rewrite_fn_for_captures(state, &captures, params, *body)
+          };
+          // Descend into the rewritten body with its scope.
+          let mut body_scope = scope.clone();
+          for p in &new_params {
+            let b = match p { Param::Name(b) | Param::Spread(b) => b };
+            body_scope.insert(b.id);
+          }
+          let new_body = convert_expr(state, &mut body_scope, new_body);
+          LetRecDefn::Fn { name, params: new_params, fn_kind, body: Box::new(new_body) }
+        }
+        LetRecDefn::Val { name, val } => {
+          LetRecDefn::Val { name, val }
+        }
+      }).collect();
+      let cont = convert_cont(state, scope, cont);
+      for id in &sibling_ids { scope.remove(id); }
+      let _ = Cont::Ref;
+      ExprKind::LetRec { group: new_group, no_self_edge, cont }
+    }
+  };
+  Expr { id, kind: new_kind }
+}
+
+fn convert_cont(
+  state: &mut ConvertState,
+  scope: &mut std::collections::HashSet<super::cps::ir::CpsId>,
+  cont: super::cps::ir::Cont,
+) -> super::cps::ir::Cont {
+  use super::cps::ir::Cont;
+  match cont {
+    Cont::Ref(id) => Cont::Ref(id),
+    Cont::Expr { args, body } => {
+      let mut added: Vec<super::cps::ir::CpsId> = Vec::with_capacity(args.len());
+      for a in &args {
+        if scope.insert(a.id) { added.push(a.id); }
+      }
+      let new_body = convert_expr(state, scope, *body);
+      for id in &added { scope.remove(id); }
+      Cont::Expr { args, body: Box::new(new_body) }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -780,6 +930,89 @@ mod tests {
     };
     assert!(refs.contains(&cap_id), "body should ref cap_id={:?}, refs={:?}", cap_id, refs);
     assert!(!refs.contains(&outer_x), "body should no longer ref outer_x={:?}", outer_x);
+  }
+
+  #[test]
+  fn t_convert_expr_rewrites_letrec_siblings() {
+    // outer = fn x: letrec { is_even = fn k: is_odd, is_odd = fn k: is_even } in is_even x
+    // Each defn should get a cap param for the sibling after conversion.
+    let is_even_body = Expr {
+      id: cps_id(500),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(31)),
+        args: vec![],
+      },
+    };
+    let is_odd_body = Expr {
+      id: cps_id(600),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(30)),
+        args: vec![],
+      },
+    };
+    let letrec = Expr {
+      id: cps_id(700),
+      kind: ExprKind::LetRec {
+        group: vec![
+          LetRecDefn::Fn {
+            name: synth_bind(30),
+            params: vec![Param::Name(synth_bind(40))],
+            fn_kind: CpsFnKind::CpsFunction,
+            body: Box::new(is_even_body),
+          },
+          LetRecDefn::Fn {
+            name: synth_bind(31),
+            params: vec![Param::Name(synth_bind(41))],
+            fn_kind: CpsFnKind::CpsFunction,
+            body: Box::new(is_odd_body),
+          },
+        ],
+        no_self_edge: false,
+        cont: Cont::Expr {
+          args: vec![],
+          body: Box::new(Expr {
+            id: cps_id(800),
+            kind: ExprKind::App {
+              func: Callable::Val(ref_val(30)),
+              args: vec![],
+            },
+          }),
+        },
+      },
+    };
+
+    let mut state = ConvertState {
+      origin: crate::propgraph::PropGraph::with_size(900, None),
+      synth_alias: crate::propgraph::PropGraph::with_size(900, None),
+      param_info: crate::propgraph::PropGraph::with_size(900, None),
+    };
+    let mut scope: HashSet<CpsId> = HashSet::new();
+
+    let result = convert_expr(&mut state, &mut scope, letrec);
+
+    // Inspect the LetRec defns — each should have 2 params now (1 cap + 1 user).
+    let group = match &result.kind {
+      ExprKind::LetRec { group, .. } => group,
+      _ => panic!("expected LetRec"),
+    };
+    assert_eq!(group.len(), 2);
+    for d in group {
+      match d {
+        LetRecDefn::Fn { params, .. } => {
+          assert_eq!(params.len(), 2,
+            "each defn should have 1 cap + 1 user param, got {}", params.len());
+          // First param should have ParamInfo::Cap set.
+          let cap_param_id = match &params[0] {
+            Param::Name(b) => b.id,
+            _ => panic!("expected Name"),
+          };
+          let info = state.param_info.try_get(cap_param_id).cloned().flatten();
+          assert!(matches!(info, Some(ParamInfo::Cap(_))),
+            "first param should be Cap-tagged, got {:?}", info);
+        }
+        _ => panic!("expected Fn defn"),
+      }
+    }
   }
 
   #[test]
