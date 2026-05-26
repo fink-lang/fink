@@ -628,12 +628,29 @@ pub fn convert_expr(
       let added = scope.insert(name.id);
       let cont = convert_cont(state, scope, cont);
       if added { scope.remove(&name.id); }
-      ExprKind::LetFn {
-        name,
-        params: new_params,
-        fn_kind,
-        fn_body: Box::new(new_body),
-        cont,
+      // If this fn has captures, emit FnClosure construction so the closure
+      // VALUE (not just the funcref) is materialised at the LetFn site. The
+      // construction site is inserted in the cont chain — after the LetFn
+      // defines the funcref under `name`, we wrap the cont in an FnClosure
+      // App that builds the closure with cap values and binds it under a
+      // fresh name. References to the LetFn name in the cont body get
+      // rewritten to the new closure-bind name.
+      //
+      // Skipped for capture-free fns: those resolve via resolve_id_as_operand
+      // which builds a no-capture closure on demand.
+      if captures.is_empty() {
+        ExprKind::LetFn {
+          name,
+          params: new_params,
+          fn_kind,
+          fn_body: Box::new(new_body),
+          cont,
+        }
+      } else {
+        emit_letfn_with_closure_construction(
+          state, name, new_params, fn_kind,
+          new_body, cont, &captures,
+        )
       }
     }
     ExprKind::App { func, args } => {
@@ -694,6 +711,94 @@ pub fn convert_expr(
     }
   };
   Expr { id, kind: new_kind }
+}
+
+/// For a LetFn with captures, restructure to emit an FnClosure construction
+/// in the cont chain. The LetFn's funcref (under `name`) is consumed by the
+/// FnClosure App, which builds a closure VALUE bound to a fresh user-bind.
+/// All refs to the LetFn name in the cont body are rewritten to the new bind.
+fn emit_letfn_with_closure_construction(
+  state: &mut ConvertState,
+  name: super::cps::ir::BindNode,
+  new_params: Vec<super::cps::ir::Param>,
+  fn_kind: super::cps::ir::CpsFnKind,
+  new_body: super::cps::ir::Expr,
+  cont: super::cps::ir::Cont,
+  captures: &[super::cps::ir::CpsId],
+) -> super::cps::ir::ExprKind {
+  use super::cps::ir::{Arg, Bind, BuiltIn, Callable, Cont, Expr, ExprKind, Ref, Val, ValKind};
+
+  // Allocate a fresh bind for the closure value (it inherits the name's
+  // origin so source-map debugging shows the original binding site).
+  let ast_origin = state.origin.try_get(name.id).and_then(|o| *o);
+  let closure_bind = state.bind(Bind::Synth, ast_origin);
+
+  // Build rewrite map: refs to the LetFn's name -> the new closure-bind id.
+  let mut rewrite_map: std::collections::HashMap<super::cps::ir::CpsId, super::cps::ir::CpsId>
+    = std::collections::HashMap::new();
+  rewrite_map.insert(name.id, closure_bind.id);
+
+  // Rewrite the cont chain's body refs.
+  let cont = rewrite_refs_cont(cont, &rewrite_map);
+
+  // Build the FnClosure App args:
+  //   [Ref(letfn_name), cap_val_refs..., Cont::Expr { args: [closure_bind], body: cont's body }]
+  let fn_name_val = Val {
+    id: state.next(ast_origin),
+    kind: ValKind::Ref(Ref::Synth(name.id)),
+  };
+  let mut app_args: Vec<Arg> = vec![Arg::Val(fn_name_val)];
+  for &cap_id in captures {
+    let cap_origin = state.origin.try_get(cap_id).and_then(|o| *o);
+    let cap_val = Val {
+      id: state.next(cap_origin),
+      kind: ValKind::Ref(Ref::Synth(cap_id)),
+    };
+    app_args.push(Arg::Val(cap_val));
+  }
+
+  // The FnClosure cont: binds closure_bind, body is the original cont body.
+  // For Cont::Ref tail, wrap it as the FnClosure's cont arg directly.
+  let app_cont = match cont {
+    Cont::Ref(_) => cont,
+    Cont::Expr { args: orig_args, body } => {
+      // The original cont's args are dropped — they were either empty or
+      // a single bind for the LetFn's value, and we replace it with
+      // closure_bind. If orig_args had a different shape, we drop them
+      // (this is the standard FnClosure shape).
+      let _ = orig_args;
+      Cont::Expr {
+        args: vec![closure_bind],
+        body,
+      }
+    }
+  };
+  app_args.push(Arg::Cont(app_cont));
+
+  let app = Expr {
+    id: state.next(ast_origin),
+    kind: ExprKind::App {
+      func: Callable::BuiltIn(BuiltIn::FnClosure),
+      args: app_args,
+    },
+  };
+
+  // The LetFn's cont is now: a single Cont::Expr with no args, body = the FnClosure App.
+  // This way the LetFn defines the funcref (under `name`), then immediately the
+  // FnClosure App runs in the cont, consumes the funcref + caps, and binds the
+  // resulting closure value under closure_bind for the rest of the program.
+  let outer_cont = Cont::Expr {
+    args: vec![],
+    body: Box::new(app),
+  };
+
+  ExprKind::LetFn {
+    name,
+    params: new_params,
+    fn_kind,
+    fn_body: Box::new(new_body),
+    cont: outer_cont,
+  }
 }
 
 fn convert_cont(
@@ -963,6 +1068,82 @@ mod tests {
     };
     assert!(refs.contains(&cap_id), "body should ref cap_id={:?}, refs={:?}", cap_id, refs);
     assert!(!refs.contains(&outer_x), "body should no longer ref outer_x={:?}", outer_x);
+  }
+
+  #[test]
+  fn t_convert_expr_emits_fnclosure_for_capturing_letfn() {
+    // outer = fn outer_x:
+    //   inner = fn p: outer_x   <- captures outer_x
+    //   inner ()
+    //
+    // After conversion, inner should have Cap params AND an FnClosure App
+    // should appear in inner's cont to materialize the closure value.
+    let outer_x = cps_id(50);
+    let inner_name = cps_id(51);
+    let inner_param = cps_id(52);
+
+    let inner_body = Expr {
+      id: cps_id(100),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(50)),  // refs outer_x
+        args: vec![],
+      },
+    };
+
+    let final_use = Expr {
+      id: cps_id(200),
+      kind: ExprKind::App {
+        func: Callable::Val(ref_val(51)),  // call inner
+        args: vec![],
+      },
+    };
+
+    let outer_body_expr = Expr {
+      id: cps_id(300),
+      kind: ExprKind::LetFn {
+        name: BindNode { id: inner_name, kind: Bind::Synth },
+        params: vec![Param::Name(BindNode { id: inner_param, kind: Bind::Synth })],
+        fn_kind: CpsFnKind::CpsFunction,
+        fn_body: Box::new(inner_body),
+        cont: Cont::Expr {
+          args: vec![],
+          body: Box::new(final_use),
+        },
+      },
+    };
+
+    let mut state = ConvertState {
+      origin: crate::propgraph::PropGraph::with_size(500, None),
+      synth_alias: crate::propgraph::PropGraph::with_size(500, None),
+      param_info: crate::propgraph::PropGraph::with_size(500, None),
+    };
+    let mut scope: HashSet<CpsId> = [outer_x].into_iter().collect();
+
+    let result = convert_expr(&mut state, &mut scope, outer_body_expr);
+
+    // After conversion, the outer ExprKind should still be LetFn (inner),
+    // but its cont should contain an FnClosure App.
+    let (name, params, cont) = match &result.kind {
+      ExprKind::LetFn { name, params, cont, .. } => (name, params, cont),
+      _ => panic!("expected LetFn, got {:?}", result.kind),
+    };
+    assert_eq!(name.id, inner_name, "LetFn name should be preserved");
+    // Should have cap params: 1 cap + 1 user = 2 params
+    assert_eq!(params.len(), 2, "inner should have 1 cap + 1 user param");
+
+    // Cont body should be an FnClosure App.
+    let body = match cont {
+      Cont::Expr { body, .. } => body,
+      _ => panic!("expected Cont::Expr"),
+    };
+    let (func, args) = match &body.kind {
+      ExprKind::App { func, args } => (func, args),
+      _ => panic!("expected FnClosure App, got {:?}", body.kind),
+    };
+    assert!(matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)),
+      "expected FnClosure App, got func={:?}", func);
+    // Args: [fn_ref, cap_val (outer_x), cont]
+    assert_eq!(args.len(), 3, "expected [fn_ref, cap_val, cont], got {} args", args.len());
   }
 
   #[test]
