@@ -138,6 +138,7 @@ pub fn lift<'src>(
       return current;
     }
 
+
     if round == MAX_ROUNDS - 1 {
       panic!("lifting::lift: did not converge after {MAX_ROUNDS} rounds");
     }
@@ -301,7 +302,7 @@ fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
 // the same shape).
 fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
   match &expr.kind {
-    ExprKind::LetFn { fn_body, cont, name: _, .. } => {
+    ExprKind::LetFn { fn_body, cont, .. } => {
       // fn_body is inside a fn scope — set in_fn=true regardless of caller.
       contains_letfn_or_inline_cont(fn_body, true) || cont_needs_lifting(cont, in_fn)
     }
@@ -330,8 +331,17 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
       })
     }
     ExprKind::If { then, else_, .. } => needs_lifting(then, in_fn) || needs_lifting(else_, in_fn),
-    // LetRec is terminal for lifting — only the cont can need further work.
-    ExprKind::LetRec { cont, .. } => cont_needs_lifting(cont, in_fn),
+    // LetRec from CPS-0: defn bodies are fn scopes. Recurse via needs_lifting
+    // on each body (treats body as expr-in-fn-scope, not as "the fn_body of
+    // an enclosing LetFn"). Otherwise `contains_letfn_or_inline_cont(body, true)`
+    // returns true whenever body's outer kind is LetFn — even for a body that
+    // is locally normalised — and we loop forever.
+    ExprKind::LetRec { group, cont, .. } => {
+      group.iter().any(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { body, .. } => needs_lifting(body, true),
+        crate::passes::cps::ir::LetRecDefn::Val { .. } => false,
+      }) || cont_needs_lifting(cont, in_fn)
+    }
   }
 }
 
@@ -405,11 +415,18 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
     ExprKind::If { then, else_, .. } => {
       module_body_needs_lifting(then) || module_body_needs_lifting(else_)
     }
-    // LetRec at module-body level: terminal for lifting (see needs_lifting).
-    ExprKind::LetRec { cont, .. } => match cont {
-      Cont::Ref(_) => false,
-      Cont::Expr { body, .. } => module_body_needs_lifting(body),
-    },
+    // LetRec at module-body level: recurse into defn bodies as fn scopes
+    // (use needs_lifting, not contains_letfn_or_inline_cont — see the LetRec
+    // arm of needs_lifting for the convergence rationale).
+    ExprKind::LetRec { group, cont, .. } => {
+      group.iter().any(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { body, .. } => needs_lifting(body, true),
+        crate::passes::cps::ir::LetRecDefn::Val { .. } => false,
+      }) || match cont {
+        Cont::Ref(_) => false,
+        Cont::Expr { body, .. } => module_body_needs_lifting(body),
+      }
+    }
   }
 }
 
@@ -473,11 +490,17 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
     ExprKind::If { then, else_, .. } => {
       contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
     }
-    // LetRec is terminal — only the cont matters.
-    ExprKind::LetRec { cont, .. } => match cont {
-      Cont::Ref(_) => false,
-      Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body, in_fn),
-    },
+    // LetRec: each defn body is a fn scope; recurse via needs_lifting to
+    // match the convergence-aware checking used at module level.
+    ExprKind::LetRec { group, cont, .. } => {
+      group.iter().any(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { body, .. } => needs_lifting(body, true),
+        crate::passes::cps::ir::LetRecDefn::Val { .. } => false,
+      }) || match cont {
+        Cont::Ref(_) => false,
+        Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body, in_fn),
+      }
+    }
   }
 }
 
@@ -676,14 +699,20 @@ fn lift_expr<'src>(
       let else_ = lift_expr(*else_, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
-    // LetRec is terminal for lifting (see needs_lifting); preserve unchanged.
-    // The defn body's nested LetFns get captures computed inline by codegen
-    // because lifting can't hoist them out without breaking the group's
-    // mutual scope. This means lower.rs's LetRec arm must do its own
-    // capture analysis for the nested fns (or rely on the codegen path
-    // that handles untagged params).
+    // LetRec from CPS-0: recurse into each defn body, treating defn params
+    // as the body's outer_params. This lifts nested LetFns inside the body
+    // (hoisting them as siblings WITHIN the body spine, not out to parent).
     ExprKind::LetRec { group, no_self_edge, cont } => {
       let cont = lift_cont(cont, ast, alloc, outer_params);
+      let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
+          let new_body = lift_expr(*body, ast, alloc, &params);
+          crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
+        }
+        crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
+          crate::passes::cps::ir::LetRecDefn::Val { name, val }
+        }
+      }).collect();
       Expr { id: expr.id, kind: ExprKind::LetRec { group, no_self_edge, cont } }
     }
   }
@@ -1095,8 +1124,12 @@ fn extract_from_body<'src>(
       let else_ = extract_from_body(*else_, parent_params, scope_binds, _ast, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
-    // LetRec passthrough inside extract_from_body: don't hoist defns; just
-    // recurse into their bodies and the cont.
+    // LetRec inside extract_from_body: don't hoist defns themselves (the
+    // group's mutual scope is load-bearing), but DO apply lift_expr to each
+    // defn body so nested LetFns within them are normalized. Sibling names
+    // are folded into the defn body's outer_params so capture analysis
+    // (which checks refs against outer_params + scope_binds) picks up
+    // sibling refs as captures.
     ExprKind::LetRec { group, no_self_edge, cont } => {
       let cont = match cont {
         Cont::Ref(_) => cont,
@@ -1105,11 +1138,27 @@ fn extract_from_body<'src>(
           body: Box::new(extract_from_body(*body, parent_params, scope_binds, _ast, alloc, hoisted)),
         },
       };
+      // Build fake "params" for sibling names — they're not actual params of
+      // the defn but they ARE in scope (mutual rec). Capture analysis treats
+      // them like params for the purpose of free-var detection.
+      let sibling_params: Vec<Param> = group.iter().map(|d| match d {
+        crate::passes::cps::ir::LetRecDefn::Fn { name, .. } => Param::Name(name.clone()),
+        crate::passes::cps::ir::LetRecDefn::Val { name, .. } => Param::Name(name.clone()),
+      }).collect();
       let group: Vec<crate::passes::cps::ir::LetRecDefn> = group.into_iter().map(|d| match d {
         crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body } => {
-          // The defn's body is a fn scope — leave it alone here; the recursive
-          // lift_expr pass will descend in via the outer iteration.
-          crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body }
+          // outer_params for the body: defn's own params + sibling names.
+          // Sibling refs in nested LetFns get treated as captures.
+          let mut body_outer = params.clone();
+          for sp in &sibling_params {
+            // Skip our own name (no self-capture via this path; existing
+            // self-rec alias machinery handles that).
+            let sp_id = match sp { Param::Name(b) | Param::Spread(b) => b.id };
+            if sp_id == name.id { continue; }
+            body_outer.push(sp.clone());
+          }
+          let new_body = lift_expr(*body, _ast, alloc, &body_outer);
+          crate::passes::cps::ir::LetRecDefn::Fn { name, params, fn_kind, body: Box::new(new_body) }
         }
         crate::passes::cps::ir::LetRecDefn::Val { name, val } => {
           crate::passes::cps::ir::LetRecDefn::Val { name, val }
