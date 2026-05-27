@@ -139,8 +139,8 @@ test 'partial apply', fn:
     ·ƒink_module fn ·ƒctx_12, ·ƒret_1:
       ·fn
         fn ·ƒctx_14, ·ƒret_3, ·v_0: ·∅add ·ƒctx_14, ·ƒret_3, (i8 3), ·v_0
-        fn ·v_2: ·ƒret_1 ·v_2
-    # sm:HgABAAgAAQAIJAEACBgBAAgSAAIABgEACAABAAgIABAAGAEACBYBAAgKAAQBAAgAAQADEgAUAAQBAAgSAAYBCAEAAQABBgEAAQQABAEGAQoAEAENCAoABAEACAABAAgUAQAI
+        fn ·v_2: ·ƒret_1 ·ƒctx_12, ·v_2
+    # sm:IAABAAgAAQAIJAEACBgBAAgSAAIABgEACAABAAgIABAAGAEACBYBAAgKAAQBAAgAAQADEgAUAAQBAAgSAAYBCAEAAQABBgEAAQQABAEGAQoAEAENCAoABAEACAABAAgUAQAIFAAEAQAI
 
 
 test 'pipe with lambda — literal head', fn:
@@ -149,9 +149,9 @@ test 'pipe with lambda — literal head', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_1:
       ·fn
-        fn ·ƒctx_18, ·ƒret_4, ·a_0: ·op_plus ·a_0, (i8 2), ·ƒret_4
+        fn ·ƒctx_18, ·ƒret_4, ·a_0: ·op_plus ·ƒctx_18, ·a_0, (i8 2), ·ƒret_4
         fn ·v_3: ·v_3 ·ƒctx_16, ·ƒret_1, (i8 3)
-    # sm:IgABAA8AAQAPJAEADxgBAA8SAAIABgEICwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQMBAAEECwwAFAAEAQcPEgAGAQABAAEAAQYBAAE
+    # sm:JAABAA8AAQAPJAEADxgBAA8SAAIABgEICwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoABAEDAQABBAsMABQABAEHDxIABgEAAQABAAEGAQAB
 
 
 test 'pipe with lambda — ident head', fn:
@@ -160,9 +160,9 @@ test 'pipe with lambda — ident head', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_1:
       ·fn
-        fn ·ƒctx_18, ·ƒret_4, ·a_0: ·op_plus ·a_0, (i8 2), ·ƒret_4
+        fn ·ƒctx_18, ·ƒret_4, ·a_0: ·op_plus ·ƒctx_18, ·a_0, (i8 2), ·ƒret_4
         fn ·v_3: ·v_3 ·ƒctx_16, ·ƒret_1, ·∅x
-    # sm:IAABAA8AAQAPJAEADxgBAA8SAAIABgEICwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQMBAAEECwwAFAAEAQcPEgAEAQAB
+    # sm:IgABAA8AAQAPJAEADxgBAA8SAAIABgEICwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoABAEDAQABBAsMABQABAEHDxIABAEAAQ
 
 
 test 'pipe with partial', fn:
@@ -229,5 +229,5 @@ test 'call with spread — passes through from varargs fn', fn:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
       ·fn
         fn ·ƒctx_13, ·ƒret_3, ..·args_0: ·∅foo ·ƒctx_13, ·ƒret_3, ..·args_0
-        fn ·v_2: ·ƒret_1 ·v_2
-    # sm:HgABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUIABAAGAEWChYBCwQAAQAEBAEABBAABAEMCgABAAMSABQABAEAChIABAEMBAABAAQEAQAEEAAQASEVCgAEAQAVAAEAFRQBABU
+        fn ·v_2: ·ƒret_1 ·ƒctx_11, ·v_2
+    # sm:IAABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUIABAAGAEWChYBCwQAAQAEBAEABBAABAEMCgABAAMSABQABAEAChIABAEMBAABAAQEAQAEEAAQASEVCgAEAQAVAAEAFRQBABUUAAQBABU

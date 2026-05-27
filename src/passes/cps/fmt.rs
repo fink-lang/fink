@@ -90,7 +90,7 @@ pub fn fmt(expr: &Expr) -> String {
 /// caller (passed to one of the `ast::fmt::*` entry points).
 fn build_ast(expr: &Expr, ctx: &Ctx<'_, '_>) -> Ast<'static> {
   let mut b = AstBuilder::new();
-  let root = build_expr(&mut b, expr, ctx);
+  let root = build_expr(&mut b, expr, ctx, None);
   b.finish(root)
 }
 
@@ -426,14 +426,15 @@ fn render_builtin(op: &BuiltIn) -> String {
 /// `site_loc` is the source location of the surrounding call — used as
 /// the anchor for a `Cont::Ref` render (the cont itself is a synthetic
 /// token; its semantic position is the tail of the call being built).
-fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_loc: Loc) -> AstId {
+fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_loc: Loc, current_ctx: Option<CpsId>) -> AstId {
   match cont {
     Cont::Expr { args, body } => {
       // Cont params are synthetic bindings — use their CpsId loc if available.
       let params: Vec<AstId> = args.iter()
         .map(|bn| b_ident(b, &render_bind_ctx(bn, ctx), ctx_loc(bn.id, ctx)))
         .collect();
-      let body_id = build_expr(b, body, ctx);
+      let inner_ctx = first_ctx_bind(args).or(current_ctx);
+      let body_id = build_expr(b, body, ctx, inner_ctx);
       // Use the first param's loc for the fn wrapper — the cont lambda originates
       // from the same source position as its parameter.
       let fn_loc = args.first().map(|bn| ctx_loc(bn.id, ctx)).unwrap_or_else(dummy_loc);
@@ -444,6 +445,16 @@ fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_
       b_ident(b, &render_synth_fallback(*cont_id, ctx), site_loc)
     }
   }
+}
+
+fn first_ctx_bind(args: &[BindNode]) -> Option<CpsId> {
+  args.first().and_then(|bn| matches!(bn.kind, Bind::Ctx).then_some(bn.id))
+}
+
+fn first_ctx_param(params: &[Param]) -> Option<CpsId> {
+  params.first().and_then(|p| match p {
+    Param::Name(bn) | Param::Spread(bn) => matches!(bn.kind, Bind::Ctx).then_some(bn.id),
+  })
 }
 
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
@@ -457,22 +468,30 @@ fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_
 /// synthesised param, no apply wrapper) would be more truthful and is
 /// load-bearing once ctx-threading lands: the current fake-lambda hides
 /// the ctx that codegen will pass at the Cont::Ref invocation site.
-fn build_cont_body(b: &mut AstBuilder<'static>, cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> AstId {
+fn build_cont_body(b: &mut AstBuilder<'static>, cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>, current_ctx: Option<CpsId>) -> AstId {
   match cont {
-    Cont::Expr { body, .. } => build_expr(b, body, ctx),
+    Cont::Expr { args, body } => {
+      let inner_ctx = first_ctx_bind(args).or(current_ctx);
+      build_expr(b, body, ctx, inner_ctx)
+    }
     Cont::Ref(cont_id) => {
       let cont_loc = ctx_loc(*cont_id, ctx);
       let name_loc = ctx_loc(bound_id, ctx);
       let cont_name = render_synth_fallback(*cont_id, ctx);
-      let cont_id = b_ident(b, &cont_name, cont_loc);
-      let arg_id = b_ident(b, bound_name, name_loc);
-      b_apply(b, cont_id, vec![arg_id], cont_loc)
+      let cont_ident = b_ident(b, &cont_name, cont_loc);
+      let mut call_args: Vec<AstId> = Vec::new();
+      if let Some(ctx_id) = current_ctx {
+        let ctx_name = render_synth_fallback(ctx_id, ctx);
+        call_args.push(b_ident(b, &ctx_name, cont_loc));
+      }
+      call_args.push(b_ident(b, bound_name, name_loc));
+      b_apply(b, cont_ident, call_args, cont_loc)
     }
   }
 }
 
 
-pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -> AstId {
+pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>, current_ctx: Option<CpsId>) -> AstId {
   // Best-effort loc for the expression itself — used for keyword/wrapper nodes.
   let expr_loc = ctx_loc(expr.id, ctx);
 
@@ -480,7 +499,7 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
     ExprKind::LetVal { name, val, cont } => {
       let plain = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
-      let body_id = build_cont_body(b, cont, &plain, name.id, ctx);
+      let body_id = build_cont_body(b, cont, &plain, name.id, ctx, current_ctx);
       // Map ·let to the = or |= token inside the Bind AST node.
       let let_loc = ctx.ast_node(expr.id)
         .and_then(|n| match &n.kind {
@@ -523,8 +542,9 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
         fn_param_ids.insert(0, label_id);
       }
 
-      let body_id = build_cont_body(b, cont, &plain_name, name.id, ctx);
-      let inner_fn_body = build_expr(b, fn_body, ctx);
+      let body_id = build_cont_body(b, cont, &plain_name, name.id, ctx, current_ctx);
+      let fn_inner_ctx = first_ctx_param(params).or(current_ctx);
+      let inner_fn_body = build_expr(b, fn_body, ctx, fn_inner_ctx);
       let fn_pats = b_patterns(b, fn_param_ids);
       let inner_fn = b_fn(b, fn_pats, vec![inner_fn_body], expr_loc);
       let name_ident = b_ident(b, &plain_name, name_loc);
@@ -560,16 +580,16 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
           let n = build_val(b, v, ctx);
           b_spread(b, n, ctx_loc(v.id, ctx))
         }
-        Arg::Cont(c) => build_cont(b, c, ctx, expr_loc),
-        Arg::Expr(e) => build_expr(b, e, ctx),
+        Arg::Cont(c) => build_cont(b, c, ctx, expr_loc, current_ctx),
+        Arg::Expr(e) => build_expr(b, e, ctx, current_ctx),
       }).collect();
       b_apply(b, func_id, arg_ids, call_loc)
     }
 
     ExprKind::If { cond, then, else_ } => {
       let cond_id = build_val(b, cond, ctx);
-      let then_id = build_expr(b, then, ctx);
-      let else_id = build_expr(b, else_, ctx);
+      let then_id = build_expr(b, then, ctx, current_ctx);
+      let else_id = build_expr(b, else_, ctx, current_ctx);
       let then_fn = b_state_fn(b, then_id);
       let else_fn = b_state_fn(b, else_id);
       let if_keyword = b_ident(b, "·if", expr_loc);

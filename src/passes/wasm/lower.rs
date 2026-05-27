@@ -569,7 +569,9 @@ fn lower_expr(
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
-      // `·ƒpub val, cont` — register `val` as a module-level export.
+      // `·ƒpub ctx, val, cont` — register `val` as a module-level export.
+      // After thread_ctx, args[0] is ctx (currently ignored by Pub's
+      // side-effects but threaded through uniformly per the design).
       //
       // Two side effects, both inline (no CPS hop):
       //   1. `global.set $<fqn>:<name> val` — addressable storage.
@@ -581,8 +583,12 @@ fn lower_expr(
       //
       // The fqn url is `lcx.fqn_prefix` minus the trailing `:` separator;
       // the source name comes from `pub_globals` alongside the global.
-      let Some(Arg::Val(val)) = args.first() else {
-        panic!("lower: Pub expects [val, cont], missing val");
+      // Peel the ctx arg (currently unused by Pub).
+      let Some(Arg::Val(_ctx_val)) = args.first() else {
+        panic!("lower: Pub expects [ctx, val, cont], missing ctx");
+      };
+      let Some(Arg::Val(val)) = args.get(1) else {
+        panic!("lower: Pub expects [ctx, val, cont], missing val");
       };
       let id = cps_id_of_ref(val);
       let (gsym, src_name) = lcx.pub_globals.get(&id)
@@ -603,8 +609,8 @@ fn lower_expr(
         None);
       ctx.instrs.push(i_pub);
 
-      let cont_arg = args.get(1)
-        .unwrap_or_else(|| panic!("lower: Pub expects [val, cont]"));
+      let cont_arg = args.get(2)
+        .unwrap_or_else(|| panic!("lower: Pub expects [ctx, val, cont]"));
       let Arg::Cont(cont) = cont_arg else {
         panic!("lower: Pub cont arg is not a Cont");
       };

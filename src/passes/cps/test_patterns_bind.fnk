@@ -41,9 +41,9 @@ test 'plain bind', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
       ·let ·∅foo, fn ·x_0:
-        ·ƒpub ·x_0, fn:
-          ·ƒret_1 ·ƒctx_10, ·x_0
-    # sm:GAABAAcAAQAHJAEABxgBAAcSAAIABgEEAQABAAEMAQQDEAAKAQcBCgACAAoBAAEAAQABEAEAAQoACAACAA4BAAEAAQABFAAUAAQBAAE
+        ·ƒpub ·ƒctx_10, ·x_0, fn ·ƒctx_13:
+          ·ƒret_1 ·ƒctx_13, ·x_0
+    # sm:GwABAAcAAQAHJAEABxgBAAcSAAIABgEEAQABAAEMAQQDEAAKAQcBCgACAAoBAAEAAQABEAAUAAQBAAEKAAoAFAACAA4BAAEAAQABFAAUAAQBAAE
 
 
 test 'simple guard', fn:
@@ -57,12 +57,12 @@ test 'simple guard', fn:
           fn ·v_18:
             ·fn
               fn ·ƒctx_34, ·ƒsucc_4, ·ƒfail_5, ·v_3:
-                ·op_gt ·v_3, (i8 0), fn ·v_8:
+                ·op_gt ·ƒctx_34, ·v_3, (i8 0), fn ·ƒctx_36, ·v_8:
                   ·if ·v_8,
-                    fn: ·ƒsucc_4 ·ƒctx_34, ·v_3
-                    fn: ·ƒfail_5 ·ƒctx_34
+                    fn: ·ƒsucc_4 ·ƒctx_36, ·v_3
+                    fn: ·ƒfail_5 ·ƒctx_36
               fn ·v_16: ·v_16 ·ƒctx_30, ·v_18, ·panic, ·∅foo
-    # sm:TAABAAsAAQALJAEACxgBAAsSAAIABgEMAQABAAEMAQQDEAAKAQ8BCgACAAoBAAsAAQALCAAUABgBAAEKAAQBAAsAAQALFAAUAAQBAAsKABQBAAsMAAIAEgEACwABAAsIABwAGAAYABgBAAsKAAIAGgEABQABAAUQAQALCgAGAQgBAAEAAQYBAAEEAAoBBwUKAAIAHgEABQABAAUKAQAFCgACACYABAEACwABAAsWABQABAEACwoAJgAEAQALAAEACxYAFAAcAQALDAAEAQALAAEACw4AFAAEAQALDAAEAQALDgAEARAD
+    # sm:TwABAAsAAQALJAEACxgBAAsSAAIABgEMAQABAAEMAQQDEAAKAQ8BCgACAAoBAAsAAQALCAAUABgBAAEKAAQBAAsAAQALFAAUAAQBAAsKABQBAAsMAAIAEgEACwABAAsIABwAGAAYABgBAAsKAAIAGgEABQABAAUQABQABAEACwoABgEIAQABAAEGAQABBAAKABgBBwUKAAIAHgEABQABAAUKAQAFCgACACYABAEACwABAAsWABQABAEACwoAJgAEAQALAAEACxYAFAAcAQALDAAEAQALAAEACw4AFAAEAQALDAAEAQALDgAEARAD
 
 
 test 'nested guard', fn:
@@ -76,12 +76,12 @@ test 'nested guard', fn:
           fn ·v_22:
             ·fn
               fn ·ƒctx_38, ·ƒsucc_4, ·ƒfail_5, ·v_3:
-                ·op_lt ·a_0, (i8 9), fn ·v_8:
-                  ·op_or ·v_3, ·v_8, fn ·v_11:
+                ·op_lt ·ƒctx_38, ·a_0, (i8 9), fn ·ƒctx_40, ·v_8:
+                  ·op_or ·ƒctx_40, ·v_3, ·v_8, fn ·ƒctx_42, ·v_11:
                     ·if ·v_11,
-                      fn: ·ƒsucc_4 ·ƒctx_38, ·v_3
-                      fn: ·ƒfail_5 ·ƒctx_38
+                      fn: ·ƒsucc_4 ·ƒctx_42, ·v_3
+                      fn: ·ƒfail_5 ·ƒctx_42
               fn ·v_20: ·v_20 ·ƒctx_34, ·v_22, ·panic, ·∅foo
-    # sm:VQABABQAAQAUJAEAFBgBABQSAAIABgEeAQABAAEMAQQDEAAKASEBCgACAAoBABQAAQAUCAAUABgBAAEKAAQBABQAAQAUFAAUAAQBABQKABQBABQMAAIAEgEAFAABABQIABwAGAAYABgBABQKAAIAGgESBQABAAUQAQABCgAGAQgBAAEAAQYBAAEEAAoBBwUKAAIAHgERDgABAA4QAQAUCgAEARIFCgAKAREODAACACIBAA4AAQAOCgEADgwAAgAqAAQBABQAAQAUFgAUAAQBABQKACoABAEAFAABABQWABQAHAEAFAwABAEAFAABABQOABQABAEAFAwABAEAFA4ABAEiAw
+    # sm:WwABABQAAQAUJAEAFBgBABQSAAIABgEeAQABAAEMAQQDEAAKASEBCgACAAoBABQAAQAUCAAUABgBAAEKAAQBABQAAQAUFAAUAAQBABQKABQBABQMAAIAEgEAFAABABQIABwAGAAYABgBABQKAAIAGgESBQABAAUQABQABAEAAQoABgEIAQABAAEGAQABBAAKABgBBwUKAAIAHgERDgABAA4QABQABAEAFAoABAESBQoACgAYAREODAACACIBAA4AAQAOCgEADgwAAgAqAAQBABQAAQAUFgAUAAQBABQKACoABAEAFAABABQWABQAHAEAFAwABAEAFAABABQOABQABAEAFAwABAEAFA4ABAEiAw
 
 
