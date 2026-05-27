@@ -454,6 +454,9 @@ fn lower_bind_stmt(
   rhs: AstId,
   origin: Option<AstId>,
 ) -> Vec<Pending> {
+  // Peel the synthetic `pub` modifier wrapper from the LHS, if present.
+  // See `unwrap_modifier_lhs` and `lower_bind`.
+  let lhs = unwrap_modifier_lhs(g.ast, lhs);
   let (val, mut pending) = lower(g, rhs);
   match &g.node(lhs).kind {
     NodeKind::Wildcard => {
@@ -474,6 +477,11 @@ fn lower_bind(
   rhs: AstId,
   origin: Option<AstId>,
 ) -> Lower {
+  // Peel the synthetic `pub` modifier wrapper from the LHS, if present.
+  // CPS lowers a `pub`-wrapped bind exactly like a plain bind; the export
+  // intent is recovered separately by `collect_module_exports` walking the
+  // unpeeled AST and is realised by `inject_pub_calls`.
+  let lhs = unwrap_modifier_lhs(g.ast, lhs);
   let (val, mut pending) = lower(g, rhs);
   match &g.node(lhs).kind {
     NodeKind::Wildcard => {
@@ -2025,17 +2033,18 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
 /// lhs is a plain Ident. Pattern destructures and imports are excluded.
 fn collect_module_exports(ast: &Ast<'_>, exprs: &[AstId], bind_site_to_cps: &std::collections::HashMap<u32, CpsId>) -> Vec<CpsId> {
   exprs.iter().filter_map(|&expr_id| {
-    let NodeKind::Bind { lhs, rhs, .. } = &ast.nodes.get(expr_id).kind else { return None; };
+    let NodeKind::Bind { lhs, .. } = &ast.nodes.get(expr_id).kind else { return None; };
     let lhs = *lhs;
-    let rhs = *rhs;
-    let NodeKind::Ident(_) = &ast.nodes.get(lhs).kind else { return None; };
-    // Exclude imports: `{foo} = import './bar'` — rhs is Apply { func: Ident("import"), .. }
-    if let NodeKind::Apply { func, .. } = &ast.nodes.get(rhs).kind {
-      let func = *func;
-      if let NodeKind::Ident(name) = &ast.nodes.get(func).kind
-        && *name == "import" { return None; }
-    }
-    bind_site_to_cps.get(&lhs.0).copied()
+    // Only `pub`-wrapped LHS represents an exported binding. ast_desugar
+    // synthesises this wrapper on every top-level simple `name = expr`
+    // and leaves destructures, imports, and nested-scope binds alone, so
+    // recognising the wrapper here is sufficient.
+    let NodeKind::Apply { func, args } = &ast.nodes.get(lhs).kind else { return None; };
+    if args.items.len() != 1 { return None; }
+    let NodeKind::Ident("pub") = &ast.nodes.get(*func).kind else { return None; };
+    let inner = args.items[0];
+    let NodeKind::Ident(_) = &ast.nodes.get(inner).kind else { return None; };
+    bind_site_to_cps.get(&inner.0).copied()
   }).collect()
 }
 
@@ -2073,6 +2082,16 @@ fn walk_bind_lhs(
   bind_site_to_cps: &std::collections::HashMap<u32, CpsId>,
   out: &mut Vec<(CpsId, String)>,
 ) {
+  // Peel the `pub` modifier wrapper if present — the inner subtree is
+  // the real bind LHS for module-locals purposes.
+  let id = if let NodeKind::Apply { func, args } = &ast.nodes.get(id).kind
+    && args.items.len() == 1
+    && matches!(&ast.nodes.get(*func).kind, NodeKind::Ident("pub"))
+  {
+    args.items[0]
+  } else {
+    id
+  };
   let kind = ast.nodes.get(id).kind.clone();
   match kind {
     NodeKind::Ident(name) => {
@@ -3474,6 +3493,22 @@ fn extract_bind_ast_id(g: &Gen, id: AstId) -> AstId {
     }
     other => panic!("extract_bind_ast_id: expected ident in pattern lhs, got {:?}", other),
   }
+}
+
+/// If `id` is the synthetic `pub` wrapper `Apply(Ident "pub", [inner])`
+/// emitted by ast_desugar, return the inner AstId. Otherwise return `id`
+/// unchanged. Modifier wrappers like `pub` are transparent to CPS
+/// lowering — the inner subtree is the actual bind LHS. The export
+/// intent is recovered separately by `collect_module_exports`, which
+/// looks for the same wrapper shape in the AST.
+fn unwrap_modifier_lhs(ast: &Ast<'_>, id: AstId) -> AstId {
+  if let NodeKind::Apply { func, args } = &ast.nodes.get(id).kind
+    && args.items.len() == 1
+    && matches!(&ast.nodes.get(*func).kind, NodeKind::Ident("pub"))
+  {
+    return args.items[0];
+  }
+  id
 }
 
 // ---------------------------------------------------------------------------
