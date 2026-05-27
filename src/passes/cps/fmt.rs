@@ -415,6 +415,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Import       => "·import".into(),
     BuiltIn::FinkModule   => "·ƒink_module".into(),
     BuiltIn::Pub          => "·ƒpub".into(),
+    BuiltIn::Set          => "·set".into(),
     BuiltIn::Panic        => "·panic".into(),
   }
 }
@@ -595,10 +596,19 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>, c
       let if_keyword = b_ident(b, "·if", expr_loc);
       b_apply(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc)
     }
-    // LetRec is reserved for the closure-convert migration; CPS-0 does not
-    // emit it yet. Render placeholder so partial-migration debugging works.
-    ExprKind::LetRec { .. } => {
-      b_ident(b, "·letrec_unimpl", expr_loc)
+    ExprKind::LetRec { slots, body } => {
+      // Render `·letrec` followed by one `fn slot_1, ...: <body>` fn-arg
+      // — the slots are the params of a synthetic scope-fn, the body is
+      // the source-ordered sequence of `·set` calls and other effects.
+      let slot_idents: Vec<AstId> = slots.iter()
+        .map(|s| b_ident(b, &render_bind_ctx(s, ctx), ctx_loc(s.id, ctx)))
+        .collect();
+      let slots_pats = b_patterns(b, slot_idents);
+      let body_id = build_expr(b, body, ctx, current_ctx);
+      let fn_loc = slots.first().map(|s| ctx_loc(s.id, ctx)).unwrap_or(expr_loc);
+      let scope_fn = b_fn(b, slots_pats, vec![body_id], fn_loc);
+      let letrec_kw = b_ident(b, "·letrec", expr_loc);
+      b_apply(b, letrec_kw, vec![scope_fn], expr_loc)
     }
   }
 }

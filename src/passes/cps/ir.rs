@@ -300,6 +300,12 @@ pub enum BuiltIn {
   // Args: exported value, cont (no args — pure side effect).
   // Emitted by lower_module after each module-level binding that is exported.
   Pub,
+  // Slot fill in a `LetRec` scope. Args: slot ref, value, cont. The slot
+  // must have been declared by the enclosing `LetRec`; the cont fires
+  // after the slot is filled (it carries no value — Set is a pure side
+  // effect from the IR's perspective). Replaces `LetVal` as the binding
+  // primitive inside a LetRec scope.
+  Set,
   // Module import — `import './foo.fnk'` is a builtin function at module level.
   Import,
   // Module entry point — the root App of every compiled module.
@@ -552,20 +558,25 @@ pub enum ExprKind {
   /// Emitted by CPS-0 (post-migration) for every fn-like binding and any SCC
   /// of sibling bindings (LetVal + LetFn). In the degenerate non-recursive
   /// case the group has a single defn and `no_self_edge: true`; the formatter
-  /// renders this as a plain `name = ...` binding. Multi-element groups
-  /// (or single-element groups with a self back-ref) render with an
-  /// explicit `letrec ... in ...` block.
+  /// Recursive scope. Declares a set of named slots that are all in
+  /// scope across `body`, then runs `body` to fill them.
   ///
-  /// All names in `group` are in scope of all defn bodies AND of `cont`,
-  /// resolving the forward-reference problem that CPS-0 today papers over
-  /// with a synth-name + user-bind alias hack.
+  /// Conceptually `LetRec { slots: [foo, bar], body }` behaves like a
+  /// synthetic scope-fn `fn foo, bar: <body>` where the body is a
+  /// sequence of `Set name, val` calls (filling slots) interleaved
+  /// with any other source-ordered side effects (Pub, IO, ...).
   ///
-  /// Not yet emitted by any pass — added in step 1 of the closure-convert
-  /// migration. See .brain/.scratch/closure-convert-design.md §3.2.
+  /// Refs to a slot name resolve to a slot read from the start of the
+  /// scope onward. Reading an empty slot traps at runtime (the slot
+  /// has not been filled yet).
+  ///
+  /// Every scope-introducing block (module, fn body, match arm body,
+  /// group) lowers to one LetRec — there is no per-group SCC analysis
+  /// or partition into recursive vs. non-recursive bindings. Forward
+  /// references and self-recursion fall out of the slot semantics.
   LetRec {
-    group: Vec<LetRecDefn>,
-    no_self_edge: bool,
-    cont: Cont,
+    slots: Vec<BindNode>,
+    body: Box<Expr>,
   },
 
   // ---------------------------------------------------------------------------
@@ -579,30 +590,6 @@ pub enum ExprKind {
   // the body's params give them user-visible names.
   // ---------------------------------------------------------------------------
 
-}
-
-/// One member of a `LetRec` group.
-///
-/// In the common case a defn is fn-shaped: it carries the same fields as
-/// `LetFn` minus the trailing `cont` (the cont is owned by the enclosing
-/// `LetRec`). A value-shaped defn (rare — only emitted when a non-fn
-/// participates in an SCC, e.g. `x = x + 1`) carries a `val` instead of
-/// the fn fields.
-///
-/// Not yet emitted by any pass — added in step 1 of the closure-convert
-/// migration. See .brain/.scratch/closure-convert-design.md §3.2.
-#[derive(Debug, Clone)]
-pub enum LetRecDefn {
-  Fn {
-    name: BindNode,
-    params: Vec<Param>,
-    fn_kind: CpsFnKind,
-    body: Box<Expr>,
-  },
-  Val {
-    name: BindNode,
-    val: Box<Val>,
-  },
 }
 
 // ---------------------------------------------------------------------------
@@ -648,23 +635,11 @@ fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Opti
       collect_bk_expr(then, bk);
       collect_bk_expr(else_, bk);
     }
-    ExprKind::LetRec { group, cont, .. } => {
-      for defn in group {
-        match defn {
-          LetRecDefn::Fn { name, params, body, .. } => {
-            collect_bk_bind(name, bk);
-            for p in params {
-              let b = match p { Param::Name(b) | Param::Spread(b) => b };
-              collect_bk_bind(b, bk);
-            }
-            collect_bk_expr(body, bk);
-          }
-          LetRecDefn::Val { name, .. } => {
-            collect_bk_bind(name, bk);
-          }
-        }
+    ExprKind::LetRec { slots, body } => {
+      for slot in slots {
+        collect_bk_bind(slot, bk);
       }
-      collect_bk_cont(cont, bk);
+      collect_bk_expr(body, bk);
     }
   }
 }

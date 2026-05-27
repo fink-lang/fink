@@ -127,8 +127,13 @@ impl Threader<'_> {
           else_: Box::new(new_else),
         }
       }
-      // LetRec not yet emitted by CPS-0; pass-through unchanged.
-      ExprKind::LetRec { .. } => kind,
+      ExprKind::LetRec { slots, body } => {
+        // The letrec's body is part of the enclosing ctx scope — no fresh
+        // ctx bind is introduced. Recurse to thread ctx through any Apps
+        // (Set, Pub, ƒret, ...) inside.
+        let new_body = self.thread_expr(*body);
+        ExprKind::LetRec { slots, body: Box::new(new_body) }
+      }
     };
     Expr { id, kind: new_kind }
   }

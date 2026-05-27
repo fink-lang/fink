@@ -178,13 +178,8 @@ fn walk_exprs(root: &Expr, visit: &mut impl FnMut(&Expr)) {
       walk_exprs(then, visit);
       walk_exprs(else_, visit);
     }
-    ExprKind::LetRec { group, cont, .. } => {
-      for defn in group {
-        if let crate::passes::cps::ir::LetRecDefn::Fn { body, .. } = defn {
-          walk_exprs(body, visit);
-        }
-      }
-      walk_cont(cont, visit);
+    ExprKind::LetRec { body, .. } => {
+      walk_exprs(body, visit);
     }
   }
 }
