@@ -187,6 +187,9 @@ fn walk_exprs(root: &Expr, visit: &mut impl FnMut(&Expr)) {
     ExprKind::Closure { cont, .. } => {
       walk_cont(cont, visit);
     }
+    ExprKind::LetCaps { cont, .. } => {
+      walk_cont(cont, visit);
+    }
   }
 }
 

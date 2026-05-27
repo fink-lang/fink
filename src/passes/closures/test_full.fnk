@@ -1,0 +1,1324 @@
+---
+unified lifting tests
+---
+
+# Unified closure/continuation lifting — lifts nested fns one level at a time,
+# threading captured bindings as explicit params via ·closure.
+#
+# After lifting, no fn should reference bindings from outer scopes — all values
+# are passed explicitly as params. No forward references to sibling-scope binds.
+#
+# Param display format (purely visual — the IR is a flat param list):
+#   {·a_1, ·b_2}     captures — closed-over variables threaded by lifting
+#   [·x_3, ·y_4]     user params — original function arguments
+#   ·v_5              cont — the return continuation (bare, no brackets)
+#
+# Capture names use the source name from the original binding (via AST origin)
+# paired with the capture param's own CpsId, so they match body refs.
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_closures ƒink:
+#       <fink source>
+#
+#     | equals ƒink:
+#       <expected lifted CPS>
+
+{test, skip, equals, expect, cps_closures} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
+{·ƒink_module,·import,·ƒpub, ·closure, ·if, ·panic
+  ·op_plus
+  ·op_mul
+  ·op_eq
+  ·empty
+  ·is_seq_like
+  ·is_rec_like
+  ·seq_pop
+  ·seq_prepend
+  ·rec_put
+  ·rec_pop
+} = import '@fink/compile/builtins'
+
+
+
+
+test 'single module expr', fn:
+  expect cps_closures ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
+
+
+test 'single binding export', fn:
+  expect cps_closures ƒink:
+    foo = fn: 123
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_18, ·ƒret_1:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_25, ·ƒctx_20, ·ƒret_3: ·ƒret_3 ·ƒctx_20, (i8 123)
+          fn ·v_28:
+            ·closure ·v_28, {}, fn ·v_2:
+              ·set ·foo_0, ·v_2, fn:
+                ·ƒpub ·ƒctx_18, ·foo_0, fn ·ƒctx_23:
+                  ·ƒret_1 ·ƒctx_23, ·foo_0
+    # sm:PgABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0YAQADDgACAAoBDAcAAQAHCAAUAQAHEAAYAQgDEgAEAQADAAEAAxQAFAAGAQADAAEAAwYBAAMIABQBBwcMAAIAEgEABwABAAcUAQAHDAAEAQAHAAEABwIBAAcCAAoBAAcKAAIAFgELDQABAA0MAQADDgAEAQwHCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
+
+test 'single binding export with trailing expr', fn:
+  expect cps_closures ƒink:
+    foo = fn: 123
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_17, ·ƒret_1:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_24, ·ƒctx_19, ·ƒret_3: ·ƒret_3 ·ƒctx_19, (i8 123)
+          fn ·v_27:
+            ·closure ·v_27, {}, fn ·v_2:
+              ·set ·foo_0, ·v_2, fn:
+                ·ƒpub ·ƒctx_17, ·foo_0, fn ·ƒctx_22:
+                  ·ƒret_1 ·ƒctx_22, (i8 42)
+    # sm:QAABABAAAQAQJAEAEBgBHAISAAIABgEbEAABABAYAQADDgACAAoBDAcAAQAHCAAUAQAHEAAYAQgDEgAEAQADAAEAAxQAFAAGAQADAAEAAwYBAAMIABQBBwcMAAIAEgEABwABAAcUAQAHDAAEAQAHAAEABwIBAAcCAAoBAAcKAAIAFgELDQABAA0MAQADDgAEAQwHCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEcAgABAAIUABQABgEAAgABAAIGAQAC
+
+
+
+test 'two fn exports', fn:
+  expect cps_closures ƒink:
+    foo = fn: 123
+    bar = fn: 345
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_31, ·ƒret_2:
+      ·letrec fn ·foo_0, ·bar_1:
+        ·fn
+          fn ·v_48, ·ƒctx_33, ·ƒret_4: ·ƒret_4 ·ƒctx_33, (i8 123)
+          fn ·v_51:
+            ·closure ·v_51, {}, fn ·v_3:
+              ·set ·foo_0, ·v_3, fn:
+                ·ƒpub ·ƒctx_31, ·foo_0, fn ·ƒctx_36:
+                  ·fn
+                    fn ·v_42, ·ƒctx_37, ·ƒret_10: ·ƒret_10 ·ƒctx_37, (i16 345)
+                    fn ·v_45:
+                      ·closure ·v_45, {}, fn ·v_9:
+                        ·set ·bar_1, ·v_9, fn:
+                          ·ƒpub ·ƒctx_36, ·bar_1, fn ·ƒctx_40:
+                            ·ƒret_2 ·ƒctx_40, ·bar_1
+    # sm:bQABABsAAQAbJAEAGxgBHA0SAAIABgEbGwABABsYAQADEgEcAw4AAgAKAQ8HAAEABwgAFAEABxAAGAEIAxIABAEAAwABAAMUABQABgEAAwABAAMGAQADCAAUAQcHDAACABIBAAcAAQAHFAEABwwABAEABwABAAcCAQAHAgAKAQAHCgACABYBCw0AAQANDAEAAw4ABAEMBwoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BKAcAAQAHCAAoAQAHEAAYAQgDFAAEAQADAAEAAxYAFAAGAQADAAEAAwgBAAMIACgBBwcMAAIAJgEABwABAAcUAQAHDAAEAQAHAAEABwIBAAcCAAoBAAcKAAIAKgELDQABAA0MAQADDgAEAQwHCgAIAAIALgELAwABAAMQABQABAEAAw4ACgAUAAIAMgEAAwABAAMUABQABAEAAw
+
+test 'fooobar — multi fn with calls', fn:
+  expect cps_closures ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      a * b
+
+    p = mul s, 3
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_63, ·ƒret_8:
+      ·letrec fn ·add_0, ·s_1, ·mul_2, ·p_3:
+        ·fn
+          fn ·v_88, ·ƒctx_65, ·ƒret_10, ·a_4, ·b_5: ·op_plus ·ƒctx_65, ·a_4, ·b_5, ·ƒret_10
+          fn ·v_91:
+            ·closure ·v_91, {}, fn ·v_9:
+              ·set ·add_0, ·v_9, fn:
+                ·ƒpub ·ƒctx_63, ·add_0, fn ·ƒctx_68:
+                  ·add_0
+                    ·ƒctx_68
+                    fn ·ƒctx_70, ·v_20:
+                      ·set ·s_1, ·v_20, fn:
+                        ·ƒpub ·ƒctx_70, ·s_1, fn ·ƒctx_72:
+                          ·fn
+                            fn ·v_82, ·ƒctx_73, ·ƒret_23, ·a_6, ·b_7: ·op_mul ·ƒctx_73, ·a_6, ·b_7, ·ƒret_23
+                            fn ·v_85:
+                              ·closure ·v_85, {}, fn ·v_22:
+                                ·set ·mul_2, ·v_22, fn:
+                                  ·ƒpub ·ƒctx_72, ·mul_2, fn ·ƒctx_76:
+                                    ·mul_2
+                                      ·ƒctx_76
+                                      fn ·ƒctx_78, ·v_33:
+                                        ·set ·p_3, ·v_33, fn:
+                                          ·ƒpub ·ƒctx_78, ·p_3, fn ·ƒctx_80:
+                                            ·ƒret_8 ·ƒctx_80, ·p_3
+                                      ·s_1
+                                      i8 3
+                    i8 1
+                    i8 2
+    # sm:sQEAAQBKAAEASiQBAEoYAXwMEgACAAYBe0oAAQBKGAEAAxIBMAEOARwDEgEwAQoAAgAKAW8QAAEAEAgAFAEAEBAAGAEWBRgBDwEOAQYBCgAEAQoFAAEABRQAFAAEAQABCgAEAQgBCgAEAQcFFAAUARUQDAACABIBABAAAQAQFAEAEAwABAEAEAABABACAQAQAgAKAQAQCgACABYBCxYAAQAWDAEAAw4ABAEMEAoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BOAgAAQADMAA8ABgBAAgMAAIAJgEHDAABAAwMAQABCgAEAQgIDAAIAAIAKgEHAQABAAEQABQABAEAAQoACgAUAAIALgEoEAABABAIADgBABAQABgBFgUYAQ8BDgEGAQoABAEKBQABAAUSABQABAEAAQoABAEIAQoABAEHBRQAOAEVEAwAAgA2AQAQAAEAEBQBABAMAAQBABAAAQAQAgEAEAIACgEAEAwAAgA6AQsWAAEAFgwBAAMOAAQBDBAMAAgAAgA-AQsDAAEAAxAAFAAEAQADDgAKABQAAgBCATgIAAEAA1QAYAAYAQAIDAACAEoBBwwAAQAMDAEAAQoABAEICAwACAACAE4BBwEAAQABEAAUAAQBAAEKAAoAFAACAFIBAAEAAQABFAAUAAQBAAFQARABUAEGAQABAAEGAQABJAFRAQABAAEGAQABJAEGAQABAAEGAQAB
+
+
+---
+pure functions — no captures, unchanged
+---
+
+test 'pure fn is unchanged', fn:
+  expect cps_closures ƒink:
+    f = fn x: x
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_19, ·ƒret_2:
+      ·letrec fn ·f_0:
+        ·fn
+          fn ·v_26, ·ƒctx_21, ·ƒret_4, ·x_1: ·ƒret_4 ·ƒctx_21, ·x_1
+          fn ·v_29:
+            ·closure ·v_29, {}, fn ·v_3:
+              ·set ·f_0, ·v_3, fn:
+                ·ƒpub ·ƒctx_19, ·f_0, fn ·ƒctx_24:
+                  ·ƒret_2 ·ƒctx_24, ·f_0
+    # sm:PQABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsYAQABCgACAAoBCAcAAQAHCAAUAQAHEAAYAQwBFgEFAQoABAEGAQABAAEUABQABAEAAQoAFAELBwwAAgASAQAHAAEABxQBAAcMAAQBAAcAAQAHAgEABwIACgEABwoAAgAWAQcLAAEACwwBAAEKAAQBCAcKAAgAAgAaAQcBAAEAARAAFAAEAQABCgAKABQAAgAeAQABAAEAARQAFAAEAQAB
+
+
+test 'pure nested fn — no captures, hoisted to module scope', fn:
+  expect cps_closures ƒink:
+    foo = fn a:
+      fn b: b
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_24, ·ƒret_3:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_40, ·ƒctx_26, ·ƒret_5, ·a_1:
+            ·fn
+              fn ·v_32, ·ƒctx_27, ·ƒret_7, ·b_2: ·ƒret_7 ·ƒctx_27, ·b_2
+              fn ·v_35:
+                ·closure ·v_35, {}, fn ·v_6:
+                  ·ƒret_5 _
+          fn ·v_43:
+            ·closure ·v_43, {}, fn ·v_4:
+              ·set ·foo_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_24, ·foo_0, fn ·ƒctx_30:
+                  ·ƒret_3 ·ƒctx_30, ·foo_0
+    # sm:WAABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUYAQADDgACAAoBDA8AAQAPCAAUAQAPEAAYARAHFgEJAQoAAgASAQoHAAEABwgAHAEABxAAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKABwBCwcMAAIAGgEABwABAAcUAQAHDAAEAQAHAAEABwIBAAcCAAoBAAcKAAIAHgAAABQAAgAUAQ8PDAACABIBAA8AAQAPFAEADwwABAEADwABAA8CAQAPAgAKAQAPCgACABYBCxUAAQAVDAEAAw4ABAEMDwoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
+
+
+---
+continuation lifting — inline Cont::Expr bodies become named fns
+---
+
+test 'fn call result bound at module level', fn:
+  expect cps_closures ƒink:
+    add = fn a, b: a + b
+    x = add 1, 2
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_34, ·ƒret_4:
+      ·letrec fn ·add_0, ·x_1:
+        ·fn
+          fn ·v_45, ·ƒctx_36, ·ƒret_6, ·a_2, ·b_3: ·op_plus ·ƒctx_36, ·a_2, ·b_3, ·ƒret_6
+          fn ·v_48:
+            ·closure ·v_48, {}, fn ·v_5:
+              ·set ·add_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_34, ·add_0, fn ·ƒctx_39:
+                  ·add_0
+                    ·ƒctx_39
+                    fn ·ƒctx_41, ·v_16:
+                      ·set ·x_1, ·v_16, fn:
+                        ·ƒpub ·ƒctx_41, ·x_1, fn ·ƒctx_43:
+                          ·ƒret_4 ·ƒctx_43, ·x_1
+                    i8 1
+                    i8 2
+    # sm:YQABACEAAQAhJAEAIRgBKgwSAAIABgEpIQABACEYAQADEgEqAQoAAgAKAR0OAAEADggAFAEADhAAGAESBRYBCwEOAQYBCgAEAQYFAAEABRQAFAAEAQABCgAEAQgBCgAEAQcFEgAUAREODAACABIBAA4AAQAOFAEADgwABAEADgABAA4CAQAOAgAKAQAOCgACABYBCxQAAQAUDAEAAw4ABAEMDgoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BMggAAQADMAA8ABgBAAgMAAIAJgEHDAABAAwMAQABCgAEAQgIDAAIAAIAKgEHAQABAAEQABQABAEAAQoACgAUAAIALgEAAQABAAEUABQABAEAASwBEAEAAQABBgEAASQBBgEAAQABBgEAAQ
+
+
+test 'chained ops at module level', fn:
+  expect cps_closures ƒink:
+    2 * 3 + 4
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
+      ·op_mul ·ƒctx_11, (i8 2), (i8 3), fn ·ƒctx_14, ·v_3:
+        ·op_plus ·ƒctx_14, ·v_3, (i8 4), ·ƒret_0
+    # sm:IQABAAkAAQAJJAEACRgBAAkSAAIABgEABQABAAUSABQABgEAAQABAAEGAQABBAAGAQgBAAEAAQYBAAEEAAoAGAEHBQoAAgAKAQAJAAEACRQAFAAEAQAFCgAGARABAAEAAQYBAAEEAAQBDwk
+
+
+test 'chained arithmetic — cont body lifted', fn:
+  expect cps_closures ƒink:
+    x = 2 * 3
+    x + 4
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_18, ·ƒret_1:
+      ·letrec fn ·x_0:
+        ·op_mul ·ƒctx_18, (i8 2), (i8 3), fn ·ƒctx_21, ·v_4:
+          ·set ·x_0, ·v_4, fn:
+            ·ƒpub ·ƒctx_21, ·x_0, fn ·ƒctx_23:
+              ·op_plus ·ƒctx_23, ·x_0, (i8 4), ·ƒret_1
+    # sm:NwABAA8AAQAPJAEADxgBFAUSAAIABgETDwABAA8YAQABCgACAAoBCAUAAQAFEgAUAAYBAAEAAQABBgEAAQQABgEIAQABAAEGAQABBAAKABgBBwUKAAIADgEHCQABAAkMAQABCgAEAQgFCgAIAAIAEgEHAQABAAEQABQABAEAAQoACgAUAAIAFgEUBQABAAUUABQABAEAAQoABgEIAQABAAEGAQABBAAEAQcF
+
+
+---
+depth-1 closures — single level of capture
+---
+
+test 'captured binding becomes leading param', fn:
+  expect cps_closures ƒink:
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_26, ·ƒret_3:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_44, ·ƒctx_28, ·ƒret_5, ·a_1:
+            ·fn
+              fn ·v_35, ·ƒctx_29, ·ƒret_7, ·b_2:
+                ·letcaps ·v_35, fn {·a_34}:
+                  ·op_plus ·ƒctx_29, ·a_34, ·b_2, ·ƒret_7
+              fn ·v_39:
+                ·closure ·v_39, {·a_34: ·a_1}, fn ·v_6:
+                  ·ƒret_5 _
+          fn ·v_47:
+            ·closure ·v_47, {}, fn ·v_4:
+              ·set ·foo_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_26, ·foo_0, fn ·ƒctx_32:
+                  ·ƒret_3 ·ƒctx_32, ·foo_0
+    # sm:bQABAB0AAQAdJAEAHRgBAB0SAAIABgEAHQABAB0YAQADDgACAAoBDBcAAQAXCAAUAQAXEAAYARAPFgEJAQoAAgASAQoPAAEADwgAHAEADxAAGAEUBRYBDQEKAAIAGgEFDwABAA8UAQAPDAAKAQAPAAEADwIBCQEMAAABCg8CAAIAHgEUBQABAAUUABQABAEAAQwABAEIAQoABAEHBRIAHAETDwwAAgAaAQAPAAEADxQBAA8MAAQBAA8AAQAPAgEJAQABAAEMAAQBAAEKAAABCg8CAAoBAA8KAAIAHgAAABQAAgAUAQ8XDAACABIBABcAAQAXFAEAFwwABAEAFwABABcCAQAXAgAKAQAXCgACABYBCx0AAQAdDAEAAw4ABAEMFwoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
+
+
+test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
+  expect cps_closures ƒink:
+    f = fn x:
+      x
+    g = fn a:
+      fn b:
+        a + b
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_40, ·ƒret_5:
+      ·letrec fn ·f_0, ·g_1:
+        ·fn
+          fn ·v_68, ·ƒctx_42, ·ƒret_7, ·x_2: ·ƒret_7 ·ƒctx_42, ·x_2
+          fn ·v_71:
+            ·closure ·v_71, {}, fn ·v_6:
+              ·set ·f_0, ·v_6, fn:
+                ·ƒpub ·ƒctx_40, ·f_0, fn ·ƒctx_45:
+                  ·fn
+                    fn ·v_62, ·ƒctx_46, ·ƒret_13, ·a_3:
+                      ·fn
+                        fn ·v_53, ·ƒctx_47, ·ƒret_15, ·b_4:
+                          ·letcaps ·v_53, fn {·a_52}:
+                            ·op_plus ·ƒctx_47, ·a_52, ·b_4, ·ƒret_15
+                        fn ·v_57:
+                          ·closure ·v_57, {·a_52: ·a_3}, fn ·v_14:
+                            ·ƒret_13 _
+                    fn ·v_65:
+                      ·closure ·v_65, {}, fn ·v_12:
+                        ·set ·g_1, ·v_12, fn:
+                          ·ƒpub ·ƒctx_45, ·g_1, fn ·ƒctx_50:
+                            ·ƒret_5 ·ƒctx_50, ·g_1
+    # sm:mwEAAQApAAEAKSQBACkYARwbEgACAAYBGykAAQApGAEAAQ4BHAEKAAIACgETCQABAAkIABQBAAkQABgBEAEWAQkBCgAEAQoBAAEAARQAFAAEAQABCgAUAQ8JDAACABIBAAkAAQAJFAEACQwABAEACQABAAkCAQAJAgAKAQAJCgACABYBBw0AAQANDAEAAQoABAEICQoACAACABoBBwEAAQABEAAUAAQBAAEKAAoAFAACAB4BJBcAAQAXCAAoAQAXEAAYARAPGAEJAQoAAgAmAQoPAAEADwgAMAEADxAAGAEUBRgBDQEKAAIALgEFDwABAA8UAQAPDAAKAQAPAAEADwIBCQEMAAABCg8CAAIAMgEUBQABAAUUABQABAEAAQwABAEIAQoABAEHBRQAMAETDwwAAgAuAQAPAAEADxQBAA8MAAQBAA8AAQAPAgEJAQABAAEMAAQBAAEKAAABCg8CAAoBAA8MAAIAMgAAABYAAgAoAQ8XDAACACYBABcAAQAXFAEAFwwABAEAFwABABcCAQAXAgAKAQAXDAACACoBBxsAAQAbDAEAAQoABAEIFwwACAACAC4BBwEAAQABEAAUAAQBAAEKAAoAFAACADIBAAEAAQABFAAUAAQBAAE
+
+---
+depth-2 closures — multiple nesting levels
+---
+
+test 'depth-2 closure', fn:
+  expect cps_closures ƒink:
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b + c
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_36, ·ƒret_4:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_69, ·ƒctx_38, ·ƒret_6, ·a_1:
+            ·fn
+              fn ·v_60, ·ƒctx_39, ·ƒret_8, ·b_2:
+                ·letcaps ·v_60, fn {·a_59}:
+                  ·fn
+                    fn ·v_49, ·ƒctx_40, ·ƒret_10, ·c_3:
+                      ·letcaps ·v_49, fn {·a_47, ·b_48}:
+                        ·op_plus ·ƒctx_40, ·a_47, ·b_48, fn ·ƒctx_42, ·v_13:
+                          ·op_plus ·ƒctx_42, ·v_13, ·c_3, ·ƒret_10
+                    fn ·v_54:
+                      ·closure ·v_54, {·a_47: ·a_59, ·b_48: ·b_2}, fn ·v_9:
+                        ·ƒret_8 _
+              fn ·v_64:
+                ·closure ·v_64, {·a_59: ·a_1}, fn ·v_7:
+                  ·ƒret_6 _
+          fn ·v_72:
+            ·closure ·v_72, {}, fn ·v_5:
+              ·set ·foo_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_36, ·foo_0, fn ·ƒctx_45:
+                  ·ƒret_4 ·ƒctx_45, ·foo_0
+    # sm:qwEAAQAtAAEALSQBAC0YAQAtEgACAAYBAC0AAQAtGAEAAw4AAgAKAQwnAAEAJwgAFAEAJxAAGAEQHxYBCQEKAAIAEgEKHwABAB8IABwBAB8QABgBFBUWAQ0BCgACABoBBR8AAQAfFAEAHwwACgEAHwABAB8CAQkBDAAAAQofAgACAB4BFBUAAQAVCAAoAQAVEAAYARgJGAERAQoAAgAmAQUVAAEAFRQBABUMAAoBABUAAQAVAgEdAQwABAEQAQwAAAEOFQIAAgAqARgFAAEABRQAFAAEAQABDAAEAQgBDAAKABgBBwUMAAIALgEACQABAAkUABQABAEABQwABAEQAQoABAEPCRQAKAEXFQwAAgAmAQAVAAEAFRQBABUMAAQBABUAAQAVAgEdAQABAAEMAAQBAAEMAAQBEAEAAQABDAAEAQABCgAAAQ4VAgAKAQAVCgACACoAAAAUAAIAHAETHwwAAgAaAQAfAAEAHxQBAB8MAAQBAB8AAQAfAgEJAQABAAEMAAQBAAEKAAABCh8CAAoBAB8KAAIAHgAAABQAAgAUAQ8nDAACABIBACcAAQAnFAEAJwwABAEAJwABACcCAQAnAgAKAQAnCgACABYBCy0AAQAtDAEAAw4ABAEMJwoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
+
+
+test 'multiple captures at depth-2', fn:
+  expect cps_closures ƒink:
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_31, ·ƒret_4:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_62, ·ƒctx_33, ·ƒret_6, ·a_1:
+            ·fn
+              fn ·v_53, ·ƒctx_34, ·ƒret_8, ·b_2:
+                ·letcaps ·v_53, fn {·a_52}:
+                  ·fn
+                    fn ·v_42, ·ƒctx_35, ·ƒret_10, ·c_3:
+                      ·letcaps ·v_42, fn {·a_40, ·b_41}:
+                        ·op_plus ·ƒctx_35, ·a_40, ·b_41, ·ƒret_10
+                    fn ·v_47:
+                      ·closure ·v_47, {·a_40: ·a_52, ·b_41: ·b_2}, fn ·v_9:
+                        ·ƒret_8 _
+              fn ·v_57:
+                ·closure ·v_57, {·a_52: ·a_1}, fn ·v_7:
+                  ·ƒret_6 _
+          fn ·v_65:
+            ·closure ·v_65, {}, fn ·v_5:
+              ·set ·foo_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_31, ·foo_0, fn ·ƒctx_38:
+                  ·ƒret_4 ·ƒctx_38, ·foo_0
+    # sm:nwEAAQApAAEAKSQBACkYAQApEgACAAYBACkAAQApGAEAAw4AAgAKAQwjAAEAIwgAFAEAIxAAGAEQGxYBCQEKAAIAEgEKGwABABsIABwBABsQABgBFBEWAQ0BCgACABoBBRsAAQAbFAEAGwwACgEAGwABABsCAQkBDAAAAQobAgACAB4BFBEAAQARCAAoAQAREAAYARgFGAERAQoAAgAmAQURAAEAERQBABEMAAoBABEAAQARAgEdAQwABAEQAQwAAAEOEQIAAgAqARgFAAEABRQAFAAEAQABDAAEAQgBDAAEAQcFFAAoARcRDAACACYBABEAAQARFAEAEQwABAEAEQABABECAR0BAAEAAQwABAEAAQwABAEQAQABAAEMAAQBAAEKAAABDhECAAoBABEKAAIAKgAAABQAAgAcARMbDAACABoBABsAAQAbFAEAGwwABAEAGwABABsCAQkBAAEAAQwABAEAAQoAAAEKGwIACgEAGwoAAgAeAAAAFAACABQBDyMMAAIAEgEAIwABACMUAQAjDAAEAQAjAAEAIwIBACMCAAoBACMKAAIAFgELKQABACkMAQADDgAEAQwjCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
+
+
+test 'multi-fn module — add and main', fn:
+  expect cps_closures ƒink:
+    add = fn a, b:
+      a + b
+
+    foo = fn:
+      add 3, 4
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_38, ·ƒret_4:
+      ·letrec fn ·add_0, ·foo_1:
+        ·fn
+          fn ·v_57, ·ƒctx_40, ·ƒret_6, ·a_2, ·b_3: ·op_plus ·ƒctx_40, ·a_2, ·b_3, ·ƒret_6
+          fn ·v_60:
+            ·closure ·v_60, {}, fn ·v_5:
+              ·set ·add_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_38, ·add_0, fn ·ƒctx_43:
+                  ·fn
+                    fn ·v_50, ·ƒctx_44, ·ƒret_14:
+                      ·letcaps ·v_50, fn {·add_49}:
+                        ·add_49 ·ƒctx_44, ·ƒret_14, (i8 3), (i8 4)
+                    fn ·v_54:
+                      ·closure ·v_54, {·add_49: ·add_0}, fn ·v_13:
+                        ·set ·foo_1, ·v_13, fn:
+                          ·ƒpub ·ƒctx_43, ·foo_1, fn ·ƒctx_47:
+                            ·ƒret_4 ·ƒctx_47, ·foo_1
+    # sm:iAEAAQAsAAEALCQBACwYATAUEgACAAYBLywAAQAsGAEAAxIBMAMOAAIACgEjEAABABAIABQBABAQABgBFgUWAQ8BDgEGAQoABAEKBQABAAUUABQABAEAAQoABAEIAQoABAEHBRIAFAEVEAwAAgASAQAQAAEAEBQBABAMAAQBABAAAQAQAgEAEAIACgEAEAoAAgAWAQsWAAEAFgwBAAMOAAQBDBAKAAgAAgAaAQsDAAEAAxAAFAAEAQADDgAKABQAAgAeATwOAAEADggAKAEADhAAGAEMCBQAAgAmAQsOAAEADhQBAA4MAAoBAA4AAQAOAgE7AxAAAAE8DgIAAgAqAQwIAAEAAxIAFAAEAQAIFAAGAQgBAAEAAQYBAAEEAAYBBgEAAQABBgEAAQQAKAEZDgwAAgAmAQAOAAEADhQBAA4MAAQBAA4AAQAOAgE7AwABAAMQAAQBAAMOAAABPA4CAAoBAA4MAAIAKgELFAABABQMAQADDgAEAQwODAAIAAIALgELAwABAAMQABQABAEAAw4ACgAUAAIAMgEAAwABAAMUABQABAEAAw
+
+test 'chained module-fn calls via let — cont closes over outer cont', fn:
+  # The cont ·v_55 closes over ·v_28 (the outer cont param) via ·closure.
+  # This is correct and necessary: ·double_0 calls its cont with one arg (the
+  # result), so ·v_28 must be baked into the cont beforehand.
+  # The ·closure could be eliminated by threading ·v_28 as an extra param
+  # through ·double_0 — see the "closure elimination" note in lifting/mod.rs.
+  expect cps_closures ƒink:
+    double = fn x:
+      x * 2
+    inc = fn x:
+      x + 1
+
+    foo = fn:
+      x = double 5
+      inc x
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_62, ·ƒret_6:
+      ·letrec fn ·double_0, ·inc_1, ·foo_2:
+        ·fn
+          fn ·v_95, ·ƒctx_64, ·ƒret_8, ·x_3: ·op_mul ·ƒctx_64, ·x_3, (i8 2), ·ƒret_8
+          fn ·v_98:
+            ·closure ·v_98, {}, fn ·v_7:
+              ·set ·double_0, ·v_7, fn:
+                ·ƒpub ·ƒctx_62, ·double_0, fn ·ƒctx_67:
+                  ·fn
+                    fn ·v_89, ·ƒctx_68, ·ƒret_16, ·x_4: ·op_plus ·ƒctx_68, ·x_4, (i8 1), ·ƒret_16
+                    fn ·v_92:
+                      ·closure ·v_92, {}, fn ·v_15:
+                        ·set ·inc_1, ·v_15, fn:
+                          ·ƒpub ·ƒctx_67, ·inc_1, fn ·ƒctx_71:
+                            ·fn
+                              fn ·v_81, ·ƒctx_72, ·ƒret_24:
+                                ·letcaps ·v_81, fn {·double_79, ·inc_80}:
+                                  ·letrec fn ·x_5:
+                                    ·double_79
+                                      ·ƒctx_72
+                                      fn ·ƒctx_74, ·v_27:
+                                        ·set ·x_5, ·v_27, fn:
+                                          ·inc_80 ·ƒctx_74, ·ƒret_24, ·x_5
+                                      i8 5
+                              fn ·v_86:
+                                ·closure ·v_86, {·double_79: ·double_0, ·inc_80: ·inc_1}, fn ·v_23:
+                                  ·set ·foo_2, ·v_23, fn:
+                                    ·ƒpub ·ƒctx_71, ·foo_2, fn ·ƒctx_77:
+                                      ·ƒret_6 ·ƒctx_77, ·foo_2
+    # sm:1QEAAQBMAAEATCQBAEwYAVggEgACAAYBV0wAAQBMGAEABhgBLgMSASoDDgACAAoBRQ0AAQANCAAUAQANEAAYARAFFgEJAQoABAEKBQABAAUSABQABAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAUAQ8NDAACABIBAA0AAQANFAEADQwABAEADQABAA0CAQANAgAKAQANCgACABYBERYAAQAWDAEABhQABAESDQoACAACABoBEQYAAQAGEAAUAAQBAAYUAAoAFAACAB4BOg0AAQANCAAoAQANEAAYARAFGAEJAQoABAEKBQABAAUUABQABAEAAQoABgEIAQABAAEGAQABBAAEAQcFFAAoAQ8NDAACACYBAA0AAQANFAEADQwABAEADQABAA0CAQANAgAKAQANDAACACoBCxMAAQATDAEAAw4ABAEMDQwACAACAC4BCwMAAQADEAAUAAQBAAMOAAoAFAACADIBNhoAAQAaCAA8AQAaEAAYASoFFAACADoBKRoAAQAaFAEAGgwACgEAGgABABoCAWMGFgAEAS4DEAAAATYaAgACAD4BABoAAQAaGAEMAQoAAgBCAQgIAAEABlwAYAAYAQAIDAACAEoBBwwAAQAMDAEAAQoABAEICAwACAACAE4BFgUAAQADEgAUAAQBAAUUAAQBCAFQAQ8BAAEAAQYBAAECADwBIRoMAAIAOgEAGgABABoUAQAaDAAEAQAaAAEAGgIBYwYAAQAGFgAEAQAGFAAEAS4DAAEAAxAABAEAAw4AAAE2GgIACgEAGgwAAgA-AQsgAAEAIAwBAAMOAAQBDBoMAAgAAgBCAQsDAAEAAxAAFAAEAQADDgAKABQAAgBGAQADAAEAAxQAFAAEAQAD
+
+---
+pattern matching
+---
+
+test 'seq destructure', fn:
+  expect cps_closures ƒink:
+    spam = fn foo:
+      [a] = foo
+      a + 1
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_60, ·ƒret_3:
+      ·letrec fn ·spam_0:
+        ·fn
+          fn ·v_94, ·ƒctx_62, ·ƒret_5, ·foo_1:
+            ·letrec fn ·a_2:
+              ·fn
+                fn ·v_87, ·ƒctx_63, ·v_10:
+                  ·letcaps ·v_87, fn {·v_86}:
+                    ·let ·v_10, fn ·a_2:
+                      ·op_plus ·ƒctx_63, ·a_2, (i8 1), ·v_86
+                fn ·v_91:
+                  ·closure ·v_91, {·v_86: ·ƒret_5}, fn ·v_41:
+                    ·fn
+                      fn ·v_80, ·ƒctx_65, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                        ·is_seq_like ·ƒctx_65, ·v_7,
+                          fn ·ƒctx_67, ·v_22:
+                            ·seq_pop ·ƒctx_67, ·v_22, ·ƒfail_9, fn ·ƒctx_69, ·v_10, ·v_14:
+                              ·empty ·ƒctx_69, ·v_14, fn ·ƒctx_71, ·v_17:
+                                ·if ·v_17,
+                                  fn: ·ƒsucc_8 ·ƒctx_71, ·v_10
+                                  fn: ·ƒfail_9 ·ƒctx_71
+                          fn ·ƒctx_74: ·ƒfail_9 ·ƒctx_74
+                      fn ·v_83:
+                        ·closure ·v_83, {}, fn ·v_30:
+                          ·v_30 ·ƒctx_62, ·v_41, ·panic, ·foo_1
+          fn ·v_97:
+            ·closure ·v_97, {}, fn ·v_4:
+              ·set ·spam_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_60, ·spam_0, fn ·ƒctx_78:
+                  ·ƒret_3 ·ƒctx_78, ·spam_0
+    # sm:0QEAAQAiAAEAIiQBACIYAQAiEgACAAYBACIAAQAiGAEABBAAAgAKAQ4bAAEAGwgAFAEAGxAAGAEsBRYBJQMOAAIAEgEFGwABABsYARYBCgACABYBAQkAAQAJCAAgAQAJEAAYAQAJDAACAB4BAAkAAQAJFAEACQwACgEACQABAAkCARgFDAAAARcJAgACACIBAgEAAQABDAEBCQwACgECAQoAAgAmARYFAAEABRQAFAAEAQABCgAGAQgBAAEAAQYBAAEEAAQBBwUMACABFwkMAAIAHgEACQABAAkUAQAJDAAEAQAJAAEACQIBGAUAAQAFDAAEAQAFEgAAARcJAgAKAQAJDAACACIBAAkAAQAJCAAsAQAJEAAYABgAGAEACQoAAgAqAQAJAAEACRwAFAAEAQAJCgACADQAGAEACQwAAgAyAQAJAAEACRQAFAAEAQAJDAAEAQAJFAAKABgBAAkQAQAJDAACADYBAAkAAQAJEAAUAAQBAAkMAAoAGAEACQwAAgA6AQAJAAEACQoBAAkMAAIAQgAEAQAJAAEACRYAFAAEAQAJDABCAAQBAAkAAQAJFgAUADQAFAAEAQAJAAEACRYAFAAsAQAJDAACACoBAAkAAQAJFAEACQwABAEACQABAAkCAQAJAgAKAQAJDAACAC4BAAkAAQAJDgAUAAQBAAkMAAQBAAkOAAQBDAMOABQBHxsMAAIAEgEAGwABABsUAQAbDAAEAQAbAAEAGwIBABsCAAoBABsKAAIAFgENIgABACIMAQAEEAAEAQ4bCgAIAAIAGgENBAABAAQQABQABAEABBAACgAUAAIAHgEABAABAAQUABQABAEABA
+
+
+test 'record destructure', fn:
+  expect cps_closures ƒink:
+    ham = fn foo:
+      {x} = foo
+      x + 1
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_54, ·ƒret_3:
+      ·letrec fn ·ham_0:
+        ·fn
+          fn ·v_85, ·ƒctx_56, ·ƒret_5, ·foo_1:
+            ·letrec fn ·x_2:
+              ·fn
+                fn ·v_78, ·ƒctx_57, ·v_10:
+                  ·letcaps ·v_78, fn {·v_77}:
+                    ·let ·v_10, fn ·x_2:
+                      ·op_plus ·ƒctx_57, ·x_2, (i8 1), ·v_77
+                fn ·v_82:
+                  ·closure ·v_82, {·v_77: ·ƒret_5}, fn ·v_35:
+                    ·fn
+                      fn ·v_71, ·ƒctx_59, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                        ·is_rec_like ·ƒctx_59, ·v_7,
+                          fn ·ƒctx_61, ·v_15:
+                            ·rec_pop ·ƒctx_61, ·v_15, 'x', ·ƒfail_9, fn ·ƒctx_63, ·v_10, ·v_14:
+                              ·ƒsucc_8 ·ƒctx_63, ·v_10
+                          fn ·ƒctx_65: ·ƒfail_9 ·ƒctx_65
+                      fn ·v_74:
+                        ·closure ·v_74, {}, fn ·v_24:
+                          ·v_24 ·ƒctx_56, ·v_35, ·panic, ·foo_1
+          fn ·v_88:
+            ·closure ·v_88, {}, fn ·v_4:
+              ·set ·ham_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_54, ·ham_0, fn ·ƒctx_69:
+                  ·ƒret_3 ·ƒctx_69, ·ham_0
+    # sm:wQEAAQAhAAEAISQBACEYAQAhEgACAAYBACEAAQAhGAEAAw4AAgAKAQwbAAEAGwgAFAEAGxAAGAEsBRYBJQMOAAIAEgEFGwABABsYARYBCgACABYBAQkAAQAJCAAgAQAJEAAYAQAJDAACAB4BAAkAAQAJFAEACQwACgEACQABAAkCARgFDAAAARcJAgACACIBAgEAAQABDAEBCQwACgECAQoAAgAmARYFAAEABRQAFAAEAQABCgAGAQgBAAEAAQYBAAEEAAQBBwUMACABFwkMAAIAHgEACQABAAkUAQAJDAAEAQAJAAEACQIBGAUAAQAFDAAEAQAFEgAAARcJAgAKAQAJDAACACIBAAkAAQAJCAAsAQAJEAAYABgAGAEACQoAAgAqAQAJAAEACRwAFAAEAQAJCgACADQAGAEACQwAAgAyAQAJAAEACRQAFAAEAQAJDAAEAQAJAAEACQIBAAkCAQAJAgAEAQAJFAAKABgBAAkQAQAJDAACADYBAAkAAQAJFgAUAAQBAAkMADQAFAAEAQAJAAEACRYAFAAsAQAJDAACACoBAAkAAQAJFAEACQwABAEACQABAAkCAQAJAgAKAQAJDAACAC4BAAkAAQAJDgAUAAQBAAkMAAQBAAkOAAQBDAMOABQBHxsMAAIAEgEAGwABABsUAQAbDAAEAQAbAAEAGwIBABsCAAoBABsKAAIAFgELIQABACEMAQADDgAEAQwbCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
+
+
+test 'match — no forward refs after lift', fn:
+  expect cps_closures ƒink:
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_71, ·ƒret_2:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_131, ·ƒctx_73, ·ƒret_4, ·n_1:
+            ·fn
+              fn ·v_125, ·ƒctx_74, ·ƒret_25: ·ƒret_25 ·ƒctx_74, (i8 42)
+              fn ·v_128:
+                ·closure ·v_128, {}, fn ·v_29:
+                  ·fn
+                    fn ·v_118, ·ƒctx_76, ·ƒsucc_7, ·ƒfail_8, ·v_6:
+                      ·letcaps ·v_118, fn {·v_117}:
+                        ·fn
+                          fn ·v_101, ·ƒctx_77:
+                            ·letcaps ·v_101, fn {·v_99, ·v_100}:
+                              ·v_99 ·ƒctx_77, ·v_100
+                          fn ·v_106:
+                            ·closure ·v_106, {·v_99: ·v_117, ·v_100: ·ƒsucc_7}, fn ·v_35:
+                              ·fn
+                                fn ·v_93, ·ƒctx_79, ·ƒsucc_11, ·ƒfail_12, ·v_10:
+                                  ·op_eq ·ƒctx_79, ·v_10, (i8 0), fn ·ƒctx_81, ·v_15:
+                                    ·if ·v_15,
+                                      fn: ·ƒsucc_11 ·ƒctx_81
+                                      fn: ·ƒfail_12 ·ƒctx_81
+                                fn ·v_96:
+                                  ·closure ·v_96, {}, fn ·v_23:
+                                    ·v_23 ·ƒctx_76, ·v_35, ·ƒfail_8, ·v_6
+                    fn ·v_122:
+                      ·closure ·v_122, {·v_117: ·v_29}, fn ·v_41:
+                        ·fn
+                          fn ·v_110, ·ƒctx_85, ·ƒret_43, ·v_42:
+                            ·letcaps ·v_110, fn {·v_109}:
+                              ·v_109
+                                ·ƒctx_85
+                                ·ƒret_43
+                                fn ·ƒctx_87: ·panic ·ƒctx_87
+                                ·v_42
+                          fn ·v_114:
+                            ·closure ·v_114, {·v_109: ·v_41}, fn ·v_49:
+                              ·v_49 ·ƒctx_73, ·ƒret_4, ·n_1
+          fn ·v_134:
+            ·closure ·v_134, {}, fn ·v_3:
+              ·set ·foo_0, ·v_3, fn:
+                ·ƒpub ·ƒctx_71, ·foo_0, fn ·ƒctx_91:
+                  ·ƒret_2 ·ƒctx_91, ·foo_0
+    # sm:qAIAAQAgAAEAICQBACAYAQAgEgACAAYBACAAAQAgGAEAAw4AAgAKAQwaAAEAGggAFAEAGhIAGAEQEhYBCQEKAAIAEgEkBQABAAUIABwBAAUSABgAFAAEAQYCAAEAAhYAFAAGAQACAAEAAgYBAAIGABwBBQUOAAIAGgEABQABAAUUAQAFDgAEAQAFAAEABQIBAAUCAAoBAAUMAAIAHgEABQABAAUIACgBAAUSABgAGAAYAAoAAgAmAQAFAAEABRQBAAUOAAoBAAUAAQAFAgEABQ4AAAEABQIAAgAqAQAFAAEABQgANAEABRIAFAACADIBAAUAAQAFFAEABQ4ACgEABQABAAUCAQAFDAAEAA4AAAEABQIAAgA2AQAFAAEABQ4AFAAEAQAFDgA0AQAFDgACADIBAAUAAQAFFAEABQ4ABAEABQABAAUCAQAFAAEABQwABAEABQ4ABAAAAA4ABAAUAAABAAUCAAoBAAUMAAIANgEABQABAAUIAEABAAEQABgAGgAaAQABDAACAD4BAAEAAQABEAAUAAQBAAEMAAYBAAEAAQABBgEAAQQACgAYAQABDAACAEIBAAEAAQABCgEAAQwAAgBKAAQBAAEAAQABGAAUAEoABAEAAQABAAEYABQAQAEAAQwAAgA-AQABAAEAARQBAAEMAAQBAAEAAQABAgEAAQIACgEAAQwAAgBCAQAFAAEABQ4AFAAEAQAFDAAEAQAFFAAEAQAFCgAoAQAFDgACACYBAAUAAQAFFAEABQ4ABAEABQABAAUCAQAFAAEABQ4ABAEABQwAAAEABQIACgEABQwAAgAqARkSAAEAEggANAEAEhIAGAAYAQASDAACADIBABIAAQASFAEAEg4ACgEAEgABABICARoFDgAAARkSAgACADYBABIAAQASSABOAQASVAAUAAQBABIAAQASEABOAQASDAA0AQASDgACADIBABIAAQASFAEAEg4ABAEAEgABABICARoFAAEABQ4ABAEABQwAAAEZEgIACgEAEgwAAgA2AQASAAEAEg4AFAAEAQASEgAEAQwBCgAUARsaDgACABIBABoAAQAaFAEAGg4ABAEAGgABABoCAQAaAgAKAQAaCgACABYBCyAAAQAgDAEAAw4ABAEMGgoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
+
+
+test 'match with binding', fn:
+  expect cps_closures ƒink:
+    foo = fn n:
+      r = match n:
+        0: n + 1
+      r
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_80, ·ƒret_3:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_144, ·ƒctx_82, ·ƒret_5, ·n_1:
+            ·letrec fn ·r_2:
+              ·fn
+                fn ·v_137, ·ƒctx_83, ·ƒret_26:
+                  ·letcaps ·v_137, fn {·n_136}:
+                    ·op_plus ·ƒctx_83, ·n_136, (i8 1), ·ƒret_26
+                fn ·v_141:
+                  ·closure ·v_141, {·n_136: ·n_1}, fn ·v_32:
+                    ·fn
+                      fn ·v_129, ·ƒctx_85, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                        ·letcaps ·v_129, fn {·v_128}:
+                          ·fn
+                            fn ·v_112, ·ƒctx_86:
+                              ·letcaps ·v_112, fn {·v_110, ·v_111}:
+                                ·v_110 ·ƒctx_86, ·v_111
+                            fn ·v_117:
+                              ·closure ·v_117, {·v_110: ·v_128, ·v_111: ·ƒsucc_8}, fn ·v_38:
+                                ·fn
+                                  fn ·v_104, ·ƒctx_88, ·ƒsucc_12, ·ƒfail_13, ·v_11:
+                                    ·op_eq ·ƒctx_88, ·v_11, (i8 0), fn ·ƒctx_90, ·v_16:
+                                      ·if ·v_16,
+                                        fn: ·ƒsucc_12 ·ƒctx_90
+                                        fn: ·ƒfail_13 ·ƒctx_90
+                                  fn ·v_107:
+                                    ·closure ·v_107, {}, fn ·v_24:
+                                      ·v_24 ·ƒctx_85, ·v_38, ·ƒfail_9, ·v_7
+                      fn ·v_133:
+                        ·closure ·v_133, {·v_128: ·v_32}, fn ·v_44:
+                          ·fn
+                            fn ·v_121, ·ƒctx_94, ·ƒret_46, ·v_45:
+                              ·letcaps ·v_121, fn {·v_120}:
+                                ·v_120
+                                  ·ƒctx_94
+                                  ·ƒret_46
+                                  fn ·ƒctx_96: ·panic ·ƒctx_96
+                                  ·v_45
+                            fn ·v_125:
+                              ·closure ·v_125, {·v_120: ·v_44}, fn ·v_52:
+                                ·v_52
+                                  ·ƒctx_82
+                                  fn ·ƒctx_99, ·v_53:
+                                    ·set ·r_2, ·v_53, fn:
+                                      ·ƒret_5 ·ƒctx_99, ·r_2
+                                  ·n_1
+          fn ·v_147:
+            ·closure ·v_147, {}, fn ·v_4:
+              ·set ·foo_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_80, ·foo_0, fn ·ƒctx_102:
+                  ·ƒret_3 ·ƒctx_102, ·foo_0
+    # sm:0AIAAQArAAEAKyQBACsYAQArEgACAAYBACsAAQArGAEAAw4AAgAKAQwlAAEAJQgAFAEAJRIAGAFIARYBQQEKAAIAEgEFJQABACUYARABCgACABYBIggAAQAICAAgAQAIEgAYABQAAgAeAQAIAAEACBQBAAgOAAoBAAgAAQAIAgErAQ4AAAEsCAIAAgAiAQYFAAEABRQAFAAEAQABDgAGAQgBAAEAAQYBAAEEAAQBBwUUACABBQgOAAIAHgEACAABAAgUAQAIDgAEAQAIAAEACAIBKwEAAQABDgAEAQABCgAAASwIAgAKAQAIDAACACIBAAgAAQAICAAsAQAIEgAYABgAGAAKAAIAKgEACAABAAgUAQAIDgAKAQAIAAEACAIBAAgOAAABAAgCAAIALgEACAABAAgIADgBAAgSABQAAgA2AQAIAAEACBQBAAgOAAoBAAgAAQAIAgEACA4ABAAOAAABAAgCAAIAOgEACAABAAgQABQABAEACA4AOAEACA4AAgA2AQAIAAEACBQBAAgOAAQBAAgAAQAIAgEACAABAAgOAAQBAAgOAAQAAAAOAAQAFAAAAQAIAgAKAQAIDAACADoBAAgAAQAICABEAQABEgAYABoAGgEAAQwAAgBCAQABAAEAARAAFAAEAQABDAAGAQABAAEAAQYBAAEEAAoAGAEAAQwAAgBGAQABAAEAAQoBAAEMAAIATgAEAQABAAEAARgAFABOAAQBAAEAAQABGAAUAEQBAAEOAAIAQgEAAQABAAEUAQABDgAEAQABAAEAAQIBAAECAAoBAAEMAAIARgEACAABAAgOABQABAEACAwABAEACBQABAEACAoALAEACA4AAgAqAQAIAAEACBQBAAgOAAQBAAgAAQAIAgEACAABAAgOAAQBAAgMAAABAAgCAAoBAAgMAAIALgEZFQABABUIADgBABUSABgAGAEAFQwAAgA2AQAVAAEAFRQBABUOAAoBABUAAQAVAgEaCA4AAAEZFQIAAgA6AQAVAAEAFUwAUgEAFVgAFAAEAQAVAAEAFRAAUgEAFQwAOAEAFQ4AAgA2AQAVAAEAFRQBABUOAAQBABUAAQAVAgEaCAABAAgOAAQBAAgMAAABGRUCAAoBABUMAAIAOgEAFQABABVKAFgAGAEAFQwAAgBCAQcZAAEAGQwBAAEKAAQBCBUMAAgAAgBGATABAAEAARQAFAAEAQABSAEjAQoAFAEjJQ4AAgASAQAlAAEAJRQBACUOAAQBACUAAQAlAgEAJQIACgEAJQoAAgAWAQsrAAEAKwwBAAMOAAQBDCUKAAgAAgAaAQsDAAEAAxAAFAAEAQADDgAKABYAAgAeAQADAAEAAxQAFgAEAQAD
+
+
+test 'match arm refs top-level binding', fn:
+  expect cps_closures ƒink:
+    x = 5
+    match x:
+      0: 0
+      _: x + 1
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_87, ·ƒret_1:
+      ·letrec fn ·x_0:
+        ·set ·x_0, (i8 5), fn:
+          ·ƒpub ·ƒctx_87, ·x_0, fn ·ƒctx_90:
+            ·fn
+              fn ·v_163, ·ƒctx_91, ·ƒret_23: ·ƒret_23 ·ƒctx_91, (i8 0)
+              fn ·v_166:
+                ·closure ·v_166, {}, fn ·v_27:
+                  ·fn
+                    fn ·v_156, ·ƒctx_93, ·ƒsucc_5, ·ƒfail_6, ·v_4:
+                      ·letcaps ·v_156, fn {·v_155}:
+                        ·fn
+                          fn ·v_121, ·ƒctx_94:
+                            ·letcaps ·v_121, fn {·v_119, ·v_120}:
+                              ·v_119 ·ƒctx_94, ·v_120
+                          fn ·v_126:
+                            ·closure ·v_126, {·v_119: ·v_155, ·v_120: ·ƒsucc_5}, fn ·v_33:
+                              ·fn
+                                fn ·v_113, ·ƒctx_96, ·ƒsucc_9, ·ƒfail_10, ·v_8:
+                                  ·op_eq ·ƒctx_96, ·v_8, (i8 0), fn ·ƒctx_98, ·v_13:
+                                    ·if ·v_13,
+                                      fn: ·ƒsucc_9 ·ƒctx_98
+                                      fn: ·ƒfail_10 ·ƒctx_98
+                                fn ·v_116:
+                                  ·closure ·v_116, {}, fn ·v_21:
+                                    ·v_21 ·ƒctx_93, ·v_33, ·ƒfail_6, ·v_4
+                    fn ·v_160:
+                      ·closure ·v_160, {·v_155: ·v_27}, fn ·v_39:
+                        ·fn
+                          fn ·v_148, ·ƒctx_102, ·ƒret_44:
+                            ·letcaps ·v_148, fn {·x_147}:
+                              ·op_plus ·ƒctx_102, ·x_147, (i8 1), ·ƒret_44
+                          fn ·v_152:
+                            ·closure ·v_152, {·x_147: ·x_0}, fn ·v_50:
+                              ·fn
+                                fn ·v_140, ·ƒctx_104, ·ƒsucc_41, ·ƒfail_42, ·v_40:
+                                  ·letcaps ·v_140, fn {·v_139}:
+                                    ·v_139 ·ƒctx_104, ·ƒsucc_41
+                                fn ·v_144:
+                                  ·closure ·v_144, {·v_139: ·v_50}, fn ·v_55:
+                                    ·fn
+                                      fn ·v_131, ·ƒctx_106, ·ƒret_57, ·v_56:
+                                        ·letcaps ·v_131, fn {·v_129, ·v_130}:
+                                          ·v_129
+                                            ·ƒctx_106
+                                            ·ƒret_57
+                                            fn ·ƒctx_108:
+                                              ·v_130
+                                                ·ƒctx_108
+                                                ·ƒret_57
+                                                fn ·ƒctx_110: ·panic ·ƒctx_110
+                                                ·v_56
+                                            ·v_56
+                                      fn ·v_136:
+                                        ·closure ·v_136, {·v_129: ·v_39, ·v_130: ·v_55}, fn ·v_67:
+                                          ·v_67 ·ƒctx_90, ·ƒret_1, ·x_0
+    # sm:_AIAAQAgAAEAICQBACAYAQwaEgACAAYBCyAAAQAgGAEAAQoAAgAKAQAFAAEABQwBAAEKAAYBCAEAAQABBgEAAQQACAACAA4BBwEAAQABEAAUAAQBAAEKAAoAFAACABIBIgQAAQAECAAcAQAEEgAYABQABAEGAQABAAEWABQABgEAAQABAAEGAQABBAAcAQUEDgACABoBAAQAAQAEFAEABA4ABAEABAABAAQCAQAEAgAKAQAEDAACAB4BAAQAAQAECAAoAQAEEgAYABgAGAAKAAIAJgEABAABAAQUAQAEDgAKAQAEAAEABAIBAAQOAAABAAQCAAIAKgEABAABAAQIADQBAAQSABQAAgAyAQAEAAEABBQBAAQOAAoBAAQAAQAEAgEABA4ABAAOAAABAAQCAAIANgEABAABAAQQABQABAEABA4ANAEABA4AAgAyAQAEAAEABBQBAAQOAAQBAAQAAQAEAgEABAABAAQOAAQBAAQOAAQAAAAOAAQAFAAAAQAEAgAKAQAEDAACADYBAAQAAQAECABAAQABEgAYABgAGgEAAQoAAgA-AQABAAEAARAAFAAEAQABCgAGAQABAAEAAQYBAAEEAAoAGAEAAQwAAgBCAQABAAEAAQoBAAEMAAIASgAEAQABAAEAARYAFABKAAQBAAEAAQABGAAUAEABAAEOAAIAPgEAAQABAAEUAQABDgAEAQABAAEAAQIBAAECAAoBAAEMAAIAQgEABAABAAQOABQABAEABAwABAEABBQABAEABAoAKAEABA4AAgAmAQAEAAEABBQBAAQOAAQBAAQAAQAEAgEABAABAAQOAAQBAAQMAAABAAQCAAoBAAQMAAIAKgEOCAABAAgIADQBAAgSABoAFAACADIBAAgAAQAIFAEACA4ACgEACAABAAgCAS8BDgAAATAIAgACADYBBgUAAQAFFAAWAAQBAAEOAAYBCAEAAQABBgEAAQQABAEHBRQANAEFCA4AAgAyAQAIAAEACBQBAAgOAAQBAAgAAQAIAgEvAQABAAEOAAQBAAEKAAABMAgCAAoBAAgMAAIANgEACAABAAgIAEABAAgSABoAGgAaAAwAAgA-AQAIAAEACBQBAAgOAAoBAAgAAQAIAgEACA4AAAEACAIAAgBCAQAIAAEACBAAFgAEAQAIFgBAAQAIDgACAD4BAAgAAQAIFAEACA4ABAEACAABAAgCAQAIAAEACA4ABAEACAwAAAEACAIACgEACAwAAgBCASMaAAEAGggATAEAGhIAGgAYAQAaDAACAEoBABoAAQAaFAEAGg4ACgEAGgABABoCARYEDgAEAQ4IDgAAASMaAgACAE4BABoAAQAaYABoAQAabAAWAAIAVgEAGgABABpoAHABABp0ABYABAEAGgABABoQAHABABpeAQAaDABMAQAaDgACAEoBABoAAQAaFAEAGg4ABAEAGgABABoCARYEAAEABA4ABAEABAwABAEOCAABAAgOAAQBAAgMAAABIxoCAAoBABoMAAIATgEAGgABABoOABQABAEAGhIABAEMAQ
+
+
+test 'recursive fn in match', fn:
+  expect cps_closures ƒink:
+    fib = fn n:
+      r = match n:
+        0: 1
+        _: fib n + 1
+      r
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_107, ·ƒret_3:
+      ·letrec fn ·fib_0:
+        ·fn
+          fn ·v_198, ·ƒctx_109, ·ƒret_5, ·n_1:
+            ·letcaps ·v_198, fn {·fib_197}:
+              ·letrec fn ·r_2:
+                ·fn
+                  fn ·v_191, ·ƒctx_110, ·ƒret_26: ·ƒret_26 ·ƒctx_110, (i8 1)
+                  fn ·v_194:
+                    ·closure ·v_194, {}, fn ·v_30:
+                      ·fn
+                        fn ·v_184, ·ƒctx_112, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                          ·letcaps ·v_184, fn {·v_183}:
+                            ·fn
+                              fn ·v_147, ·ƒctx_113:
+                                ·letcaps ·v_147, fn {·v_145, ·v_146}:
+                                  ·v_145 ·ƒctx_113, ·v_146
+                              fn ·v_152:
+                                ·closure ·v_152, {·v_145: ·v_183, ·v_146: ·ƒsucc_8}, fn ·v_36:
+                                  ·fn
+                                    fn ·v_139, ·ƒctx_115, ·ƒsucc_12, ·ƒfail_13, ·v_11:
+                                      ·op_eq ·ƒctx_115, ·v_11, (i8 0), fn ·ƒctx_117, ·v_16:
+                                        ·if ·v_16,
+                                          fn: ·ƒsucc_12 ·ƒctx_117
+                                          fn: ·ƒfail_13 ·ƒctx_117
+                                    fn ·v_142:
+                                      ·closure ·v_142, {}, fn ·v_24:
+                                        ·v_24 ·ƒctx_112, ·v_36, ·ƒfail_9, ·v_7
+                        fn ·v_188:
+                          ·closure ·v_188, {·v_183: ·v_30}, fn ·v_42:
+                            ·fn
+                              fn ·v_175, ·ƒctx_121, ·ƒret_47:
+                                ·letcaps ·v_175, fn {·n_173, ·fib_174}:
+                                  ·op_plus ·ƒctx_121, ·n_173, (i8 1), fn ·ƒctx_123, ·v_51:
+                                    ·fib_174 ·ƒctx_123, ·ƒret_47, ·v_51
+                              fn ·v_180:
+                                ·closure ·v_180, {·n_173: ·n_1, ·fib_174: ·fib_197}, fn ·v_58:
+                                  ·fn
+                                    fn ·v_166, ·ƒctx_125, ·ƒsucc_44, ·ƒfail_45, ·v_43:
+                                      ·letcaps ·v_166, fn {·v_165}:
+                                        ·v_165 ·ƒctx_125, ·ƒsucc_44
+                                    fn ·v_170:
+                                      ·closure ·v_170, {·v_165: ·v_58}, fn ·v_63:
+                                        ·fn
+                                          fn ·v_157, ·ƒctx_127, ·ƒret_65, ·v_64:
+                                            ·letcaps ·v_157, fn {·v_155, ·v_156}:
+                                              ·v_155
+                                                ·ƒctx_127
+                                                ·ƒret_65
+                                                fn ·ƒctx_129:
+                                                  ·v_156
+                                                    ·ƒctx_129
+                                                    ·ƒret_65
+                                                    fn ·ƒctx_131: ·panic ·ƒctx_131
+                                                    ·v_64
+                                                ·v_64
+                                          fn ·v_162:
+                                            ·closure ·v_162, {·v_155: ·v_42, ·v_156: ·v_63}, fn ·v_75:
+                                              ·v_75
+                                                ·ƒctx_109
+                                                fn ·ƒctx_134, ·v_76:
+                                                  ·set ·r_2, ·v_76, fn:
+                                                    ·ƒret_5 ·ƒctx_134, ·r_2
+                                                ·n_1
+          fn ·v_202:
+            ·closure ·v_202, {·fib_197: ·fib_0}, fn ·v_4:
+              ·set ·fib_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_107, ·fib_0, fn ·ƒctx_137:
+                  ·ƒret_3 ·ƒctx_137, ·fib_0
+    # sm:ywMAAQA4AAEAOCQBADgaAQA4EgACAAYBADgAAQA4GAEAAw4AAgAKAQwyAAEAMggAFAEAMhIAGgFiARYBWwEKAAIAEgEFMgABADIUAQAyDgAKAQAyAAEAMgIBCwMSAAABDDICAAIAFgEAMgABADIYARABCgACABoBIgQAAQAECAAkAQAEEgAaABQABAEGAQABAAEWABYABgEAAQABAAEGAQABBAAkAQUEDgACACIBAAQAAQAEFAEABA4ABAEABAABAAQCAQAEAgAKAQAEDAACACYBAAQAAQAECAAwAQAEEgAaABgAGAAKAAIALgEABAABAAQUAQAEDgAKAQAEAAEABAIBAAQOAAABAAQCAAIAMgEABAABAAQIADwBAAQSABYAAgA6AQAEAAEABBQBAAQOAAoBAAQAAQAEAgEABA4ABAAOAAABAAQCAAIAPgEABAABAAQQABYABAEABA4APAEABA4AAgA6AQAEAAEABBQBAAQOAAQBAAQAAQAEAgEABAABAAQOAAQBAAQOAAQAAAAOAAQAFAAAAQAEAgAKAQAEDAACAD4BAAQAAQAECABIAQABEgAaABoAGgEAAQwAAgBGAQABAAEAARAAFgAEAQABDAAGAQABAAEAAQYBAAEEAAoAGgEAAQwAAgBKAQABAAEAAQoBAAEMAAIAUgAEAQABAAEAARgAFgBSAAQBAAEAAQABGAAWAEgBAAEOAAIARgEAAQABAAEUAQABDgAEAQABAAEAAQIBAAECAAoBAAEMAAIASgEABAABAAQOABYABAEABAwABAEABBQABAEABAoAMAEABA4AAgAuAQAEAAEABBQBAAQOAAQBAAQAAQAEAgEABAABAAQOAAQBAAQMAAABAAQCAAoBAAQMAAIAMgESDAABAAwIADwBAAwSABoAFAACADoBAAwAAQAMFAEADA4ACgEADAABAAwCAT0BDgAEAREDEgAAAVAMAgACAD4BDgUAAQAFFAAWAAQBAAEOAAYBCAEAAQABBgEAAQQACgAaAQcFDAACAEIBBwkAAQADFAAWAAQBAAkUAAQBCAUMADwBDQwOAAIAOgEADAABAAwUAQAMDgAEAQAMAAEADAIBPQEAAQABDgAEAQABCgAEAREDAAEAAxIABAEAAxIAAAFQDAIACgEADAwAAgA-AQAMAAEADAgASAEADBIAGgAaABoADAACAEYBAAwAAQAMFAEADA4ACgEADAABAAwCAQAMDgAAAQAMAgACAEoBAAwAAQAMEAAWAAQBAAwWAEgBAAwOAAIARgEADAABAAwUAQAMDgAEAQAMAAEADAIBAAwAAQAMDgAEAQAMDAAAAQAMAgAKAQAMDAACAEoBKyIAAQAiCABUAQAiEgAaABgBACIMAAIAUgEAIgABACIUAQAiDgAKAQAiAAEAIgIBGgQOAAQBEgwOAAABKyICAAIAVgEAIgABACJoAHABACJ0ABYAAgBeAQAiAAEAInAAeAEAInwAFgAEAQAiAAEAIhAAeAEAImYBACIMAFQBACIOAAIAUgEAIgABACIUAQAiDgAEAQAiAAEAIgIBGgQAAQAEDgAEAQAEDAAEARIMAAEADA4ABAEADAwAAAErIgIACgEAIgwAAgBWAQAiAAEAImYAdgAaAQAiDAACAF4BByYAAQAmDAEAAQoABAEIIgwACAACAGIBSgEAAQABFAAWAAQBAAFkAT0BCgAUASMyDgACABIBADIAAQAyFAEAMg4ABAEAMgABADICAQsDAAEAAxIABAEAAw4AAAEMMgIACgEAMgoAAgAWAQs4AAEAOAwBAAMOAAQBDDIKAAgAAgAaAQsDAAEAAxAAFgAEAQADDgAKABYAAgAeAQADAAEAAxQAFgAEAQAD
+
+
+test 'mutual recursion — ping pong', fn:
+  expect cps_closures ƒink:
+    ping = fn x: pong x
+    pong = fn x: ping x
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_37, ·ƒret_4:
+      ·letrec fn ·ping_0, ·pong_1:
+        ·fn
+          fn ·v_57, ·ƒctx_39, ·ƒret_6, ·x_2:
+            ·letcaps ·v_57, fn {·pong_56}:
+              ·pong_56 ·ƒctx_39, ·ƒret_6, ·x_2
+          fn ·v_61:
+            ·closure ·v_61, {·pong_56: ·pong_1}, fn ·v_5:
+              ·set ·ping_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_37, ·ping_0, fn ·ƒctx_42:
+                  ·fn
+                    fn ·v_49, ·ƒctx_43, ·ƒret_14, ·x_3:
+                      ·letcaps ·v_49, fn {·ping_48}:
+                        ·ping_48 ·ƒctx_43, ·ƒret_14, ·x_3
+                    fn ·v_53:
+                      ·closure ·v_53, {·ping_48: ·ping_0}, fn ·v_13:
+                        ·set ·pong_1, ·v_13, fn:
+                          ·ƒpub ·ƒctx_42, ·pong_1, fn ·ƒctx_46:
+                            ·ƒret_4 ·ƒctx_46, ·pong_1
+    # sm:kQEAAQAnAAEAJyQBACcYASgTEgACAAYBJycAAQAnGAEABBQBKAQQAAIACgEZDAABAAwIABQBAAwQABgBDAYWAQUBCgACABIBBQwAAQAMFAEADAwACgEADAABAAwCARoEEgAAARkMAgACABYBDAYAAQAEFAAUAAQBAAYSAAQBCgEKABQBFQwMAAIAEgEADAABAAwUAQAMDAAEAQAMAAEADAIBGgQAAQAEEgAEAQAEEAAAARkMAgAKAQAMCgACABYBDRMAAQATDAEABBAABAEODAoACAACABoBDQQAAQAEEAAUAAQBAAQQAAoAFAACAB4BNgwAAQAMCAAoAQAMEAAYAQwGGAEFAQoAAgAmAQUMAAEADBQBAAwMAAoBAAwAAQAMAgE1BBIAAAE2DAIAAgAqAQwGAAEABBQAFAAEAQAGFAAEAQoBCgAoARUMDAACACYBAAwAAQAMFAEADAwABAEADAABAAwCATUEAAEABBIABAEABBAAAAE2DAIACgEADAwAAgAqAQ0TAAEAEwwBAAQQAAQBDgwMAAgAAgAuAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAyAQAEAAEABBQAFAAEAQAE
+
+
+test 'mutual recursion — is_even / is_odd', fn:
+  expect cps_closures ƒink:
+    is_even = fn n:
+      match n:
+        0: true
+        _: is_odd n - 1
+    is_odd = fn n:
+      match n:
+        0: false
+        _: is_even n - 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_195, ·ƒret_4:
+      ·letrec fn ·is_even_0, ·is_odd_1:
+        ·fn
+          fn ·v_377, ·ƒctx_197, ·ƒret_6, ·n_2:
+            ·letcaps ·v_377, fn {·is_odd_376}:
+              ·fn
+                fn ·v_304, ·ƒctx_198, ·ƒret_27: ·ƒret_27 ·ƒctx_198, true
+                fn ·v_307:
+                  ·closure ·v_307, {}, fn ·v_31:
+                    ·fn
+                      fn ·v_297, ·ƒctx_200, ·ƒsucc_9, ·ƒfail_10, ·v_8:
+                        ·letcaps ·v_297, fn {·v_296}:
+                          ·fn
+                            fn ·v_260, ·ƒctx_201:
+                              ·letcaps ·v_260, fn {·v_258, ·v_259}:
+                                ·v_258 ·ƒctx_201, ·v_259
+                            fn ·v_265:
+                              ·closure ·v_265, {·v_258: ·v_296, ·v_259: ·ƒsucc_9}, fn ·v_37:
+                                ·fn
+                                  fn ·v_252, ·ƒctx_203, ·ƒsucc_13, ·ƒfail_14, ·v_12:
+                                    ·op_eq ·ƒctx_203, ·v_12, (i8 0), fn ·ƒctx_205, ·v_17:
+                                      ·if ·v_17,
+                                        fn: ·ƒsucc_13 ·ƒctx_205
+                                        fn: ·ƒfail_14 ·ƒctx_205
+                                  fn ·v_255:
+                                    ·closure ·v_255, {}, fn ·v_25:
+                                      ·v_25 ·ƒctx_200, ·v_37, ·ƒfail_10, ·v_8
+                      fn ·v_301:
+                        ·closure ·v_301, {·v_296: ·v_31}, fn ·v_43:
+                          ·fn
+                            fn ·v_288, ·ƒctx_209, ·ƒret_48:
+                              ·letcaps ·v_288, fn {·n_286, ·is_odd_287}:
+                                ·op_minus ·ƒctx_209, ·n_286, (i8 1), fn ·ƒctx_211, ·v_52:
+                                  ·is_odd_287 ·ƒctx_211, ·ƒret_48, ·v_52
+                            fn ·v_293:
+                              ·closure ·v_293, {·n_286: ·n_2, ·is_odd_287: ·is_odd_376}, fn ·v_59:
+                                ·fn
+                                  fn ·v_279, ·ƒctx_213, ·ƒsucc_45, ·ƒfail_46, ·v_44:
+                                    ·letcaps ·v_279, fn {·v_278}:
+                                      ·v_278 ·ƒctx_213, ·ƒsucc_45
+                                  fn ·v_283:
+                                    ·closure ·v_283, {·v_278: ·v_59}, fn ·v_64:
+                                      ·fn
+                                        fn ·v_270, ·ƒctx_215, ·ƒret_66, ·v_65:
+                                          ·letcaps ·v_270, fn {·v_268, ·v_269}:
+                                            ·v_268
+                                              ·ƒctx_215
+                                              ·ƒret_66
+                                              fn ·ƒctx_217:
+                                                ·v_269
+                                                  ·ƒctx_217
+                                                  ·ƒret_66
+                                                  fn ·ƒctx_219: ·panic ·ƒctx_219
+                                                  ·v_65
+                                              ·v_65
+                                        fn ·v_275:
+                                          ·closure ·v_275, {·v_268: ·v_43, ·v_269: ·v_64}, fn ·v_76:
+                                            ·v_76 ·ƒctx_197, ·ƒret_6, ·n_2
+          fn ·v_381:
+            ·closure ·v_381, {·is_odd_376: ·is_odd_1}, fn ·v_5:
+              ·set ·is_even_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_195, ·is_even_0, fn ·ƒctx_223:
+                  ·fn
+                    fn ·v_369, ·ƒctx_224, ·ƒret_93, ·n_3:
+                      ·letcaps ·v_369, fn {·is_even_368}:
+                        ·fn
+                          fn ·v_362, ·ƒctx_225, ·ƒret_114: ·ƒret_114 ·ƒctx_225, false
+                          fn ·v_365:
+                            ·closure ·v_365, {}, fn ·v_118:
+                              ·fn
+                                fn ·v_355, ·ƒctx_227, ·ƒsucc_96, ·ƒfail_97, ·v_95:
+                                  ·letcaps ·v_355, fn {·v_354}:
+                                    ·fn
+                                      fn ·v_318, ·ƒctx_228:
+                                        ·letcaps ·v_318, fn {·v_316, ·v_317}:
+                                          ·v_316 ·ƒctx_228, ·v_317
+                                      fn ·v_323:
+                                        ·closure ·v_323, {·v_316: ·v_354, ·v_317: ·ƒsucc_96}, fn ·v_124:
+                                          ·fn
+                                            fn ·v_310, ·ƒctx_230, ·ƒsucc_100, ·ƒfail_101, ·v_99:
+                                              ·op_eq ·ƒctx_230, ·v_99, (i8 0), fn ·ƒctx_232, ·v_104:
+                                                ·if ·v_104,
+                                                  fn: ·ƒsucc_100 ·ƒctx_232
+                                                  fn: ·ƒfail_101 ·ƒctx_232
+                                            fn ·v_313:
+                                              ·closure ·v_313, {}, fn ·v_112:
+                                                ·v_112 ·ƒctx_227, ·v_124, ·ƒfail_97, ·v_95
+                                fn ·v_359:
+                                  ·closure ·v_359, {·v_354: ·v_118}, fn ·v_130:
+                                    ·fn
+                                      fn ·v_346, ·ƒctx_236, ·ƒret_135:
+                                        ·letcaps ·v_346, fn {·n_344, ·is_even_345}:
+                                          ·op_minus ·ƒctx_236, ·n_344, (i8 1), fn ·ƒctx_238, ·v_139:
+                                            ·is_even_345 ·ƒctx_238, ·ƒret_135, ·v_139
+                                      fn ·v_351:
+                                        ·closure ·v_351, {·n_344: ·n_3, ·is_even_345: ·is_even_368}, fn ·v_146:
+                                          ·fn
+                                            fn ·v_337, ·ƒctx_240, ·ƒsucc_132, ·ƒfail_133, ·v_131:
+                                              ·letcaps ·v_337, fn {·v_336}:
+                                                ·v_336 ·ƒctx_240, ·ƒsucc_132
+                                            fn ·v_341:
+                                              ·closure ·v_341, {·v_336: ·v_146}, fn ·v_151:
+                                                ·fn
+                                                  fn ·v_328, ·ƒctx_242, ·ƒret_153, ·v_152:
+                                                    ·letcaps ·v_328, fn {·v_326, ·v_327}:
+                                                      ·v_326
+                                                        ·ƒctx_242
+                                                        ·ƒret_153
+                                                        fn ·ƒctx_244:
+                                                          ·v_327
+                                                            ·ƒctx_244
+                                                            ·ƒret_153
+                                                            fn ·ƒctx_246: ·panic ·ƒctx_246
+                                                            ·v_152
+                                                        ·v_152
+                                                  fn ·v_333:
+                                                    ·closure ·v_333, {·v_326: ·v_130, ·v_327: ·v_151}, fn ·v_163:
+                                                      ·v_163 ·ƒctx_224, ·ƒret_93, ·n_3
+                    fn ·v_373:
+                      ·closure ·v_373, {·is_even_368: ·is_even_0}, fn ·v_92:
+                        ·set ·is_odd_1, ·v_92, fn:
+                          ·ƒpub ·ƒctx_223, ·is_odd_1, fn ·ƒctx_250:
+                            ·ƒret_4 ·ƒctx_250, ·is_odd_1
+    # sm:3QYAAQB2AAEAdiQBAHYaAXY7EgACAAYBdXYAAQB2GAEABxoBdgYUAAIACgFhMAABADAIABQBADASABoBECgWAQkBCgACABIBBTAAAQAwFAEAMA4ACgEAMAABADACAWIGGAAAAWEwAgACABYBKgcAAQAHCAAgAQAHEgAaABQABAEGBAABAAQWABYABAEABAgAIAEFBw4AAgAeAQAHAAEABxQBAAcOAAQBAAcAAQAHAgEABwIACgEABwwAAgAiAQAHAAEABwgALAEABxIAGgAYABoACgACACoBAAcAAQAHFAEABw4ACgEABwABAAcCAQAHDgAAAQAHAgACAC4BAAcAAQAHCAA4AQAHEgAWAAIANgEABwABAAcUAQAHDgAKAQAHAAEABwIBAAcOAAQADgAAAQAHAgACADoBAAcAAQAHEAAWAAQBAAcOADgBAAcOAAIANgEABwABAAcUAQAHDgAEAQAHAAEABwIBAAcAAQAHDgAEAQAHDgAEAAAADgAEABQAAAEABwIACgEABwwAAgA6AQAHAAEABwgARAEAARIAGgAaABoBAAEMAAIAQgEAAQABAAEQABYABAEAAQwABgEAAQABAAEGAQABBAAKABoBAAEMAAIARgEAAQABAAEKAQABDAACAE4ABAEAAQABAAEYABYATgAEAQABAAEAARgAFgBEAQABDgACAEIBAAEAAQABFAEAAQ4ABAEAAQABAAECAQABAgAKAQABDAACAEYBAAcAAQAHDgAWAAQBAAcMAAQBAAcWAAQBAAcKACwBAAcOAAIAKgEABwABAAcUAQAHDgAEAQAHAAEABwIBAAcAAQAHDgAEAQAHDAAAAQAHAgAKAQAHDAACAC4BGA8AAQAPCAA4AQAPEgAaABQAAgA2AQAPAAEADxQBAA8OAAoBAA8AAQAPAgE7AQ4ABAFcBhgAAAEfDwIAAgA6ARQFAAEABRYAFgAEAQABDgAGAQgBAAEAAQYBAAEEAAoAGgEHBQwAAgA-AQ0MAAEABhoAFgAEAQAMFAAEAQ4FDAA4ARMPDgACADYBAA8AAQAPFAEADw4ABAEADwABAA8CATsBAAEAAQ4ABAEAAQoABAFcBgABAAYYAAQBAAYYAAABHw8CAAoBAA8MAAIAOgEADwABAA8IAEQBAA8SABoAGgAaAAwAAgBCAQAPAAEADxQBAA8OAAoBAA8AAQAPAgEADw4AAAEADwIAAgBGAQAPAAEADxAAFgAEAQAPFgBEAQAPDgACAEIBAA8AAQAPFAEADw4ABAEADwABAA8CAQAPAAEADw4ABAEADwwAAAEADwIACgEADwwAAgBGATEoAAEAKAgAUAEAKBIAGgAYAQAoDAACAE4BACgAAQAoFAEAKA4ACgEAKAABACgCARoHDgAEARgPDgAAATEoAgACAFIBACgAAQAoZABsAQAocAAWAAIAWgEAKAABAChsAHQBACh4ABYABAEAKAABACgQAHQBAChiAQAoDABQAQAoDgACAE4BACgAAQAoFAEAKA4ABAEAKAABACgCARoHAAEABw4ABAEABwwABAEYDwABAA8OAAQBAA8MAAABMSgCAAoBACgMAAIAUgEAKAABACgOABYABAEAKBIABAEMAQoAFAEbMA4AAgASAQAwAAEAMBQBADAOAAQBADAAAQAwAgFiBgABAAYYAAQBAAYUAAABYTACAAoBADAKAAIAFgETOgABADoMAQAHFgAEARQwCgAIAAIAGgETBwABAAcQABYABAEABxYACgAWAAIAHgGIATIAAQAyCAAoAQAyEgAaARAqGAEJAQoAAgAmAQUyAAEAMhQBADIOAAoBADIAAQAyAgGHAQcaAAABiAEyAgACACoBKggAAQAICAA0AQAIEgAaABYABAEGBQABAAUYABYABAEABQoANAEFCA4AAgAyAQAIAAEACBQBAAgOAAQBAAgAAQAIAgEACAIACgEACA4AAgA2AQAIAAEACAgAQAEACBIAGgAaABoADAACAD4BAAgAAQAIFAEACA4ACgEACAABAAgCAQAIDgAAAQAIAgACAEIBAAgAAQAICABMAQAIEgAWAAIASgEACAABAAgUAQAIDgAKAQAIAAEACAIBAAgOAAQADgAAAQAIAgACAE4BAAgAAQAIEAAWAAQBAAgOAEwBAAgOAAIASgEACAABAAgUAQAIDgAEAQAIAAEACAIBAAgAAQAIDgAEAQAIDgAEAAAADgAEABYAAAEACAIACgEACA4AAgBOAQAIAAEACAgAWAEAARIAGgAcABwBAAEMAAIAVgEAAQABAAEQABYABAEAAQwABgEAAQABAAEGAQABBAAKABoBAAEOAAIAWgEAAQABAAEKAQABDgACAGIABAEAAQABAAEaABYAYgAEAQABAAEAARoAFgBYAQABDgACAFYBAAEAAQABFAEAAQ4ABAEAAQABAAECAQABAgAKAQABDgACAFoBAAgAAQAIEAAWAAQBAAgOAAQBAAgWAAQBAAgMAEABAAgOAAIAPgEACAABAAgUAQAIDgAEAQAIAAEACAIBAAgAAQAIDgAEAQAIDgAAAQAIAgAKAQAIDgACAEIBGhAAAQAQCABMAQAQEgAaABYAAgBKAQAQAAEAEBQBABAOAAoBABAAAQAQAgE9AQ4ABAGNAQcaAAABzAEQAgACAE4BFgUAAQAFFgAWAAQBAAEOAAYBCAEAAQABBgEAAQQACgAaAQcFDgACAFIBDw0AAQAHHAAWAAQBAA0WAAQBEAUOAEwBFRAOAAIASgEAEAABABAUAQAQDgAEAQAQAAEAEAIBPQEAAQABDgAEAQABCgAEAY0BBwABAAcaAAQBAAcaAAABzAEQAgAKAQAQDgACAE4BABAAAQAQCABYAQAQEgAaABwAHAAOAAIAVgEAEAABABAUAQAQDgAKAQAQAAEAEAIBABAOAAABABACAAIAWgEAEAABABAQABYABAEAEBgAWAEAEA4AAgBWAQAQAAEAEBQBABAOAAQBABAAAQAQAgEAEAABABAOAAQBABAOAAABABACAAoBABAOAAIAWgEzKgABACoIAGQBACoSABoAGgEAKg4AAgBiAQAqAAEAKhQBACoOAAoBACoAAQAqAgEaCA4ABAEaEA4AAAEzKgIAAgBmAQAqAAEAKngAgAEBACqGAQAWAAIAbgEAKgABACqAAQCIAQEAKo4BABYABAEAKgABACoQAIgBAQAqeAEAKg4AZAEAKg4AAgBiAQAqAAEAKhQBACoOAAQBACoAAQAqAgEaCAABAAgOAAQBAAgOAAQBGhAAAQAQDgAEAQAQDgAAATMqAgAKAQAqDgACAGYBACoAAQAqEAAWAAQBACoUAAQBDAEKACgBGzIOAAIAJgEAMgABADIUAQAyDgAEAQAyAAEAMgIBhwEHAAEABxoABAEABxYAAAGIATICAAoBADIMAAIAKgEROwABADsMAQAGFAAEARIyDAAIAAIALgERBgABAAYQABYABAEABhQACgAWAAIAMgEABgABAAYUABYABAEABg
+
+
+test 'str eq', fn:
+  expect cps_closures ƒink:
+    'hello' == 'hello'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
+      ·op_eq ·ƒctx_6, 'hello', 'hello', ·ƒret_0
+    # sm:FQABABIAAQASJAEAEhYBABISAAIABgEAEgABABIQABIABAEABwABAAcCAQAHCgEABwIABAEWBwABAAcCAQAHCgEABwIABAEVEg
+
+
+test 'str literal', fn:
+  expect cps_closures ƒink:
+    'hello'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, 'hello'
+    # sm:DgABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABAEABwABAAcCAQAHCgEABw
+
+test 'match — seq literal guard', fn:
+  expect cps_closures ƒink:
+    match [1, 42]:
+      [1, val, ..]: val
+      _: 0
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_130, ·ƒret_1:
+      ·seq_prepend ·ƒctx_130, (i8 42), [], fn ·ƒctx_133, ·v_4:
+        ·seq_prepend ·ƒctx_133, (i8 1), ·v_4, fn ·ƒctx_135, ·v_7:
+          ·fn
+            fn ·v_240, ·ƒctx_136, ·ƒret_59, ·val_0: ·ƒret_59 ·ƒctx_136, ·val_0
+            fn ·v_243:
+              ·closure ·v_243, {}, fn ·v_63:
+                ·fn
+                  fn ·v_233, ·ƒctx_138, ·ƒsucc_10, ·ƒfail_11, ·v_9:
+                    ·letcaps ·v_233, fn {·v_232}:
+                      ·fn
+                        fn ·v_199, ·ƒctx_139, ·v_16, ·v_17:
+                          ·letcaps ·v_199, fn {·v_196, ·v_197, ·v_198}:
+                            ·fn
+                              fn ·v_181, ·ƒctx_140:
+                                ·letcaps ·v_181, fn {·v_178, ·v_179, ·v_180}:
+                                  ·let ·v_178, fn ·val_0:
+                                    ·v_179 ·ƒctx_140, ·v_180, ·v_178
+                              fn ·v_187:
+                                ·closure ·v_187, {·v_178: ·v_17, ·v_179: ·v_196, ·v_180: ·v_197}, fn ·v_70:
+                                  ·fn
+                                    fn ·v_172, ·ƒctx_142, ·ƒsucc_43, ·ƒfail_44, ·v_42:
+                                      ·op_eq ·ƒctx_142, ·v_42, (i8 1), fn ·ƒctx_144, ·v_47:
+                                        ·if ·v_47,
+                                          fn: ·ƒsucc_43 ·ƒctx_144
+                                          fn: ·ƒfail_44 ·ƒctx_144
+                                    fn ·v_175:
+                                      ·closure ·v_175, {}, fn ·v_55:
+                                        ·v_55 ·ƒctx_139, ·v_70, ·v_198, ·v_16
+                        fn ·v_205:
+                          ·closure ·v_205, {·v_196: ·v_232, ·v_197: ·ƒsucc_10, ·v_198: ·ƒfail_11}, fn ·v_78:
+                            ·fn
+                              fn ·v_190, ·ƒctx_148, ·ƒsucc_14, ·ƒfail_15, ·v_13:
+                                ·is_seq_like ·ƒctx_148, ·v_13,
+                                  fn ·ƒctx_150, ·v_28:
+                                    ·seq_pop ·ƒctx_150, ·v_28, ·ƒfail_15, fn ·ƒctx_152, ·v_16, ·v_29:
+                                      ·seq_pop ·ƒctx_152, ·v_29, ·ƒfail_15, fn ·ƒctx_154, ·v_17, ·v_22:
+                                        ·seq_pop ·ƒctx_154, ·v_22, ·ƒfail_15, fn ·ƒctx_156, ·v_24, ·v_25:
+                                          ·ƒsucc_14 ·ƒctx_156, ·v_16, ·v_17
+                                  fn ·ƒctx_158: ·ƒfail_15 ·ƒctx_158
+                              fn ·v_193:
+                                ·closure ·v_193, {}, fn ·v_40:
+                                  ·v_40 ·ƒctx_138, ·v_78, ·ƒfail_11, ·v_9
+                  fn ·v_237:
+                    ·closure ·v_237, {·v_232: ·v_63}, fn ·v_85:
+                      ·fn
+                        fn ·v_226, ·ƒctx_161, ·ƒret_90: ·ƒret_90 ·ƒctx_161, (i8 0)
+                        fn ·v_229:
+                          ·closure ·v_229, {}, fn ·v_94:
+                            ·fn
+                              fn ·v_219, ·ƒctx_163, ·ƒsucc_87, ·ƒfail_88, ·v_86:
+                                ·letcaps ·v_219, fn {·v_218}:
+                                  ·v_218 ·ƒctx_163, ·ƒsucc_87
+                              fn ·v_223:
+                                ·closure ·v_223, {·v_218: ·v_94}, fn ·v_99:
+                                  ·fn
+                                    fn ·v_210, ·ƒctx_165, ·ƒret_101, ·v_100:
+                                      ·letcaps ·v_210, fn {·v_208, ·v_209}:
+                                        ·v_208
+                                          ·ƒctx_165
+                                          ·ƒret_101
+                                          fn ·ƒctx_167:
+                                            ·v_209
+                                              ·ƒctx_167
+                                              ·ƒret_101
+                                              fn ·ƒctx_169: ·panic ·ƒctx_169
+                                              ·v_100
+                                          ·v_100
+                                    fn ·v_215:
+                                      ·closure ·v_215, {·v_208: ·v_85, ·v_209: ·v_99}, fn ·v_111:
+                                        ·v_111 ·ƒctx_135, ·ƒret_1, ·v_7
+    # sm:kwQAAQApAAEAKSQBACkaAQApEgACAAYBFAIAAQACHAAWAAYBAAIAAQACBgEAAgYABAEHBwABAAcCAQAHAgAKABoBCAIKAAIACgEFAQABAAEcABYABgEAAQABAAEGAQABBAAEAQYCCgAKABoBBQEKAAIADgEUEQABABEIABgBABESABoAGAEIAw4ABAEUAwABAAMWABYABAEAAw4AGAEbEQ4AAgAWAQARAAEAERQBABEOAAQBABEAAQARAgEAEQIACgEAEQwAAgAaAQARAAEAEQgAJAEAERIAGgAaABoACgACACIBABEAAQARFAEAEQ4ACgEAEQABABECAQARDgAAAQARAgACACYBAAwAAQAMCAAwAQAMEgAaAQAMEAEADAwAAgAuAQAMAAEADBQBAAwOAAoBAAwAAQAMAgEAEQ4ABAAOAAQADgAAAQAMAgACADIBAgEAAQABCAA8AQABEgAWAAIAOgEAAQABAAEUAQABDgAKAQABAAEAAQIBAQwOAAQBABEOAAQADgAAAQIBAgACAD4BBgMAAQADDAEHDA4ACgEIAw4AAgBCAQcRAAEAERAAFgAEAQARDgAEAQAMDgA8AQIBDgACADoBAAEAAQABFAEAAQ4ABAEAAQABAAECAQEMAAEADA4ABAEADAwABAEAEQABABEOAAQBABEOAAQAAAAOAAQADgAAAQIBAgAKAQABDAACAD4BAAEAAQABCABIAQABEgAaABoAGgEAAQwAAgBGAQABAAEAARAAFgAEAQABDAAGAQABAAEAAQYBAAEEAAoAGgEAAQwAAgBKAQABAAEAAQoBAAEMAAIAUgAEAQABAAEAARgAFgBSAAQBAAEAAQABGAAWAEgBAAEOAAIARgEAAQABAAEUAQABDgAEAQABAAEAAQIBAAECAAoBAAEMAAIASgEAAQABAAEOABYABAEAAQwABAEAAQ4ABAEBDAwAMAEADA4AAgAuAQAMAAEADBQBAAwOAAQBAAwAAQAMAgEAEQABABEOAAQBABEOAAQAAAAOAAQAFgAEAAAADgAEABYAAAEADAIACgEADAwAAgAyAQAMAAEADAgAPAEADBIAGgAaABoBAAwMAAIAOgEADAABAAwcABYABAEADAwAAgBEABoBAAwMAAIAQgEADAABAAwUABYABAEADAwABAEADBYACgAaAQAMEAEADAwAAgBGAQAMAAEADBQAFgAEAQAMDAAEAQAMFgAKABoBAAwQAQAMDAACAEoBAAwAAQAMFAAWAAQBAAwMAAQBAAwWAAoAGgEADBABAAwMAAIATgEADAABAAwYABYABAEADAwABAEADAwARAAWAAQBAAwAAQAMGAAWADwBAAwOAAIAOgEADAABAAwUAQAMDgAEAQAMAAEADAIBAAwCAAoBAAwMAAIAPgEADAABAAwOABYABAEADAwABAEADBYABAEADAoAJAEAEQ4AAgAiAQARAAEAERQBABEOAAQBABEAAQARAgEAEQABABEOAAQBABEMAAABABECAAoBABEMAAIAJgEoBAABAAQIADABAAQSABoAFAAEAQYBAAEAARYAFgAGAQABAAEAAQYBAAEEADABBQQOAAIALgEABAABAAQUAQAEDgAEAQAEAAEABAIBAAQCAAoBAAQMAAIAMgEABAABAAQIADwBAAQSABoAGgAaAAwAAgA6AQAEAAEABBQBAAQOAAoBAAQAAQAEAgEABA4AAAEABAIAAgA-AQAEAAEABBAAFgAEAQAEFgA8AQAEDgACADoBAAQAAQAEFAEABA4ABAEABAABAAQCAQAEAAEABA4ABAEABAwAAAEABAIACgEABAwAAgA-AUkpAAEAKQgASAEAKRIAGgAaAQApDgACAEYBACkAAQApFAEAKQ4ACgEAKQABACkCASIRDgAEASgEDgAAAUkpAgACAEoBACkAAQApXABkAQApagAWAAIAUgEAKQABAClkAGwBAClyABYABAEAKQABACkQAGwBAClcAQApDgBIAQApDgACAEYBACkAAQApFAEAKQ4ABAEAKQABACkCASIRAAEAEQ4ABAEAEQwABAEoBAABAAQOAAQBAAQMAAABSSkCAAoBACkOAAIASgEAKQABACkQABYABAEAKRIABAEOAQ
+
+test 'match — rec literal guard', fn:
+  expect cps_closures ƒink:
+    match {kind: 1, val: 42}:
+      {kind: 1, val}: val
+      _: 0
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_129, ·ƒret_1:
+      ·rec_put ·ƒctx_129, {}, 'kind', (i8 1), fn ·ƒctx_132, ·v_5:
+        ·rec_put ·ƒctx_132, ·v_5, 'val', (i8 42), fn ·ƒctx_134, ·v_9:
+          ·fn
+            fn ·v_237, ·ƒctx_135, ·ƒret_58, ·val_0: ·ƒret_58 ·ƒctx_135, ·val_0
+            fn ·v_240:
+              ·closure ·v_240, {}, fn ·v_62:
+                ·fn
+                  fn ·v_230, ·ƒctx_137, ·ƒsucc_12, ·ƒfail_13, ·v_11:
+                    ·letcaps ·v_230, fn {·v_229}:
+                      ·fn
+                        fn ·v_196, ·ƒctx_138, ·v_18, ·v_19:
+                          ·letcaps ·v_196, fn {·v_193, ·v_194, ·v_195}:
+                            ·fn
+                              fn ·v_178, ·ƒctx_139:
+                                ·letcaps ·kind_178, fn {·v_175, ·v_176, ·v_177}:
+                                  ·let ·v_175, fn ·val_0:
+                                    ·v_176 ·ƒctx_139, ·v_177, ·v_175
+                              fn ·v_184:
+                                ·closure ·kind_184, {·v_175: ·v_19, ·v_176: ·v_193, ·v_177: ·v_194}, fn ·v_69:
+                                  ·fn
+                                    fn ·v_169, ·ƒctx_141, ·ƒsucc_42, ·ƒfail_43, ·v_41:
+                                      ·op_eq ·ƒctx_141, ·kind_41, (i8 1), fn ·ƒctx_143, ·v_46:
+                                        ·if ·kind_46,
+                                          fn: ·ƒsucc_42 ·ƒctx_143
+                                          fn: ·ƒfail_43 ·ƒctx_143
+                                    fn ·v_172:
+                                      ·closure ·kind_172, {}, fn ·v_54:
+                                        ·kind_54 ·ƒctx_138, ·kind_69, ·v_195, ·v_18
+                        fn ·v_202:
+                          ·closure ·v_202, {·v_193: ·v_229, ·v_194: ·ƒsucc_12, ·v_195: ·ƒfail_13}, fn ·v_77:
+                            ·fn
+                              fn ·v_187, ·ƒctx_147, ·ƒsucc_16, ·ƒfail_17, ·v_15:
+                                ·is_rec_like ·ƒctx_147, ·v_15,
+                                  fn ·ƒctx_149, ·v_25:
+                                    ·rec_pop ·ƒctx_149, ·v_25, 'kind', ·ƒfail_17, fn ·ƒctx_151, ·v_18, ·v_26:
+                                      ·rec_pop ·ƒctx_151, ·v_26, 'val', ·ƒfail_17, fn ·ƒctx_153, ·v_19, ·v_24:
+                                        ·ƒsucc_16 ·ƒctx_153, ·v_18, ·v_19
+                                  fn ·ƒctx_155: ·ƒfail_17 ·ƒctx_155
+                              fn ·v_190:
+                                ·closure ·v_190, {}, fn ·v_39:
+                                  ·v_39 ·ƒctx_137, ·v_77, ·ƒfail_13, ·v_11
+                  fn ·v_234:
+                    ·closure ·v_234, {·v_229: ·v_62}, fn ·v_84:
+                      ·fn
+                        fn ·v_223, ·ƒctx_158, ·ƒret_89: ·ƒret_89 ·ƒctx_158, (i8 0)
+                        fn ·v_226:
+                          ·closure ·v_226, {}, fn ·v_93:
+                            ·fn
+                              fn ·v_216, ·ƒctx_160, ·ƒsucc_86, ·ƒfail_87, ·v_85:
+                                ·letcaps ·v_216, fn {·v_215}:
+                                  ·v_215 ·ƒctx_160, ·ƒsucc_86
+                              fn ·v_220:
+                                ·closure ·v_220, {·v_215: ·v_93}, fn ·v_98:
+                                  ·fn
+                                    fn ·v_207, ·ƒctx_162, ·ƒret_100, ·v_99:
+                                      ·letcaps ·v_207, fn {·v_205, ·v_206}:
+                                        ·v_205
+                                          ·ƒctx_162
+                                          ·ƒret_100
+                                          fn ·ƒctx_164:
+                                            ·v_206
+                                              ·ƒctx_164
+                                              ·ƒret_100
+                                              fn ·ƒctx_166: ·panic ·ƒctx_166
+                                              ·v_99
+                                          ·v_99
+                                    fn ·v_212:
+                                      ·closure ·v_212, {·v_205: ·v_84, ·v_206: ·v_98}, fn ·v_110:
+                                        ·v_110 ·ƒctx_134, ·ƒret_1, ·v_9
+    # sm:mgQAAQA2AAEANiQBADYaAQA2EgACAAYBDgcAAQAHFAAWAAQBARIAAQASAgEAEgIABAECBAABAAQCAQAECAEABAIABgEMAQABAAEGAQABBAAKABoBCwcKAAIACgESBwABAAcUABYABAERBwoABAESAwABAAMCAQADBgEAAwIABgEKAgABAAIGAQACBgAKABoBCQcKAAIADgEYEwABABMIABgBABMSABoAGAEUAw4ABAEMAwABAAMWABYABAEAAw4AGAEfEw4AAgAWAQATAAEAExQBABMOAAQBABMAAQATAgEAEwIACgEAEwwAAgAaAQATAAEAEwgAJAEAExIAGgAaABoADAACACIBABMAAQATFAEAEw4ACgEAEwABABMCAQATDgAAAQATAgACACYBAA4AAQAOCAAwAQAOEgAaAQAOEAEADgwAAgAuAQAOAAEADhQBAA4OAAoBAA4AAQAOAgEAEw4ABAAOAAQADgAAAQAOAgACADIBAgQAAQAECAA8AQAEEgAWAAIAOgEABAABAAQUAQAEFAAKAQAEAAEABAIBAQ4OAAQBABMOAAQADgAAAQIEAgACAD4BEgMAAQADDAETDg4ACgEUAw4AAgBCARMTAAEAExAAFgAEAQATDgAEAQAODgA8AQIEDgACADoBAAQAAQAEFAEABBQABAEABAABAAQCAQEOAAEADg4ABAEADgwABAEAEwABABMOAAQBABMOAAQAAAAOAAQADgAAAQIEAgAKAQAEDAACAD4BAAQAAQAECABIAQAEEgAaABoAGgEABAwAAgBGAQAEAAEABBAAFgAEAQAEEgAGAQAEAAEABAYBAAQEAAoAGgEABAwAAgBKAQAEAAEABAoBAAQSAAIAUgAEAQAEAAEABBgAFgBSAAQBAAQAAQAEGAAWAEgBAAQOAAIARgEABAABAAQUAQAEFAAEAQAEAAEABAIBAAQCAAoBAAQMAAIASgEABAABAAQUABYABAEABBIABAEABA4ABAEBDgwAMAEADg4AAgAuAQAOAAEADhQBAA4OAAQBAA4AAQAOAgEAEwABABMOAAQBABMOAAQAAAAOAAQAFgAEAAAADgAEABYAAAEADgIACgEADgwAAgAyAQAOAAEADggAPAEADhIAGgAaABoBAA4MAAIAOgEADgABAA4cABYABAEADgwAAgBEABoBAA4MAAIAQgEADgABAA4UABYABAEADgwABAEADgABAA4CAQAOCAEADgIABAEADhYACgAaAQAOEAEADgwAAgBGAQAOAAEADhQAFgAEAQAODAAEAQAOAAEADgIBAA4GAQAOAgAEAQAOFgAKABoBAA4QAQAODAACAEoBAA4AAQAOGAAWAAQBAA4MAAQBAA4MAEQAFgAEAQAOAAEADhgAFgA8AQAODgACADoBAA4AAQAOFAEADg4ABAEADgABAA4CAQAOAgAKAQAODAACAD4BAA4AAQAODgAWAAQBAA4MAAQBAA4WAAQBAA4MACQBABMOAAIAIgEAEwABABMUAQATDgAEAQATAAEAEwIBABMAAQATDgAEAQATDAAAAQATAgAKAQATDAACACYBLAQAAQAECAAwAQAEEgAaABQABAEGAQABAAEWABYABgEAAQABAAEGAQABBAAwAQUEDgACAC4BAAQAAQAEFAEABA4ABAEABAABAAQCAQAEAgAKAQAEDAACADIBAAQAAQAECAA8AQAEEgAaABoAGgAMAAIAOgEABAABAAQUAQAEDgAKAQAEAAEABAIBAAQOAAABAAQCAAIAPgEABAABAAQQABYABAEABBYAPAEABA4AAgA6AQAEAAEABBQBAAQOAAQBAAQAAQAEAgEABAABAAQOAAQBAAQMAAABAAQCAAoBAAQMAAIAPgFjNgABADYIAEgBADYSABoAGgEANgwAAgBGAQA2AAEANhQBADYOAAoBADYAAQA2AgE4Ew4ABAEsBA4AAAFjNgIAAgBKAQA2AAEANlwAZAEANmoAFgACAFIBADYAAQA2ZABsAQA2cgAWAAQBADYAAQA2EABsAQA2WgEANgwASAEANg4AAgBGAQA2AAEANhQBADYOAAQBADYAAQA2AgE4EwABABMOAAQBABMMAAQBLAQAAQAEDgAEAQAEDAAAAWM2AgAKAQA2DgACAEoBADYAAQA2EAAWAAQBADYSAAQBIAc
+
+
+
+test 'top-level seq destructure with literal rhs — lift non-convergence', fn:
+  expect cps_closures ƒink:
+    [a, b] = [1, 2]
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_60, ·ƒret_2:
+      ·letrec fn ·a_0, ·b_1:
+        ·seq_prepend ·ƒctx_60, (i8 2), [], fn ·ƒctx_63, ·v_5:
+          ·seq_prepend ·ƒctx_63, (i8 1), ·v_5, fn ·ƒctx_65, ·v_8:
+            ·fn
+              fn ·v_88, ·ƒctx_66, ·v_13, ·v_14:
+                ·letcaps ·v_88, fn {·v_87}:
+                  ·let ·v_13, fn ·a_0:
+                    ·let ·v_14, fn ·b_1:
+                      ·v_87 ·ƒctx_65, ·b_1
+              fn ·v_92:
+                ·closure ·v_92, {·v_87: ·ƒret_2}, fn ·v_48:
+                  ·fn
+                    fn ·v_81, ·ƒctx_67, ·ƒsucc_11, ·ƒfail_12, ·v_10:
+                      ·is_seq_like ·ƒctx_67, ·v_10,
+                        fn ·ƒctx_69, ·v_27:
+                          ·seq_pop ·ƒctx_69, ·v_27, ·ƒfail_12, fn ·ƒctx_71, ·v_13, ·v_28:
+                            ·seq_pop ·ƒctx_71, ·v_28, ·ƒfail_12, fn ·ƒctx_73, ·v_14, ·v_19:
+                              ·empty ·ƒctx_73, ·v_19, fn ·ƒctx_75, ·v_22:
+                                ·if ·v_22,
+                                  fn: ·ƒsucc_11 ·ƒctx_75, ·v_13, ·v_14
+                                  fn: ·ƒfail_12 ·ƒctx_75
+                        fn ·ƒctx_78: ·ƒfail_12 ·ƒctx_78
+                    fn ·v_84:
+                      ·closure ·v_84, {}, fn ·v_39:
+                        ·v_39 ·ƒctx_65, ·v_48, ·panic, ·v_8
+    # sm:zgEAAQAPAAEADyQBAA8YAQAPEgACAAYBAA8AAQAPGAECAQ4BBgEKAAIACgESAQABAAEcABQABgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoAGAEIAQoAAgAOAQUBAAEAARwAFAAGAQABAAEAAQYBAAEEAAQBBgEKAAoAGAEFAQoAAgASARMPAAEADwgAHAEADxAAGAEADxABAA8MAAIAGgEADwABAA8UAQAPDAAKAQAPAAEADwIBAA8MAAABAA8CAAIAHgECAQABAAEMAQEPDAAKAQIBCgACACIBBgEAAQABDAEHDwwACgEIAQoAAgAmAQcPAAEADw4BAA8UAAQBCAEKABwBBw8MAAIAGgEADwABAA8UAQAPDAAEAQAPAAEADwIBAA8AAQAPDAAEAQAPEgAAAQAPAgAKAQAPDAACAB4BAA8AAQAPCAAoAQAPEAAYABoAGgEADwwAAgAmAQAPAAEADxwAFAAEAQAPDAACADAAGAEADwwAAgAuAQAPAAEADxQAFAAEAQAPDAAEAQAPFgAKABgBAA8QAQAPDAACADIBAA8AAQAPFAAUAAQBAA8MAAQBAA8WAAoAGAEADxABAA8MAAIANgEADwABAA8QABQABAEADwwACgAYAQAPDAACADoBAA8AAQAPCgEADwwAAgBCAAQBAA8AAQAPGAAUAAQBAA8MAAQBAA8MAEIABAEADwABAA8YABQAMAAUAAQBAA8AAQAPGAAUACgBAA8MAAIAJgEADwABAA8UAQAPDAAEAQAPAAEADwIBAA8CAAoBAA8MAAIAKgEADwABAA8OABQABAEADwwABAEADw4ABAEUAQ
+
+
+test 'top-level rec destructure with literal rhs — lift non-convergence', fn:
+  expect cps_closures ƒink:
+    {x} = {x: 1}
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_40, ·ƒret_1:
+      ·letrec fn ·x_0:
+        ·rec_put ·ƒctx_40, {}, 'x', (i8 1), fn ·ƒctx_43, ·v_5:
+          ·fn
+            fn ·v_61, ·ƒctx_44, ·v_10:
+              ·letcaps ·v_61, fn {·v_60}:
+                ·let ·v_10, fn ·x_0:
+                  ·v_60 ·ƒctx_43, ·x_0
+            fn ·v_65:
+              ·closure ·v_65, {·v_60: ·ƒret_1}, fn ·v_30:
+                ·fn
+                  fn ·v_54, ·ƒctx_45, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                    ·is_rec_like ·ƒctx_45, ·v_7,
+                      fn ·ƒctx_47, ·v_15:
+                        ·rec_pop ·ƒctx_47, ·v_15, 'x', ·ƒfail_9, fn ·ƒctx_49, ·v_10, ·v_14:
+                          ·ƒsucc_8 ·ƒctx_49, ·v_10
+                      fn ·ƒctx_51: ·ƒfail_9 ·ƒctx_51
+                  fn ·v_57:
+                    ·closure ·v_57, {}, fn ·v_24:
+                      ·v_24 ·ƒctx_43, ·v_30, ·panic, ·v_5
+    # sm:nQEAAQAMAAEADCQBAAwYAQAMEgACAAYBAAwAAQAMGAECAQoAAgAKAQwEAAEABBQAFAAEAQEGAAEABgIBAAYCAAQBAgEAAQABAgEAAQIBAAECAAYBBgEAAQABBgEAAQQACgAYAQUECgACAA4BDQwAAQAMCAAYAQAMEAAYAQAMDAACABYBAAwAAQAMFAEADAwACgEADAABAAwCAQAMDAAAAQAMAgACABoBAgEAAQABDAEBDAwACgECAQoAAgAeAQEMAAEADA4BAAwUAAQBAgEKABgBAQwMAAIAFgEADAABAAwUAQAMDAAEAQAMAAEADAIBAAwAAQAMDAAEAQAMEgAAAQAMAgAKAQAMDAACABoBAAwAAQAMCAAkAQAMEAAYABgAGAEADAoAAgAiAQAMAAEADBwAFAAEAQAMCgACACwAGAEADAwAAgAqAQAMAAEADBQAFAAEAQAMDAAEAQAMAAEADAIBAAwCAQAMAgAEAQAMFAAKABgBAAwQAQAMDAACAC4BAAwAAQAMFgAUAAQBAAwMACwAFAAEAQAMAAEADBYAFAAkAQAMDAACACIBAAwAAQAMFAEADAwABAEADAABAAwCAQAMAgAKAQAMDAACACYBAAwAAQAMDgAUAAQBAAwMAAQBAAwOAAQBDgQ
+
+
+test 'top-level destructure with call rhs — lift non-convergence', fn:
+  expect cps_closures ƒink:
+    [a, b] = some_call x
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_55, ·ƒret_2:
+      ·letrec fn ·a_0, ·b_1:
+        ·∅some_call
+          ·ƒctx_55
+          fn ·ƒctx_58, ·v_5:
+            ·fn
+              fn ·v_81, ·ƒctx_59, ·v_10, ·v_11:
+                ·letcaps ·v_81, fn {·v_80}:
+                  ·let ·v_10, fn ·a_0:
+                    ·let ·v_11, fn ·b_1:
+                      ·v_80 ·ƒctx_58, ·b_1
+              fn ·v_85:
+                ·closure ·v_85, {·v_80: ·ƒret_2}, fn ·v_45:
+                  ·fn
+                    fn ·v_74, ·ƒctx_60, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                      ·is_seq_like ·ƒctx_60, ·v_7,
+                        fn ·ƒctx_62, ·v_24:
+                          ·seq_pop ·ƒctx_62, ·v_24, ·ƒfail_9, fn ·ƒctx_64, ·v_10, ·v_25:
+                            ·seq_pop ·ƒctx_64, ·v_25, ·ƒfail_9, fn ·ƒctx_66, ·v_11, ·v_16:
+                              ·empty ·ƒctx_66, ·v_16, fn ·ƒctx_68, ·v_19:
+                                ·if ·v_19,
+                                  fn: ·ƒsucc_8 ·ƒctx_68, ·v_10, ·v_11
+                                  fn: ·ƒfail_9 ·ƒctx_68
+                        fn ·ƒctx_71: ·ƒfail_9 ·ƒctx_71
+                    fn ·v_77:
+                      ·closure ·v_77, {}, fn ·v_36:
+                        ·v_36 ·ƒctx_58, ·v_45, ·panic, ·v_5
+          ·∅x
+    # sm:uAEAAQAUAAEAFCQBABQYAQAUEgACAAYBABQAAQAUGAECAQ4BBgEKAAIACgEKCwABAAkqACgAGAEACwoAAgASAREUAAEAFAgAHAEAFBAAGAEAFBABABQMAAIAGgEAFAABABQUAQAUDAAKAQAUAAEAFAIBABQMAAABABQCAAIAHgECAQABAAEMAQEUDAAKAQIBCgACACIBBgEAAQABDAEHFAwACgEIAQoAAgAmAQcUAAEAFA4BABQUAAQBCAEKABwBBxQMAAIAGgEAFAABABQUAQAUDAAEAQAUAAEAFAIBABQAAQAUDAAEAQAUEgAAAQAUAgAKAQAUDAACAB4BABQAAQAUCAAoAQAUEAAYABgAGAEAFAoAAgAmAQAUAAEAFBwAFAAEAQAUCgACADAAGAEAFAwAAgAuAQAUAAEAFBQAFAAEAQAUDAAEAQAUFAAKABgBABQQAQAUDAACADIBABQAAQAUFAAUAAQBABQMAAQBABQUAAoAGAEAFBABABQMAAIANgEAFAABABQQABQABAEAFAwACgAYAQAUDAACADoBABQAAQAUCgEAFAwAAgBCAAQBABQAAQAUFgAUAAQBABQMAAQBABQMAEIABAEAFAABABQWABQAMAAUAAQBABQAAQAUFgAUACgBABQMAAIAJgEAFAABABQUAQAUDAAEAQAUAAEAFAIBABQCAAoBABQMAAIAKgEAFAABABQOABQABAEAFAwABAEAFA4ABAESCxgBFAE
+
+
+test 'top-level destructure with import rhs — lift non-convergence', fn:
+  expect cps_closures ƒink:
+    {foo} = import './bar.fnk'
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_39, ·ƒret_2:
+      ·import ·ƒctx_39, './bar.fnk', fn ·ƒctx_42, ·v_5:
+        ·fn
+          fn ·v_60, ·ƒctx_43, ·v_10:
+            ·letcaps ·v_60, fn {·v_59}:
+              ·let ·v_10, fn ·foo_0:
+                ·v_59 ·ƒctx_42, ·foo_0
+          fn ·v_64:
+            ·closure ·v_64, {·v_59: ·ƒret_2}, fn ·v_30:
+              ·fn
+                fn ·v_53, ·ƒctx_44, ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                  ·is_rec_like ·ƒctx_44, ·v_7,
+                    fn ·ƒctx_46, ·v_15:
+                      ·rec_pop ·ƒctx_46, ·v_15, 'foo', ·ƒfail_9, fn ·ƒctx_48, ·v_10, ·v_14:
+                        ·ƒsucc_8 ·ƒctx_48, ·v_10
+                    fn ·ƒctx_50: ·ƒfail_9 ·ƒctx_50
+                fn ·v_56:
+                  ·closure ·v_56, {}, fn ·v_24:
+                    ·v_24 ·ƒctx_42, ·v_30, ·panic, ·v_5
+    # sm:kAEAAQAaAAEAGiQBABoYAQAaEgACAAYBEBIAAQASEgAUAAQBDgsAAQALAgEACxIBAAsCAAoAGAENEgoAAgAKAQ8aAAEAGggAFAEAGhAAGAEAGgwAAgASAQAaAAEAGhQBABoMAAoBABoAAQAaAgEAGgwAAAEAGgIAAgAWAQIDAAEAAwwBARoMAAoBAgMOAAIAGgEBGgABABoOAQAaFAAEAQIDDgAUAQEaDAACABIBABoAAQAaFAEAGgwABAEAGgABABoCAQAaAAEAGgwABAEAGhIAAAEAGgIACgEAGgwAAgAWAQAaAAEAGggAIAEAGhAAGAAYABgBABoKAAIAHgEAGgABABocABQABAEAGgoAAgAoABgBABoMAAIAJgEAGgABABoUABQABAEAGgwABAEAGgABABoCAQAaBgEAGgIABAEAGhQACgAYAQAaEAEAGgwAAgAqAQAaAAEAGhYAFAAEAQAaDAAoABQABAEAGgABABoWABQAIAEAGgwAAgAeAQAaAAEAGhQBABoMAAQBABoAAQAaAgEAGgIACgEAGgwAAgAiAQAaAAEAGg4AFAAEAQAaDAAEAQAaDgAEARAS
+
+
+---
+Regression test for the fooobar lifting bug — module with multiple
+top-level fns where the results of calls are bound to names. Previously
+downstream wasm emit panicked with `unknown local: add_0` because capture
+analysis didn't track LetVal names that aliased hoisted fn references
+(`add_0 = v_14` where v_14 is the hoisted add-fn). Nested inline conts
+referencing `add_0` couldn't see it in scope_binds and therefore didn't
+capture it. Fixed by always adding LetVal names to scope_binds during
+extraction, regardless of whether the val aliases a hoisted fn.
+---
+
+test 'multiple top-level fns with bound call results', fn:
+  expect cps_closures ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      a * b
+
+    p = mul s, 3
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_63, ·ƒret_8:
+      ·letrec fn ·add_0, ·s_1, ·mul_2, ·p_3:
+        ·fn
+          fn ·v_88, ·ƒctx_65, ·ƒret_10, ·a_4, ·b_5: ·op_plus ·ƒctx_65, ·a_4, ·b_5, ·ƒret_10
+          fn ·v_91:
+            ·closure ·v_91, {}, fn ·v_9:
+              ·set ·add_0, ·v_9, fn:
+                ·ƒpub ·ƒctx_63, ·add_0, fn ·ƒctx_68:
+                  ·add_0
+                    ·ƒctx_68
+                    fn ·ƒctx_70, ·v_20:
+                      ·set ·s_1, ·v_20, fn:
+                        ·ƒpub ·ƒctx_70, ·s_1, fn ·ƒctx_72:
+                          ·fn
+                            fn ·v_82, ·ƒctx_73, ·ƒret_23, ·a_6, ·b_7: ·op_mul ·ƒctx_73, ·a_6, ·b_7, ·ƒret_23
+                            fn ·v_85:
+                              ·closure ·v_85, {}, fn ·v_22:
+                                ·set ·mul_2, ·v_22, fn:
+                                  ·ƒpub ·ƒctx_72, ·mul_2, fn ·ƒctx_76:
+                                    ·mul_2
+                                      ·ƒctx_76
+                                      fn ·ƒctx_78, ·v_33:
+                                        ·set ·p_3, ·v_33, fn:
+                                          ·ƒpub ·ƒctx_78, ·p_3, fn ·ƒctx_80:
+                                            ·ƒret_8 ·ƒctx_80, ·p_3
+                                      ·s_1
+                                      i8 3
+                    i8 1
+                    i8 2
+    # sm:sQEAAQBKAAEASiQBAEoYAXwMEgACAAYBe0oAAQBKGAEAAxIBMAEOARwDEgEwAQoAAgAKAW8QAAEAEAgAFAEAEBAAGAEWBRgBDwEOAQYBCgAEAQoFAAEABRQAFAAEAQABCgAEAQgBCgAEAQcFFAAUARUQDAACABIBABAAAQAQFAEAEAwABAEAEAABABACAQAQAgAKAQAQCgACABYBCxYAAQAWDAEAAw4ABAEMEAoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BOAgAAQADMAA8ABgBAAgMAAIAJgEHDAABAAwMAQABCgAEAQgIDAAIAAIAKgEHAQABAAEQABQABAEAAQoACgAUAAIALgEoEAABABAIADgBABAQABgBFgUYAQ8BDgEGAQoABAEKBQABAAUSABQABAEAAQoABAEIAQoABAEHBRQAOAEVEAwAAgA2AQAQAAEAEBQBABAMAAQBABAAAQAQAgEAEAIACgEAEAwAAgA6AQsWAAEAFgwBAAMOAAQBDBAMAAgAAgA-AQsDAAEAAxAAFAAEAQADDgAKABQAAgBCATgIAAEAA1QAYAAYAQAIDAACAEoBBwwAAQAMDAEAAQoABAEICAwACAACAE4BBwEAAQABEAAUAAQBAAEKAAoAFAACAFIBAAEAAQABFAAUAAQBAAFQARABUAEGAQABAAEGAQABJAFRAQABAAEGAQABJAEGAQABAAEGAQAB

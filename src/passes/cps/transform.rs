@@ -2087,6 +2087,16 @@ fn inject_pub_calls(
       };
       Expr { id: expr.id, kind: ExprKind::Closure { funcref, captures, cont } }
     }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::LetCaps { caps, binds, cont } }
+    }
   }
 }
 
@@ -2176,6 +2186,10 @@ fn rewrite_lets_to_sets(
     ExprKind::Closure { funcref, captures, cont } => {
       let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
       ExprKind::Closure { funcref, captures, cont }
+    }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::LetCaps { caps, binds, cont }
     }
   };
   Expr { id, kind: new_kind }

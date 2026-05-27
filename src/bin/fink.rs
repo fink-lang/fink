@@ -160,13 +160,11 @@ fn main() {
         param_info: Some(&result.param_info),
         bind_kinds: Some(&bk),
       };
-      let lifted_flat = lifted.as_ref().is_some_and(|v| v.is_none());
-      if lifted_flat && source_map {
-        let (output, srcmap) = fink::passes::lifting::fmt::fmt_flat_mapped_native(&result.root, &ctx);
-        println!("{output}\n# sm:{}", srcmap.encode_base64url());
-      } else if lifted_flat {
-        println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
-      } else if source_map {
+      // `--lifted=plain` previously routed through the legacy `lifting`
+      // pass's flat formatter. Closure-convert renders the same shape
+      // via the standard CPS formatter, so both paths now share it.
+      let _ = lifted;
+      if source_map {
         let (output, srcmap) = fink::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
         println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {

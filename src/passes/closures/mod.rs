@@ -1,38 +1,37 @@
-//! Closure conversion — lifts every user fn to a top-level closure-converted
-//! form. Each lifted fn takes its captures as a single `ƒcaps` record arg
-//! (first user arg), followed by `ƒctx, ƒret, args...`. At each fn-definition
-//! site, `App(MkClosure, [funcref, caps])` packages the captured values into
-//! the record.
+//! Closure conversion + hoist.
 //!
-//! Conventions:
-//! - Lifted fn signature: `fn ƒcaps, ƒctx, ƒret, args...`. Pure fns get
-//!   `ƒcaps = {}` (still passed).
-//! - Body refs to captured names render as `ƒcaps.<name>` (record projection).
-//! - MkClosure renders as `·mkclosure ƒfn_lifted, {name: ref, ...}`.
+//! Two passes that together produce a fully closure-converted, top-level-flat
+//! IR ready for codegen. Both live in this module so they can share helpers,
+//! but they run as distinct stages so their effects are independently
+//! inspectable.
 //!
-//! Runs after `cps::transform::lower_module` + `cps::thread_ctx`. Input is a
-//! LetRec/Set/slot-shaped CpsResult; output is the same shape with all fn
-//! definitions lifted out and replaced by MkClosure calls.
+//! Pipeline:
+//!
+//! ```text
+//!   convert(cps)  → Closure / LetCaps inserted, body refs rewritten to locals
+//!   hoist(cps)    → nested LetFn definitions lifted to top-level
+//! ```
+//!
+//! [`convert`] implements closure conversion against the LetRec/Set/slot
+//! IR produced by `cps::transform` + `cps::thread_ctx`. Every user fn
+//! gets a leading `ƒcaps` param; the body is rewritten so refs to
+//! captured outer bindings resolve to fresh local CpsIds bound by
+//! `LetCaps` at fn entry; each fn-definition site emits a `Closure`
+//! node that carries the captured values from the construction scope.
+//!
+//! [`hoist`] is the follow-on pass that flattens nested fn definitions
+//! out of the module body — once captures are explicit, fn bodies are
+//! closed and can be lifted to the top level. Currently a stub.
+//!
+//! See `test_convert.fnk` for the curated convert-only shape and
+//! `test_full.fnk` for the regression set inherited from the legacy
+//! lifting pass.
 
-use crate::passes::cps::ir::CpsResult;
+pub mod convert;
+pub mod hoist;
 
-/// Convert all fn definitions in `cps` to closure-converted form.
-///
-/// Stub — implementation pending. See `test_closures.fnk` for the target
-/// shape (Option A: single caps record arg).
-pub fn convert(cps: CpsResult) -> CpsResult {
-  // TODO: implement.
-  // 1. Walk the IR; collect every LetFn definition.
-  // 2. For each fn, compute its free variables (refs to names defined
-  //    outside the fn body — siblings in an enclosing LetRec, outer
-  //    params, etc.).
-  // 3. Lift each fn body to a top-level form, parameterised on a fresh
-  //    `ƒcaps` record carrying the free vars.
-  // 4. Rewrite refs to free vars inside the body to `ƒcaps.<name>`
-  //    (record projection — an App(Get, [caps_ref, name_lit, cont])).
-  // 5. Replace the original LetFn with App(MkClosure, [funcref, caps_record, cont]).
-  cps
-}
+pub use convert::convert;
+pub use hoist::hoist;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -42,6 +41,7 @@ pub fn convert(cps: CpsResult) -> CpsResult {
 mod tests {
   use crate::passes::cps::fmt::Ctx;
 
+  /// Run CPS → thread_ctx → convert. Renders the convert-only shape.
   fn cps_closures(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
@@ -49,7 +49,13 @@ mod tests {
         let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
         let result = super::convert(threaded);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
-        let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
+        let ctx = Ctx {
+          origin: &result.origin,
+          ast: &desugared.ast,
+          captures: None,
+          param_info: None,
+          bind_kinds: Some(&bk),
+        };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
         let _ = src;
         let b64 = srcmap.encode_base64url();
@@ -59,5 +65,32 @@ mod tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/closures/test_closures.fnk");
+  /// Run CPS → thread_ctx → convert → hoist. Renders the post-hoist shape.
+  fn cps_hoisted(src: &str) -> String {
+    match crate::to_desugared(src, "test") {
+      Ok(desugared) => {
+        let cps = crate::passes::lower(&desugared);
+        let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+        let converted = super::convert(threaded);
+        let result = super::hoist(converted);
+        let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
+        let ctx = Ctx {
+          origin: &result.origin,
+          ast: &desugared.ast,
+          captures: None,
+          param_info: None,
+          bind_kinds: Some(&bk),
+        };
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
+        let _ = src;
+        let b64 = srcmap.encode_base64url();
+        format!("{output}\n# sm:{b64}")
+      }
+      Err(e) => format!("ERROR: {e}"),
+    }
+  }
+
+  test_macros::include_fink_tests!("src/passes/closures/test_convert.fnk");
+  test_macros::include_fink_tests!("src/passes/closures/test_full.fnk");
+  test_macros::include_fink_tests!("src/passes/closures/test_hoist.fnk");
 }

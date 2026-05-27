@@ -1786,6 +1786,7 @@ fn find_pub_apps(
     ExprKind::LetRec { .. } => unreachable!("wasm::lower::find_pub_apps: LetRec not yet handled in wasm codegen"),
     ExprKind::Set { .. } => unreachable!("wasm::lower::find_pub_apps: Set not yet handled in wasm codegen"),
     ExprKind::Closure { .. } => unreachable!("wasm::lower::find_pub_apps: Closure not yet handled in wasm codegen"),
+    ExprKind::LetCaps { .. } => unreachable!("wasm::lower::find_pub_apps: LetCaps not yet handled in wasm codegen"),
   }
 }
 
@@ -1798,6 +1799,7 @@ fn short_kind(k: &ExprKind) -> &'static str {
     ExprKind::LetRec { .. } => "LetRec",
     ExprKind::Set { .. } => "Set",
     ExprKind::Closure { .. } => "Closure",
+    ExprKind::LetCaps { .. } => "LetCaps",
   }
 }
 

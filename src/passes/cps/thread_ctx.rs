@@ -148,6 +148,11 @@ impl Threader<'_> {
         let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
         ExprKind::Closure { funcref, captures, cont: new_cont }
       }
+      ExprKind::LetCaps { caps, binds, cont } => {
+        // LetCaps is a compile-time destructure — no ctx threading.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::LetCaps { caps, binds, cont: new_cont }
+      }
     };
     Expr { id, kind: new_kind }
   }

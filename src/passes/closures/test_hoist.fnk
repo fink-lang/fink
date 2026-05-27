@@ -1,0 +1,45 @@
+---
+Hoist tests — post-convert + hoist shape.
+
+Same source inputs as `test_convert.fnk`, but checked against the
+post-hoist output: nested fn definitions should appear at the module's
+top level rather than embedded in the module body.
+
+Hoist is currently a pass-through stub, so these tests will render
+identically to `test_convert.fnk`'s expected outputs until the pass
+is implemented. Bless once the impl lands.
+---
+
+{test, skip, expect, equals, cps_hoisted} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+skip test 'hoist pure fn', fn:
+  expect cps_hoisted ƒink:
+    add = fn a, b: a + b
+  | equals ƒink:
+    Pending
+
+
+skip test 'hoist self-rec', fn:
+  expect cps_hoisted ƒink:
+    fib = fn n: fib n - 1
+  | equals ƒink:
+    Pending
+
+
+skip test 'hoist mutual rec', fn:
+  expect cps_hoisted ƒink:
+    ping = fn x: pong x
+    pong = fn x: ping x
+  | equals ƒink:
+    Pending
+
+
+skip test 'hoist nested', fn:
+  expect cps_hoisted ƒink:
+    foo = fn a:
+      inner = fn b: a + b
+      inner
+  | equals ƒink:
+    Pending

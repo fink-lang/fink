@@ -1,0 +1,487 @@
+//! Closure conversion — every user fn becomes a top-level closure-converted
+//! form. Each lifted fn takes its captures as a single `ƒcaps` record arg
+//! (first user arg), followed by `ƒctx, ƒret, args...`. At each fn-definition
+//! site, the original `LetFn` is followed by an `ExprKind::Closure` node that
+//! records the captured values; codegen materialises the caps struct.
+//!
+//! Conventions:
+//! - Lifted fn signature: `fn ƒcaps, ƒctx, ƒret, args...`. Pure fns get
+//!   `ƒcaps = {}` (still passed; codegen sees an empty captures list).
+//! - The lifted fn body is NOT rewritten here. It still references free
+//!   variables by their original CpsIds. The `Closure` node carries the
+//!   captures list as metadata; codegen reads them from the caps struct
+//!   at fn entry (the fn's body sees its capture-bind CpsIds as already
+//!   in-scope at the start of the body — the contract between this pass
+//!   and codegen).
+//!
+//! Free variables: a `Ref::Synth(id)` or `ContRef(id)` whose `id` was not
+//! bound inside the fn's body (params, LetVal, LetFn, LetRec slots, Cont
+//! args, Set names). LetRec slots from an enclosing scope ARE captured —
+//! they are not bound inside the fn.
+//!
+//! Runs after `cps::transform::lower_module` + `cps::thread_ctx`.
+
+use std::collections::HashSet;
+
+use crate::ast::AstId;
+use crate::passes::cps::ir::{
+  Arg, Bind, BindNode, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
+  Ref, Val, ValKind,
+};
+use crate::propgraph::PropGraph;
+
+pub fn convert(mut cps: CpsResult) -> CpsResult {
+  let mut cx = Cx { origin: &mut cps.origin };
+  cps.root = cx.convert_expr(cps.root);
+  cps
+}
+
+struct Cx<'a> {
+  origin: &'a mut PropGraph<CpsId, Option<AstId>>,
+}
+
+impl Cx<'_> {
+  fn fresh_id(&mut self, origin: Option<AstId>) -> CpsId {
+    self.origin.push(origin)
+  }
+
+  /// Recursively convert an expression, lifting every LetFn encountered.
+  fn convert_expr(&mut self, expr: Expr) -> Expr {
+    let Expr { id, kind } = expr;
+    let new_kind = match kind {
+      ExprKind::LetVal { name, val, cont } => {
+        let cont = self.convert_cont(cont);
+        ExprKind::LetVal { name, val, cont }
+      }
+      ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+        // Recurse first — inner fns get converted before this one is
+        // analysed.
+        let fn_body = self.convert_expr(*fn_body);
+        let cont = self.convert_cont(cont);
+
+        // Compute free variables in the converted body.
+        let mut bound: HashSet<CpsId> = HashSet::new();
+        for p in &params {
+          let bn = match p { Param::Name(b) | Param::Spread(b) => b };
+          bound.insert(bn.id);
+        }
+        let mut frees = Frees::new();
+        collect_free_in_expr(&fn_body, &bound, &mut frees);
+
+        // For each free var, mint a fresh local CpsId. The lifted body
+        // will reference these local ids; LetCaps at fn entry binds them
+        // from the caps record. Origin propgraph maps the local back to
+        // the same AST node as the outer capture so the rendered name
+        // matches.
+        let outer_to_local: Vec<(CpsId, CpsId)> = frees.order.iter().map(|&outer| {
+          let outer_origin = self.origin.try_get(outer).and_then(|o| *o);
+          let local = self.fresh_id(outer_origin);
+          (outer, local)
+        }).collect();
+        let rename: std::collections::HashMap<CpsId, CpsId> =
+          outer_to_local.iter().copied().collect();
+
+        // Rewrite all refs in the body: outer_id → local_id.
+        let fn_body = rename_refs_in_expr(fn_body, &rename);
+
+        // Inject a fresh ƒcaps param at the head of the params list.
+        let name_origin = self.origin.try_get(name.id).and_then(|o| *o);
+        let caps_id = self.fresh_id(name_origin);
+        let caps_bind = BindNode { id: caps_id, kind: Bind::Synth };
+        let mut new_params = vec![Param::Name(caps_bind)];
+        new_params.extend(params);
+
+        // Wrap the rewritten body in LetCaps that binds each local id.
+        let letcaps_binds: Vec<BindNode> = outer_to_local.iter().map(|&(_outer, local)| {
+          BindNode { id: local, kind: Bind::SynthName }
+        }).collect();
+        let caps_ref_id = self.fresh_id(name_origin);
+        let caps_ref = Val {
+          id: caps_ref_id,
+          kind: ValKind::Ref(Ref::Synth(caps_id)),
+        };
+        let letcaps_id = self.fresh_id(name_origin);
+        let new_fn_body = if letcaps_binds.is_empty() {
+          // No captures — skip the LetCaps wrapper.
+          fn_body
+        } else {
+          Expr {
+            id: letcaps_id,
+            kind: ExprKind::LetCaps {
+              caps: caps_ref,
+              binds: letcaps_binds,
+              cont: Cont::Expr {
+                args: vec![],
+                body: Box::new(fn_body),
+              },
+            },
+          }
+        };
+
+        // Build captures for the Closure node: each (local_bind, outer_ref).
+        // The local_bind documents the name as it appears in the lifted
+        // body (its CpsId is the local id LetCaps will bind); the outer
+        // Val is the construction-site read.
+        let captures: Vec<(BindNode, Val)> = outer_to_local.iter().map(|&(outer, local)| {
+          let outer_origin = self.origin.try_get(outer).and_then(|o| *o);
+          let bn = BindNode { id: local, kind: Bind::SynthName };
+          let val_id = self.fresh_id(outer_origin);
+          let val = Val { id: val_id, kind: ValKind::Ref(Ref::Synth(outer)) };
+          (bn, val)
+        }).collect();
+
+        // Rename LetFn name to a fresh lifted-fn id; use the original
+        // `name` as the Closure's bound result so surrounding-scope
+        // refs resolve to the closure value.
+        let lifted_id = self.fresh_id(name_origin);
+        let lifted_name = BindNode { id: lifted_id, kind: name.kind };
+
+        let funcref_id = self.fresh_id(name_origin);
+        let funcref = Val {
+          id: funcref_id,
+          kind: ValKind::Ref(Ref::Synth(lifted_id)),
+        };
+        let closure_id = self.fresh_id(name_origin);
+        let closure_node = Expr {
+          id: closure_id,
+          kind: ExprKind::Closure {
+            funcref,
+            captures,
+            cont: Cont::Expr {
+              args: vec![name],
+              body: cont_to_body(cont, self),
+            },
+          },
+        };
+
+        let new_cont = Cont::Expr {
+          args: vec![],
+          body: Box::new(closure_node),
+        };
+
+        ExprKind::LetFn {
+          name: lifted_name,
+          params: new_params,
+          fn_kind,
+          fn_body: Box::new(new_fn_body),
+          cont: new_cont,
+        }
+      }
+      ExprKind::App { func, args } => {
+        let args = args.into_iter().map(|a| match a {
+          Arg::Cont(c) => Arg::Cont(self.convert_cont(c)),
+          Arg::Expr(e) => Arg::Expr(Box::new(self.convert_expr(*e))),
+          other => other,
+        }).collect();
+        ExprKind::App { func, args }
+      }
+      ExprKind::If { cond, then, else_ } => {
+        let then = Box::new(self.convert_expr(*then));
+        let else_ = Box::new(self.convert_expr(*else_));
+        ExprKind::If { cond, then, else_ }
+      }
+      ExprKind::LetRec { slots, body } => {
+        let body = Box::new(self.convert_expr(*body));
+        ExprKind::LetRec { slots, body }
+      }
+      ExprKind::Set { name, val, cont } => {
+        let cont = self.convert_cont(cont);
+        ExprKind::Set { name, val, cont }
+      }
+      ExprKind::Closure { funcref, captures, cont } => {
+        let cont = self.convert_cont(cont);
+        ExprKind::Closure { funcref, captures, cont }
+      }
+      ExprKind::LetCaps { caps, binds, cont } => {
+        let cont = self.convert_cont(cont);
+        ExprKind::LetCaps { caps, binds, cont }
+      }
+    };
+    Expr { id, kind: new_kind }
+  }
+
+  fn convert_cont(&mut self, cont: Cont) -> Cont {
+    match cont {
+      Cont::Ref(_) => cont,
+      Cont::Expr { args, body } => {
+        let body = Box::new(self.convert_expr(*body));
+        Cont::Expr { args, body }
+      }
+    }
+  }
+}
+
+/// Unwrap a Cont into its body Expr. For `Cont::Ref(id)`, synthesise a
+/// forwarding App `id(name)` — but here we use this only inside Closure
+/// to set up the Closure's cont body, where the original cont was the
+/// LetFn's cont (could be ref or expr).
+fn cont_to_body(cont: Cont, cx: &mut Cx<'_>) -> Box<Expr> {
+  match cont {
+    Cont::Expr { args: _, body } => body,
+    Cont::Ref(cont_id) => {
+      // Forward the closure result to the cont.
+      let cont_val_id = cx.fresh_id(None);
+      let cont_val = Val {
+        id: cont_val_id,
+        kind: ValKind::ContRef(cont_id),
+      };
+      let app_id = cx.fresh_id(None);
+      Box::new(Expr {
+        id: app_id,
+        kind: ExprKind::App {
+          func: Callable::Val(cont_val),
+          args: vec![],
+        },
+      })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Free-variable collection
+// ---------------------------------------------------------------------------
+
+/// Insertion-ordered set of CpsIds. Order matters so capture layouts are
+/// deterministic; dedupe via the hash set.
+struct Frees {
+  seen: HashSet<CpsId>,
+  order: Vec<CpsId>,
+}
+
+impl Frees {
+  fn new() -> Self {
+    Self { seen: HashSet::new(), order: Vec::new() }
+  }
+  fn insert(&mut self, id: CpsId) {
+    if self.seen.insert(id) {
+      self.order.push(id);
+    }
+  }
+}
+
+/// Walk an expression and record every `Ref::Synth(id)` / `ContRef(id)` whose
+/// `id` is not in `bound`. Adds new binds encountered along the way to
+/// `bound` for the duration of the subexpression where they're in scope.
+fn collect_free_in_expr(
+  expr: &Expr,
+  bound: &HashSet<CpsId>,
+  frees: &mut Frees,
+) {
+  match &expr.kind {
+    ExprKind::LetVal { name, val, cont } => {
+      collect_free_in_val(val, bound, frees);
+      let mut inner = bound.clone();
+      inner.insert(name.id);
+      collect_free_in_cont(cont, &inner, frees);
+    }
+    ExprKind::LetFn { name, params: _, fn_body: _, cont, .. } => {
+      // The lifted fn's body is closed — its captures have already been
+      // collected at its own conversion site and propagated into the
+      // surrounding Closure node. Refs inside the body are the inner fn's
+      // concern, NOT this scope's. We do NOT recurse into `fn_body`.
+      //
+      // Names from THIS scope that the inner fn captures appear as
+      // `Ref::Synth` Vals in the Closure node's `captures` list (sibling
+      // to this LetFn in the parent's body); those reads are handled
+      // when we walk the Closure arm separately.
+      //
+      // The LetFn name is in scope for the cont; track it.
+      let mut inner_cont = bound.clone();
+      inner_cont.insert(name.id);
+      collect_free_in_cont(cont, &inner_cont, frees);
+    }
+    ExprKind::App { func, args } => {
+      if let Callable::Val(v) = func { collect_free_in_val(v, bound, frees); }
+      for a in args {
+        match a {
+          Arg::Val(v) | Arg::Spread(v) => collect_free_in_val(v, bound, frees),
+          Arg::Cont(c) => collect_free_in_cont(c, bound, frees),
+          Arg::Expr(e) => collect_free_in_expr(e, bound, frees),
+        }
+      }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      collect_free_in_val(cond, bound, frees);
+      collect_free_in_expr(then, bound, frees);
+      collect_free_in_expr(else_, bound, frees);
+    }
+    ExprKind::LetRec { slots, body } => {
+      let mut inner = bound.clone();
+      for s in slots { inner.insert(s.id); }
+      collect_free_in_expr(body, &inner, frees);
+    }
+    ExprKind::Set { name: _, val, cont } => {
+      // Set's `name` IS a ref to a slot in an enclosing LetRec, not a
+      // new binding — count it as a use if it's free in this scope.
+      // The `name` BindNode field is the slot binding (defined by the
+      // LetRec); we don't record it as a fresh bind here.
+      collect_free_in_val(val, bound, frees);
+      collect_free_in_cont(cont, bound, frees);
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      collect_free_in_val(funcref, bound, frees);
+      for (_name, val) in captures {
+        collect_free_in_val(val, bound, frees);
+      }
+      collect_free_in_cont(cont, bound, frees);
+    }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      collect_free_in_val(caps, bound, frees);
+      // The cont's body sees `binds` as locals.
+      let mut inner = bound.clone();
+      for b in binds { inner.insert(b.id); }
+      collect_free_in_cont(cont, &inner, frees);
+    }
+  }
+}
+
+fn collect_free_in_val(val: &Val, bound: &HashSet<CpsId>, frees: &mut Frees) {
+  match &val.kind {
+    ValKind::Ref(Ref::Synth(id)) => {
+      if !bound.contains(id) { frees.insert(*id); }
+    }
+    ValKind::ContRef(id) => {
+      if !bound.contains(id) { frees.insert(*id); }
+    }
+    _ => {}
+  }
+}
+
+fn collect_free_in_cont(cont: &Cont, bound: &HashSet<CpsId>, frees: &mut Frees) {
+  match cont {
+    Cont::Ref(id) => {
+      if !bound.contains(id) { frees.insert(*id); }
+    }
+    Cont::Expr { args, body } => {
+      let mut inner = bound.clone();
+      for a in args { inner.insert(a.id); }
+      collect_free_in_expr(body, &inner, frees);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ref-renaming: rewrite captured outer CpsIds to local CpsIds inside a
+// lifted fn body. Only refs (Ref::Synth, ContRef, Cont::Ref) get rewritten;
+// binding sites are untouched (they're already locally-fresh, or are
+// LetVal/LetFn/LetRec slots that THIS lifted body introduces locally).
+// ---------------------------------------------------------------------------
+
+fn rename_refs_in_expr(
+  expr: Expr,
+  rename: &std::collections::HashMap<CpsId, CpsId>,
+) -> Expr {
+  if rename.is_empty() {
+    return expr;
+  }
+  let Expr { id, kind } = expr;
+  let new_kind = match kind {
+    ExprKind::LetVal { name, val, cont } => {
+      let val = Box::new(rename_in_val(*val, rename));
+      let cont = rename_refs_in_cont(cont, rename);
+      ExprKind::LetVal { name, val, cont }
+    }
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      // The fn_body is its OWN scope. After conversion (which has
+      // already happened by the time rename runs), inner LetFn bodies
+      // reference their own local CpsIds (post-rename). We should NOT
+      // recurse into a nested LetFn's body — its refs are not in
+      // THIS scope. However, the nested LetFn's cont IS in this scope.
+      let cont = rename_refs_in_cont(cont, rename);
+      ExprKind::LetFn { name, params, fn_kind, fn_body, cont }
+    }
+    ExprKind::App { func, args } => {
+      let func = match func {
+        Callable::Val(v) => Callable::Val(rename_in_val(v, rename)),
+        Callable::BuiltIn(_) => func,
+      };
+      let args = args.into_iter().map(|a| match a {
+        Arg::Val(v) => Arg::Val(rename_in_val(v, rename)),
+        Arg::Spread(v) => Arg::Spread(rename_in_val(v, rename)),
+        Arg::Cont(c) => Arg::Cont(rename_refs_in_cont(c, rename)),
+        Arg::Expr(e) => Arg::Expr(Box::new(rename_refs_in_expr(*e, rename))),
+      }).collect();
+      ExprKind::App { func, args }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let cond = Box::new(rename_in_val(*cond, rename));
+      let then = Box::new(rename_refs_in_expr(*then, rename));
+      let else_ = Box::new(rename_refs_in_expr(*else_, rename));
+      ExprKind::If { cond, then, else_ }
+    }
+    ExprKind::LetRec { slots, body } => {
+      let body = Box::new(rename_refs_in_expr(*body, rename));
+      ExprKind::LetRec { slots, body }
+    }
+    ExprKind::Set { name, val, cont } => {
+      // Set's `name` is a slot binding *defined* by an enclosing LetRec;
+      // its CpsId is a USE site (refers to the slot). Rename it if it's
+      // in the rename map.
+      let new_name_id = rename.get(&name.id).copied().unwrap_or(name.id);
+      let name = BindNode { id: new_name_id, kind: name.kind };
+      let val = rename_in_val(val, rename);
+      let cont = rename_refs_in_cont(cont, rename);
+      ExprKind::Set { name, val, cont }
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      // funcref refers to a lifted fn id — that's a SIBLING binding
+      // in the enclosing scope's LetFn chain. Inside the current
+      // lifted body, the SIBLING funcref id isn't captured (the inner
+      // fn is its own thing). The captures Val refs ARE in this body's
+      // scope and could be renamed.
+      let funcref = rename_in_val(funcref, rename);
+      let captures = captures.into_iter().map(|(name, val)| {
+        (name, rename_in_val(val, rename))
+      }).collect();
+      let cont = rename_refs_in_cont(cont, rename);
+      ExprKind::Closure { funcref, captures, cont }
+    }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let caps = rename_in_val(caps, rename);
+      let cont = rename_refs_in_cont(cont, rename);
+      ExprKind::LetCaps { caps, binds, cont }
+    }
+  };
+  Expr { id, kind: new_kind }
+}
+
+fn rename_in_val(
+  val: Val,
+  rename: &std::collections::HashMap<CpsId, CpsId>,
+) -> Val {
+  let Val { id, kind } = val;
+  let new_kind = match kind {
+    ValKind::Ref(Ref::Synth(target)) => {
+      if let Some(&new_target) = rename.get(&target) {
+        ValKind::Ref(Ref::Synth(new_target))
+      } else {
+        ValKind::Ref(Ref::Synth(target))
+      }
+    }
+    ValKind::ContRef(target) => {
+      if let Some(&new_target) = rename.get(&target) {
+        ValKind::ContRef(new_target)
+      } else {
+        ValKind::ContRef(target)
+      }
+    }
+    other => other,
+  };
+  Val { id, kind: new_kind }
+}
+
+fn rename_refs_in_cont(
+  cont: Cont,
+  rename: &std::collections::HashMap<CpsId, CpsId>,
+) -> Cont {
+  match cont {
+    Cont::Ref(id) => {
+      let new_id = rename.get(&id).copied().unwrap_or(id);
+      Cont::Ref(new_id)
+    }
+    Cont::Expr { args, body } => {
+      let body = Box::new(rename_refs_in_expr(*body, rename));
+      Cont::Expr { args, body }
+    }
+  }
+}

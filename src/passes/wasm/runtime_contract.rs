@@ -880,6 +880,7 @@ fn walk_fn_bodies(expr: &Expr, pred: &mut dyn FnMut(&Expr) -> bool) -> bool {
     ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::walk_fn_bodies: LetRec not yet handled in wasm codegen"),
     ExprKind::Set { .. } => unreachable!("wasm::runtime_contract::walk_fn_bodies: Set not yet handled in wasm codegen"),
     ExprKind::Closure { .. } => unreachable!("wasm::runtime_contract::walk_fn_bodies: Closure not yet handled in wasm codegen"),
+    ExprKind::LetCaps { .. } => unreachable!("wasm::runtime_contract::walk_fn_bodies: LetCaps not yet handled in wasm codegen"),
   }
 }
 
@@ -926,6 +927,7 @@ fn tail_is_apply_path(expr: &Expr) -> bool {
     ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::tail_is_apply_path: LetRec not yet handled in wasm codegen"),
     ExprKind::Set { .. } => unreachable!("wasm::runtime_contract::tail_is_apply_path: Set not yet handled in wasm codegen"),
     ExprKind::Closure { .. } => unreachable!("wasm::runtime_contract::tail_is_apply_path: Closure not yet handled in wasm codegen"),
+    ExprKind::LetCaps { .. } => unreachable!("wasm::runtime_contract::tail_is_apply_path: LetCaps not yet handled in wasm codegen"),
   }
 }
 
@@ -986,6 +988,7 @@ fn scan_expr(expr: &Expr, cps: &CpsResult, usage: &mut RuntimeUsage) {
     ExprKind::LetRec { .. } => unreachable!("wasm::runtime_contract::scan_expr: LetRec not yet handled in wasm codegen"),
     ExprKind::Set { .. } => unreachable!("wasm::runtime_contract::scan_expr: Set not yet handled in wasm codegen"),
     ExprKind::Closure { .. } => unreachable!("wasm::runtime_contract::scan_expr: Closure not yet handled in wasm codegen"),
+    ExprKind::LetCaps { .. } => unreachable!("wasm::runtime_contract::scan_expr: LetCaps not yet handled in wasm codegen"),
   }
 }
 

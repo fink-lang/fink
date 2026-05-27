@@ -595,6 +595,20 @@ pub enum ExprKind {
     cont: Cont,
   },
 
+  /// Caps destructure at the start of a lifted fn body. Compile-time IR
+  /// node — NOT a runtime call. Reads each named field from the `caps`
+  /// record (a WasmGC struct at codegen time) and binds it locally for
+  /// the cont. `binds` are fresh CpsIds owned by this LetCaps; refs to
+  /// captured names inside the lifted body resolve to these locals, not
+  /// to the outer CpsIds they originated from.
+  ///
+  /// Rendered form: `·letcaps <caps>, fn {name_1, name_2, ...}: <body>`.
+  LetCaps {
+    caps: Val,
+    binds: Vec<BindNode>,
+    cont: Cont,
+  },
+
   // ---------------------------------------------------------------------------
   // Pattern matching — all patterns lower to PatternMatch (LetFn + App).
   // Type guards (IsSeqLike, IsRecLike) wrap matcher entries; collection primitives
@@ -664,6 +678,12 @@ fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Opti
     ExprKind::Closure { captures, cont, .. } => {
       for (name, _) in captures {
         collect_bk_bind(name, bk);
+      }
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::LetCaps { binds, cont, .. } => {
+      for b in binds {
+        collect_bk_bind(b, bk);
       }
       collect_bk_cont(cont, bk);
     }

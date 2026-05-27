@@ -1,0 +1,181 @@
+---
+Closure conversion — `passes/closures`.
+
+Lifts every user fn to a top-level closure-converted form. Each
+lifted fn takes its captures as a single `ƒcaps` record arg
+(first user arg), followed by the usual `ƒctx, ƒret, args...`.
+At the call site, `MkClosure { funcref, caps }` packages the
+captured values into the record.
+
+Conventions:
+- Every lifted fn has signature `fn ƒcaps, ƒctx, ƒret, args...`.
+  Pure fns get `ƒcaps = {}`.
+- Body refs to captured names render as `ƒcaps.<name>` (record
+  projection on the caps arg). Local refs and param refs stay
+  unchanged.
+- MkClosure renders as `·mkclosure ƒfn_lifted, {name: ref, ...}`
+  — the caps record literal preserves the original capture name
+  for readability.
+
+Slot semantics still apply: a closure captures the SLOT REFERENCE
+for a sibling LetRec name, not the slot's current value. Reading
+the slot at call time gets whatever's filled by then.
+
+Test format mirrors test_letrec.fnk — bless to populate the
+`Pending` placeholders once the pass is implemented.
+---
+
+{test, expect, equals, cps_closures} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+Pure fn — no captures. The closure construction passes an empty
+caps record. The lifted fn signature still has `ƒcaps` but it's
+unused inside the body.
+---
+
+test 'closures pure fn', fn:
+  expect cps_closures ƒink:
+    add = fn a, b: a + b
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_22, ·ƒret_3:
+      ·letrec fn ·add_0:
+        ·fn
+          fn ·v_29, ·ƒctx_24, ·ƒret_5, ·a_1, ·b_2: ·op_plus ·ƒctx_24, ·a_1, ·b_2, ·ƒret_5
+          fn ·v_32:
+            ·closure ·v_32, {}, fn ·v_4:
+              ·set ·add_0, ·v_4, fn:
+                ·ƒpub ·ƒctx_22, ·add_0, fn ·ƒctx_27:
+                  ·ƒret_3 ·ƒctx_27, ·add_0
+    # sm:QgABABQAAQAUJAEAFBgBABQSAAIABgEAFAABABQYAQADDgACAAoBDA4AAQAOCAAUAQAOEAAYARIFFgELAQ4BBgEKAAQBBgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUSABQBEQ4MAAIAEgEADgABAA4UAQAODAAEAQAOAAEADgIBAA4CAAoBAA4KAAIAFgELFAABABQMAQADDgAEAQwOCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
+
+
+---
+Single-name capture from a sibling slot. The lifted body reads
+`ƒcaps.fib_0` to call itself. At MkClosure time the slot is still
+empty (it's about to be filled with the closure we're building),
+but the captured reference is the slot itself.
+---
+
+test 'closures self-rec', fn:
+  expect cps_closures ƒink:
+    fib = fn n: fib n - 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_26, ·ƒret_2:
+      ·letrec fn ·fib_0:
+        ·fn
+          fn ·v_36, ·ƒctx_28, ·ƒret_4, ·n_1:
+            ·letcaps ·v_36, fn {·fib_35}:
+              ·op_minus ·ƒctx_28, ·n_1, (i8 1), fn ·ƒctx_30, ·v_8:
+                ·fib_35 ·ƒctx_30, ·ƒret_4, ·v_8
+          fn ·v_40:
+            ·closure ·v_40, {·fib_35: ·fib_0}, fn ·v_3:
+              ·set ·fib_0, ·v_3, fn:
+                ·ƒpub ·ƒctx_26, ·fib_0, fn ·ƒctx_33:
+                  ·ƒret_2 ·ƒctx_33, ·fib_0
+    # sm:XgABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUYAQADDgACAAoBDA8AAQAPCAAUAQAPEAAYAQwJFgEFAQoAAgASAQUPAAEADxQBAA8MAAoBAA8AAQAPAgELAxAAAAEMDwIAAgAWARQFAAEABRYAFAAEAQABCgAGAQgBAAEAAQYBAAEEAAoAGAEHBQoAAgAaAQcJAAEAAxIAFAAEAQAJEgAEAQgFCgAUARMPDAACABIBAA8AAQAPFAEADwwABAEADwABAA8CAQsDAAEAAxAABAEAAw4AAAEMDwIACgEADwoAAgAWAQsVAAEAFQwBAAMOAAQBDA8KAAgAAgAaAQsDAAEAAxAAFAAEAQADDgAKABQAAgAeAQADAAEAAxQAFAAEAQAD
+
+
+---
+Mutual rec across two sibling slots. Each closure captures only
+the slot it references (not all siblings).
+---
+
+test 'closures mutual rec', fn:
+  expect cps_closures ƒink:
+    ping = fn x: pong x
+    pong = fn x: ping x
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_37, ·ƒret_4:
+      ·letrec fn ·ping_0, ·pong_1:
+        ·fn
+          fn ·v_57, ·ƒctx_39, ·ƒret_6, ·x_2:
+            ·letcaps ·v_57, fn {·pong_56}:
+              ·pong_56 ·ƒctx_39, ·ƒret_6, ·x_2
+          fn ·v_61:
+            ·closure ·v_61, {·pong_56: ·pong_1}, fn ·v_5:
+              ·set ·ping_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_37, ·ping_0, fn ·ƒctx_42:
+                  ·fn
+                    fn ·v_49, ·ƒctx_43, ·ƒret_14, ·x_3:
+                      ·letcaps ·v_49, fn {·ping_48}:
+                        ·ping_48 ·ƒctx_43, ·ƒret_14, ·x_3
+                    fn ·v_53:
+                      ·closure ·v_53, {·ping_48: ·ping_0}, fn ·v_13:
+                        ·set ·pong_1, ·v_13, fn:
+                          ·ƒpub ·ƒctx_42, ·pong_1, fn ·ƒctx_46:
+                            ·ƒret_4 ·ƒctx_46, ·pong_1
+    # sm:kQEAAQAnAAEAJyQBACcYASgTEgACAAYBJycAAQAnGAEABBQBKAQQAAIACgEZDAABAAwIABQBAAwQABgBDAYWAQUBCgACABIBBQwAAQAMFAEADAwACgEADAABAAwCARoEEgAAARkMAgACABYBDAYAAQAEFAAUAAQBAAYSAAQBCgEKABQBFQwMAAIAEgEADAABAAwUAQAMDAAEAQAMAAEADAIBGgQAAQAEEgAEAQAEEAAAARkMAgAKAQAMCgACABYBDRMAAQATDAEABBAABAEODAoACAACABoBDQQAAQAEEAAUAAQBAAQQAAoAFAACAB4BNgwAAQAMCAAoAQAMEAAYAQwGGAEFAQoAAgAmAQUMAAEADBQBAAwMAAoBAAwAAQAMAgE1BBIAAAE2DAIAAgAqAQwGAAEABBQAFAAEAQAGFAAEAQoBCgAoARUMDAACACYBAAwAAQAMFAEADAwABAEADAABAAwCATUEAAEABBIABAEABBAAAAE2DAIACgEADAwAAgAqAQ0TAAEAEwwBAAQQAAQBDgwMAAgAAgAuAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAyAQAEAAEABBQAFAAEAQAE
+
+
+---
+Capture from an outer fn's parameter scope. `inner` reads `a`
+from `foo`'s frame. The capture record carries the live param
+value at MkClosure time, not a slot reference.
+---
+
+test 'closures nested param capture', fn:
+  expect cps_closures ƒink:
+    foo = fn a:
+      inner = fn b: a + b
+      inner
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_33, ·ƒret_4:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_50, ·ƒctx_35, ·ƒret_6, ·a_1:
+            ·letrec fn ·inner_2:
+              ·fn
+                fn ·v_43, ·ƒctx_36, ·ƒret_8, ·b_3:
+                  ·letcaps ·v_43, fn {·a_42}:
+                    ·op_plus ·ƒctx_36, ·a_42, ·b_3, ·ƒret_8
+                fn ·v_47:
+                  ·closure ·v_47, {·a_42: ·a_1}, fn ·v_7:
+                    ·set ·inner_2, ·v_7, fn:
+                      ·ƒret_6 ·ƒctx_35, ·inner_2
+          fn ·v_53:
+            ·closure ·v_53, {}, fn ·v_5:
+              ·set ·foo_0, ·v_5, fn:
+                ·ƒpub ·ƒctx_33, ·foo_0, fn ·ƒctx_40:
+                  ·ƒret_4 ·ƒctx_40, ·foo_0
+    # sm:fAABACkAAQApJAEAKRgBACkSAAIABgEAKQABACkYAQADDgACAAoBDCMAAQAjCAAUAQAjEAAYATwFFgE1AQoAAgASAQUjAAEAIxgBEAUSAAIAFgEQCwABAAsIACABAAsQABgBDAUWAQUBCgACAB4BBQsAAQALFAEACwwACgEACwABAAsCARkBDAAAARoLAgACACIBDAUAAQAFFAAUAAQBAAEMAAQBCAEKAAQBBwUSACABCwsMAAIAHgEACwABAAsUAQALDAAEAQALAAEACwIBGQEAAQABDAAEAQABCgAAARoLAgAKAQALCgACACIBDxMAAQATDAEABRIABAEQCwoACAACACYBHAUAAQAFFAAUAAQBAAUSABQBOyMMAAIAEgEAIwABACMUAQAjDAAEAQAjAAEAIwIBACMCAAoBACMKAAIAFgELKQABACkMAQADDgAEAQwjCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
+
+
+---
+Multiple captures in one fn — both an outer param and a sibling
+slot. The caps record holds both, keyed by their source names.
+---
+
+test 'closures multiple captures', fn:
+  expect cps_closures ƒink:
+    foo = fn a:
+      helper = fn x: x + 1
+      use = fn y: helper a + y
+      use
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_52, ·ƒret_6:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·v_81, ·ƒctx_54, ·ƒret_8, ·a_1:
+            ·letrec fn ·helper_2, ·use_3:
+              ·fn
+                fn ·v_75, ·ƒctx_55, ·ƒret_10, ·x_4: ·op_plus ·ƒctx_55, ·x_4, (i8 1), ·ƒret_10
+                fn ·v_78:
+                  ·closure ·v_78, {}, fn ·v_9:
+                    ·set ·helper_2, ·v_9, fn:
+                      ·fn
+                        fn ·v_67, ·ƒctx_57, ·ƒret_18, ·y_5:
+                          ·letcaps ·v_67, fn {·a_65, ·helper_66}:
+                            ·op_plus ·ƒctx_57, ·a_65, ·y_5, fn ·ƒctx_59, ·v_22:
+                              ·helper_66 ·ƒctx_59, ·ƒret_18, ·v_22
+                        fn ·v_72:
+                          ·closure ·v_72, {·a_65: ·a_1, ·helper_66: ·helper_2}, fn ·v_17:
+                            ·set ·use_3, ·v_17, fn:
+                              ·ƒret_8 ·ƒctx_54, ·use_3
+          fn ·v_84:
+            ·closure ·v_84, {}, fn ·v_7:
+              ·set ·foo_0, ·v_7, fn:
+                ·ƒpub ·ƒctx_52, ·foo_0, fn ·ƒctx_63:
+                  ·ƒret_6 ·ƒctx_63, ·foo_0
+    # sm:uAEAAQBDAAEAQyQBAEMYAQBDEgACAAYBAEMAAQBDGAEAAw4AAgAKAQw9AAEAPQgAFAEAPRAAGAF0AxYBbQEKAAIAEgEFPQABAD0YARAGGAEuAw4AAgAWARsLAAEACwgAIAEACxAAGAEMBRgBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRQAIAELCwwAAgAeAQALAAEACxQBAAsMAAQBAAsAAQALAgEACwIACgEACwoAAgAiAREUAAEAFAwBAAYUAAQBEgsKAAgAAgAmASgSAAEAEggAMAEAEhAAGAEMDBgBBQEKAAIALgEFEgABABIUAQASDAAKAQASAAEAEgIBQwEMAAQBCgYWAAABOhICAAIAMgEaBQABAAUUABQABAEAAQwABAEIAQoACgAYAQcFDAACADYBDQwAAQAGGAAUAAQBAAwUAAQBDgUMADABGRIMAAIALgEAEgABABIUAQASDAAEAQASAAEAEgIBQwEAAQABDAAEAQABCgAEAQoGAAEABhYABAEABhQAAAE6EgIACgEAEgwAAgAyAQsYAAEAGAwBAAMOAAQBDBIMAAgAAgA2ASoDAAEAAxQAFAAEAQADDgAUAXM9DAACABIBAD0AAQA9FAEAPQwABAEAPQABAD0CAQA9AgAKAQA9CgACABYBC0MAAQBDDAEAAw4ABAEMPQoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM

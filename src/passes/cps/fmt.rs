@@ -627,6 +627,43 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>, c
       let cont_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
       b_apply(b, set_kw, vec![name_id, val_id, cont_id], expr_loc)
     }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      // Render `·letcaps <caps>, fn {name_1, name_2, ...}: <body>`.
+      // The cont's body sees `binds` as locals.
+      let caps_id = build_val(b, caps, ctx);
+      // Build the destructure pattern as a LitRec of bare idents.
+      let bind_idents: Vec<AstId> = binds.iter().map(|bn| {
+        let bind_loc = ctx_loc(bn.id, ctx);
+        b_ident(b, &render_bind_ctx(bn, ctx), bind_loc)
+      }).collect();
+      let pat_rec = b_lit_rec(b, bind_idents, expr_loc);
+      let body_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
+      // Wrap pattern + cont as a fn — `fn {a, b}: body`.
+      // build_cont already returns a fn-shaped node; replace its
+      // patterns with our LitRec. Simplest: build the pat-fn directly.
+      let letcaps_kw = b_ident(b, "·letcaps", expr_loc);
+      // Build pattern-fn: params = LitRec, body = cont body.
+      // We need to extract the cont's body. For Cont::Expr no value
+      // args, the cont renders as `fn: body` — we replace its empty
+      // params with our pattern record. Simpler path: emit a Patterns
+      // wrapper containing the LitRec.
+      let pats = b_patterns(b, vec![pat_rec]);
+      // Convert `body_id` (which build_cont built as a fn already) —
+      // we instead build a fresh fn with our pattern.
+      // Cheaper: build_cont returns a fn; extract its body via tree walk.
+      // Skip that — re-build the body directly here.
+      let _ = body_id;
+      let inner_body_id = match cont {
+        Cont::Expr { body, .. } => build_expr(b, body, ctx, current_ctx),
+        Cont::Ref(_) => {
+          // Direct ref cont — render as a placeholder ident.
+          b_ident(b, "·letcaps_cont_ref", expr_loc)
+        }
+      };
+      let fn_loc = binds.first().map(|bn| ctx_loc(bn.id, ctx)).unwrap_or(expr_loc);
+      let letcaps_fn = b_fn(b, pats, vec![inner_body_id], fn_loc);
+      b_apply(b, letcaps_kw, vec![caps_id, letcaps_fn], expr_loc)
+    }
     ExprKind::Closure { funcref, captures, cont } => {
       // Render `·closure <funcref>, {<name>: <ref>, ...}, fn <result>: <cont>`.
       // The captures record is a synthetic literal — keys are the capture
@@ -637,9 +674,22 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>, c
       // Arm in a LitRec.
       let cap_items: Vec<AstId> = captures.iter().map(|(name, val)| {
         let name_loc = ctx_loc(name.id, ctx);
-        let key_id = b_ident(b, &render_bind_ctx(name, ctx), name_loc);
-        let val_id = build_val(b, val, ctx);
-        b_arm(b, key_id, vec![val_id], name_loc)
+        let key_str = render_bind_ctx(name, ctx);
+        // If the capture name matches the captured ref (the common case
+        // where the lifted body uses the same name as the construction
+        // site), render the entry as a bare ident `{name}` instead of
+        // the verbose `{name: name}`.
+        let val_matches_name = matches!(
+          &val.kind,
+          ValKind::Ref(Ref::Synth(id)) if *id == name.id,
+        );
+        if val_matches_name {
+          b_ident(b, &key_str, name_loc)
+        } else {
+          let key_id = b_ident(b, &key_str, name_loc);
+          let val_id = build_val(b, val, ctx);
+          b_arm(b, key_id, vec![val_id], name_loc)
+        }
       }).collect();
       let caps_rec = b_lit_rec(b, cap_items, expr_loc);
       let cont_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
