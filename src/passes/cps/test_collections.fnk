@@ -49,7 +49,7 @@ test 'rec shorthand', fn:
     {x, y}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_13, ·ƒret_0:
-      ·rec_put {}, 'x', ·∅x, fn ·v_4:
+      ·rec_put {}, 'x', ·∅x, fn ·x_4:
         ·rec_put ·x_4, 'y', ·∅y, ·ƒret_0
     # sm:IgABAAYAAQAGJAEABhgBAAYSAAIABgECAQABAAEUAQEGAAEABgIBAAYCAAQBAgEAAQABAgEAAQIBAAECAAQBAAEMAAoBAAEKAAIACgEGAQABAAEUAQUBCgAEAQYBAAEAAQIBAAECAQABAgAEAQABDAAEAQAB
 

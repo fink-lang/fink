@@ -1,0 +1,87 @@
+---
+closure conversion tests
+
+Snapshot tests for the new closure_convert pass. Runs in place of lifting
+(via `to_closure_converted` in lib.rs) so the output reflects only the new
+pass's behaviour, not lifting's.
+
+The expected output uses the same rendering conventions as
+test_lifting.fnk:
+  {·a_1, ·b_2}     captures rec (closed-over vars + cont aliases)
+  [·x_3, ·y_4]     user params seq
+  ·v_5              continuation (bare; no brackets)
+
+After closure conversion:
+- Every fn with captures has Cap-tagged params at the FRONT of its params list
+- A FnClosure App emission immediately after each capturing LetFn materialises
+  the closure value into a fresh user-bind
+- LetFn names of capture-free fns retain the bare-funcref binding
+- LetRec defns get Cap params for outer-scope refs + sibling refs
+---
+
+
+{test, skip, equals, expect, cc} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
+{·ƒink_module, ·import, ·ƒpub, ·closure, ·if, ·panic
+  ·op_plus
+  ·op_eq
+  ·op_minus
+} = import '@fink/compile/builtins'
+
+
+---
+basic — atom passes through unchanged
+---
+
+test 'single literal', fn:
+  expect cc ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
+
+
+---
+single fn — no captures
+---
+
+test 'capture-free fn', fn:
+  expect cc ƒink:
+    foo = fn: 123
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_17, ·ƒret_1:
+      ·fn
+        fn ·ƒctx_19, ·ƒret_3: ·ƒret_3 ·ƒctx_19, (i8 123)
+        fn ·v_2:
+          ·let ·v_2, fn ·foo_0:
+            ·ƒpub ·foo_0, fn:
+              ·ƒret_1 ·ƒctx_17, ·foo_0
+    # sm:KQABAA0AAQANJAEADRgBAA0SAAIABgEMBwABAAcIABAAGAEIAxIABAEAAwABAAMUABQABgEAAwABAAMGAQADCAAQAQcHCgACAA4BAwEAAQABDAEEBwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQAFAAEAQAD
+
+
+---
+nested fn with closure over outer var
+---
+
+test 'closure over outer variable', fn:
+  expect cc ƒink:
+    foo = fn a:
+      ni = fn b:
+        a + b
+      ni
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_31, ·ƒret_4:
+      ·fn
+        fn ·ƒctx_33, ·ƒret_6, ·a_1:
+          ·fn
+            fn ·a_37, ·ƒctx_34, ·ƒret_8, ·b_3: ·op_plus ·a_37, ·b_3, ·ƒret_8
+            fn ·v_7:
+              ·closure ·v_7, ·a_1, fn ·v_38:
+                ·let ·v_38, fn ·ni_2:
+                  ·ƒret_6 ·ƒctx_33, ·ni_2
+        fn ·v_5:
+          ·let ·v_5, fn ·foo_0:
+            ·ƒpub ·foo_0, fn:
+              ·ƒret_4 ·ƒctx_31, ·foo_0
+    # sm:TAABACcAAQAnJAEAJxgBACcSAAIABgEMIQABACEIABAAGAE-AhYBNwEKAAIADgEUDwABAA8IABgBEwEQABgBKAUWAQ0BCgAEAQ4FAAEABRQBAAEMAAQBCAEKAAQBBwUSABgBEw8KAAIAFgEADwABAA8UAQAPCgAEARMBCgAKARQPDAACABoBAwEAAQABDAEEDwwACgEJAgwAAgAeAS4CAAEAAhQAFAAEAQACDAAQAT0hCgACAA4BAwEAAQABDAEEIQoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQAFAAEAQAD

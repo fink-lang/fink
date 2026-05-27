@@ -684,10 +684,11 @@ pub fn convert_expr(
       // statically via lower.rs's fn_syms; threading them as captures
       // produces spurious cap params.
       //
-      // Skip fns lifting has already processed. Detected by ANY param
-      // having a ParamInfo entry (lifting's classify_untagged_params tags
-      // every param). Re-processing produces duplicate FnClosure wrappers
-      // and spurious captures.
+      // Skip fns lifting has already processed (any param has a ParamInfo
+      // entry — lifting's classify_untagged_params tags every param).
+      // Re-processing produces duplicate FnClosure wrappers and spurious
+      // captures. This makes closure_convert a no-op for lifting's output
+      // in the current `lifting -> closure_convert` pipeline.
       let already_converted = params.iter().any(|p| {
         let b = match p { Param::Name(b) | Param::Spread(b) => b };
         state.param_info.try_get(b.id).cloned().flatten().is_some()
@@ -773,16 +774,14 @@ pub fn convert_expr(
       let new_group: Vec<LetRecDefn> = group.into_iter().map(|d| match d {
         LetRecDefn::Fn { name, params, fn_kind, body } => {
           let body_free = free_vars(&body);
-          // For LetRec defns, siblings are part of the scope at this site.
-          // We DO want sibling refs as captures (that's the whole point of
-          // LetRec). Don't filter out via letfn_names — sibling defn names
-          // are NOT in letfn_names (only LetFn names are).
-          //
-          // Skip if any param is already tagged by lifting (already-processed).
+          // Skip if any param is already tagged by lifting.
           let already_converted = params.iter().any(|p| {
             let b = match p { Param::Name(b) | Param::Spread(b) => b };
             state.param_info.try_get(b.id).cloned().flatten().is_some()
           });
+          // For LetRec defns, siblings are part of the scope at this site.
+          // letfn_names excludes top-level fn refs but sibling defn names
+          // are NOT in letfn_names (they're proper closure values).
           let captures: Vec<super::cps::ir::CpsId> = if already_converted {
             Vec::new()
           } else {
@@ -1386,4 +1385,50 @@ mod tests {
     assert!(!refs.contains(&a));
     assert!(!refs.contains(&b));
   }
+
+  // ---------------------------------------------------------------------------
+  // Fink-source snapshot tests
+  // ---------------------------------------------------------------------------
+  //
+  // Runs closure_convert in place of lifting, snapshotting the rendered IR.
+  // Exercises the pass end-to-end on real fink source.
+
+  #[allow(unused)]
+  fn cc(src: &str) -> String {
+    use crate::passes::cps::fmt::{Ctx, fmt_with_mapped_native};
+
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+      match crate::to_closure_converted(&src_owned, "test") {
+        Ok((converted, desugared)) => {
+          let bk = crate::passes::cps::ir::collect_bind_kinds(&converted.result.root);
+          let ctx = Ctx {
+            origin: &converted.result.origin,
+            ast: &desugared.ast,
+            captures: None,
+            param_info: Some(&converted.result.param_info),
+            bind_kinds: Some(&bk),
+          };
+          let (output, srcmap) = fmt_with_mapped_native(&converted.result.root, &ctx);
+          let b64 = srcmap.encode_base64url();
+          format!("{output}\n# sm:{b64}")
+        }
+        Err(e) => format!("ERROR: {e}"),
+      }
+    })) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  test_macros::include_fink_tests!("src/passes/closure_convert/test_closure_convert.fnk");
 }

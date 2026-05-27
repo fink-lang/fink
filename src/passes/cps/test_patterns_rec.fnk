@@ -200,7 +200,7 @@ test 'rec — predicate guard in value position', fn:
           ·let ·v_6, fn ·v_0:
             ·∅is_even
               ·ƒctx_47
-              fn ·ƒctx_49, ·v_31:
+              fn ·ƒctx_49, ·k_31:
                 ·if ·k_31,
                   fn: ·ƒret_1 ·ƒctx_49
                   fn: ·panic ·ƒctx_49
@@ -227,14 +227,14 @@ test 'rec — infix comparison guard in value position', fn:
           ·let ·v_6, fn ·v_0:
             ·fn
               fn ·ƒctx_61, ·v_0: ·ƒret_1 ·ƒctx_61, ·v_0
-              fn ·v_38:
+              fn ·k_38:
                 ·fn
-                  fn ·ƒctx_63, ·ƒsucc_23, ·ƒfail_24, ·v_22:
+                  fn ·ƒctx_63, ·ƒsucc_23, ·ƒfail_24, ·k_22:
                     ·op_eq ·k_22, (i8 4), fn ·v_27:
                       ·if ·v_27,
                         fn: ·ƒsucc_23 ·ƒctx_63, ·k_22
                         fn: ·ƒfail_24 ·ƒctx_63
-                  fn ·v_35: ·k_35 ·ƒctx_60, ·k_38, ·panic, ·v_6
+                  fn ·k_35: ·k_35 ·ƒctx_60, ·k_38, ·panic, ·v_6
         fn ·v_51:
           ·fn
             fn ·ƒctx_67, ·ƒsucc_4, ·ƒfail_5, ·v_3:

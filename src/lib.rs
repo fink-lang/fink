@@ -73,6 +73,22 @@ pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, 
   Ok((lifted, desugared))
 }
 
+/// Compile source → closure-converted CPS IR, BYPASSING lifting.
+///
+/// Test-only helper that runs the new closure_convert pass in place of
+/// lifting. Used by `src/passes/closure_convert/test_closure_convert.fnk`
+/// to snapshot the pass's output independently of lifting's.
+///
+/// The default pipeline still runs `lifting -> closure_convert` (as a
+/// no-op for already-lifted fns). This helper exercises only the
+/// closure_convert path.
+pub fn to_closure_converted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
+  let (cps, desugared) = to_cps(src, url)?;
+  let threaded = passes::cps::thread_ctx::thread_ctx(cps.result);
+  let result = passes::closure_convert::convert(threaded, &desugared.ast);
+  Ok((passes::LiftedCps { result }, desugared))
+}
+
 /// Compile source → WASM binary.
 ///
 /// For callers that have a source string in hand and just want to compile

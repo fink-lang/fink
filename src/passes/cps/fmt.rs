@@ -336,10 +336,25 @@ fn render_unresolved_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
 }
 
 /// Render a Bind node's name using origin map.
+///
+/// For Bind::Synth, consult the origin map: closure_convert (and lifting)
+/// allocate fresh Synth binds for captured params but copy the captured
+/// bind's AstId origin so the formatter can recover the source name. If
+/// the origin's AST node is an Ident, render `·<name>_<id>` to match how
+/// refs to the same CpsId render (via render_synth_name).
 fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, ctx),
-    Bind::Synth     => format!("·v_{}", bind.id.0),
+    Bind::Synth     => {
+      // If the bind has an Ident origin (e.g. captured param), use the
+      // source name so bind and ref sites render the same way.
+      if let Some(node) = ctx.ast_node(bind.id)
+        && let NodeKind::Ident(s) = &node.kind
+      {
+        return format!("·{}_{}", s, bind.id.0);
+      }
+      format!("·v_{}", bind.id.0)
+    }
     Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
     Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
     Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
