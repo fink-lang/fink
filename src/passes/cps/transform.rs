@@ -504,6 +504,10 @@ fn lower_fn(
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
+  // Collect the fn-body's local binds for the LetRec slot list. Same
+  // collector as module scope — `collect_module_locals` is shape-agnostic
+  // and just walks the bind LHSs of the given exprs.
+  let body_locals: Vec<(CpsId, String)> = collect_module_locals(g.ast, body, &g.bind_site_to_cps);
   // The cont represents the return point of the function — semantically
   // anchored at the expression whose value flows into it (the last body
   // statement), not the whole fn node. Narrowing here makes hovering a
@@ -512,7 +516,8 @@ fn lower_fn(
   let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = {
       let body = lower_seq(g, body);
-      prepend_pat_binds(g, deferred, body)
+      let body = prepend_pat_binds(g, deferred, body);
+      wrap_module_in_letrec(g, body, &body_locals, origin)
     };
   g.pop_cont(prev_cont);
   param_names.insert(0, Param::Name(cont));

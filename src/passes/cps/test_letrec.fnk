@@ -182,47 +182,65 @@ test 'letrec three-way mutual rec', fn:
 
 
 ---
-Nested scope — local binds inside a fn body should also be in a
-LetRec. The inner letrec declares `x, y` as slots; the outer
-declares `foo`. Currently fn-body lowering still emits the flat
-LetVal chain — only module scope is LetRec-wrapped.
-
-# TODO: wrap fn bodies in LetRec too.
-# Need: in `lower_fn` (and `lower_module_as_fn`), collect bind
-# names from the fn's body sequence and wrap the lowered body in
-# `ExprKind::LetRec`, analogous to `wrap_module_in_letrec` at
-# module scope. Same `rewrite_lets_to_sets` pass converts the
-# inner LetVals to Sets.
+Nested scope — local binds inside a fn body are also in a LetRec.
+The inner letrec declares `x, y` as slots; the outer declares
+`foo`. Every scope-block uses the same shape.
 ---
 
-skip test 'letrec nested fn body', fn:
+test 'letrec nested fn body', fn:
   expect cps_module ƒink:
     foo = fn:
       x = 1
       y = 2
       x + y
   | equals ƒink:
-    Pending
+    ·ƒink_module fn ·ƒctx_32, ·ƒret_3:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·ƒctx_34, ·ƒret_5:
+            ·letrec fn ·x_1, ·y_2:
+              ·set ·ƒctx_34, ·x_1, (i8 1), fn ·ƒctx_36:
+                ·set ·ƒctx_36, ·y_2, (i8 2), fn ·ƒctx_38:
+                  ·op_plus ·ƒctx_38, ·x_1, ·y_2, ·ƒret_5
+          fn ·v_4:
+            ·set ·ƒctx_32, ·foo_0, ·v_4, fn ·ƒctx_41:
+              ·ƒpub ·ƒctx_41, ·foo_0, fn ·ƒctx_43:
+                ·ƒret_3 ·ƒctx_43, ·foo_0
+    # sm:WAABACEAAQAhJAEAIRgBACESAAIABgEAIQABACEYAQADDgACAAoBDBsAAQAbCAAUABgBLAUSAAIAEgErGwABABsYAQwBDgEQAQoAAgAWAQ8FAAEABQwAFAAEAQABCgAGAQgBAAEAAQYBAAEEAAoAFAACABoBCAUAAQAFDAAUAAQBAAEKAAYBCAEAAQABBgEAAQQACgAUAAIAHgEIBQABAAUUABQABAEAAQoABAEIAQoABAEHBRIAFAErGwoAAgASAQshAAEAIQwAFAAEAQADDgAEAQwbCgAKABQAAgAWAQsDAAEAAxAAFAAEAQADDgAKABQAAgAaAQADAAEAAxQAFAAEAQAD
 
 
 ---
 Nested mutual recursion — two fns defined inside a fn body that
-call each other. The inner letrec scope must declare both slots
-so each closure can capture the other's slot.
-
-Currently fails (see nested-fn-body TODO above) — without the
-inner letrec, `inner-a`/`inner-b` are bound by sequential LetVal,
-so the first closure can't see the second's slot.
+call each other. The inner letrec scope declares both slots so
+each closure can capture the other's slot.
 ---
 
-skip test 'letrec nested mutual rec', fn:
+test 'letrec nested mutual rec', fn:
   expect cps_module ƒink:
     foo = fn:
       inner-a = fn: inner-b
       inner-b = fn: inner-a
       inner-a
   | equals ƒink:
-    Pending
+    ·ƒink_module fn ·ƒctx_43, ·ƒret_3:
+      ·letrec fn ·foo_0:
+        ·fn
+          fn ·ƒctx_45, ·ƒret_5:
+            ·letrec fn ·inner-a_1, ·inner-b_2:
+              ·fn
+                fn ·ƒctx_46, ·ƒret_7: ·ƒret_7 ·ƒctx_46, ·inner-b_2
+                fn ·v_6:
+                  ·set ·ƒctx_45, ·inner-a_1, ·v_6, fn ·ƒctx_49:
+                    ·fn
+                      fn ·ƒctx_50, ·ƒret_13: ·ƒret_13 ·ƒctx_50, ·inner-a_1
+                      fn ·v_12:
+                        ·set ·ƒctx_49, ·inner-b_2, ·v_12, fn ·ƒctx_53:
+                          ·ƒret_5 ·ƒctx_53, ·inner-a_1
+          fn ·v_4:
+            ·set ·ƒctx_43, ·foo_0, ·v_4, fn ·ƒctx_56:
+              ·ƒpub ·ƒctx_56, ·foo_0, fn ·ƒctx_58:
+                ·ƒret_3 ·ƒctx_58, ·foo_0
+    # sm:bgABAEMAAQBDJAEAQxgBAEMSAAIABgEAQwABAEMYAQADDgACAAoBDD0AAQA9CAAUABgBbAcSAAIAEgFrPQABAD0YAQwHGgEwBxYAAgAWARsLAAEACwgAIAAYAQgHEgAEAQAHAAEABxQAFAAEAQAHFgAgAQcLCgACAB4BExUAAQAVDAAUAAQBAAcWAAQBFAsKAAoAFAACACIBMAsAAQALCAAsABgBCAcUAAQBAAcAAQAHFgAUAAQBAAcWACwBBwsMAAIAKgETFQABABUMABQABAEABxYABAEUCwwACgAUAAIALgEcBwABAAcUABQABAEABxYAFAFrPQoAAgASAQtDAAEAQwwAFAAEAQADDgAEAQw9CgAKABQAAgAWAQsDAAEAAxAAFAAEAQADDgAKABQAAgAaAQADAAEAAxQAFAAEAQAD
 
 
 ---
