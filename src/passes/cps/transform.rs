@@ -2066,6 +2066,27 @@ fn inject_pub_calls(
       let body = inject_pub_calls(g, *body, export_ids);
       Expr { id: expr.id, kind: ExprKind::LetRec { slots, body: Box::new(body) } }
     }
+    ExprKind::Set { name, val, cont } => {
+      // Recurse into the cont — it carries the rest of the module body.
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::Set { name, val, cont } }
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::Closure { funcref, captures, cont } }
+    }
   }
 }
 
@@ -2106,32 +2127,22 @@ fn rewrite_lets_to_sets(
       let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
       if slot_ids.contains(&name.id) {
         let name_origin = g.origin.try_get(name.id).and_then(|o| *o);
-        let name_ref = g.val(ValKind::Ref(Ref::Synth(name.id)), name_origin);
-        let cont_body = match cont {
-          Cont::Expr { args: _, body } => body,
+        let set_cont = match cont {
+          Cont::Expr { args: _, body } => Cont::Expr { args: vec![], body },
           Cont::Ref(cont_id) => {
             // LetVal cont is a direct ref — forward the bound name to it.
             let cont_val = g.val(ValKind::ContRef(cont_id), name_origin);
             let fwd_ref = g.val(ValKind::Ref(Ref::Synth(name.id)), name_origin);
-            Box::new(g.expr(ExprKind::App {
+            let forward = g.expr(ExprKind::App {
               func: Callable::Val(cont_val),
               args: vec![Arg::Val(fwd_ref)],
-            }, name_origin))
+            }, name_origin);
+            Cont::Expr { args: vec![], body: Box::new(forward) }
           }
         };
-        // Builtin args render with cont LAST per CPS convention; user-visible
-        // args here are `[name_ref, val]` so the rendered form reads
-        // `·set ·name, val, fn ...:`.
         return Expr {
           id,
-          kind: ExprKind::App {
-            func: Callable::BuiltIn(BuiltIn::Set),
-            args: vec![
-              Arg::Val(name_ref),
-              Arg::Val(*val),
-              Arg::Cont(Cont::Expr { args: vec![], body: cont_body }),
-            ],
-          },
+          kind: ExprKind::Set { name, val: *val, cont: set_cont },
         };
       }
       ExprKind::LetVal { name, val, cont }
@@ -2157,6 +2168,14 @@ fn rewrite_lets_to_sets(
     ExprKind::LetRec { slots, body } => {
       let body = rewrite_lets_to_sets(g, *body, slot_ids);
       ExprKind::LetRec { slots, body: Box::new(body) }
+    }
+    ExprKind::Set { name, val, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::Set { name, val, cont }
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::Closure { funcref, captures, cont }
     }
   };
   Expr { id, kind: new_kind }

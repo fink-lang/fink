@@ -181,6 +181,12 @@ fn walk_exprs(root: &Expr, visit: &mut impl FnMut(&Expr)) {
     ExprKind::LetRec { body, .. } => {
       walk_exprs(body, visit);
     }
+    ExprKind::Set { cont, .. } => {
+      walk_cont(cont, visit);
+    }
+    ExprKind::Closure { cont, .. } => {
+      walk_cont(cont, visit);
+    }
   }
 }
 

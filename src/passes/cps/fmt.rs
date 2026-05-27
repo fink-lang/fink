@@ -156,6 +156,14 @@ fn b_state_fn(b: &mut AstBuilder<'static>, body: AstId) -> AstId {
   b_fn(b, empty_patterns, vec![body], loc)
 }
 
+fn b_arm(b: &mut AstBuilder<'static>, lhs: AstId, body: Vec<AstId>, loc: Loc) -> AstId {
+  b.append(NodeKind::Arm { lhs, sep: dummy_tok(), body: b_exprs(body) }, loc)
+}
+
+fn b_lit_rec(b: &mut AstBuilder<'static>, items: Vec<AstId>, loc: Loc) -> AstId {
+  b.append(NodeKind::LitRec { open: tok_at(loc), close: tok_at(loc), items: b_exprs(items) }, loc)
+}
+
 
 // ---------------------------------------------------------------------------
 // Val → Node id
@@ -400,7 +408,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
-    BuiltIn::MkClosure => "·mkclosure".into(),
     // Type guards
     BuiltIn::IsSeqLike    => "·is_seq_like".into(),
     BuiltIn::IsRecLike    => "·is_rec_like".into(),
@@ -415,7 +422,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Import       => "·import".into(),
     BuiltIn::FinkModule   => "·ƒink_module".into(),
     BuiltIn::Pub          => "·ƒpub".into(),
-    BuiltIn::Set          => "·set".into(),
     BuiltIn::Panic        => "·panic".into(),
   }
 }
@@ -609,6 +615,36 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>, c
       let scope_fn = b_fn(b, slots_pats, vec![body_id], fn_loc);
       let letrec_kw = b_ident(b, "·letrec", expr_loc);
       b_apply(b, letrec_kw, vec![scope_fn], expr_loc)
+    }
+    ExprKind::Set { name, val, cont } => {
+      // Set is a compile-time binding op (like ·letrec, ·fn) — no ctx
+      // threading. Render `·set ·name, val, fn: <cont body>`. The cont
+      // inherits the enclosing scope's ctx.
+      let name_loc = ctx_loc(name.id, ctx);
+      let name_id = b_ident(b, &render_bind_ctx(name, ctx), name_loc);
+      let val_id = build_val(b, val, ctx);
+      let set_kw = b_ident(b, "·set", expr_loc);
+      let cont_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
+      b_apply(b, set_kw, vec![name_id, val_id, cont_id], expr_loc)
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      // Render `·closure <funcref>, {<name>: <ref>, ...}, fn <result>: <cont>`.
+      // The captures record is a synthetic literal — keys are the capture
+      // names as they appear inside the lifted fn body, values are the
+      // refs at the construction site.
+      let funcref_id = build_val(b, funcref, ctx);
+      // Build the captures record as `{name: ref, ...}` — each entry an
+      // Arm in a LitRec.
+      let cap_items: Vec<AstId> = captures.iter().map(|(name, val)| {
+        let name_loc = ctx_loc(name.id, ctx);
+        let key_id = b_ident(b, &render_bind_ctx(name, ctx), name_loc);
+        let val_id = build_val(b, val, ctx);
+        b_arm(b, key_id, vec![val_id], name_loc)
+      }).collect();
+      let caps_rec = b_lit_rec(b, cap_items, expr_loc);
+      let cont_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
+      let closure_kw = b_ident(b, "·closure", expr_loc);
+      b_apply(b, closure_kw, vec![funcref_id, caps_rec, cont_id], expr_loc)
     }
   }
 }

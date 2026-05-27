@@ -39,12 +39,12 @@ test 'single binding export', fn:
   expect cps_module ƒink:
     foo = 1
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_12, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
       ·letrec fn ·foo_0:
-        ·set ·ƒctx_12, ·foo_0, (i8 1), fn ·ƒctx_15:
-          ·ƒpub ·ƒctx_15, ·foo_0, fn ·ƒctx_17:
-            ·ƒret_1 ·ƒctx_17, ·foo_0
-    # sm:JgABAAcAAQAHJAEABxgBAAcSAAIABgEABwABAAcYAQADDgACAAoBAAcAAQAHDAAUAAQBAAMOAAYBDAEAAQABBgEAAQQACgAUAAIADgELAwABAAMQABQABAEAAw4ACgAUAAIAEgEAAwABAAMUABQABAEAAw
+        ·set ·foo_0, (i8 1), fn:
+          ·ƒpub ·ƒctx_11, ·foo_0, fn ·ƒctx_14:
+            ·ƒret_1 ·ƒctx_14, ·foo_0
+    # sm:IwABAAcAAQAHJAEABxgBAAcSAAIABgEABwABAAcYAQADDgACAAoBAAcAAQAHDAEAAw4ABgEMAQABAAEGAQABBAAIAAIADgELAwABAAMQABQABAEAAw4ACgAUAAIAEgEAAwABAAMUABQABAEAAw
 
 
 test 'single binding export with trailing expr', fn:
@@ -52,12 +52,12 @@ test 'single binding export with trailing expr', fn:
     foo = 1
     42
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
       ·letrec fn ·foo_0:
-        ·set ·ƒctx_11, ·foo_0, (i8 1), fn ·ƒctx_14:
-          ·ƒpub ·ƒctx_14, ·foo_0, fn ·ƒctx_16:
-            ·ƒret_1 ·ƒctx_16, (i8 42)
-    # sm:KAABAAoAAQAKJAEAChgBEAISAAIABgEPCgABAAoYAQADDgACAAoBAAcAAQAHDAAUAAQBAAMOAAYBDAEAAQABBgEAAQQACgAUAAIADgELAwABAAMQABQABAEAAw4ACgAUAAIAEgEQAgABAAIUABQABgEAAgABAAIGAQAC
+        ·set ·foo_0, (i8 1), fn:
+          ·ƒpub ·ƒctx_10, ·foo_0, fn ·ƒctx_13:
+            ·ƒret_1 ·ƒctx_13, (i8 42)
+    # sm:JQABAAoAAQAKJAEAChgBEAISAAIABgEPCgABAAoYAQADDgACAAoBAAcAAQAHDAEAAw4ABgEMAQABAAEGAQABBAAIAAIADgELAwABAAMQABQABAEAAw4ACgAUAAIAEgEQAgABAAIUABQABgEAAgABAAIGAQAC
 
 
 ---
@@ -69,14 +69,14 @@ test 'two bindings export', fn:
     foo = 1
     bar = 2
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_19, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_17, ·ƒret_2:
       ·letrec fn ·foo_0, ·bar_1:
-        ·set ·ƒctx_19, ·foo_0, (i8 1), fn ·ƒctx_22:
-          ·ƒpub ·ƒctx_22, ·foo_0, fn ·ƒctx_24:
-            ·set ·ƒctx_24, ·bar_1, (i8 2), fn ·ƒctx_26:
-              ·ƒpub ·ƒctx_26, ·bar_1, fn ·ƒctx_28:
-                ·ƒret_2 ·ƒctx_28, ·bar_1
-    # sm:PQABAA8AAQAPJAEADxgBEAcSAAIABgEPDwABAA8YAQADEgEQAw4AAgAKAQ8HAAEABwwAFAAEAQADDgAGAQwBAAEAAQYBAAEEAAoAFAACAA4BCwMAAQADEAAUAAQBAAMOAAoAFAACABIBEAcAAQAHDAAUAAQBAAMOAAYBDAEAAQABBgEAAQQACgAUAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEAAwABAAMUABQABAEAAw
+        ·set ·foo_0, (i8 1), fn:
+          ·ƒpub ·ƒctx_17, ·foo_0, fn ·ƒctx_20:
+            ·set ·bar_1, (i8 2), fn:
+              ·ƒpub ·ƒctx_20, ·bar_1, fn ·ƒctx_22:
+                ·ƒret_2 ·ƒctx_22, ·bar_1
+    # sm:NwABAA8AAQAPJAEADxgBEAcSAAIABgEPDwABAA8YAQADEgEQAw4AAgAKAQ8HAAEABwwBAAMOAAYBDAEAAQABBgEAAQQACAACAA4BCwMAAQADEAAUAAQBAAMOAAoAFAACABIBEAcAAQAHDAEAAw4ABgEMAQABAAEGAQABBAAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEAAwABAAMUABQABAEAAw
 
 
 test 'two fns export', fn:
@@ -87,20 +87,20 @@ test 'two fns export', fn:
     main = fn:
       add 3, 4
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_40, ·ƒret_4:
+    ·ƒink_module fn ·ƒctx_38, ·ƒret_4:
       ·letrec fn ·add_0, ·main_1:
         ·fn
-          fn ·ƒctx_42, ·ƒret_6, ·a_2, ·b_3: ·op_plus ·ƒctx_42, ·a_2, ·b_3, ·ƒret_6
+          fn ·ƒctx_40, ·ƒret_6, ·a_2, ·b_3: ·op_plus ·ƒctx_40, ·a_2, ·b_3, ·ƒret_6
           fn ·v_5:
-            ·set ·ƒctx_40, ·add_0, ·v_5, fn ·ƒctx_45:
-              ·ƒpub ·ƒctx_45, ·add_0, fn ·ƒctx_47:
+            ·set ·add_0, ·v_5, fn:
+              ·ƒpub ·ƒctx_38, ·add_0, fn ·ƒctx_43:
                 ·fn
-                  fn ·ƒctx_48, ·ƒret_14: ·add_0 ·ƒctx_48, ·ƒret_14, (i8 3), (i8 4)
+                  fn ·ƒctx_44, ·ƒret_14: ·add_0 ·ƒctx_44, ·ƒret_14, (i8 3), (i8 4)
                   fn ·v_13:
-                    ·set ·ƒctx_47, ·main_1, ·v_13, fn ·ƒctx_51:
-                      ·ƒpub ·ƒctx_51, ·main_1, fn ·ƒctx_53:
-                        ·ƒret_4 ·ƒctx_53, ·main_1
-    # sm:ZQABAC0AAQAtJAEALRgBMBUSAAIABgEvLQABAC0YAQADEgEwBBAAAgAKASMQAAEAEAgAFAAYARYFFgEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUSABQBFRAKAAIAEgELFgABABYMABQABAEAAw4ABAEMEAoACgAUAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE-DgABAA4IACQAGAEMCBQABAEACAABAAMQABQABAEACBQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEACQBGQ4MAAIAIgENFQABABUMABQABAEABBAABAEODgwACgAUAAIAJgENBAABAAQQABQABAEABBAACgAUAAIAKgEABAABAAQUABQABAEABA
+                    ·set ·main_1, ·v_13, fn:
+                      ·ƒpub ·ƒctx_43, ·main_1, fn ·ƒctx_47:
+                        ·ƒret_4 ·ƒctx_47, ·main_1
+    # sm:XwABAC0AAQAtJAEALRgBMBUSAAIABgEvLQABAC0YAQADEgEwBBAAAgAKASMQAAEAEAgAFAAYARYFFgEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUSABQBFRAKAAIAEgELFgABABYMAQADDgAEAQwQCgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE-DgABAA4IACQAGAEMCBQABAEACAABAAMQABQABAEACBQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEACQBGQ4MAAIAIgENFQABABUMAQAEEAAEAQ4ODAAIAAIAJgENBAABAAQQABQABAEABBAACgAUAAIAKgEABAABAAQUABQABAEABA
 
 
 ---
@@ -309,37 +309,37 @@ test 'export args do not leak call args', fn:
 
     p = mul s, 3
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_75, ·ƒret_9:
+    ·ƒink_module fn ·ƒctx_70, ·ƒret_9:
       ·letrec fn ·add_0, ·s_1, ·mul_2, ·p_3:
         ·fn
-          fn ·ƒctx_77, ·ƒret_11, ·a_4, ·b_5: ·op_plus ·ƒctx_77, ·a_4, ·b_5, ·ƒret_11
+          fn ·ƒctx_72, ·ƒret_11, ·a_4, ·b_5: ·op_plus ·ƒctx_72, ·a_4, ·b_5, ·ƒret_11
           fn ·v_10:
-            ·set ·ƒctx_75, ·add_0, ·v_10, fn ·ƒctx_80:
-              ·ƒpub ·ƒctx_80, ·add_0, fn ·ƒctx_82:
+            ·set ·add_0, ·v_10, fn:
+              ·ƒpub ·ƒctx_70, ·add_0, fn ·ƒctx_75:
                 ·add_0
-                  ·ƒctx_82
-                  fn ·ƒctx_84, ·v_21:
-                    ·set ·ƒctx_84, ·s_1, ·v_21, fn ·ƒctx_86:
-                      ·ƒpub ·ƒctx_86, ·s_1, fn ·ƒctx_88:
+                  ·ƒctx_75
+                  fn ·ƒctx_77, ·v_21:
+                    ·set ·s_1, ·v_21, fn:
+                      ·ƒpub ·ƒctx_77, ·s_1, fn ·ƒctx_79:
                         ·fn
-                          fn ·ƒctx_89, ·ƒret_24, ·a_6, ·b_7:
+                          fn ·ƒctx_80, ·ƒret_24, ·a_6, ·b_7:
                             ·letrec fn ·ni_8:
-                              ·op_mul ·ƒctx_89, ·a_6, ·b_7, fn ·ƒctx_91, ·v_27:
-                                ·set ·ƒctx_91, ·ni_8, ·v_27, fn ·ƒctx_93:
-                                  ·ƒret_24 ·ƒctx_93, ·ni_8
+                              ·op_mul ·ƒctx_80, ·a_6, ·b_7, fn ·ƒctx_82, ·v_27:
+                                ·set ·ni_8, ·v_27, fn:
+                                  ·ƒret_24 ·ƒctx_82, ·ni_8
                           fn ·v_23:
-                            ·set ·ƒctx_88, ·mul_2, ·v_23, fn ·ƒctx_96:
-                              ·ƒpub ·ƒctx_96, ·mul_2, fn ·ƒctx_98:
+                            ·set ·mul_2, ·v_23, fn:
+                              ·ƒpub ·ƒctx_79, ·mul_2, fn ·ƒctx_85:
                                 ·mul_2
-                                  ·ƒctx_98
-                                  fn ·ƒctx_100, ·v_41:
-                                    ·set ·ƒctx_100, ·p_3, ·v_41, fn ·ƒctx_102:
-                                      ·ƒpub ·ƒctx_102, ·p_3, fn ·ƒctx_104:
-                                        ·ƒret_9 ·ƒctx_104, ·p_3
+                                  ·ƒctx_85
+                                  fn ·ƒctx_87, ·v_40:
+                                    ·set ·p_3, ·v_40, fn:
+                                      ·ƒpub ·ƒctx_87, ·p_3, fn ·ƒctx_89:
+                                        ·ƒret_9 ·ƒctx_89, ·p_3
                                   ·s_1
                                   i8 3
                   i8 1
                   i8 2
-    # sm:vgEAAQBUAAEAVCQBAFQYAZABDBIAAgAGAY8BVAABAFQYAQADEgEwAQ4BHAMSAUQBCgACAAoBgwEQAAEAEAgAFAAYARYFGAEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUUABQBFRAMAAIAEgELFgABABYMABQABAEAAw4ABAEMEAwACgAUAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE4CAABAAMsADgAGAEACAwAAgAiAQcMAAEADAwAFAAEAQABCgAEAQgIDAAKABQAAgAmAQcBAAEAARAAFAAEAQABCgAKABQAAgAqASgaAAEAGggANAAYATACGAEpAQ4BBgEKAAIAMgELGgABABoYARYCDAACADYBCgUAAQAFEgAUAAQBAAEKAAQBCAEKAAoAGAEHBQwAAgA6AQkKAAEACgwAFAAEAQACDAAEAQoFDAAKABQAAgA-ARACAAEAAhYAFAAEAQACDAA0AS8aDAACADIBCyAAAQAgDAAUAAQBAAMOAAQBDBoMAAoAFAACADYBCwMAAQADEAAUAAQBAAMOAAoAFAACADoBTAgAAQADTABYABoBAAgMAAIAQgEHDAABAAwMABYABAEAAQoABAEICAwACgAWAAIARgEHAQABAAEQABYABAEAAQoACgAWAAIASgEAAQABAAEUABYABAEAAUgBEAFIAQYBAAEAAQYBAAEgAWUBAAEAAQYBAAEgAQYBAAEAAQYBAAE
+    # sm:rwEAAQBUAAEAVCQBAFQYAZABDBIAAgAGAY8BVAABAFQYAQADEgEwAQ4BHAMSAUQBCgACAAoBgwEQAAEAEAgAFAAYARYFGAEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUUABQBFRAMAAIAEgELFgABABYMAQADDgAEAQwQDAAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE4CAABAAMsADgAGAEACAwAAgAiAQcMAAEADAwBAAEKAAQBCAgMAAgAAgAmAQcBAAEAARAAFAAEAQABCgAKABQAAgAqASgaAAEAGggANAAYATACGAEpAQ4BBgEKAAIAMgELGgABABoYARYCDAACADYBCgUAAQAFEgAUAAQBAAEKAAQBCAEKAAoAGAEHBQwAAgA6AQkKAAEACgwBAAIMAAQBCgUMAAgAAgA-ARACAAEAAhYAFAAEAQACDAA0AS8aDAACADIBCyAAAQAgDAEAAw4ABAEMGgwACAACADYBCwMAAQADEAAUAAQBAAMOAAoAFAACADoBTAgAAQADTABYABgBAAgMAAIAQgEHDAABAAwMAQABCgAEAQgIDAAIAAIARgEHAQABAAEQABQABAEAAQoACgAUAAIASgEAAQABAAEUABQABAEAAUgBEAFIAQYBAAEAAQYBAAEgAWUBAAEAAQYBAAEgAQYBAAEAAQYBAAE
 
 

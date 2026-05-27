@@ -266,6 +266,8 @@ fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
     }
     // LetRec only emitted post-closure-convert migration; lifting will not see it.
     ExprKind::LetRec { .. } => unreachable!("lifting: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting: Set is closure-convert IR — not seen on the legacy lifting path"),
+    ExprKind::Closure { .. } => unreachable!("lifting: Closure is closure-convert IR — not seen on the legacy lifting path"),
   }
 }
 
@@ -316,6 +318,8 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
     ExprKind::If { then, else_, .. } => needs_lifting(then, in_fn) || needs_lifting(else_, in_fn),
     // LetRec only emitted post-closure-convert migration; lifting will not see it.
     ExprKind::LetRec { .. } => unreachable!("lifting::needs_lifting: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::needs_lifting: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::needs_lifting: Closure is closure-convert IR"),
   }
 }
 
@@ -390,6 +394,8 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
       module_body_needs_lifting(then) || module_body_needs_lifting(else_)
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::module_body_needs_lifting: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::module_body_needs_lifting: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::module_body_needs_lifting: Closure is closure-convert IR"),
   }
 }
 
@@ -454,6 +460,8 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
       contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::contains_letfn_or_inline_cont: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::contains_letfn_or_inline_cont: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::contains_letfn_or_inline_cont: Closure is closure-convert IR"),
   }
 }
 
@@ -653,6 +661,8 @@ fn lift_expr<'src>(
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::lift_expr: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::lift_expr: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::lift_expr: Closure is closure-convert IR"),
   }
 }
 
@@ -1063,6 +1073,8 @@ fn extract_from_body<'src>(
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::extract_from_body: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::extract_from_body: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::extract_from_body: Closure is closure-convert IR"),
   }
 }
 
@@ -1121,6 +1133,8 @@ fn rewrite_refs_split(
       Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::rewrite_refs_split: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::rewrite_refs_split: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::rewrite_refs_split: Closure is closure-convert IR"),
   }
 }
 
@@ -1176,6 +1190,8 @@ fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Ex
       Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::rewrite_refs: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::rewrite_refs: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::rewrite_refs: Closure is closure-convert IR"),
   }
 }
 
@@ -1297,6 +1313,8 @@ fn collect_captured_refs(
       collect_captured_refs(else_, parent_ids, out, seen);
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::collect_captured_refs: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::collect_captured_refs: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::collect_captured_refs: Closure is closure-convert IR"),
   }
 }
 
@@ -1382,6 +1400,8 @@ fn classify_untagged_params(expr: &Expr, param_info: &mut PropGraph<CpsId, Optio
       classify_untagged_params(else_, param_info);
     }
     ExprKind::LetRec { .. } => unreachable!("lifting::classify_untagged_params: LetRec not yet emitted by CPS-0"),
+    ExprKind::Set { .. } => unreachable!("lifting::classify_untagged_params: Set is closure-convert IR"),
+    ExprKind::Closure { .. } => unreachable!("lifting::classify_untagged_params: Closure is closure-convert IR"),
   }
 }
 

@@ -82,12 +82,12 @@ test 'member dynamic key', fn:
     key = 'foo'
     {(key): 42}
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_15, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_14, ·ƒret_1:
       ·letrec fn ·key_0:
-        ·set ·ƒctx_15, ·key_0, 'foo', fn ·ƒctx_18:
-          ·ƒpub ·ƒctx_18, ·key_0, fn ·ƒctx_20:
-            ·rec_put ·ƒctx_20, {}, ·key_0, (i8 42), ·ƒret_1
-    # sm:MQABABcAAQAXJAEAFxgBGAsSAAIABgEXFwABABcYAQADDgACAAoBAAsAAQALDAAUAAQBAAMOAAQBDAUAAQAFAgEABQYBAAUCAAoAFAACAA4BCwMAAQADEAAUAAQBAAMOAAoAFAACABIBGgkAAQAJFAAUAAQBAQsAAQALAgEACwIABAEEAw4ABgEMAgABAAIGAQACBgAEAQ0J
+        ·set ·key_0, 'foo', fn:
+          ·ƒpub ·ƒctx_14, ·key_0, fn ·ƒctx_17:
+            ·rec_put ·ƒctx_17, {}, ·key_0, (i8 42), ·ƒret_1
+    # sm:LgABABcAAQAXJAEAFxgBGAsSAAIABgEXFwABABcYAQADDgACAAoBAAsAAQALDAEAAw4ABAEMBQABAAUCAQAFBgEABQIACAACAA4BCwMAAQADEAAUAAQBAAMOAAoAFAACABIBGgkAAQAJFAAUAAQBAQsAAQALAgEACwIABAEEAw4ABgEMAgABAAIGAQACBgAEAQ0J
 
 
 test 'member string key shorthand', fn:

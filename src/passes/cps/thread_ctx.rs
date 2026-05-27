@@ -134,6 +134,20 @@ impl Threader<'_> {
         let new_body = self.thread_expr(*body);
         ExprKind::LetRec { slots, body: Box::new(new_body) }
       }
+      ExprKind::Set { name, val, cont } => {
+        // Set is a structural binding op — its cont is inlined into the
+        // enclosing scope (no fresh ctx prepended, no value args). The
+        // rendered ctx prefix is purely a formatter affordance.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::Set { name, val, cont: new_cont }
+      }
+      ExprKind::Closure { funcref, captures, cont } => {
+        // Closure construction's cont binds the resulting closure value;
+        // ctx is inherited from the enclosing scope. The cont's first arg
+        // already names the result; no fresh ctx prepended.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::Closure { funcref, captures, cont: new_cont }
+      }
     };
     Expr { id, kind: new_kind }
   }

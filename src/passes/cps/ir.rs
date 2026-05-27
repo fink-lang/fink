@@ -275,12 +275,6 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
-  // Closure construction in the new (closure-converted) IR.
-  // Operand shape (rendered): MkClosure { funcref, captures: {name_1: ref_1, ..., name_n: ref_n} }
-  // Captures are name-keyed (matching Fn3's caps rec). Result bound by the cont.
-  // Not yet emitted by any pass — added in step 1 of the closure-convert migration.
-  // See .brain/.scratch/closure-convert-design.md §3.3.
-  MkClosure,
   // Collection primitives — used inside pattern matchers for seq/rec destructuring.
   // IsSeqLike(value, succ(value), fail()) — type guard; succ if seq-like (list)
   // IsRecLike(value, succ(value), fail()) — type guard; succ if rec-like (rec, dict)
@@ -300,12 +294,6 @@ pub enum BuiltIn {
   // Args: exported value, cont (no args — pure side effect).
   // Emitted by lower_module after each module-level binding that is exported.
   Pub,
-  // Slot fill in a `LetRec` scope. Args: slot ref, value, cont. The slot
-  // must have been declared by the enclosing `LetRec`; the cont fires
-  // after the slot is filled (it carries no value — Set is a pure side
-  // effect from the IR's perspective). Replaces `LetVal` as the binding
-  // primitive inside a LetRec scope.
-  Set,
   // Module import — `import './foo.fnk'` is a builtin function at module level.
   Import,
   // Module entry point — the root App of every compiled module.
@@ -579,6 +567,34 @@ pub enum ExprKind {
     body: Box<Expr>,
   },
 
+  /// Fill a `LetRec` slot. Compile-time binding operation — NOT a runtime
+  /// function call. The slot named by `name` (declared in an enclosing
+  /// `LetRec`) is set to `val`; `cont` runs after the store. Codegen
+  /// emits a store to the slot's storage cell (WasmGC nullable ref).
+  ///
+  /// Refs to `name` from this point on resolve to the filled slot;
+  /// reads before any Set traps at runtime.
+  Set {
+    name: BindNode,
+    val: Val,
+    cont: Cont,
+  },
+
+  /// Closure construction. Compile-time IR node — NOT a runtime call.
+  /// Builds a closure from a lifted-fn `funcref` and a record of captured
+  /// values. The closure result is bound by `cont`'s first arg.
+  ///
+  /// `captures` is an IR-level annotation: each entry is the name as it
+  /// appears inside the lifted fn body paired with the `Ref` at the
+  /// construction site (typically a slot ref or a local). Codegen emits
+  /// a WasmGC struct allocation; the rendered form is
+  /// `·closure <funcref>, {<name>: <ref>, ...}, fn <result>: <cont>`.
+  Closure {
+    funcref: Val,
+    captures: Vec<(BindNode, Val)>,
+    cont: Cont,
+  },
+
   // ---------------------------------------------------------------------------
   // Pattern matching — all patterns lower to PatternMatch (LetFn + App).
   // Type guards (IsSeqLike, IsRecLike) wrap matcher entries; collection primitives
@@ -640,6 +656,16 @@ fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Opti
         collect_bk_bind(slot, bk);
       }
       collect_bk_expr(body, bk);
+    }
+    ExprKind::Set { name, cont, .. } => {
+      collect_bk_bind(name, bk);
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::Closure { captures, cont, .. } => {
+      for (name, _) in captures {
+        collect_bk_bind(name, bk);
+      }
+      collect_bk_cont(cont, bk);
     }
   }
 }

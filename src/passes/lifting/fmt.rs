@@ -583,9 +583,19 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let app_id = b_apply_loc(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc);
       out.push(app_id);
     }
-    // LetRec not yet emitted; render placeholder so partial-migration debugging works.
+    // LetRec / Set / Closure are CPS-side IR nodes; lifting is the legacy
+    // pre-LetRec path and shouldn't normally encounter them. Render
+    // placeholders so partial-migration debugging works.
     ExprKind::LetRec { .. } => {
       let placeholder = b_ident_loc(b, "·letrec_unimpl", expr_loc);
+      out.push(placeholder);
+    }
+    ExprKind::Set { .. } => {
+      let placeholder = b_ident_loc(b, "·set_unimpl", expr_loc);
+      out.push(placeholder);
+    }
+    ExprKind::Closure { .. } => {
+      let placeholder = b_ident_loc(b, "·closure_unimpl", expr_loc);
       out.push(placeholder);
     }
   }

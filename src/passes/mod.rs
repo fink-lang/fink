@@ -19,11 +19,12 @@
 //! `Ast` must uphold the arena contract in `ast/arena-contract.md`.
 
 pub mod ast;
+pub mod ast_desugar;
+pub mod closures;
 pub mod cps;
 pub mod debug_marks;
 pub mod lifting;
 pub mod modules;
-pub mod ast_desugar;
 pub mod scopes;
 pub mod wasm;
 
