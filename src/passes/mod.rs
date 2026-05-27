@@ -23,7 +23,7 @@ pub mod cps;
 pub mod debug_marks;
 pub mod lifting;
 pub mod modules;
-pub mod partial;
+pub mod ast_desugar;
 pub mod scopes;
 pub mod wasm;
 
@@ -68,7 +68,7 @@ pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::
 /// Desugar partial applications and run scope analysis.
 /// Produces the typed result needed by `lower()`.
 pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::transform::TransformError> {
-  let ast = partial::apply(parsed)?;
+  let ast = ast_desugar::apply(parsed)?;
   let scope = scopes::analyse(&ast, &[]);
   Ok(DesugaredAst { ast, scope })
 }

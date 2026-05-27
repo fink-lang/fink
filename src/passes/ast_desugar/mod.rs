@@ -1006,5 +1006,5 @@ mod tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/partial/test_partial.fnk");
+  test_macros::include_fink_tests!("src/passes/ast_desugar/test_partial.fnk");
 }

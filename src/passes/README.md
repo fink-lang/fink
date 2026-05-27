@@ -17,7 +17,7 @@ The stage chain lives in [mod.rs](mod.rs). Most callers enter via the `to_ast` /
 ## Stages
 
 - [ast/](ast/) — lexer, parser, AST arena, formatter, `Transform` trait.
-- [partial/](partial/) — partial-application desugaring (`a | add ?`).
+- [ast_desugar/](ast_desugar/) — AST-level desugaring (partial application `a | add ?`, wildcard call `f _`).
 - [scopes/](scopes/) — name resolution, scope graph, capture/recursion classification.
 - [cps/](cps/) — AST → CPS lowering and the CPS IR.
 - [lifting/](lifting/) — unified closure + continuation lifting.
