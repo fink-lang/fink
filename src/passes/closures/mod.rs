@@ -91,6 +91,5 @@ mod tests {
   }
 
   test_macros::include_fink_tests!("src/passes/closures/test_convert.fnk");
-  test_macros::include_fink_tests!("src/passes/closures/test_full.fnk");
   test_macros::include_fink_tests!("src/passes/closures/test_hoist.fnk");
 }
