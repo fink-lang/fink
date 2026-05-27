@@ -152,7 +152,9 @@ test 'partial in binding rhs', fn:
     add5 = add 5, ?
   | equals ƒink:
     Bind '=',
-      Ident 'add5'
+      Apply
+        Ident 'pub'
+        Ident 'add5'
       Fn ':',
         Patterns
           SynthIdent '·$_0'
@@ -349,7 +351,9 @@ test 'partial in pipe inside fn body', fn:
       | add 3, ?
   | equals ƒink:
     Bind '=',
-      Ident 'main'
+      Apply
+        Ident 'pub'
+        Ident 'main'
       Fn ':',
         Patterns
         Pipe
@@ -371,7 +375,9 @@ test 'partial in pipe with ident', fn:
       | add 3, ?
   | equals ƒink:
     Bind '=',
-      Ident 'main'
+      Apply
+        Ident 'pub'
+        Ident 'main'
       Fn ':',
         Patterns
         Pipe

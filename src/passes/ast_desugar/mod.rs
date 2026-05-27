@@ -38,12 +38,89 @@ pub fn apply(ast: Ast<'_>) -> Result<Ast<'_>, TransformError> {
   let pre_root = rewrite_wildcard_call(&mut builder0, &src0, root0);
   let pre_ast = builder0.finish(pre_root);
 
+  // Pre-pass: implicit `pub` injection on top-level simple bindings.
+  // `foo = expr` at module scope becomes `pub foo = expr` — the LHS is
+  // rewritten to `Apply(Ident "pub", Ident "foo")`. Pattern destructures,
+  // import bindings, and bindings whose LHS already carries `pub` are
+  // left alone. Nested-scope bindings are not touched.
+  let src_pub = pre_ast.clone();
+  let (mut builder_pub, root_pub) = AstBuilder::from_ast(pre_ast);
+  let pub_root = inject_implicit_pub(&mut builder_pub, &src_pub, root_pub);
+  let pub_ast = builder_pub.finish(pub_root);
+
   // Main partial-application desugaring.
-  let src = pre_ast.clone();
-  let (mut builder, root) = AstBuilder::from_ast(pre_ast);
+  let src = pub_ast.clone();
+  let (mut builder, root) = AstBuilder::from_ast(pub_ast);
   let mut pass = PartialPass { synth_counter: 0 };
   let new_root = pass.transform_stmt(&mut builder, &src, root)?;
   Ok(builder.finish(new_root))
+}
+
+/// Walk the Module root and, for each top-level `Bind` whose LHS is a
+/// plain `Ident(name)` and whose RHS is not an `import ...` call,
+/// rewrite the LHS to `Apply(Ident "pub", Ident name)`. This makes the
+/// implicit module-export contract explicit in the AST so downstream
+/// passes don't need to special-case top-level bindings.
+fn inject_implicit_pub<'src>(
+  builder: &mut AstBuilder<'src>,
+  src: &Ast<'src>,
+  root: AstId,
+) -> AstId {
+  let root_node = src.nodes.get(root);
+  let NodeKind::Module { exprs, url } = &root_node.kind else { return root };
+  let module_loc = root_node.loc;
+  let module_url = url.clone();
+  let exprs = exprs.clone();
+
+  let new_items: Vec<AstId> = exprs.items.iter()
+    .map(|&id| maybe_wrap_top_bind(builder, src, id))
+    .collect();
+
+  if new_items.iter().zip(exprs.items.iter()).all(|(a, b)| a == b) {
+    return root;
+  }
+  builder.append(
+    NodeKind::Module {
+      exprs: Exprs { items: new_items.into_boxed_slice(), seps: exprs.seps },
+      url: module_url,
+    },
+    module_loc,
+  )
+}
+
+fn maybe_wrap_top_bind<'src>(
+  builder: &mut AstBuilder<'src>,
+  src: &Ast<'src>,
+  id: AstId,
+) -> AstId {
+  let node = src.nodes.get(id);
+  let NodeKind::Bind { op, lhs, rhs } = node.kind.clone() else { return id };
+  let bind_loc = node.loc;
+
+  // LHS must be a plain Ident — destructures and already-wrapped LHS skipped.
+  let lhs_node = src.nodes.get(lhs);
+  let NodeKind::Ident(name) = lhs_node.kind else { return id };
+  let lhs_loc = lhs_node.loc;
+
+  // Skip import bindings — they're not module exports.
+  if rhs_is_import_call(src, rhs) { return id; }
+
+  // Build `Apply(Ident "pub", Ident name)` and a fresh Bind around it.
+  let pub_ident = builder.append(NodeKind::Ident("pub"), lhs_loc);
+  let name_ident = builder.append(NodeKind::Ident(name), lhs_loc);
+  let new_lhs = builder.append(
+    NodeKind::Apply {
+      func: pub_ident,
+      args: Exprs { items: Box::new([name_ident]), seps: vec![] },
+    },
+    lhs_loc,
+  );
+  builder.append(NodeKind::Bind { op, lhs: new_lhs, rhs }, bind_loc)
+}
+
+fn rhs_is_import_call(src: &Ast<'_>, rhs: AstId) -> bool {
+  let NodeKind::Apply { func, .. } = &src.nodes.get(rhs).kind else { return false };
+  matches!(src.nodes.get(*func).kind, NodeKind::Ident("import"))
 }
 
 /// Pre-pass: rewrite `Apply(f, [Wildcard])` -> `Apply(f, [])`.
@@ -1007,4 +1084,5 @@ mod tests {
   }
 
   test_macros::include_fink_tests!("src/passes/ast_desugar/test_partial.fnk");
+  test_macros::include_fink_tests!("src/passes/ast_desugar/test_pub.fnk");
 }
