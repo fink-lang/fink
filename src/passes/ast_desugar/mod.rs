@@ -99,19 +99,22 @@ fn maybe_wrap_top_bind<'src>(
 
   // LHS must be a plain Ident — destructures and already-wrapped LHS skipped.
   let lhs_node = src.nodes.get(lhs);
-  let NodeKind::Ident(name) = lhs_node.kind else { return id };
+  let NodeKind::Ident(_) = lhs_node.kind else { return id };
   let lhs_loc = lhs_node.loc;
 
   // Skip import bindings — they're not module exports.
   if rhs_is_import_call(src, rhs) { return id; }
 
-  // Build `Apply(Ident "pub", Ident name)` and a fresh Bind around it.
+  // Build `Apply(Ident "pub", <original lhs>)` and a fresh Bind around it.
+  // Reuse the original `lhs` node id rather than synthesising a fresh
+  // Ident — keeps the bind's origin AstId at the user-written position so
+  // scope-pass forward-ref detection (which compares AstId ordering) keeps
+  // working. Only the `pub` marker and the Apply wrapper get fresh ids.
   let pub_ident = builder.append(NodeKind::Ident("pub"), lhs_loc);
-  let name_ident = builder.append(NodeKind::Ident(name), lhs_loc);
   let new_lhs = builder.append(
     NodeKind::Apply {
       func: pub_ident,
-      args: Exprs { items: Box::new([name_ident]), seps: vec![] },
+      args: Exprs { items: Box::new([lhs]), seps: vec![] },
     },
     lhs_loc,
   );

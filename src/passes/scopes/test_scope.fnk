@@ -46,7 +46,7 @@ test 'single binding', fn:
   expect scope ƒink:
     x = 1
   | equals ƒink:
-    scope 3, 'module',
+    scope 7, 'module',
       bind 0, 'x'
 
 
@@ -54,7 +54,7 @@ test 'nested bind in rhs is sequential', fn:
   expect scope ƒink:
     foo = spam = 1
   | equals ƒink:
-    scope 5, 'module',
+    scope 9, 'module',
       bind 1, 'spam'
       bind 0, 'foo'
 
@@ -74,7 +74,7 @@ test 'fn params in scope', fn:
     f = fn a, b:
       a + b
   | equals ƒink:
-    scope 9, 'module',
+    scope 13, 'module',
 
       scope 7, 'fn',
         bind 1, 'a'
@@ -88,11 +88,11 @@ test 'partial application', fn:
   expect scope ƒink:
     foo = 2 + ?
   | equals ƒink:
-    scope 13, 'module',
+    scope 17, 'module',
 
-      scope 11, 'fn',
-        bind 9, '·$_0'
-        ref '·$_0', 9
+      scope 15, 'fn',
+        bind 13, '·$_0'
+        ref '·$_0', 13
       bind 0, 'foo'
 
 
@@ -100,12 +100,12 @@ test 'multiple partials — same param', fn:
   expect scope ƒink:
     foo = ? + ?
   | equals ƒink:
-    scope 14, 'module',
+    scope 18, 'module',
 
-      scope 12, 'fn',
-        bind 10, '·$_0'
-        ref '·$_0', 10
-        ref '·$_0', 10
+      scope 16, 'fn',
+        bind 14, '·$_0'
+        ref '·$_0', 14
+        ref '·$_0', 14
       bind 0, 'foo'
 
 
@@ -113,7 +113,7 @@ test 'wildcard _ does not bind', fn:
   expect scope ƒink:
     f = fn _: 42
   | equals ƒink:
-    scope 6, 'module',
+    scope 10, 'module',
 
       scope 4, 'fn'
       bind 0, 'f'
@@ -135,7 +135,7 @@ test 'wildcard in match arm', fn:
       match x:
         _: 42
   | equals ƒink:
-    scope 12, 'module',
+    scope 16, 'module',
 
       scope 10, 'fn',
         bind 1, 'x'
@@ -152,7 +152,7 @@ test 'sequential bindings in fn body', fn:
       y = x + 1
       y
   | equals ƒink:
-    scope 13, 'module',
+    scope 17, 'module',
 
       scope 11, 'fn',
         bind 2, 'x'
@@ -167,7 +167,7 @@ test 'self-recursion', fn:
     fib = fn n:
       fib n - 1
   | equals ƒink:
-    scope 10, 'module',
+    scope 14, 'module',
 
       scope 8, 'fn',
         bind 1, 'n'
@@ -182,7 +182,7 @@ test 'nested fn — closure depth', fn:
       fn b:
         a + b
   | equals ƒink:
-    scope 11, 'module',
+    scope 15, 'module',
 
       scope 9, 'fn',
         bind 1, 'a'
@@ -208,7 +208,7 @@ test 'unresolved ref', fn:
       foo 1
 
   | equals ƒink:
-    scope 16, 'module',
+    scope 29, 'module',
       unresolved 'spam'
       bind 0, 'ni'
       ref 'ni', 0
@@ -235,7 +235,7 @@ test 'two fns — main refs add', fn:
       add 3, 4
 
   | equals ƒink:
-    scope 17, 'module',
+    scope 24, 'module',
 
       scope 7, 'fn',
         bind 1, 'a'
@@ -262,7 +262,7 @@ test 'mutual recursion — is-even refs is-odd', fn:
         _: is-even n - 1
 
   | equals ƒink:
-    scope 40, 'module',
+    scope 47, 'module',
 
       scope 18, 'fn',
         bind 1, 'n'
@@ -294,7 +294,7 @@ test 'match with binding in arm', fn:
         0: 42
         n: n + 1
   | equals ƒink:
-    scope 18, 'module',
+    scope 22, 'module',
 
       scope 16, 'fn',
         bind 1, 'x'
@@ -314,7 +314,7 @@ test 'pipe — refs to fns', fn:
     inc = fn x: x + 1
     main = fn: 5 | double | inc
   | equals ƒink:
-    scope 24, 'module',
+    scope 34, 'module',
 
       scope 6, 'fn',
         bind 1, 'x'
@@ -349,7 +349,7 @@ test 'inner binding shadows outer', fn:
     main = fn: add 3, 4
 
   | equals ƒink:
-    scope 34, 'module',
+    scope 44, 'module',
 
       scope 7, 'fn',
         bind 1, 'a'
@@ -422,7 +422,7 @@ test 'fn with destructured params', fn:
   expect scope ƒink:
     f = fn [a, b]: a + b
   | equals ƒink:
-    scope 10, 'module',
+    scope 14, 'module',
 
       scope 8, 'fn',
         bind 1, 'a'
@@ -538,7 +538,7 @@ test 'member dynamic key resolves rhs binding', fn:
     k = 'a'
     r.(k)
   | equals ƒink:
-    scope 15, 'module',
+    scope 22, 'module',
       bind 0, 'r'
       bind 6, 'k'
       ref 'r', 0
@@ -556,10 +556,5 @@ test 'import resolves to prelude', fn:
     scope 8, 'module',
       bind 0, 'foo'
       ref 'import', builtin 0
-
-
-
-
-
 
 
