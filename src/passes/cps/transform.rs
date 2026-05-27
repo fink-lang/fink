@@ -551,11 +551,15 @@ fn lower_iife(
 ) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
+  // Local binds in the IIFE body are slots in their own LetRec — same
+  // shape as a regular fn body.
+  let body_locals: Vec<(CpsId, String)> = collect_module_locals(g.ast, body, &g.bind_site_to_cps);
   let cont_origin = body.last().copied().map(Some).unwrap_or(origin);
   let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = {
       let body = lower_seq(g, body);
-      prepend_pat_binds(g, deferred, body)
+      let body = prepend_pat_binds(g, deferred, body);
+      wrap_module_in_letrec(g, body, &body_locals, origin)
     };
   g.pop_cont(prev_cont);
   param_names.insert(0, Param::Name(cont));
