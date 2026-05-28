@@ -13,9 +13,11 @@
 //! cont_args, fn_body: cont_body, cont: <wrapped> }`.
 //!
 //! After this pass, every `Arg::Cont(Cont::Expr { .. })` left in the IR
-//! sits at a `Callable::BuiltIn` call (those keep their inline conts —
-//! codegen lowers them as straight-line wasm). User-fn callsites only
-//! carry `Arg::Val(Ref)` cont references.
+//! sits at a `Callable::BuiltIn` call in the small `builtin_keeps_inline_conts`
+//! set (Pub, Panic, FnClosure, FinkModule — these are structural ops
+//! whose cont body is emitted inline as straight-line wasm). Every
+//! other builtin's cont takes its arg as a closure value (runtime
+//! calls it via apply_3), so inline Cont::Expr there must be lifted.
 //!
 //! Subsequent passes:
 //! - `convert` runs over the synthesised LetFns identically to user
@@ -25,25 +27,19 @@
 use crate::ast::AstId;
 use crate::passes::cps::ir::BuiltIn;
 
-/// Builtins that take their `Cont::Expr` args as **closure values**
-/// at the runtime call site (the runtime function calls them via
-/// `apply_3`). Their inline conts must be lifted into named LetFns
-/// so they become first-class `$Closure` refs.
-fn builtin_wants_closure_conts(b: BuiltIn) -> bool {
+/// Builtins that keep their `Cont::Expr` args **inline** at codegen
+/// time. Codegen lowers them as straight-line wasm without crossing
+/// the runtime apply boundary — the cont's body is emitted directly
+/// into the enclosing fn. All other builtins take their cont as a
+/// closure value (the runtime tail-calls it via `apply_3`); their
+/// inline Cont::Expr args must be lifted into named LetFns.
+fn builtin_keeps_inline_conts(b: BuiltIn) -> bool {
   matches!(
     b,
-    BuiltIn::IsSeqLike
-      | BuiltIn::IsRecLike
-      | BuiltIn::SeqPop
-      | BuiltIn::SeqPopBack
-      | BuiltIn::RecPop
-      | BuiltIn::RecPut
-      | BuiltIn::SeqPrepend
-      | BuiltIn::SeqConcat
-      | BuiltIn::RecMerge
-      | BuiltIn::StrFmt
-      | BuiltIn::StrMatch
-      | BuiltIn::Import,
+    BuiltIn::Pub          // structural: descend into cont body
+      | BuiltIn::Panic    // no cont (trap)
+      | BuiltIn::FnClosure // closure construction — cont takes the new closure
+      | BuiltIn::FinkModule, // module root — cont is the module body
   )
 }
 use crate::passes::cps::ir::{
@@ -114,8 +110,8 @@ impl Cx<'_> {
         // those Cont::Expr args must also be lifted.
         match &func {
           Callable::Val(_) => self.lift_user_app(app),
-          Callable::BuiltIn(b) if builtin_wants_closure_conts(*b) => self.lift_user_app(app),
-          Callable::BuiltIn(_) => app,
+          Callable::BuiltIn(b) if builtin_keeps_inline_conts(*b) => app,
+          Callable::BuiltIn(_) => self.lift_user_app(app),
         }
       }
     }
