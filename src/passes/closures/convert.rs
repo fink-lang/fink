@@ -437,12 +437,8 @@ fn collect_free_in_expr(
 
 fn collect_free_in_val(val: &Val, bound: &HashSet<CpsId>, frees: &mut Frees) {
   match &val.kind {
-    ValKind::Ref(Ref::Synth(id)) => {
-      if !bound.contains(id) { frees.insert(*id); }
-    }
-    ValKind::ContRef(id) => {
-      if !bound.contains(id) { frees.insert(*id); }
-    }
+    ValKind::Ref(Ref::Synth(id)) if !bound.contains(id) => { frees.insert(*id); }
+    ValKind::ContRef(id) if !bound.contains(id) => { frees.insert(*id); }
     _ => {}
   }
 }
