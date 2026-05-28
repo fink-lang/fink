@@ -1568,9 +1568,10 @@
       (local.get $succ)))
 
   (func $op_dot (@impl "std/operators.fnk:op_dot" $Rec _)
+    (param $ctx (ref null any))
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (ref.null any)
+      (local.get $ctx)
       (call $get
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))

@@ -1491,6 +1491,7 @@
   ;; deterministic (hash-bucket), not insertion order, but stable
   ;; for a given set.
   (func $seq_pop (@impl "std/seq.fnk:pop" $Set)
+    (param $ctx (ref null any))
     (param $s (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (local $node (ref $SetNode))
@@ -1502,13 +1503,13 @@
 
     (if (i32.eqz (call $_set_size_node (local.get $node)))
       (then (return_call $list_apply_0
-      (ref.null any) (local.get $fail))))
+      (local.get $ctx) (local.get $fail))))
 
     (local.set $key (call $_pick_first_key (local.get $node)))
     (local.set $rest_node (call $remove (local.get $node) (local.get $key)))
 
     (return_call $list_apply_2_vals
-      (ref.null any)
+      (local.get $ctx)
       (local.get $key)
       (struct.new $SetImpl (local.get $rest_node))
       (local.get $succ))

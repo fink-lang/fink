@@ -91,6 +91,14 @@
   ;; The user payload is seeded with `ref.i31 0` (fink unit), not null,
   ;; so `get_ctx _` before any `set_ctx` returns a real value rather
   ;; than tripping non-null casts downstream.
+  ;;
+  ;; TODO: audit every use of `empty_ctx` across the codebase. The ONLY
+  ;; legitimate caller is the host runner at the universe entry point.
+  ;; Any internal runtime call that mints empty_ctx (rather than
+  ;; threading the caller's ctx) silently breaks ctx propagation —
+  ;; e.g. `import` / `_import_wrap_step` / `_init_module_step` /
+  ;; `_apply_2_nullable` currently do this, causing `set_ctx` after
+  ;; `import` to receive a null/fresh ctx instead of the importer's.
   (func $empty_ctx (@pub) (result (ref $Ctx))
     (struct.new $Ctx (ref.i31 (i32.const 0)))
   )

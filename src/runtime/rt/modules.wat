@@ -399,8 +399,12 @@
         (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $url))))
 
+    ;; HACK: should thread the importer's ctx through captures. For
+    ;; now mint empty_ctx so ctx_user doesn't trap on null. The proper
+    ;; fix is to make `import` take ctx as a param and capture it
+    ;; alongside (url, user_cont). See empty_ctx TODO in apply.wat.
     (return_call $list_apply_1
-      (ref.null any)
+      (call $empty_ctx)
       (local.get $rec)
       (local.get $user_cont)))
 

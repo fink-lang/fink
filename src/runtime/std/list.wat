@@ -360,6 +360,7 @@
   ;;   $Range key → slice (closed, inclusive, or open-end).
   ;;                Out of bounds → unreachable.
   (func $op_dot (@impl "std/operators.fnk:op_dot" $List _)
+    (param $ctx (ref null any))
     (param $list (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     (local $l (ref $List))
@@ -397,7 +398,7 @@
             (local.set $end_i (i64.add (local.get $end_i) (i64.const 1))))))
 
       (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
         (call $_list_slice
           (local.get $l)
           (local.get $start_i)
@@ -426,7 +427,7 @@
       (if (ref.is_null (local.get $elem))
         (then (unreachable)))
       (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
         (ref.as_non_null (local.get $elem))
         (local.get $cont)))
 
@@ -471,9 +472,10 @@
   ;; seq_prepend(val, list, cont) — prepend val to front of list, pass result to cont.
   ;; O(1) — single cons cell allocation.
   (func $seq_prepend (@pub) (@impl "std/seq.fnk:prepend" $List)
+    (param $ctx (ref null any))
     (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
       (call $prepend
         (ref.cast (ref any) (local.get $val))
         (ref.cast (ref $List) (local.get $list)))
@@ -481,9 +483,10 @@
 
   ;; seq_concat(list_a, list_b, cont) — concatenate two lists, pass result to cont.
   (func $seq_concat (@pub) (@impl "std/seq.fnk:concat" $List)
+    (param $ctx (ref null any))
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
       (call $concat
         (ref.cast (ref $List) (local.get $a))
         (ref.cast (ref $List) (local.get $b)))
@@ -493,18 +496,19 @@
   ;; If empty: tail-call fail with 0 args.
   ;; If non-empty: extract head + tail, tail-call succ with 2 args.
   (func $seq_pop (@impl "std/seq.fnk:pop" $List)
+    (param $ctx (ref null any))
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (local $cons (ref $Cons))
 
     (if (ref.test (ref $Nil) (local.get $cursor))
       (then (return_call $apply_0
-      (ref.null any) (local.get $fail))))
+      (local.get $ctx) (local.get $fail))))
 
     (local.set $cons (ref.cast (ref $Cons) (local.get $cursor)))
 
     (return_call $apply_2_vals
-      (ref.null any)
+      (local.get $ctx)
       (struct.get $Cons $head (local.get $cons))
       (struct.get $Cons $tail (local.get $cons))
       (local.get $succ)))
@@ -547,6 +551,7 @@
 
   ;; seq_pop_back(cursor, fail, succ) — destructure [..init, last].
   (func $seq_pop_back (@impl "std/seq.fnk:pop_back" $List)
+    (param $ctx (ref null any))
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (local $init (ref $List))
@@ -554,14 +559,14 @@
 
     (if (ref.test (ref $Nil) (local.get $cursor))
       (then (return_call $apply_0
-      (ref.null any) (local.get $fail))))
+      (local.get $ctx) (local.get $fail))))
 
     (call $pop_back (ref.cast (ref $List) (local.get $cursor)))
     (local.set $last)
     (local.set $init)
 
     (return_call $apply_2_vals
-      (ref.null any)
+      (local.get $ctx)
       (local.get $init)
       (local.get $last)
       (local.get $succ)))
