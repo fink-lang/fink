@@ -1152,14 +1152,42 @@ fn lower_expr(
       );
       ctx.instrs.push(i_cast);
       for (i, bind) in binds.iter().enumerate() {
-        let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
-        ctx.bind(bind.id, local);
-        let i_get = push_array_get(
-          lcx.frag, lcx.rt.captures(),
-          op_local(caps_cast), lit_i32(i as i32),
-          local,
-        );
-        ctx.instrs.push(i_get);
+        let name = cps_ident_for_bind(lcx.cps, lcx.ast, bind);
+        // Bind::Slot locals hold a `(ref null $Cell)`. Captures
+        // array entries are anyref, so extract into a scratch anyref
+        // and ref.cast into the typed local. Other bind kinds keep
+        // their anyref-typed local (Closures, ints etc).
+        if matches!(bind.kind, Bind::Slot) {
+          let local = ctx.alloc_local_typed(
+            &name,
+            val_ref(lcx.rt.cell(), /*nullable*/ true),
+          );
+          ctx.bind(bind.id, local);
+          let tmp = ctx.alloc_local_typed(
+            &format!("{name}_raw"),
+            val_anyref(true),
+          );
+          let i_get = push_array_get(
+            lcx.frag, lcx.rt.captures(),
+            op_local(caps_cast), lit_i32(i as i32),
+            tmp,
+          );
+          ctx.instrs.push(i_get);
+          let i_cast = push_ref_cast_nullable(
+            lcx.frag, lcx.rt.cell(),
+            op_local(tmp), local,
+          );
+          ctx.instrs.push(i_cast);
+        } else {
+          let local = ctx.alloc_local(&name);
+          ctx.bind(bind.id, local);
+          let i_get = push_array_get(
+            lcx.frag, lcx.rt.captures(),
+            op_local(caps_cast), lit_i32(i as i32),
+            local,
+          );
+          ctx.instrs.push(i_get);
+        }
       }
       if let Cont::Expr { body, .. } = cont {
         lower_expr(lcx, ctx, body);

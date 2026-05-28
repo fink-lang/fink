@@ -181,7 +181,8 @@ test 'binding rhs is a call', fn:
       (func $test::v_55 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:v_16 (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
-        (local $:slot_48 (ref null any))
+        (local $:slot_48 (ref null $rt/apply.wat:Cell))
+        (local $:slot_48_raw (ref null any))
         (local $:ret_49 (ref null any))
         (local $:pub_x_1 (ref null any))
         (local $:pub_url (ref null any))
@@ -190,7 +191,8 @@ test 'binding rhs is a call', fn:
         (local $:args (ref any))
         (local.set $:v_16 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
-        (local.set $:slot_48 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
+        (local.set $:slot_48_raw (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
+        (local.set $:slot_48 (ref.cast (ref null $rt/apply.wat:Cell) (local.get $:slot_48_raw)))
         (local.set $:ret_49 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_48) (local.get $:v_16))
         (local.set $:pub_x_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
@@ -256,7 +258,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:LYIFAJgBAJoBAJIBAJoBAJIBAR4F0gkAlgEAugEAxgEAxAEAngEAogEAlAEAlgEAxgEArAEAbgDMAQCYDQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCUAQCWAQDKAQDeAQDQAQCwAQEcAYoBAQYBigEAbgDCAQDCAQC-AQC0BQB6AOYBAIwBAA
+    ;; sm:LoIFAJgBAJoBAJIBAJoBAJIBAR4FwgoAlgEAugEAzgEAugEAxAEAngEAogEAlAEAlgEAxgEArAEAbgDMAQCYDQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCUAQCWAQDKAQDeAQDQAQCwAQEcAYoBAQYBigEAbgDCAQDCAQC-AQC0BQB6AOYBAIwBAA
 
 
 
@@ -272,13 +274,15 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:ret_30 (ref null any))
         (local $a_2 (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
-        (local $:slot_90 (ref null any))
+        (local $:slot_90 (ref null $rt/apply.wat:Cell))
+        (local $:slot_90_raw (ref null any))
         (local $:unwrap_x_90 (ref null any))
         (local.set $:ret_30 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $a_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
-        (local.set $:slot_90 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
+        (local.set $:slot_90_raw (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
+        (local.set $:slot_90 (ref.cast (ref null $rt/apply.wat:Cell) (local.get $:slot_90_raw)))
         (local.set $:unwrap_x_90 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_90)))
         (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $:unwrap_x_90) (local.get $a_2) (local.get $:ret_30))
       )
@@ -434,6 +438,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:UcwHAJoBAJoBAJIBALoBAMYBAKwBATQF4AsAlgEAugEAxgEBMQFQAK4BANABARoDVACqAQCUAQCWAQDKAQCoAQBuAM4BAPoGAJYBAJoBAJYBALoBAMYBAG4AvgEAyAgAlgEAugEAyAEAyAEAugEA0gEBGw2SAQEADbwGALoBAMgBAG4AyAgAnAEAmgEAnAEAmgEAlAEA5AEA0gEAuAEA0gEBAA2QCwCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA8AEAbgC8AQDIAQC-AQCwCQCYAQCUAQBmAJgBAGgAtAEA0gEBDAdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
+    ;; sm:UrwIAJoBAJoBAJIBALoBAM4BALoBAKwBATQF4AsAlgEAugEAxgEBMQFQAK4BANABARoDVACqAQCUAQCWAQDKAQCoAQBuAM4BAPoGAJYBAJoBAJYBALoBAMYBAG4AvgEAyAgAlgEAugEAyAEAyAEAugEA0gEBGw2SAQEADbwGALoBAMgBAG4AyAgAnAEAmgEAnAEAmgEAlAEA5AEA0gEAuAEA0gEBAA2QCwCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA8AEAbgC8AQDIAQC-AQCwCQCYAQCUAQBmAJgBAGgAtAEA0gEBDAdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
 
 

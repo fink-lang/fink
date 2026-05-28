@@ -808,6 +808,15 @@ pub fn push_ref_cast_non_null(
   push(frag, InstrKind::RefCastNonNull { ty, src, into })
 }
 
+pub fn push_ref_cast_nullable(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  src: Operand,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::RefCastNullable { ty, src, into })
+}
+
 pub fn push_ref_cast_non_null_abs(
   frag: &mut Fragment,
   ht: AbsHeap,
