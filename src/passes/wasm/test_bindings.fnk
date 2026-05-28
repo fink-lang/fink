@@ -21,9 +21,9 @@ test 'single binding export', fn:
         (global.set $test:foo (local.get $foo_0))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
-        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $foo_0))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (global.get $test:foo))
         (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $foo_0) (local.get $:args)))
+        (local.set $:args (call $rt/apply.wat:args_prepend (global.get $test:foo) (local.get $:args)))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $v_1))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -39,7 +39,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:DZ4GAJIBAQADhgEAXACUAQCWAQDAAQBuAL4BAKAFAHoA5gEAjAEA
+    ;; sm:DZ4GAJIBAQADhgEAXACUAQCWAQDIAQBuAMYBAKAFAHoA5gEAjAEA
 
 
 
@@ -61,9 +61,9 @@ test 'let binding', fn:
         (global.set $test:x (local.get $x_0))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
-        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_0))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (global.get $test:x))
         (local.set $:args (call $rt/apply.wat:args_empty))
-        (local.set $:args (call $rt/apply.wat:args_prepend (local.get $x_0) (local.get $:args)))
+        (local.set $:args (call $rt/apply.wat:args_prepend (global.get $test:x) (local.get $:args)))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $x_1))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -79,7 +79,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:DZoGAJIBAQABhAEAVACUAQCWAQC8AQBuALoBAKAFAHoA5gEAjAEA
+    ;; sm:DZoGAJIBAQABhAEAVACUAQCWAQDEAQBuAMIBAKAFAHoA5gEAjAEA
 
 
 
@@ -104,13 +104,13 @@ test 'multiple let bindings used', fn:
         (global.set $test:x (local.get $x_0))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
-        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_0))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (global.get $test:x))
         (local.set $y_1 (struct.new $std/int.wat:I64 (i64.const 3)))
         (global.set $test:y (local.get $y_1))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $y_1))
-        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $x_0) (local.get $y_1) (local.get $v_2))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (global.get $test:y))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $:ctx_param) (global.get $test:x) (global.get $test:y))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -127,7 +127,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:ELYHAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBDAXIBQB6AOYBAIwBAA
+    ;; sm:ELYHAJIBAQABggEAVACUAQCWAQDEAQEMAYIBAFQAlAEAlgEAxAEBDAXmBQB6AOYBAIwBAA
 
 
 

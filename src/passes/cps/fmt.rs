@@ -305,6 +305,19 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
 ///   no origin      → ·v_<id>
 /// ```
 fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+  // bind_kinds wins over origin-Ident: only `SynthName` — the def-site
+  // that asserts a source name — follows the origin-Ident path. Every
+  // other kind (Synth, Cont, Ctx, Caps) renders by its semantic role
+  // regardless of any leaked Ident origin. Without this, a non-source
+  // bind whose origin was accidentally set to an Ident node gets two
+  // different names at use vs def — masking real id-reuse and
+  // origin-corruption bugs as cosmetic differences.
+  if let Some(bk) = ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id)
+    && !matches!(kind, Bind::SynthName)
+  {
+    return render_synth_fallback(cps_id, ctx);
+  }
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
@@ -320,6 +333,7 @@ fn render_synth_fallback(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   if let Some(bk) = ctx.bind_kinds
     && let Some(Some(kind)) = bk.try_get(cps_id) {
       return match kind {
+        Bind::Caps                 => format!("·ƒcaps_{}", cps_id.0),
         Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
         Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
         Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
@@ -352,6 +366,7 @@ fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
     Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
     Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
     Bind::Ctx                  => format!("·ƒctx_{}", bind.id.0),
+    Bind::Caps                 => format!("·ƒcaps_{}", bind.id.0),
   }
 }
 

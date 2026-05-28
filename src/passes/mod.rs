@@ -97,7 +97,9 @@ pub fn lift<'src>(
   desugared: &'src DesugaredAst<'src>,
 ) -> LiftedCps {
   let threaded = cps::thread_ctx::thread_ctx(cps.result);
-  let result = closures::convert(threaded);
+  let lifted = closures::cont_lift(threaded);
+  let converted = closures::convert(lifted);
+  let result = closures::hoist(converted);
   let _ = desugared;
   LiftedCps { result }
 }

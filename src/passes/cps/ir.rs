@@ -148,6 +148,7 @@ pub enum Bind {
   Synth,           // compiler-generated temp: rendered as ·v_{cps_id}
   Cont(ContKind),  // continuation parameter with semantic role
   Ctx,             // universe-context parameter: rendered as ·ƒctx_{cps_id}
+  Caps,            // closure caps record parameter: rendered as ·ƒcaps_{cps_id}
 }
 
 /// Semantic role of a continuation parameter.

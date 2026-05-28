@@ -594,18 +594,16 @@ fn lower_expr(
       let (gsym, src_name) = lcx.pub_globals.get(&id)
         .cloned()
         .unwrap_or_else(|| panic!("lower: Pub val CpsId {:?} has no pre-allocated global", id));
-      let val_local = ctx.lookup(id);
 
-      // 1. Addressable storage.
-      let i_set = push_global_set(lcx.frag, gsym, op_local(val_local));
-      ctx.instrs.push(i_set);
-
-      // 2. Registry mutation.
+      // Addressable storage already populated by the preceding Set;
+      // sourcing the value back from the slot's global for the
+      // registry call — slots have no local binding (their storage IS
+      // the global).
       let url_bytes: Vec<u8> = lcx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
       let url_local = emit_str_const(lcx, ctx, &url_bytes, ":pub_url");
       let name_local = emit_str_const(lcx, ctx, src_name.as_bytes(), ":pub_name");
       let i_pub = push_call(lcx.frag, lcx.rt.modules_pub(),
-        vec![op_local(url_local), op_local(name_local), op_local(val_local)],
+        vec![op_local(url_local), op_local(name_local), op_global(gsym)],
         None);
       ctx.instrs.push(i_pub);
 
@@ -961,6 +959,103 @@ fn lower_expr(
 
       let i_if = push_if(lcx.frag, cond_leaf, then_body, else_body);
       ctx.instrs.push(i_if);
+    }
+
+    ExprKind::LetRec { body, .. } => {
+      // Slots that need module-scope storage are already pre-registered
+      // as wasm globals via `pub_globals` (in `lower`, before this
+      // walk runs). LetRec itself is a no-op at codegen — its
+      // contribution is purely the slot-storage declaration, which is
+      // already in place. Just lower the body.
+      //
+      // TODO: fn-body-scope LetRec slots need wasm locals, not globals.
+      // Handle that when we reach fn-body lowering.
+      lower_expr(lcx, ctx, body);
+    }
+    ExprKind::Set { name, val, cont } => {
+      // Module-scope Set: emit `global.set $slot <val>`. The slot was
+      // pre-registered in `pub_globals` for pub'd bindings; other
+      // slots aren't yet supported (fn-body slots, destructure slots).
+      let slot_id = name.id;
+      let (gsym, _) = lcx.pub_globals.get(&slot_id)
+        .cloned()
+        .unwrap_or_else(|| panic!("lower: Set target {slot_id:?} not registered as global; only pub'd module slots supported so far"));
+      let val_op = match &val.kind {
+        ValKind::Lit(lit) => {
+          let lv = LitVal::from_lit(lit)
+            .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
+          let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
+          let i = box_lit(lcx.frag, lcx.rt, &lv, local);
+          if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
+          ctx.instrs.push(i);
+          op_local(local)
+        }
+        _ => val_as_operand(lcx, ctx, val),
+      };
+      let i_set = push_global_set(lcx.frag, gsym, val_op);
+      ctx.instrs.push(i_set);
+      // Lower the cont's body.
+      if let Cont::Expr { body, .. } = cont {
+        lower_expr(lcx, ctx, body);
+      }
+    }
+
+    // `·closure funcref, {cap: outer_ref, ...}, fn result: cont` —
+    // build a `$Closure` from a lifted-fn ref + captured outer values.
+    // Mirrors `App(FnClosure)` but reads explicit captures from the
+    // structural variant. Self-recursion via captured slot ref is
+    // handled naturally — the slot's value is already correct at
+    // closure-construction time once the enclosing LetRec/Set chain
+    // has filled it.
+    // `·letcaps caps_val, fn {bind_0, bind_1, ...}: cont` — destructure
+    // the lifted fn's caps record into fresh locals. `caps_val` is a
+    // Val::Ref to the ƒcaps param (a non-Cap Param::Name). Emits:
+    //   local.set $:caps_cast (ref.cast (ref $Captures) <caps_ref>)
+    //   local.set $<bind_i> (array.get $Captures $:caps_cast <i>)
+    // for each bind, then descends into the cont body.
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let caps_op = val_as_operand(lcx, ctx, caps);
+      let caps_cast = ctx.alloc_local_typed(
+        ":caps_cast",
+        val_ref(lcx.rt.captures(), /*nullable*/ false),
+      );
+      let i_cast = push_ref_cast_non_null(
+        lcx.frag, lcx.rt.captures(), caps_op, caps_cast,
+      );
+      ctx.instrs.push(i_cast);
+      for (i, bind) in binds.iter().enumerate() {
+        let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
+        ctx.bind(bind.id, local);
+        let i_get = push_array_get(
+          lcx.frag, lcx.rt.captures(),
+          op_local(caps_cast), lit_i32(i as i32),
+          local,
+        );
+        ctx.instrs.push(i_get);
+      }
+      if let Cont::Expr { body, .. } = cont {
+        lower_expr(lcx, ctx, body);
+      }
+    }
+
+    ExprKind::Closure { funcref, captures, cont } => {
+      let fn_sym = ctx.lookup_fn_sym(cps_id_of_ref(funcref));
+      let cap_operands: Vec<Operand> = captures.iter()
+        .map(|(_, outer_val)| val_as_operand(lcx, ctx, outer_val))
+        .collect();
+      match cont {
+        Cont::Expr { args: cont_args, body } => {
+          let bind = cont_args.first()
+            .expect("Closure cont has no result bind");
+          let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
+          ctx.bind(bind.id, local);
+          emit_closure_construction(lcx, ctx, fn_sym, cap_operands, local);
+          lower_expr(lcx, ctx, body);
+        }
+        Cont::Ref(_) => {
+          panic!("lower: Closure with Cont::Ref not yet supported");
+        }
+      }
     }
 
     _ => panic!("lower: unsupported expr shape: {:?}", short_kind(&expr.kind)),
@@ -1748,12 +1843,15 @@ fn find_pub_apps(
 ) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
+      // After thread_ctx: Pub args are [ctx, target_val, cont]. Only
+      // the target_val (args[1]) is the exported binding; args[0] is
+      // the threaded ctx and args[2] is the continuation.
+      if let Some(Arg::Val(v)) = args.get(1)
+        && let ValKind::Ref(Ref::Synth(id)) = v.kind
+      {
+        out.push((id, pub_export_name(cps, ast, id)));
+      }
       for arg in args {
-        if let Arg::Val(v) = arg
-          && let ValKind::Ref(Ref::Synth(id)) = v.kind
-        {
-          out.push((id, pub_export_name(cps, ast, id)));
-        }
         if let Arg::Cont(Cont::Expr { body, .. }) = arg {
           find_pub_apps(body, cps, ast, out);
         }
@@ -1783,10 +1881,24 @@ fn find_pub_apps(
       find_pub_apps(then, cps, ast, out);
       find_pub_apps(else_, cps, ast, out);
     }
-    ExprKind::LetRec { .. } => unreachable!("wasm::lower::find_pub_apps: LetRec not yet handled in wasm codegen"),
-    ExprKind::Set { .. } => unreachable!("wasm::lower::find_pub_apps: Set not yet handled in wasm codegen"),
-    ExprKind::Closure { .. } => unreachable!("wasm::lower::find_pub_apps: Closure not yet handled in wasm codegen"),
-    ExprKind::LetCaps { .. } => unreachable!("wasm::lower::find_pub_apps: LetCaps not yet handled in wasm codegen"),
+    ExprKind::LetRec { body, .. } => {
+      find_pub_apps(body, cps, ast, out);
+    }
+    ExprKind::Set { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
+    ExprKind::Closure { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
+    ExprKind::LetCaps { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
   }
 }
 

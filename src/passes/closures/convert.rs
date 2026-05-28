@@ -31,18 +31,36 @@ use crate::passes::cps::ir::{
 use crate::propgraph::PropGraph;
 
 pub fn convert(mut cps: CpsResult) -> CpsResult {
-  let mut cx = Cx { origin: &mut cps.origin };
+  // Snapshot bind kinds of the input tree so we can propagate them when
+  // minting local CpsIds for captures. A local that captures a Cont
+  // stays a Cont; a local that captures a Ctx stays a Ctx. Without this
+  // the local would default to `Bind::SynthName` and the renderer would
+  // mis-name it as a value binding.
+  let pre_bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
+  let mut cx = Cx { origin: &mut cps.origin, pre_bind_kinds: &pre_bind_kinds };
   cps.root = cx.convert_expr(cps.root);
+  drop(cx);
   cps
 }
 
 struct Cx<'a> {
   origin: &'a mut PropGraph<CpsId, Option<AstId>>,
+  pre_bind_kinds: &'a PropGraph<CpsId, Option<Bind>>,
 }
 
 impl Cx<'_> {
   fn fresh_id(&mut self, origin: Option<AstId>) -> CpsId {
     self.origin.push(origin)
+  }
+
+  /// Look up the Bind kind of an outer CpsId from the pre-snapshot
+  /// `bind_kinds`. Defaults to `SynthName` if the id has no recorded
+  /// kind (e.g. compiler temps).
+  fn outer_bind_kind(&self, outer: CpsId) -> Bind {
+    self.pre_bind_kinds
+      .try_get(outer)
+      .and_then(|o| *o)
+      .unwrap_or(Bind::SynthName)
   }
 
   /// Recursively convert an expression, lifting every LetFn encountered.
@@ -85,15 +103,22 @@ impl Cx<'_> {
         let fn_body = rename_refs_in_expr(fn_body, &rename);
 
         // Inject a fresh ƒcaps param at the head of the params list.
+        // caps_id is a synth param with no source origin — give it
+        // `None` so it can't accidentally render under the LetFn's
+        // name. Bind::Caps drives the `·ƒcaps_N` rendering.
         let name_origin = self.origin.try_get(name.id).and_then(|o| *o);
-        let caps_id = self.fresh_id(name_origin);
-        let caps_bind = BindNode { id: caps_id, kind: Bind::Synth };
+        let caps_id = self.fresh_id(None);
+        let caps_bind = BindNode { id: caps_id, kind: Bind::Caps };
         let mut new_params = vec![Param::Name(caps_bind)];
         new_params.extend(params);
 
         // Wrap the rewritten body in LetCaps that binds each local id.
-        let letcaps_binds: Vec<BindNode> = outer_to_local.iter().map(|&(_outer, local)| {
-          BindNode { id: local, kind: Bind::SynthName }
+        // Local inherits the outer's Bind kind: a captured Cont stays a
+        // Cont, a captured Ctx stays a Ctx — so the renderer names them
+        // by semantic role rather than as a generic value binding.
+        let letcaps_binds: Vec<BindNode> = outer_to_local.iter().map(|&(outer, local)| {
+          let kind = self.outer_bind_kind(outer);
+          BindNode { id: local, kind }
         }).collect();
         let caps_ref_id = self.fresh_id(name_origin);
         let caps_ref = Val {
@@ -124,7 +149,8 @@ impl Cx<'_> {
         // Val is the construction-site read.
         let captures: Vec<(BindNode, Val)> = outer_to_local.iter().map(|&(outer, local)| {
           let outer_origin = self.origin.try_get(outer).and_then(|o| *o);
-          let bn = BindNode { id: local, kind: Bind::SynthName };
+          let kind = self.outer_bind_kind(outer);
+          let bn = BindNode { id: local, kind };
           let val_id = self.fresh_id(outer_origin);
           let val = Val { id: val_id, kind: ValKind::Ref(Ref::Synth(outer)) };
           (bn, val)

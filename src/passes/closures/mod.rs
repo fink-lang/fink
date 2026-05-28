@@ -27,9 +27,11 @@
 //! `test_full.fnk` for the regression set inherited from the legacy
 //! lifting pass.
 
+pub mod cont_lift;
 pub mod convert;
 pub mod hoist;
 
+pub use cont_lift::cont_lift;
 pub use convert::convert;
 pub use hoist::hoist;
 
@@ -47,7 +49,8 @@ mod tests {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
         let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
-        let result = super::convert(threaded);
+        let lifted = super::cont_lift(threaded);
+        let result = super::convert(lifted);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
         let ctx = Ctx {
           origin: &result.origin,
@@ -71,7 +74,8 @@ mod tests {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
         let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
-        let converted = super::convert(threaded);
+        let lifted = super::cont_lift(threaded);
+        let converted = super::convert(lifted);
         let result = super::hoist(converted);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
         let ctx = Ctx {
