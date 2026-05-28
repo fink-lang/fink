@@ -130,7 +130,12 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // exported and not registered with the runtime — they're just
   // storage for the slot's mutable reference.
   let mut slot_globals: HashMap<CpsId, GlobalSym> = HashMap::new();
-  for id in &slot_ids {
+  // Iterate slot ids in deterministic order so the emitted globals
+  // appear in the same order across runs (HashSet iteration is
+  // unordered).
+  let mut sorted_slot_ids: Vec<CpsId> = slot_ids.iter().copied().collect();
+  sorted_slot_ids.sort_by_key(|id| id.0);
+  for id in &sorted_slot_ids {
     if let Some((g, _)) = pub_globals.get(id) {
       slot_globals.insert(*id, *g);
       continue;
@@ -720,89 +725,91 @@ fn lower_expr(
 
     ExprKind::App { func: Callable::BuiltIn(b), args } if binary_op_sym(*b).is_some() => {
       let sym = binary_op_sym(*b).unwrap();
-      let (a, b_v, cont) = split_binary_args(args);
+      let (ctx_a, a, b_v, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b_v);
-      emit_op_tail_call(lcx, ctx, sym, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, sym, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Not), args } => {
-      let (v, cont) = split_unary_args(args);
+      let (ctx_a, v, cont) = split_unary_args(args);
       let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, Sym::OpNot, vec![v_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::OpNot, ctx_a, vec![v_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Empty), args } => {
-      let (v, cont) = split_unary_args(args);
+      let (ctx_a, v, cont) = split_unary_args(args);
       let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, Sym::OpEmpty, vec![v_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::OpEmpty, ctx_a, vec![v_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RangeFrom), args } => {
-      let (v, cont) = split_unary_args(args);
+      let (ctx_a, v, cont) = split_unary_args(args);
       let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, Sym::OpRngFrom, vec![v_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::OpRngFrom, ctx_a, vec![v_op], cont, expr.id);
     }
 
-// StrMatch: `(subj, prefix, suffix, fail, succ)` — 5-arg template
-    // pattern dispatch. All five are anyref operands at the WASM level
-    // (the latter two are continuations resolved as closures).
+// StrMatch: `(ctx, subj, prefix, suffix, fail, succ)` — 6-arg
+    // template pattern dispatch. After thread_ctx, ctx is args[0].
+    // All six are anyref operands at the WASM level (the latter two
+    // are continuations resolved as closures).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrMatch), args } => {
-      if args.len() != 5 {
-        panic!("lower: StrMatch expects 5 args, got {}", args.len());
+      if args.len() != 6 {
+        panic!("lower: StrMatch expects 6 args (ctx + 5), got {}", args.len());
       }
-      let ctx_local = ctx.ctx_local.expect("lower StrMatch: enclosing fn must have :ctx_param");
-      let mut ops: Vec<Operand> = vec![op_local(ctx_local)];
-      ops.extend(args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)));
+      let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
       let i = push_return_call(lcx.frag, lcx.rt.str_match(), ops);
       if let Some(o) = origin_of(lcx.cps, lcx.ast, expr.id) { set_origin(lcx.frag, i, o); }
       set_cps_id(lcx.frag, i, expr.id);
       ctx.instrs.push(i);
     }
 
-    // StrFmt: `(seg_0, seg_1, ..., seg_n, cont)` — build a $VarArgs
-    // array from the segments and tail-call $str_fmt(varargs, cont).
+    // StrFmt: `(ctx, seg_0, seg_1, ..., seg_n, cont)` — build a
+    // $VarArgs array from the segments and tail-call
+    // $str_fmt(ctx, varargs, cont). After cont_lift the cont is an
+    // Arg::Val (Ref to a lifted fn); the legacy shape passed it as
+    // Arg::Cont.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrFmt), args } => {
-      // Last arg is the cont; the rest are value segments.
-      let (cont, segments) = split_last_cont(args);
+      // args[0] is ctx, last is cont, segments are everything else.
+      let ctx_a = args.first().expect("StrFmt: missing ctx");
+      let cont_arg = args.last().expect("StrFmt: missing cont");
+      let segments = &args[1..args.len() - 1];
       let seg_ops: Vec<Operand> = segments.iter()
         .map(|a| emit_arg_as_operand(lcx, ctx, a))
         .collect();
-      // Allocate the $VarArgs array.
       let varargs_local = ctx.alloc_local_typed(":varargs",
         val_ref(lcx.rt.varargs(), /*nullable*/ true));
       let i_arr = push_array_new_fixed(lcx.frag, lcx.rt.varargs(), seg_ops, varargs_local);
       ctx.instrs.push(i_arr);
-      // Wrap as Arg::Val for emit_op_tail_call's cont handling.
       emit_op_tail_call(lcx, ctx,
-        Sym::StrFmt, vec![op_local(varargs_local)], &Arg::Cont(cont.clone()),
+        Sym::StrFmt, ctx_a, vec![op_local(varargs_local)], cont_arg,
         expr.id);
     }
 
     // SeqPrepend: `(item, seq, cont)` — same call shape as a binary
     // protocol op. Lowers to `return_call $seq_prepend item seq cont`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPrepend), args } => {
-      let (a, b, cont) = split_binary_args(args);
+      let (ctx_a, a, b, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
-      emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
     // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {
-      let (a, b, cont) = split_binary_args(args);
+      let (ctx_a, a, b, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
-      emit_op_tail_call(lcx, ctx, Sym::SeqConcat, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::SeqConcat, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args } => {
-      let (a, b, cont) = split_binary_args(args);
+      let (ctx_a, a, b, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
-      emit_op_tail_call(lcx, ctx, Sym::RecMerge, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::RecMerge, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     // IsSeqLike / IsRecLike: `(val, succ, fail)` — type guard. The
@@ -1357,11 +1364,18 @@ fn lower_import(
   let url = std::str::from_utf8(url_bytes)
     .unwrap_or_else(|_| panic!("lower: BuiltIn::Import URL is not valid UTF-8"));
 
-  // Pull the destructure cont (Cont::Ref).
-  let cont_id = args.iter().find_map(|a| match a {
-    Arg::Cont(Cont::Ref(id)) => Some(*id),
-    _ => None,
-  }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing cont"));
+  // Pull the destructure cont id from the LAST arg. After
+  // cont_lift, the inline Cont::Expr is lifted into a LetFn and
+  // passed as Arg::Val (Ref to the lifted fn).
+  let cont_id = match args.last() {
+    Some(Arg::Cont(Cont::Ref(id))) => *id,
+    Some(Arg::Val(v)) => match &v.kind {
+      ValKind::Ref(r) => ref_cps_id(*r),
+      ValKind::ContRef(id) => *id,
+      _ => panic!("lower: BuiltIn::Import cont arg has unexpected Val shape"),
+    },
+    other => panic!("lower: BuiltIn::Import missing cont (got {:?})", other),
+  };
 
   if crate::passes::wasm::compile_package::MIGRATED_STDLIB_FNK.contains(&url) {
     lower_import_user_fragment(lcx, ctx, url, cont_id);
@@ -1579,17 +1593,18 @@ fn emit_op_tail_call(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
   sym: Sym,
+  ctx_arg: &Arg,
   value_operands: Vec<Operand>,
   cont: &Arg,
   app_id: CpsId,
 ) {
+  let ctx_op = emit_arg_as_operand(lcx, ctx, ctx_arg);
   let cont_op = match cont {
     Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
     Arg::Val(v) => val_as_operand(lcx, ctx, v),
     _ => panic!("lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
   };
-  let ctx_local = ctx.ctx_local.expect("emit_op_tail_call: enclosing fn must have :ctx_param");
-  let mut operands = vec![op_local(ctx_local)];
+  let mut operands = vec![ctx_op];
   operands.extend(value_operands);
   operands.push(cont_op);
   let i = push_return_call(lcx.frag, lcx.rt.op(sym), operands);
@@ -1882,18 +1897,25 @@ fn extract_fink_module_body(root: &Expr) -> Option<(CpsId, CpsId, &Expr)> {
   Some((ctx_bind.id, ret_bind.id, body))
 }
 
-fn split_binary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg) {
+/// Split a binary op's args after thread_ctx: `[ctx, a, b, cont]` →
+/// `(ctx, a, b, cont)`. The ctx is passed to the runtime op as the
+/// 0th wasm arg.
+fn split_binary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg, &Arg) {
   (
-    args.first().expect("binary op: missing arg 0"),
-    args.get(1).expect("binary op: missing arg 1"),
-    args.get(2).expect("binary op: missing cont"),
+    args.first().expect("binary op: missing ctx"),
+    args.get(1).expect("binary op: missing arg 0"),
+    args.get(2).expect("binary op: missing arg 1"),
+    args.get(3).expect("binary op: missing cont"),
   )
 }
 
-fn split_unary_args(args: &[Arg]) -> (&Arg, &Arg) {
+/// Split a unary op's args after thread_ctx: `[ctx, v, cont]` →
+/// `(ctx, v, cont)`.
+fn split_unary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg) {
   (
-    args.first().expect("unary op: missing arg"),
-    args.get(1).expect("unary op: missing cont"),
+    args.first().expect("unary op: missing ctx"),
+    args.get(1).expect("unary op: missing arg"),
+    args.get(2).expect("unary op: missing cont"),
   )
 }
 
@@ -1958,8 +1980,18 @@ fn cps_ident_kinded(
   bind_kinds: &crate::propgraph::PropGraph<CpsId, Option<crate::passes::cps::ir::Bind>>,
   id: CpsId,
 ) -> String {
-  if let Some(Some(crate::passes::cps::ir::Bind::Ctx)) = bind_kinds.try_get(id) {
-    return format!(":ctx_{}", id.0);
+  use crate::passes::cps::ir::{Bind, ContKind};
+  if let Some(Some(kind)) = bind_kinds.try_get(id) {
+    return match kind {
+      Bind::Ctx                  => format!(":ctx_{}", id.0),
+      Bind::Caps                 => format!(":caps_{}", id.0),
+      Bind::Slot                 => format!(":slot_{}", id.0),
+      Bind::Cont(ContKind::Ret)  => format!(":ret_{}", id.0),
+      Bind::Cont(ContKind::Succ) => format!(":succ_{}", id.0),
+      Bind::Cont(ContKind::Fail) => format!(":fail_{}", id.0),
+      Bind::Synth                => format!(":v_{}", id.0),
+      Bind::SynthName            => cps_ident(cps, ast, id),
+    };
   }
   cps_ident(cps, ast, id)
 }

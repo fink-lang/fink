@@ -9,13 +9,13 @@ test 'range exclusive', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 10)))
-        (return_call $std/range.fnk:excl (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 10)))
+        (return_call $std/range.fnk:excl (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -28,7 +28,7 @@ test 'range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBBgKEAQEFBboFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBBgKKAQEFBcwFAHoA5gEAjAEA
 
 
 test 'range inclusive', fn:
@@ -38,13 +38,13 @@ test 'range inclusive', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 10)))
-        (return_call $std/range.fnk:incl (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 10)))
+        (return_call $std/range.fnk:incl (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -57,7 +57,7 @@ test 'range inclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBCAKEAQEHBroFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBCAKKAQEHBswFAHoA5gEAjAEA
 
 
 test 'open range exclusive', fn:
@@ -67,11 +67,11 @@ test 'open range exclusive', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 0)))
-        (return_call $std/range.fnk:from (local.get $:ctx_param) (local.get $v_1) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
+        (return_call $std/range.fnk:from (local.get $:ctx_param) (local.get $:lit_1) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -84,7 +84,7 @@ test 'open range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:B8oEAJIBAQABggEBAAOYBQB6AOYBAIwBAA
+    ;; sm:B9YEAJgBAQABiAEBAAOkBQB6AOYBAIwBAA
 
 
 test 'range in', fn:

@@ -9,14 +9,14 @@ test 'literal bool', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $:v_0 (ref null any))
+        (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
-        (local.set $:v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 1)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_1) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_0))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -29,7 +29,7 @@ test 'literal bool', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CYwFAJQBAQAEYABuAMABAKIFAHoA5gEAjAEA
+    ;; sm:CZAFAJgBAQAEYABuAMABAKYFAHoA5gEAjAEA
 
 
 test 'literal bool false', fn:
@@ -39,14 +39,14 @@ test 'literal bool false', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $:v_0 (ref null any))
+        (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
-        (local.set $:v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_1) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_0))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -59,7 +59,7 @@ test 'literal bool false', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CYwFAJQBAQAFYABuAMABAKIFAHoA5gEAjAEA
+    ;; sm:CZAFAJgBAQAFYABuAMABAKYFAHoA5gEAjAEA
 
 
 test 'literal int', fn:
@@ -69,14 +69,14 @@ test 'literal int', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $:v_0 (ref null any))
+        (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
-        (local.set $:v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 42)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_1) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_0))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -89,7 +89,7 @@ test 'literal int', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CYwFAJQBAQACigEAbgDAAQCiBQB6AOYBAIwBAA
+    ;; sm:CZAFAJgBAQACigEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 test 'literal neg 0', fn:
@@ -99,14 +99,14 @@ test 'literal neg 0', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $:v_0 (ref null any))
+        (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
-        (local.set $:v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_1) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_0))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -119,7 +119,7 @@ test 'literal neg 0', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CYwFAJQBAQACiAEAbgDAAQCiBQB6AOYBAIwBAA
+    ;; sm:CZAFAJgBAQACiAEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 
@@ -130,14 +130,14 @@ test 'literal float', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $:v_0 (ref null any))
+        (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
-        (local.set $:v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/float.wat:F64 (f64.const 123400)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_1) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_0))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -150,7 +150,7 @@ test 'literal float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CYwFAJQBAQAIlgEAbgDAAQCiBQB6AOYBAIwBAA
+    ;; sm:CZAFAJgBAQAIlgEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 test 'literal decimal', fn:
@@ -160,14 +160,14 @@ test 'literal decimal', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $:v_0 (ref null any))
+        (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
-        (local.set $:v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/decimal.wat:Decimal (i64.const 10) (i32.const -1)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_1) (local.get $:args)))
-        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_0))
+        (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -180,7 +180,7 @@ test 'literal decimal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CYwFAJQBAQAEuAEAbgDAAQCiBQB6AOYBAIwBAA
+    ;; sm:CZAFAJgBAQAEuAEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 

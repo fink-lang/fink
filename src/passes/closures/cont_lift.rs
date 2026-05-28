@@ -37,7 +37,13 @@ fn builtin_wants_closure_conts(b: BuiltIn) -> bool {
       | BuiltIn::SeqPop
       | BuiltIn::SeqPopBack
       | BuiltIn::RecPop
-      | BuiltIn::RecPut,
+      | BuiltIn::RecPut
+      | BuiltIn::SeqPrepend
+      | BuiltIn::SeqConcat
+      | BuiltIn::RecMerge
+      | BuiltIn::StrFmt
+      | BuiltIn::StrMatch
+      | BuiltIn::Import,
   )
 }
 use crate::passes::cps::ir::{
