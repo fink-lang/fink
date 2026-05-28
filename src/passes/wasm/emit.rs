@@ -998,6 +998,22 @@ fn emit_instr(
       });
       func.instruction(&Instruction::LocalSet(into.0));
     }
+    InstrKind::StructGet { ty, field, src, into } => {
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::StructGet {
+        struct_type_index: resolve_type(rt, *ty, type_remap),
+        field_index: *field,
+      });
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::StructSet { ty, field, src, val } => {
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, val, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::StructSet {
+        struct_type_index: resolve_type(rt, *ty, type_remap),
+        field_index: *field,
+      });
+    }
     InstrKind::ArrayGet { ty, arr, idx, into } => {
       emit_operand(rt, func, arr, type_remap, func_remap, user_global_base, data_offsets);
       emit_operand(rt, func, idx, type_remap, func_remap, user_global_base, data_offsets);

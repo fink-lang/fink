@@ -436,6 +436,9 @@ fn lower_bind_stmt(
   rhs: AstId,
   origin: Option<AstId>,
 ) -> Vec<Pending> {
+  // Peel the synthetic `pub` modifier wrapper from the LHS, if present.
+  // See `unwrap_modifier_lhs` and `lower_bind`.
+  let lhs = unwrap_modifier_lhs(g.ast, lhs);
   let (val, mut pending) = lower(g, rhs);
   match &g.node(lhs).kind {
     NodeKind::Wildcard => {
@@ -456,6 +459,11 @@ fn lower_bind(
   rhs: AstId,
   origin: Option<AstId>,
 ) -> Lower {
+  // Peel the synthetic `pub` modifier wrapper from the LHS, if present.
+  // CPS lowers a `pub`-wrapped bind exactly like a plain bind; the export
+  // intent is recovered separately by `collect_module_exports` walking the
+  // unpeeled AST and is realised by `inject_pub_calls`.
+  let lhs = unwrap_modifier_lhs(g.ast, lhs);
   let (val, mut pending) = lower(g, rhs);
   match &g.node(lhs).kind {
     NodeKind::Wildcard => {
@@ -496,6 +504,10 @@ fn lower_fn(
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
+  // Collect the fn-body's local binds for the LetRec slot list. Same
+  // collector as module scope — `collect_module_locals` is shape-agnostic
+  // and just walks the bind LHSs of the given exprs.
+  let body_locals: Vec<(CpsId, String)> = collect_module_locals(g.ast, body, &g.bind_site_to_cps);
   // The cont represents the return point of the function — semantically
   // anchored at the expression whose value flows into it (the last body
   // statement), not the whole fn node. Narrowing here makes hovering a
@@ -504,7 +516,8 @@ fn lower_fn(
   let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = {
       let body = lower_seq(g, body);
-      prepend_pat_binds(g, deferred, body)
+      let body = prepend_pat_binds(g, deferred, body);
+      wrap_module_in_letrec(g, body, &body_locals, origin)
     };
   g.pop_cont(prev_cont);
   param_names.insert(0, Param::Name(cont));
@@ -538,11 +551,15 @@ fn lower_iife(
 ) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
+  // Local binds in the IIFE body are slots in their own LetRec — same
+  // shape as a regular fn body.
+  let body_locals: Vec<(CpsId, String)> = collect_module_locals(g.ast, body, &g.bind_site_to_cps);
   let cont_origin = body.last().copied().map(Some).unwrap_or(origin);
   let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = {
       let body = lower_seq(g, body);
-      prepend_pat_binds(g, deferred, body)
+      let body = prepend_pat_binds(g, deferred, body);
+      wrap_module_in_letrec(g, body, &body_locals, origin)
     };
   g.pop_cont(prev_cont);
   param_names.insert(0, Param::Name(cont));
@@ -1428,7 +1445,6 @@ fn cont_with_result(cont: Cont, result: BindNode) -> Cont {
   }
 }
 
-
 fn wrap(g: &mut Gen, bindings: Vec<Pending>, tail: Cont) -> Expr {
   wrap_with_fail(g, bindings, tail, None)
 }
@@ -1781,17 +1797,18 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
 /// lhs is a plain Ident. Pattern destructures and imports are excluded.
 fn collect_module_exports(ast: &Ast<'_>, exprs: &[AstId], bind_site_to_cps: &std::collections::HashMap<u32, CpsId>) -> Vec<CpsId> {
   exprs.iter().filter_map(|&expr_id| {
-    let NodeKind::Bind { lhs, rhs, .. } = &ast.nodes.get(expr_id).kind else { return None; };
+    let NodeKind::Bind { lhs, .. } = &ast.nodes.get(expr_id).kind else { return None; };
     let lhs = *lhs;
-    let rhs = *rhs;
-    let NodeKind::Ident(_) = &ast.nodes.get(lhs).kind else { return None; };
-    // Exclude imports: `{foo} = import './bar'` — rhs is Apply { func: Ident("import"), .. }
-    if let NodeKind::Apply { func, .. } = &ast.nodes.get(rhs).kind {
-      let func = *func;
-      if let NodeKind::Ident(name) = &ast.nodes.get(func).kind
-        && *name == "import" { return None; }
-    }
-    bind_site_to_cps.get(&lhs.0).copied()
+    // Only `pub`-wrapped LHS represents an exported binding. ast_desugar
+    // synthesises this wrapper on every top-level simple `name = expr`
+    // and leaves destructures, imports, and nested-scope binds alone, so
+    // recognising the wrapper here is sufficient.
+    let NodeKind::Apply { func, args } = &ast.nodes.get(lhs).kind else { return None; };
+    if args.items.len() != 1 { return None; }
+    let NodeKind::Ident("pub") = &ast.nodes.get(*func).kind else { return None; };
+    let inner = args.items[0];
+    let NodeKind::Ident(_) = &ast.nodes.get(inner).kind else { return None; };
+    bind_site_to_cps.get(&inner.0).copied()
   }).collect()
 }
 
@@ -1829,6 +1846,16 @@ fn walk_bind_lhs(
   bind_site_to_cps: &std::collections::HashMap<u32, CpsId>,
   out: &mut Vec<(CpsId, String)>,
 ) {
+  // Peel the `pub` modifier wrapper if present — the inner subtree is
+  // the real bind LHS for module-locals purposes.
+  let id = if let NodeKind::Apply { func, args } = &ast.nodes.get(id).kind
+    && args.items.len() == 1
+    && matches!(&ast.nodes.get(*func).kind, NodeKind::Ident("pub"))
+  {
+    args.items[0]
+  } else {
+    id
+  };
   let kind = ast.nodes.get(id).kind.clone();
   match kind {
     NodeKind::Ident(name) => {
@@ -1912,7 +1939,13 @@ pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeRe
     // Post-process: inject ·ƒpub calls after each exported LetVal binding.
     // TODO: move export detection to an AST desugaring pass; the CPS
     // transform shouldn't know about implicit module-level pub semantics.
-    if export_ids.is_empty() { body } else { inject_pub_calls(&mut g, body, &export_ids) }
+    let body = if export_ids.is_empty() { body } else { inject_pub_calls(&mut g, body, &export_ids) };
+    // Wrap the module body in a `LetRec` declaring slots for every
+    // module-level binding. References to these slots resolve via slot
+    // read; reading an empty slot traps at runtime. LetVal nodes that
+    // bind a module-local name get rewritten to `App(Set, [val, cont])`
+    // so the slot fill is explicit.
+    wrap_module_in_letrec(&mut g, body, &module_locals, module_origin)
   };
 
   // Root: App(FinkModule, [Cont::Expr { args: [ƒctx, ƒret], body }])
@@ -2028,6 +2061,150 @@ fn inject_pub_calls(
       let then = inject_pub_calls(g, *then, export_ids);
       let else_ = inject_pub_calls(g, *else_, export_ids);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
+    }
+    ExprKind::LetRec { slots, body } => {
+      let body = inject_pub_calls(g, *body, export_ids);
+      Expr { id: expr.id, kind: ExprKind::LetRec { slots, body: Box::new(body) } }
+    }
+    ExprKind::Set { name, val, cont } => {
+      // Recurse into the cont — it carries the rest of the module body.
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::Set { name, val, cont } }
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::Closure { funcref, captures, cont } }
+    }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::LetCaps { caps, binds, cont } }
+    }
+  }
+}
+
+/// Wrap `body` in a `LetRec` declaring every module-level binding as a
+/// slot, and rewrite the LetVal bindings of those slots into explicit
+/// `App(Set, [val, cont])` so the slot fill is visible in the IR. Refs
+/// to those names continue to resolve as Ref::Synth — the slot read /
+/// null-trap semantics are a codegen contract, not an IR rewrite.
+fn wrap_module_in_letrec(
+  g: &mut Gen,
+  body: Expr,
+  module_locals: &[(CpsId, String)],
+  origin: Option<AstId>,
+) -> Expr {
+  if module_locals.is_empty() {
+    return body;
+  }
+  let slot_ids: std::collections::HashSet<CpsId> =
+    module_locals.iter().map(|(id, _)| *id).collect();
+  let body = rewrite_lets_to_sets(g, body, &slot_ids);
+  let slots: Vec<BindNode> = module_locals.iter()
+    .map(|(id, _)| BindNode { id: *id, kind: Bind::SynthName })
+    .collect();
+  g.expr(ExprKind::LetRec { slots, body: Box::new(body) }, origin)
+}
+
+/// Rewrite every `LetVal { name, val, cont }` whose `name.id` is in `slot_ids`
+/// into `App(Set, [Ref(name.id), val, Cont(args = [], body = cont_body)])`,
+/// turning the implicit "introduce name" into an explicit slot fill.
+fn rewrite_lets_to_sets(
+  g: &mut Gen,
+  expr: Expr,
+  slot_ids: &std::collections::HashSet<CpsId>,
+) -> Expr {
+  let Expr { id, kind } = expr;
+  let new_kind = match kind {
+    ExprKind::LetVal { name, val, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      if slot_ids.contains(&name.id) {
+        let name_origin = g.origin.try_get(name.id).and_then(|o| *o);
+        let set_cont = match cont {
+          Cont::Expr { args: _, body } => Cont::Expr { args: vec![], body },
+          Cont::Ref(cont_id) => {
+            // LetVal cont is a direct ref — forward the bound name to it.
+            let cont_val = g.val(ValKind::ContRef(cont_id), name_origin);
+            let fwd_ref = g.val(ValKind::Ref(Ref::Synth(name.id)), name_origin);
+            let forward = g.expr(ExprKind::App {
+              func: Callable::Val(cont_val),
+              args: vec![Arg::Val(fwd_ref)],
+            }, name_origin);
+            Cont::Expr { args: vec![], body: Box::new(forward) }
+          }
+        };
+        return Expr {
+          id,
+          kind: ExprKind::Set { name, val: *val, cont: set_cont },
+        };
+      }
+      ExprKind::LetVal { name, val, cont }
+    }
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      // Fn bodies are independent scopes — don't recurse. Only the cont
+      // continues the module-level chain.
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::LetFn { name, params, fn_kind, fn_body, cont }
+    }
+    ExprKind::App { func, args } => {
+      let args = args.into_iter().map(|a| match a {
+        Arg::Cont(c) => Arg::Cont(rewrite_lets_to_sets_cont(g, c, slot_ids)),
+        other => other,
+      }).collect();
+      ExprKind::App { func, args }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let then = rewrite_lets_to_sets(g, *then, slot_ids);
+      let else_ = rewrite_lets_to_sets(g, *else_, slot_ids);
+      ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) }
+    }
+    ExprKind::LetRec { slots, body } => {
+      let body = rewrite_lets_to_sets(g, *body, slot_ids);
+      ExprKind::LetRec { slots, body: Box::new(body) }
+    }
+    ExprKind::Set { name, val, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::Set { name, val, cont }
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::Closure { funcref, captures, cont }
+    }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let cont = rewrite_lets_to_sets_cont(g, cont, slot_ids);
+      ExprKind::LetCaps { caps, binds, cont }
+    }
+  };
+  Expr { id, kind: new_kind }
+}
+
+fn rewrite_lets_to_sets_cont(
+  g: &mut Gen,
+  cont: Cont,
+  slot_ids: &std::collections::HashSet<CpsId>,
+) -> Cont {
+  match cont {
+    Cont::Ref(_) => cont,
+    Cont::Expr { args, body } => {
+      let body = rewrite_lets_to_sets(g, *body, slot_ids);
+      Cont::Expr { args, body: Box::new(body) }
     }
   }
 }
@@ -3228,6 +3405,22 @@ fn extract_bind_ast_id(g: &Gen, id: AstId) -> AstId {
   }
 }
 
+/// If `id` is the synthetic `pub` wrapper `Apply(Ident "pub", [inner])`
+/// emitted by ast_desugar, return the inner AstId. Otherwise return `id`
+/// unchanged. Modifier wrappers like `pub` are transparent to CPS
+/// lowering — the inner subtree is the actual bind LHS. The export
+/// intent is recovered separately by `collect_module_exports`, which
+/// looks for the same wrapper shape in the AST.
+fn unwrap_modifier_lhs(ast: &Ast<'_>, id: AstId) -> AstId {
+  if let NodeKind::Apply { func, args } = &ast.nodes.get(id).kind
+    && args.items.len() == 1
+    && matches!(&ast.nodes.get(*func).kind, NodeKind::Ident("pub"))
+  {
+    return args.items[0];
+  }
+  id
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -3253,6 +3446,7 @@ mod module_tests {
   }
 
   test_macros::include_fink_tests!("src/passes/cps/test_module.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_letrec.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_functions.fnk");

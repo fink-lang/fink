@@ -148,6 +148,8 @@ pub enum Bind {
   Synth,           // compiler-generated temp: rendered as ·v_{cps_id}
   Cont(ContKind),  // continuation parameter with semantic role
   Ctx,             // universe-context parameter: rendered as ·ƒctx_{cps_id}
+  Caps,            // closure caps record parameter: rendered as ·ƒcaps_{cps_id}
+  Slot,            // captured LetRec slot — local that holds a Cell ref
 }
 
 /// Semantic role of a continuation parameter.
@@ -541,6 +543,74 @@ pub enum ExprKind {
     else_: Box<Expr>,
   },
 
+  /// A group of bindings that may reference each other.
+  ///
+  /// Emitted by CPS-0 (post-migration) for every fn-like binding and any SCC
+  /// of sibling bindings (LetVal + LetFn). In the degenerate non-recursive
+  /// case the group has a single defn and `no_self_edge: true`; the formatter
+  /// Recursive scope. Declares a set of named slots that are all in
+  /// scope across `body`, then runs `body` to fill them.
+  ///
+  /// Conceptually `LetRec { slots: [foo, bar], body }` behaves like a
+  /// synthetic scope-fn `fn foo, bar: <body>` where the body is a
+  /// sequence of `Set name, val` calls (filling slots) interleaved
+  /// with any other source-ordered side effects (Pub, IO, ...).
+  ///
+  /// Refs to a slot name resolve to a slot read from the start of the
+  /// scope onward. Reading an empty slot traps at runtime (the slot
+  /// has not been filled yet).
+  ///
+  /// Every scope-introducing block (module, fn body, match arm body,
+  /// group) lowers to one LetRec — there is no per-group SCC analysis
+  /// or partition into recursive vs. non-recursive bindings. Forward
+  /// references and self-recursion fall out of the slot semantics.
+  LetRec {
+    slots: Vec<BindNode>,
+    body: Box<Expr>,
+  },
+
+  /// Fill a `LetRec` slot. Compile-time binding operation — NOT a runtime
+  /// function call. The slot named by `name` (declared in an enclosing
+  /// `LetRec`) is set to `val`; `cont` runs after the store. Codegen
+  /// emits a store to the slot's storage cell (WasmGC nullable ref).
+  ///
+  /// Refs to `name` from this point on resolve to the filled slot;
+  /// reads before any Set traps at runtime.
+  Set {
+    name: BindNode,
+    val: Val,
+    cont: Cont,
+  },
+
+  /// Closure construction. Compile-time IR node — NOT a runtime call.
+  /// Builds a closure from a lifted-fn `funcref` and a record of captured
+  /// values. The closure result is bound by `cont`'s first arg.
+  ///
+  /// `captures` is an IR-level annotation: each entry is the name as it
+  /// appears inside the lifted fn body paired with the `Ref` at the
+  /// construction site (typically a slot ref or a local). Codegen emits
+  /// a WasmGC struct allocation; the rendered form is
+  /// `·closure <funcref>, {<name>: <ref>, ...}, fn <result>: <cont>`.
+  Closure {
+    funcref: Val,
+    captures: Vec<(BindNode, Val)>,
+    cont: Cont,
+  },
+
+  /// Caps destructure at the start of a lifted fn body. Compile-time IR
+  /// node — NOT a runtime call. Reads each named field from the `caps`
+  /// record (a WasmGC struct at codegen time) and binds it locally for
+  /// the cont. `binds` are fresh CpsIds owned by this LetCaps; refs to
+  /// captured names inside the lifted body resolve to these locals, not
+  /// to the outer CpsIds they originated from.
+  ///
+  /// Rendered form: `·letcaps <caps>, fn {name_1, name_2, ...}: <body>`.
+  LetCaps {
+    caps: Val,
+    binds: Vec<BindNode>,
+    cont: Cont,
+  },
+
   // ---------------------------------------------------------------------------
   // Pattern matching — all patterns lower to PatternMatch (LetFn + App).
   // Type guards (IsSeqLike, IsRecLike) wrap matcher entries; collection primitives
@@ -596,6 +666,28 @@ fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Opti
     ExprKind::If { then, else_, .. } => {
       collect_bk_expr(then, bk);
       collect_bk_expr(else_, bk);
+    }
+    ExprKind::LetRec { slots, body } => {
+      for slot in slots {
+        collect_bk_bind(slot, bk);
+      }
+      collect_bk_expr(body, bk);
+    }
+    ExprKind::Set { name, cont, .. } => {
+      collect_bk_bind(name, bk);
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::Closure { captures, cont, .. } => {
+      for (name, _) in captures {
+        collect_bk_bind(name, bk);
+      }
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::LetCaps { binds, cont, .. } => {
+      for b in binds {
+        collect_bk_bind(b, bk);
+      }
+      collect_bk_cont(cont, bk);
     }
   }
 }

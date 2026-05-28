@@ -31,13 +31,7 @@ fn main() {
     }
     None
   });
-  let lifted = args.iter().find_map(|a| {
-    if a == "--lifted" {
-      Some(None)
-    } else {
-      a.strip_prefix("--lifted=").map(|v| Some(v.to_string()))
-    }
-  });
+  let lifted = args.iter().any(|a| a == "--lifted");
   let target = args.iter().find_map(|a| a.strip_prefix("--target=").map(|v| v.to_string()));
   let output = args.iter().zip(args.iter().skip(1)).find_map(|(a, v)| {
     if a == "-o" { Some(v.to_string()) } else { None }
@@ -68,7 +62,7 @@ fn main() {
       eprintln!("       fink <file> [args..]    (implicit `run`)");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
-      eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
+      eprintln!("  cps [--lifted]               CPS transform (optionally closure-converted + hoisted)");
       eprintln!("  marks                        debugger step-stops (per-CpsId markers + source map)");
       eprintln!("  ast/fmt/fmt2/cps [--source-map]  append embedded source map comment");
       eprintln!("  wat                          emit WAT text from IR fragment to stdout");
@@ -146,7 +140,7 @@ fn main() {
       let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
       let cps = fink::passes::lower(&desugared);
 
-      let result = if lifted.is_some() {
+      let result = if lifted {
         fink::passes::lift(cps, &desugared).result
       } else {
         cps.result
@@ -160,13 +154,7 @@ fn main() {
         param_info: Some(&result.param_info),
         bind_kinds: Some(&bk),
       };
-      let lifted_flat = lifted.as_ref().is_some_and(|v| v.is_none());
-      if lifted_flat && source_map {
-        let (output, srcmap) = fink::passes::lifting::fmt::fmt_flat_mapped_native(&result.root, &ctx);
-        println!("{output}\n# sm:{}", srcmap.encode_base64url());
-      } else if lifted_flat {
-        println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
-      } else if source_map {
+      if source_map {
         let (output, srcmap) = fink::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
         println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {

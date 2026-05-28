@@ -337,6 +337,10 @@ pub enum InstrKind {
   RefFunc { func: FuncSym, into: LocalIdx },
   /// struct.new — all fields are leaves.
   StructNew { ty: TypeSym, fields: Vec<Operand>, into: LocalIdx },
+  /// struct.get — read field at index from a struct ref.
+  StructGet { ty: TypeSym, field: u32, src: Operand, into: LocalIdx },
+  /// struct.set — write a leaf operand into a struct's mutable field.
+  StructSet { ty: TypeSym, field: u32, src: Operand, val: Operand },
   /// array.new_fixed — all elements are leaves. `size` must equal
   /// `elems.len()` (matches the WASM instruction's N).
   ArrayNewFixed { ty: TypeSym, size: u32, elems: Vec<Operand>, into: LocalIdx },
@@ -724,6 +728,26 @@ pub fn push_struct_new(
   push(frag, InstrKind::StructNew { ty, fields, into })
 }
 
+pub fn push_struct_get(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  field: u32,
+  src: Operand,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::StructGet { ty, field, src, into })
+}
+
+pub fn push_struct_set(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  field: u32,
+  src: Operand,
+  val: Operand,
+) -> InstrId {
+  push(frag, InstrKind::StructSet { ty, field, src, val })
+}
+
 pub fn push_array_new_fixed(
   frag: &mut Fragment,
   ty: TypeSym,
@@ -782,6 +806,15 @@ pub fn push_ref_cast_non_null(
   into: LocalIdx,
 ) -> InstrId {
   push(frag, InstrKind::RefCastNonNull { ty, src, into })
+}
+
+pub fn push_ref_cast_nullable(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  src: Operand,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::RefCastNullable { ty, src, into })
 }
 
 pub fn push_ref_cast_non_null_abs(

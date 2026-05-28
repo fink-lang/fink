@@ -1,0 +1,128 @@
+{test, expect, equals, partial} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+Implicit `pub` injection on top-level simple bindings.
+
+A bare `name = expr` at the module's top level is rewritten so the LHS
+becomes `Apply(Ident 'pub', Ident name)` — the explicit form the user
+could have written. Downstream passes see one uniform shape and the
+auto-export logic disappears from CPS.
+
+Rewrites only fire for top-level `Bind` nodes whose LHS is a plain
+`Ident`. Pattern destructures, imports, nested-scope bindings, and
+bindings that already start with `pub` are left alone.
+---
+
+
+test 'top-level simple binding gets implicit pub', fn:
+  expect partial ƒink:
+    foo = 1
+  | equals ƒink:
+    Bind '=',
+      Apply
+        Ident 'pub'
+        Ident 'foo'
+      LitInt '1'
+
+
+test 'top-level fn binding gets implicit pub', fn:
+  expect partial ƒink:
+    inc = fn x: x + 1
+  | equals ƒink:
+    Bind '=',
+      Apply
+        Ident 'pub'
+        Ident 'inc'
+      Fn ':',
+        Patterns
+          Ident 'x'
+        InfixOp '+',
+          Ident 'x'
+          LitInt '1'
+
+
+---
+Two top-level bindings — both get pub.
+---
+
+test 'two top-level bindings', fn:
+  expect partial ƒink:
+    foo = 1
+    bar = 2
+  | equals ƒink:
+    Module
+      Bind '=',
+        Apply
+          Ident 'pub'
+          Ident 'foo'
+        LitInt '1'
+      Bind '=',
+        Apply
+          Ident 'pub'
+          Ident 'bar'
+        LitInt '2'
+
+
+---
+Pattern-destructure bindings at module scope are NOT exported,
+so no implicit pub is injected.
+---
+
+test 'top-level seq destructure stays plain', fn:
+  expect partial ƒink:
+    [a, b] = [1, 2]
+  | equals ":
+    No Change
+
+
+test 'top-level rec destructure stays plain', fn:
+  expect partial ƒink:
+    {x, y} = point
+  | equals ":
+    No Change
+
+
+---
+Imports at module scope are not exports — left alone.
+---
+
+test 'top-level import binding stays plain', fn:
+  expect partial ƒink:
+    {foo} = import './bar.fnk'
+  | equals ":
+    No Change
+
+
+---
+Explicit `pub` written by the user is preserved as-is (no double-wrap).
+---
+
+test 'explicit pub stays single', fn:
+  expect partial ƒink:
+    pub foo = 1
+  | equals ":
+    No Change
+
+
+---
+Nested-scope bindings are local — never get implicit pub.
+---
+
+test 'fn-body bindings are not exported', fn:
+  expect partial ƒink:
+    foo = fn:
+      x = 1
+      x
+  | equals ƒink:
+    Bind '=',
+      Apply
+        Ident 'pub'
+        Ident 'foo'
+      Fn ':',
+        Patterns
+        Bind '=',
+          Ident 'x'
+          LitInt '1'
+        Ident 'x'

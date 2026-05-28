@@ -383,6 +383,17 @@ fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, ind
       for field in fields { write!(out, " {}", fmt_operand(frag, f, field)).unwrap(); }
       out.push_str("))\n");
     }
+    InstrKind::StructGet { ty, field, src, into } => {
+      writeln!(out, "{}(local.set {} (struct.get {} {} {}))",
+        pad, local_name(f, *into), type_name(frag, *ty), field,
+        fmt_operand(frag, f, src)).unwrap();
+    }
+    InstrKind::StructSet { ty, field, src, val } => {
+      writeln!(out, "{}(struct.set {} {} {} {})",
+        pad, type_name(frag, *ty), field,
+        fmt_operand(frag, f, src),
+        fmt_operand(frag, f, val)).unwrap();
+    }
     InstrKind::ArrayNewFixed { ty, size, elems, into } => {
       write!(out, "{}(local.set {} (array.new_fixed {} {}",
         pad, local_name(f, *into), type_name(frag, *ty), size).unwrap();

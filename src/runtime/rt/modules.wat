@@ -171,6 +171,7 @@
   ;; done arg. When import_module finishes, it fires wrap_cont, which
   ;; reads the now-populated rec and tail-applies user cont.
   (func $import (@pub) (@impl "std/modules.fnk:import")
+    (param $ctx     (ref null any))
     (param $url     (ref null any))
     (param $mod_ref (ref null any))
     (param $cont    (ref null any))
@@ -194,7 +195,7 @@
         (if (i32.eqz (ref.is_null (local.get $existing)))
           (then
             (return_call $list_apply_1
-      (ref.null any)
+              (local.get $ctx)
               (local.get $existing)
               (local.get $cont))))))
 
@@ -218,14 +219,14 @@
         (ref.func $_import_wrap_step)
         (local.get $caps)))
 
-    ;; Fn3 calling convention: ctx is a native wasm param. Module
-    ;; bodies are pure (no observable side effects depending on ctx),
-    ;; so we seed with empty_ctx here. Args list carries only the
-    ;; wrap_clos cont. Module body shape:
-    ;; `fn :caps_param, :ctx_param, :params` with cont = args_head(:params).
+    ;; Fn3 calling convention: ctx is a native wasm param. The
+    ;; imported module body runs under the importer's ctx so its
+    ;; `get_ctx`/`set_ctx` see and mutate the same universe context.
+    ;; The module body tail-calls wrap_clos with the (possibly
+    ;; mutated) ctx; wrap_clos forwards it to user_cont.
     (return_call $apply_3
       (call $list_prepend (local.get $wrap_clos) (call $list_empty))
-      (call $empty_ctx)
+      (local.get $ctx)
       (local.get $mod_ref)))
 
 
@@ -382,7 +383,7 @@
 
   (func $_import_wrap_step (type $Fn3)
     (param $caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $_args (ref null any))
 
     (local $cap_arr (ref $Captures))
@@ -399,8 +400,12 @@
         (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $url))))
 
+    ;; ctx flows from the imported module body's tail-call (which
+    ;; passes its possibly-mutated ctx forward). Thread it onward so
+    ;; the importer's continuation sees ctx mutations the imported
+    ;; module made.
     (return_call $list_apply_1
-      (ref.null any)
+      (local.get $ctx)
       (local.get $rec)
       (local.get $user_cont)))
 

@@ -193,6 +193,20 @@ impl<'src> Ctx<'src> {
     id
   }
 
+  /// Check whether a binding with the given AstId origin has already been
+  /// registered (via pre_register_bind or push_bind). Used by walk_stmts'
+  /// up-front mutual-rec pre-register to avoid double-registering when
+  /// walk_node later visits the Bind node.
+  fn bind_pre_registered(&self, ast_id: AstId) -> bool {
+    for i in 0..self.binds.len() {
+      let bid = BindId(i as u32);
+      if self.binds.get(bid).origin == BindOrigin::Ast(ast_id) {
+        return true;
+      }
+    }
+    false
+  }
+
   /// Emit a bind event for a pre-registered binding (found by AstId).
   /// Returns true if the binding was found (pre-registered), false otherwise.
   fn emit_bind_event(&mut self, scope: ScopeId, ast_id: AstId) -> bool {
@@ -373,6 +387,8 @@ fn pre_register_binds<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ct
 /// Find the binding Ident id from a simple bind LHS.
 /// For `Ident` → returns the id itself.
 /// For `InfixOp { lhs, .. }` (guard pattern like `a > 0`) → recurses into lhs.
+/// For `Apply { func: Ident "pub", args: [inner] }` (modifier wrapper like
+///   `pub foo = ...`) → recurses into the inner arg.
 /// For complex patterns (LitSeq, LitRec, etc.) → returns None (handled separately).
 fn binding_ident<'src>(ast: &Ast<'src>, id: AstId) -> Option<AstId> {
   match &ast.nodes.get(id).kind {
@@ -380,6 +396,12 @@ fn binding_ident<'src>(ast: &Ast<'src>, id: AstId) -> Option<AstId> {
     NodeKind::InfixOp { lhs, .. } => {
       let lhs = *lhs;
       binding_ident(ast, lhs)
+    }
+    NodeKind::Apply { func, args } if args.items.len() == 1
+      && matches!(ast.nodes.get(*func).kind, NodeKind::Ident("pub")) =>
+    {
+      let inner = args.items[0];
+      binding_ident(ast, inner)
     }
     _ => None,
   }
@@ -483,6 +505,15 @@ fn walk_pattern_refs<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut
       walk_node(ast, rhs, scope, ctx);
     }
     NodeKind::Apply { func, args, .. } => {
+      // Synthetic modifier wrapper from ast_desugar: `pub foo` is
+      // `Apply(Ident "pub", [Ident foo])` — the head is a marker, not a
+      // ref. Skip it; recurse only into the inner pattern.
+      if matches!(ast.nodes.get(func).kind, NodeKind::Ident("pub"))
+        && args.items.len() == 1
+      {
+        walk_pattern_refs(ast, args.items[0], scope, ctx);
+        return;
+      }
       // Predicate guard: `is_even y` — func is a reference.
       walk_node(ast, func, scope, ctx);
       // args contain bindings — recurse for nested guards.
@@ -527,6 +558,31 @@ fn walk_pattern_refs<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut
 // ---------------------------------------------------------------------------
 
 fn walk_stmts<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ctx: &mut Ctx<'src>) {
+  // Pre-register simple-Ident bindings in non-module scopes so sibling fns
+  // can forward-reference each other (mutual recursion at non-module scope).
+  // Today fn-body bindings are otherwise sequential — the per-binding
+  // pre-register in walk_node's Bind arm only covers self-reference, not
+  // sibling references. Pre-registering up-front extends the same mutual-rec
+  // semantics modules have to nested scopes.
+  //
+  // Restrictions:
+  //   - non-module scopes only (module bindings are pre-registered in phase 1)
+  //   - simple Ident LHS only (matches what self-ref pre-register does today)
+  //   - bindings to fn-literal RHS only (avoid surprising people with eager
+  //     pre-registration of `x = some_complex_expr; x = x + 1`-style code,
+  //     and avoid breaking ordering semantics for value bindings)
+  if ctx.scopes.get(scope).kind != ScopeKind::Module {
+    for &stmt_id in stmts {
+      if let NodeKind::Bind { lhs, rhs, .. } = &ast.nodes.get(stmt_id).kind {
+        let (lhs, rhs) = (*lhs, *rhs);
+        let is_fn_rhs = matches!(&ast.nodes.get(rhs).kind, NodeKind::Fn { .. });
+        let is_ident_lhs = matches!(&ast.nodes.get(lhs).kind, NodeKind::Ident(_));
+        if is_fn_rhs && is_ident_lhs {
+          pre_register_pattern_binds(ast, lhs, scope, ctx);
+        }
+      }
+    }
+  }
   for &stmt_id in stmts {
     walk_node(ast, stmt_id, scope, ctx);
   }
@@ -541,11 +597,18 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
   match kind {
     NodeKind::Bind { lhs, rhs, .. } => {
       // Track which binding we're defining (for self_ref detection).
+      // `current_bind_ast_id` must point at the canonical inner Ident
+      // (the bind's origin AstId) so wrappers (`pub`, guards, future
+      // modifiers) don't hide it from the self-ref comparator.
       let prev_bind = ctx.current_bind_ast_id;
-      let is_ident_lhs = matches!(&ast.nodes.get(lhs).kind, NodeKind::Ident(_));
-      if is_ident_lhs {
-        ctx.current_bind_ast_id = Some(lhs);
+      if let Some(ident_id) = binding_ident(ast, lhs) {
+        ctx.current_bind_ast_id = Some(ident_id);
       }
+      // `is_ident_lhs` here is a syntactic check (used to decide whether
+      // to pre-register for non-module mutual rec). Guards and `pub`-wrapped
+      // LHS keep the existing behaviour: not pre-registered, registered
+      // sequentially after RHS.
+      let is_ident_lhs = matches!(&ast.nodes.get(lhs).kind, NodeKind::Ident(_));
       // Pre-register simple Ident LHS bindings in non-module scopes so the
       // RHS can self-reference (e.g. `inner = fn n: ...inner...`). Module
       // scope already pre-registers in phase 1.
@@ -553,6 +616,10 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
         || ctx.scopes.get(scope).kind == ScopeKind::Module
       {
         false
+      } else if ctx.bind_pre_registered(lhs) {
+        // walk_stmts already pre-registered this Ident-LHS / fn-RHS binding
+        // for mutual recursion across siblings. Don't duplicate.
+        true
       } else {
         pre_register_pattern_binds(ast, lhs, scope, ctx);
         true

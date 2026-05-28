@@ -10,8 +10,8 @@ test 'infix add', fn:
     a + b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_plus ·∅a, ·∅b, ·ƒret_0
-    # sm:DQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUAQABDAAEAQgBDAAEAQcF
+      ·op_plus ·ƒctx_6, ·∅a, ·∅b, ·ƒret_0
+    # sm:DwABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUABIABAEAAQwABAEIAQwABAEHBQ
 
 
 test 'infix literal', fn:
@@ -19,8 +19,8 @@ test 'infix literal', fn:
     a + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_plus ·∅a, (i8 1), ·ƒret_0
-    # sm:DwABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUAQABDAAGAQgBAAEAAQYBAAEEAAQBBwU
+      ·op_plus ·ƒctx_6, ·∅a, (i8 1), ·ƒret_0
+    # sm:EQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUABIABAEAAQwABgEIAQABAAEGAQABBAAEAQcF
 
 
 
@@ -33,8 +33,8 @@ test 'unary not', fn:
     not x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
-      ·op_not ·∅x, ·ƒret_0
-    # sm:CwABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUSAQgBDAAEAQcF
+      ·op_not ·ƒctx_5, ·∅x, ·ƒret_0
+    # sm:DQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUSABIABAEIAQwABAEHBQ
 
 
 test 'unary minus', fn:
@@ -42,8 +42,8 @@ test 'unary minus', fn:
     -x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
-      ·op_minus ·∅x, ·ƒret_0
-    # sm:CwABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIWAQIBDAAEAQEC
+      ·op_minus ·ƒctx_5, ·∅x, ·ƒret_0
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIWABIABAECAQwABAEBAg
 
 ---
 chained comparisons
@@ -54,18 +54,18 @@ test 'chained cmp', fn:
     a < b < c
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_15, ·ƒret_0:
-      ·op_lt ·∅a, ·∅b, fn ·v_4:
-        ·op_lt ·∅b, ·∅c, fn ·v_6:
-          ·op_and ·v_4, ·v_6, ·ƒret_0
-    # sm:HwABAAkAAQAJJAEACRgBAAkSAAIABgEACQABAAkQAQABDAAEAQgBDAAKAQcJCgACAAoBAAkAAQAJEAEIAQwABAEIAQwACgEPCQoAAgAOAQAJAAEACRIBAAkKAAQBAAkKAAQBAAk
+      ·op_lt ·ƒctx_15, ·∅a, ·∅b, fn ·ƒctx_18, ·ƒv_4:
+        ·op_lt ·ƒctx_18, ·∅b, ·∅c, fn ·ƒctx_20, ·ƒv_6:
+          ·op_and ·ƒctx_20, ·ƒv_4, ·ƒv_6, ·ƒret_0
+    # sm:JwABAAkAAQAJJAEACRgBAAkSAAIABgEACQABAAkQABQABAEAAQwABAEIAQwACgAYAQcJDgACAAoBAAkAAQAJEAAUAAQBCAEMAAQBCAEMAAoAGAEPCQ4AAgAOAQAJAAEACRIAFAAEAQAJDgAEAQAJDgAEAQAJ
 
 test 'infix pow', fn:
   expect cps_module ƒink:
     a ** b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_pow ·∅a, ·∅b, ·ƒret_0
-    # sm:DQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYSAQABDAAEAQoBDAAEAQkG
+      ·op_pow ·ƒctx_6, ·∅a, ·∅b, ·ƒret_0
+    # sm:DwABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYSABIABAEAAQwABAEKAQwABAEJBg
 
 
 test 'infix divmod', fn:
@@ -73,8 +73,8 @@ test 'infix divmod', fn:
     a /% b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_divmod ·∅a, ·∅b, ·ƒret_0
-    # sm:DQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYYAQABDAAEAQoBDAAEAQkG
+      ·op_divmod ·ƒctx_6, ·∅a, ·∅b, ·ƒret_0
+    # sm:DwABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYYABIABAEAAQwABAEKAQwABAEJBg
 
 
 test 'infix rotl', fn:
@@ -82,8 +82,8 @@ test 'infix rotl', fn:
     a <<< b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_rotl ·∅a, ·∅b, ·ƒret_0
-    # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUAQABDAAEAQwBDAAEAQsH
+      ·op_rotl ·ƒctx_6, ·∅a, ·∅b, ·ƒret_0
+    # sm:DwABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABAEAAQwABAEMAQwABAELBw
 
 
 test 'infix rotr', fn:
@@ -91,6 +91,6 @@ test 'infix rotr', fn:
     a >>> b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_rotr ·∅a, ·∅b, ·ƒret_0
-    # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUAQABDAAEAQwBDAAEAQsH
+      ·op_rotr ·ƒctx_6, ·∅a, ·∅b, ·ƒret_0
+    # sm:DwABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABAEAAQwABAEMAQwABAELBw
 

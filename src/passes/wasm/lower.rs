@@ -35,8 +35,8 @@ use std::collections::HashMap;
 
 use crate::passes::ast::Ast;
 use crate::passes::cps::ir::{
-  Arg, BindNode, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
-  Lit, Param, ParamInfo, Ref, Val, ValKind, BuiltIn,
+  Arg, Bind, BindNode, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
+  Lit, Param, Ref, Val, ValKind, BuiltIn,
 };
 use crate::sourcemap::native::ByteRange;
 
@@ -75,6 +75,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   usage.mark(runtime_contract::Sym::ModulesInitModule);
   usage.mark(runtime_contract::Sym::Closure);
   usage.mark(runtime_contract::Sym::Captures);
+  usage.mark(runtime_contract::Sym::Cell);
   usage.mark(runtime_contract::Sym::StrFromData);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
@@ -84,11 +85,14 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     panic!("lower: unsupported CPS root shape (expected App(FinkModule, [Cont::Expr]))");
   };
 
-  // Scan for ·ƒpub apps and pre-allocate one exported (mut anyref)
-  // global per exported binding. The Pub arm in lower_expr looks these
-  // up by CpsId to emit global.set at the export site.
+  // Scan for ·ƒpub apps and pre-allocate one exported global per
+  // exported binding. Pub apps may occur inside hoisted LetFn bodies
+  // (lifted conts that pub a captured slot — the slot's actual cell
+  // lives at module scope but the pub'd CpsId is the lifted body's
+  // local-rebind). Scanning from `cps.root` covers both module body
+  // and every hoisted fn body uniformly.
   let mut pubs: Vec<(CpsId, String)> = Vec::new();
-  find_pub_apps(module_body, cps, ast, &mut pubs);
+  find_pub_apps(&cps.root, cps, ast, &mut pubs);
   let mut pub_globals: HashMap<CpsId, (GlobalSym, String)> = HashMap::new();
   for (id, name) in &pubs {
     let qualified = format!("{fqn_prefix}{name}");
@@ -98,11 +102,14 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     // wrapper export, which routes via `init_module` + the
     // registry. The bare globals stay because lifted closures read
     // them at module-init time (forward-reference machinery).
+    // Slot storage: `(mut (ref null $Cell))`. The Cell is allocated
+    // per-slot at LetRec lowering time and stored here; Set updates
+    // the Cell's `$value` field rather than overwriting the global.
     let sym = add_global(
       &mut frag,
-      val_anyref(true),
+      val_ref(rt.cell(), /*nullable*/ true),
       true,
-      GlobalInit::RefNull(AbsHeap::Any),
+      GlobalInit::RefNullConcrete(rt.cell()),
       &qualified,
       None,
     );
@@ -115,19 +122,91 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // level, making `<fqn>::fink_module` collision-safe.
   let module_display = format!("{fqn_prefix}:fink_module");
   let bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
+  let mut slot_ids: std::collections::HashSet<CpsId> = std::collections::HashSet::new();
+  collect_slot_ids(&cps.root, &mut slot_ids);
+  // Per-slot wasm global. Pub'd slots reuse their `pub_globals`
+  // GlobalSym; non-pub'd slots get a fresh synth-named global so the
+  // Cell ref has somewhere to live. The Cell-ref globals are not
+  // exported and not registered with the runtime — they're just
+  // storage for the slot's mutable reference.
+  let mut slot_globals: HashMap<CpsId, GlobalSym> = HashMap::new();
+  // Iterate slot ids in deterministic order so the emitted globals
+  // appear in the same order across runs (HashSet iteration is
+  // unordered).
+  let mut sorted_slot_ids: Vec<CpsId> = slot_ids.iter().copied().collect();
+  sorted_slot_ids.sort_by_key(|id| id.0);
+  for id in &sorted_slot_ids {
+    if let Some((g, _)) = pub_globals.get(id) {
+      slot_globals.insert(*id, *g);
+      continue;
+    }
+    // Non-pub slot: allocate a private global, named after the slot's
+    // source name (or `:v_<id>` for compiler temps) qualified with the
+    // module's FQN. No WASM export.
+    let raw = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
+    let _ = raw;  // dummy to silence unused warning; not used here
+    let source = pub_export_name(cps, ast, *id);
+    let qualified = format!("{fqn_prefix}:{source}_{}", id.0);
+    let sym = add_global(
+      &mut frag,
+      val_ref(rt.cell(), /*nullable*/ true),
+      true,
+      GlobalInit::RefNullConcrete(rt.cell()),
+      &qualified,
+      None,
+    );
+    slot_globals.insert(*id, sym);
+  }
   {
     let mut lcx = LowerCtx {
       cps, ast, rt: &rt, frag: &mut frag,
       pub_globals: &pub_globals, fqn_prefix,
       bind_kinds: &bind_kinds,
+      slot_ids: &slot_ids,
+      slot_globals: &slot_globals,
     };
+
+    // After hoist, top-level LetFns wrap the FinkModule App. Lower
+    // each one as a wasm func and collect their FuncSyms so the
+    // module body's Closure construction sites can resolve them by
+    // CpsId. We walk the chain pre-order: outer LetFn first.
+    let mut top_fn_syms: HashMap<CpsId, FuncSym> = HashMap::new();
+    let mut node = &lcx.cps.root;
+    while let ExprKind::LetFn { name, params, fn_body, cont, .. } = &node.kind {
+      let mut cap_ids: Vec<CpsId> = Vec::new();
+      let mut user_ids: Vec<(CpsId, bool)> = Vec::new();
+      for p in params {
+        let (bind, is_spread) = match p {
+          Param::Name(b)   => (b, false),
+          Param::Spread(b) => (b, true),
+        };
+        if matches!(bind.kind, Bind::Caps) {
+          cap_ids.push(bind.id);
+        } else {
+          user_ids.push((bind.id, is_spread));
+        }
+      }
+      let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
+      let display = format!("{}{}", lcx.fqn_prefix, raw_display);
+      let fn_sym = lower_fn(
+        &mut lcx,
+        &cap_ids, &user_ids, fn_body, &display,
+        &top_fn_syms,
+      );
+      top_fn_syms.insert(name.id, fn_sym);
+      node = match cont {
+        Cont::Expr { body, .. } => body,
+        Cont::Ref(_) => panic!("lower: top-level LetFn has Cont::Ref"),
+      };
+    }
+
     let fink_module = lower_fn(
       &mut lcx,
       &[],                 // no cap params at the module level
       &[(ctx_bind, false), (ret_bind, false)], // user params: ƒctx, ƒret
       module_body,
       &module_display,
-      &HashMap::new(),    // module body: no enclosing fn_syms
+      &top_fn_syms,
     );
     let FuncSym::Local(_) = fink_module else { panic!("lower: fink_module must be Local"); };
     // No WASM-level export for fink_module — host accesses the module
@@ -269,6 +348,17 @@ struct LowerCtx<'a> {
   /// Bind-kind lookup. Populated once per `to_fragment`. Used to give
   /// special bind kinds (e.g. `Bind::Ctx`) descriptive local names.
   bind_kinds: &'a crate::propgraph::PropGraph<CpsId, Option<crate::passes::cps::ir::Bind>>,
+  /// LetRec slot CpsIds. Reads of a slot id auto-unwrap via
+  /// `struct.get $Cell.value`; Set stores via `struct.set`. Captures
+  /// that close over a slot pass the `(ref $Cell)` itself, so the
+  /// captured local stays in `slot_ids` (via convert's Bind::Slot
+  /// marker) and the same access path applies inside the lifted
+  /// body.
+  slot_ids: &'a std::collections::HashSet<CpsId>,
+  /// Per-slot wasm global storage. Every module-level LetRec slot
+  /// gets one — pub'd slots share their GlobalSym with `pub_globals`;
+  /// non-pub'd slots get a synth-named global allocated here.
+  slot_globals: &'a HashMap<CpsId, GlobalSym>,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -310,30 +400,12 @@ fn lower_fn(
   let l_args_p = ctx.alloc_param(":params");
   ctx.ctx_local = Some(l_ctx_p);
 
-  // Unpack captures from $:caps_param into locals. Emits once:
-  //   local.set $:caps_cast (ref.cast (ref $Captures) $:caps_param)
-  // then per-capture:
-  //   local.set $<cap_name> (array.get $Captures $:caps_cast <i>)
-  if !cap_params.is_empty() {
-    let caps_cast = ctx.alloc_local_typed(
-      ":caps_cast",
-      val_ref(lcx.rt.captures(), /*nullable*/ false),
-    );
-    let i_cast = push_ref_cast_non_null(
-      lcx.frag, lcx.rt.captures(), op_local(l_caps_p), caps_cast,
-    );
-    ctx.instrs.push(i_cast);
-    for (i, cap_id) in cap_params.iter().enumerate() {
-      let name = cps_ident(lcx.cps, lcx.ast, *cap_id);
-      let local = ctx.alloc_local(&name);
-      ctx.bind(*cap_id, local);
-      let i_get = push_array_get(
-        lcx.frag, lcx.rt.captures(),
-        op_local(caps_cast), lit_i32(i as i32),
-        local,
-      );
-      ctx.instrs.push(i_get);
-    }
+  // Bind the `Bind::Caps` param's CpsId to the native `:caps_param`
+  // wasm slot. The lifted body's own `LetCaps` arm destructures the
+  // record into local CpsIds — this prologue does NOT pre-unpack
+  // captures.
+  for &cap_id in cap_params {
+    ctx.bind(cap_id, l_caps_p);
   }
 
   // Bind any Bind::Ctx user_param directly to the native $:ctx_param
@@ -473,6 +545,26 @@ impl FnCtx {
   }
 }
 
+/// Read a slot's `(ref $Cell)` storage. For module slots: `global.get`
+/// the slot's pub global. For captured slots (Bind::Slot in scope):
+/// `local.get` the captured Cell ref. Panics for other shapes — they
+/// aren't supported yet.
+fn slot_cell_ref(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  slot_id: CpsId,
+) -> Operand {
+  // Captured slot inside a lifted fn: bound to a local that holds the
+  // Cell ref directly (no struct.get on the read of the local itself).
+  if let Some(local) = ctx.binds.get(&slot_id).copied() {
+    return op_local(local);
+  }
+  if let Some(gsym) = lcx.slot_globals.get(&slot_id) {
+    return op_global(*gsym);
+  }
+  panic!("lower: slot {:?} has no Cell storage (not a slot global, not a captured local)", slot_id);
+}
+
 /// Resolve a CpsId to an `Operand`. Three cases, in order:
 /// 1. Locally bound — `local.get` of the bound local.
 /// 2. Pub'd module-export — `global.get` of the export global.
@@ -484,6 +576,17 @@ fn resolve_id_as_operand(
   ctx: &mut FnCtx,
   id: CpsId,
 ) -> Operand {
+  // Slot id: read the Cell ref via slot_cell_ref, then auto-unwrap the
+  // boxed value via `struct.get $Cell $value`. This makes value-position
+  // refs to a slot Just Work — the caller doesn't need to know whether
+  // it's reading a regular local or a slot.
+  if lcx.slot_ids.contains(&id) {
+    let cell_op = slot_cell_ref(lcx, ctx, id);
+    let unwrap_local = ctx.alloc_local(&format!(":unwrap_{}", cps_ident(lcx.cps, lcx.ast, id)));
+    let i = push_struct_get(lcx.frag, lcx.rt.cell(), 0, cell_op, unwrap_local);
+    ctx.instrs.push(i);
+    return op_local(unwrap_local);
+  }
   if let Some(local) = ctx.binds.get(&id).copied() {
     return op_local(local);
   }
@@ -491,7 +594,7 @@ fn resolve_id_as_operand(
     return op_global(gsym);
   }
   if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
-    let local = ctx.alloc_local(&format!("v_{}_fn", id.0));
+    let local = ctx.alloc_local(&format!(":fn_{}", id.0));
     let caps_local = ctx.alloc_local_typed(
       ":caps_arg",
       val_ref(lcx.rt.captures(), /*nullable*/ true),
@@ -520,6 +623,32 @@ fn lower_expr(
 ) {
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
+      // LetVal binding a LetRec slot id (e.g. destructure success
+      // cont's `let v_15, fn a_0:` where a_0 is a module slot) writes
+      // through the cell instead of allocating a fresh local. Reads
+      // outside the success arm go via the cell's storage.
+      if lcx.slot_ids.contains(&name.id) {
+        let cell_op = slot_cell_ref(lcx, ctx, name.id);
+        // Box the val into a scratch local if needed, then struct.set
+        // on the cell.
+        let val_op = match &val.kind {
+          ValKind::Lit(lit) => {
+            let lv = LitVal::from_lit(lit)
+              .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
+            let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
+            let i = box_lit(lcx.frag, lcx.rt, &lv, local);
+            if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
+            ctx.instrs.push(i);
+            op_local(local)
+          }
+          _ => val_as_operand(lcx, ctx, val),
+        };
+        let i_set = push_struct_set(lcx.frag, lcx.rt.cell(), 0, cell_op, val_op);
+        set_cps_id(lcx.frag, i_set, expr.id);
+        ctx.instrs.push(i_set);
+        lower_cont(lcx, ctx, cont);
+        return;
+      }
       let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
       ctx.bind(name.id, local);
       let i = emit_val_into(lcx, ctx, val, local);
@@ -534,20 +663,22 @@ fn lower_expr(
     }
 
     ExprKind::LetFn { name, params, fn_body, cont, .. } => {
-      // Collect cap + user params by role. User params carry their
-      // spread flag through to lower_fn so the prologue can emit the
-      // right `args_head`/`args_tail`/spread sequence.
+      // Collect cap + user params by role. The `Bind::Caps` param is
+      // the ƒcaps record (post closure-conversion); everything else is
+      // a user param. User params carry their spread flag so the
+      // prologue can emit the right `args_head`/`args_tail`/spread
+      // sequence.
       let mut cap_ids: Vec<CpsId> = Vec::new();
       let mut user_ids: Vec<(CpsId, bool)> = Vec::new();
       for p in params {
-        let (pid, is_spread) = match p {
-          Param::Name(b)   => (b.id, false),
-          Param::Spread(b) => (b.id, true),
+        let (bind, is_spread) = match p {
+          Param::Name(b)   => (b, false),
+          Param::Spread(b) => (b, true),
         };
-        match lcx.cps.param_info.try_get(pid).and_then(|o| *o) {
-          Some(ParamInfo::Cap(_))  => cap_ids.push(pid),
-          Some(ParamInfo::Param(_)) | Some(ParamInfo::Cont) => user_ids.push((pid, is_spread)),
-          None => user_ids.push((pid, is_spread)),  // ungilded params treated as user
+        if matches!(bind.kind, Bind::Caps) {
+          cap_ids.push(bind.id);
+        } else {
+          user_ids.push((bind.id, is_spread));
         }
       }
       // Lift the fn body to a separate Fn3. Display name carries the
@@ -569,7 +700,9 @@ fn lower_expr(
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
-      // `·ƒpub val, cont` — register `val` as a module-level export.
+      // `·ƒpub ctx, val, cont` — register `val` as a module-level export.
+      // After thread_ctx, args[0] is ctx (currently ignored by Pub's
+      // side-effects but threaded through uniformly per the design).
       //
       // Two side effects, both inline (no CPS hop):
       //   1. `global.set $<fqn>:<name> val` — addressable storage.
@@ -581,20 +714,25 @@ fn lower_expr(
       //
       // The fqn url is `lcx.fqn_prefix` minus the trailing `:` separator;
       // the source name comes from `pub_globals` alongside the global.
-      let Some(Arg::Val(val)) = args.first() else {
-        panic!("lower: Pub expects [val, cont], missing val");
+      // Peel the ctx arg (currently unused by Pub).
+      let Some(Arg::Val(_ctx_val)) = args.first() else {
+        panic!("lower: Pub expects [ctx, val, cont], missing ctx");
+      };
+      let Some(Arg::Val(val)) = args.get(1) else {
+        panic!("lower: Pub expects [ctx, val, cont], missing val");
       };
       let id = cps_id_of_ref(val);
       let (gsym, src_name) = lcx.pub_globals.get(&id)
         .cloned()
         .unwrap_or_else(|| panic!("lower: Pub val CpsId {:?} has no pre-allocated global", id));
-      let val_local = ctx.lookup(id);
 
-      // 1. Addressable storage.
-      let i_set = push_global_set(lcx.frag, gsym, op_local(val_local));
-      ctx.instrs.push(i_set);
-
-      // 2. Registry mutation.
+      // Unwrap the slot's Cell: `global.get` the slot → `struct.get
+      // $Cell $value` to read the boxed value that the preceding Set
+      // wrote in. The registry's `pub` takes the value as an anyref,
+      // not the Cell ref.
+      let val_local = ctx.alloc_local(&format!(":pub_{}", cps_ident(lcx.cps, lcx.ast, id)));
+      let i_get = push_struct_get(lcx.frag, lcx.rt.cell(), 0, op_global(gsym), val_local);
+      ctx.instrs.push(i_get);
       let url_bytes: Vec<u8> = lcx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
       let url_local = emit_str_const(lcx, ctx, &url_bytes, ":pub_url");
       let name_local = emit_str_const(lcx, ctx, src_name.as_bytes(), ":pub_name");
@@ -603,8 +741,8 @@ fn lower_expr(
         None);
       ctx.instrs.push(i_pub);
 
-      let cont_arg = args.get(1)
-        .unwrap_or_else(|| panic!("lower: Pub expects [val, cont]"));
+      let cont_arg = args.get(2)
+        .unwrap_or_else(|| panic!("lower: Pub expects [ctx, val, cont]"));
       let Arg::Cont(cont) = cont_arg else {
         panic!("lower: Pub cont arg is not a Cont");
       };
@@ -613,89 +751,91 @@ fn lower_expr(
 
     ExprKind::App { func: Callable::BuiltIn(b), args } if binary_op_sym(*b).is_some() => {
       let sym = binary_op_sym(*b).unwrap();
-      let (a, b_v, cont) = split_binary_args(args);
+      let (ctx_a, a, b_v, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b_v);
-      emit_op_tail_call(lcx, ctx, sym, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, sym, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Not), args } => {
-      let (v, cont) = split_unary_args(args);
+      let (ctx_a, v, cont) = split_unary_args(args);
       let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, Sym::OpNot, vec![v_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::OpNot, ctx_a, vec![v_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Empty), args } => {
-      let (v, cont) = split_unary_args(args);
+      let (ctx_a, v, cont) = split_unary_args(args);
       let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, Sym::OpEmpty, vec![v_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::OpEmpty, ctx_a, vec![v_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RangeFrom), args } => {
-      let (v, cont) = split_unary_args(args);
+      let (ctx_a, v, cont) = split_unary_args(args);
       let v_op = emit_arg_as_operand(lcx, ctx, v);
-      emit_op_tail_call(lcx, ctx, Sym::OpRngFrom, vec![v_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::OpRngFrom, ctx_a, vec![v_op], cont, expr.id);
     }
 
-// StrMatch: `(subj, prefix, suffix, fail, succ)` — 5-arg template
-    // pattern dispatch. All five are anyref operands at the WASM level
-    // (the latter two are continuations resolved as closures).
+// StrMatch: `(ctx, subj, prefix, suffix, fail, succ)` — 6-arg
+    // template pattern dispatch. After thread_ctx, ctx is args[0].
+    // All six are anyref operands at the WASM level (the latter two
+    // are continuations resolved as closures).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrMatch), args } => {
-      if args.len() != 5 {
-        panic!("lower: StrMatch expects 5 args, got {}", args.len());
+      if args.len() != 6 {
+        panic!("lower: StrMatch expects 6 args (ctx + 5), got {}", args.len());
       }
-      let ctx_local = ctx.ctx_local.expect("lower StrMatch: enclosing fn must have :ctx_param");
-      let mut ops: Vec<Operand> = vec![op_local(ctx_local)];
-      ops.extend(args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)));
+      let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
       let i = push_return_call(lcx.frag, lcx.rt.str_match(), ops);
       if let Some(o) = origin_of(lcx.cps, lcx.ast, expr.id) { set_origin(lcx.frag, i, o); }
       set_cps_id(lcx.frag, i, expr.id);
       ctx.instrs.push(i);
     }
 
-    // StrFmt: `(seg_0, seg_1, ..., seg_n, cont)` — build a $VarArgs
-    // array from the segments and tail-call $str_fmt(varargs, cont).
+    // StrFmt: `(ctx, seg_0, seg_1, ..., seg_n, cont)` — build a
+    // $VarArgs array from the segments and tail-call
+    // $str_fmt(ctx, varargs, cont). After cont_lift the cont is an
+    // Arg::Val (Ref to a lifted fn); the legacy shape passed it as
+    // Arg::Cont.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrFmt), args } => {
-      // Last arg is the cont; the rest are value segments.
-      let (cont, segments) = split_last_cont(args);
+      // args[0] is ctx, last is cont, segments are everything else.
+      let ctx_a = args.first().expect("StrFmt: missing ctx");
+      let cont_arg = args.last().expect("StrFmt: missing cont");
+      let segments = &args[1..args.len() - 1];
       let seg_ops: Vec<Operand> = segments.iter()
         .map(|a| emit_arg_as_operand(lcx, ctx, a))
         .collect();
-      // Allocate the $VarArgs array.
       let varargs_local = ctx.alloc_local_typed(":varargs",
         val_ref(lcx.rt.varargs(), /*nullable*/ true));
       let i_arr = push_array_new_fixed(lcx.frag, lcx.rt.varargs(), seg_ops, varargs_local);
       ctx.instrs.push(i_arr);
-      // Wrap as Arg::Val for emit_op_tail_call's cont handling.
       emit_op_tail_call(lcx, ctx,
-        Sym::StrFmt, vec![op_local(varargs_local)], &Arg::Cont(cont.clone()),
+        Sym::StrFmt, ctx_a, vec![op_local(varargs_local)], cont_arg,
         expr.id);
     }
 
     // SeqPrepend: `(item, seq, cont)` — same call shape as a binary
     // protocol op. Lowers to `return_call $seq_prepend item seq cont`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPrepend), args } => {
-      let (a, b, cont) = split_binary_args(args);
+      let (ctx_a, a, b, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
-      emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
     // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {
-      let (a, b, cont) = split_binary_args(args);
+      let (ctx_a, a, b, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
-      emit_op_tail_call(lcx, ctx, Sym::SeqConcat, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::SeqConcat, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args } => {
-      let (a, b, cont) = split_binary_args(args);
+      let (ctx_a, a, b, cont) = split_binary_args(args);
       let a_op = emit_arg_as_operand(lcx, ctx, a);
       let b_op = emit_arg_as_operand(lcx, ctx, b);
-      emit_op_tail_call(lcx, ctx, Sym::RecMerge, vec![a_op, b_op], cont, expr.id);
+      emit_op_tail_call(lcx, ctx, Sym::RecMerge, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
     // IsSeqLike / IsRecLike: `(val, succ, fail)` — type guard. The
@@ -843,7 +983,7 @@ fn lower_expr(
         }
         Cont::Ref(cont_id) => {
           // Build the closure into a fresh anyref local first.
-          let clo_local = ctx.alloc_local(&format!("v_{}_clo", cont_id.0));
+          let clo_local = ctx.alloc_local(&format!(":clo_{}", cont_id.0));
           emit_closure_construction(lcx, ctx, fn_sym, cap_operands, clo_local);
 
           // Resolve cont; spill if non-local.
@@ -851,7 +991,7 @@ fn lower_expr(
           let callee = match callee_op {
             Operand::Local(l) => l,
             other => {
-              let local = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+              let local = ctx.alloc_local(&format!(":callee_{}", cont_id.0));
               let i = push_local_set(lcx.frag, local, other);
               ctx.instrs.push(i);
               local
@@ -886,7 +1026,7 @@ fn lower_expr(
       let callee = match callee_op {
         Operand::Local(l) => l,
         other => {
-          let local = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+          let local = ctx.alloc_local(&format!(":callee_{}", cont_id.0));
           let i = push_local_set(lcx.frag, local, other);
           ctx.instrs.push(i);
           local
@@ -912,7 +1052,7 @@ fn lower_expr(
       let callee = match callee_op {
         Operand::Local(l) => l,
         other => {
-          let local = ctx.alloc_local(&format!("v_{}_callee", callee_id.0));
+          let local = ctx.alloc_local(&format!(":callee_{}", callee_id.0));
           let i = push_local_set(lcx.frag, local, other);
           ctx.instrs.push(i);
           local
@@ -955,6 +1095,160 @@ fn lower_expr(
 
       let i_if = push_if(lcx.frag, cond_leaf, then_body, else_body);
       ctx.instrs.push(i_if);
+    }
+
+    ExprKind::LetRec { slots, body } => {
+      // For each slot, allocate a fresh `$Cell` and store it in the
+      // slot's pub global. Non-pub'd slots are not yet supported.
+      // The cell starts with `value = null` (ref.null any); a read
+      // before the corresponding Set traps via struct.get of a null
+      // field, naturally enforcing the "empty slot traps" semantics.
+      for slot in slots {
+        let gsym = *lcx.slot_globals.get(&slot.id)
+          .unwrap_or_else(|| panic!("lower: LetRec slot {:?} has no slot_global registered", slot.id));
+        // Allocate cell: `local.set $:cell_<slot> (struct.new $Cell (ref.null any))`.
+        // Per-slot suffix keeps local names unique when a LetRec has
+        // multiple slots — wasm uses indices at the binary level, but
+        // duplicate WAT-display names are annoying for diagnostics.
+        let cell_name = format!(":cell_{}", cps_ident_for_bind(lcx.cps, lcx.ast, slot));
+        let cell_local = ctx.alloc_local_typed(
+          &cell_name,
+          val_ref(lcx.rt.cell(), /*nullable*/ true),
+        );
+        let i_new = push_struct_new(
+          lcx.frag, lcx.rt.cell(),
+          vec![op_ref_null(AbsHeap::Any)],
+          cell_local,
+        );
+        ctx.instrs.push(i_new);
+        // Store into the slot's global.
+        let i_gset = push_global_set(lcx.frag, gsym, op_local(cell_local));
+        ctx.instrs.push(i_gset);
+      }
+      lower_expr(lcx, ctx, body);
+    }
+    ExprKind::Set { name, val, cont } => {
+      // Set fills a LetRec slot: `struct.set $Cell $value (cell_ref) (val)`.
+      // The cell ref is read from the slot's storage location — module
+      // slot = global, captured slot = local (Bind::Slot). Non-pub'd
+      // module slots and fn-body slots aren't supported yet.
+      let slot_id = name.id;
+      let cell_op = slot_cell_ref(lcx, ctx, slot_id);
+      let val_op = match &val.kind {
+        ValKind::Lit(lit) => {
+          let lv = LitVal::from_lit(lit)
+            .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
+          let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
+          let i = box_lit(lcx.frag, lcx.rt, &lv, local);
+          if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
+          ctx.instrs.push(i);
+          op_local(local)
+        }
+        _ => val_as_operand(lcx, ctx, val),
+      };
+      let i_set = push_struct_set(lcx.frag, lcx.rt.cell(), 0, cell_op, val_op);
+      ctx.instrs.push(i_set);
+      // Lower the cont's body.
+      if let Cont::Expr { body, .. } = cont {
+        lower_expr(lcx, ctx, body);
+      }
+    }
+
+    // `·closure funcref, {cap: outer_ref, ...}, fn result: cont` —
+    // build a `$Closure` from a lifted-fn ref + captured outer values.
+    // Mirrors `App(FnClosure)` but reads explicit captures from the
+    // structural variant. Self-recursion via captured slot ref is
+    // handled naturally — the slot's value is already correct at
+    // closure-construction time once the enclosing LetRec/Set chain
+    // has filled it.
+    // `·letcaps caps_val, fn {bind_0, bind_1, ...}: cont` — destructure
+    // the lifted fn's caps record into fresh locals. `caps_val` is a
+    // Val::Ref to the ƒcaps param (a non-Cap Param::Name). Emits:
+    //   local.set $:caps_cast (ref.cast (ref $Captures) <caps_ref>)
+    //   local.set $<bind_i> (array.get $Captures $:caps_cast <i>)
+    // for each bind, then descends into the cont body.
+    ExprKind::LetCaps { caps, binds, cont } => {
+      let caps_op = val_as_operand(lcx, ctx, caps);
+      let caps_cast = ctx.alloc_local_typed(
+        ":caps_cast",
+        val_ref(lcx.rt.captures(), /*nullable*/ false),
+      );
+      let i_cast = push_ref_cast_non_null(
+        lcx.frag, lcx.rt.captures(), caps_op, caps_cast,
+      );
+      ctx.instrs.push(i_cast);
+      for (i, bind) in binds.iter().enumerate() {
+        let name = cps_ident_for_bind(lcx.cps, lcx.ast, bind);
+        // Bind::Slot locals hold a `(ref null $Cell)`. Captures
+        // array entries are anyref, so extract into a scratch anyref
+        // and ref.cast into the typed local. Other bind kinds keep
+        // their anyref-typed local (Closures, ints etc).
+        if matches!(bind.kind, Bind::Slot) {
+          let local = ctx.alloc_local_typed(
+            &name,
+            val_ref(lcx.rt.cell(), /*nullable*/ true),
+          );
+          ctx.bind(bind.id, local);
+          let tmp = ctx.alloc_local_typed(
+            &format!("{name}_raw"),
+            val_anyref(true),
+          );
+          let i_get = push_array_get(
+            lcx.frag, lcx.rt.captures(),
+            op_local(caps_cast), lit_i32(i as i32),
+            tmp,
+          );
+          ctx.instrs.push(i_get);
+          let i_cast = push_ref_cast_nullable(
+            lcx.frag, lcx.rt.cell(),
+            op_local(tmp), local,
+          );
+          ctx.instrs.push(i_cast);
+        } else {
+          let local = ctx.alloc_local(&name);
+          ctx.bind(bind.id, local);
+          let i_get = push_array_get(
+            lcx.frag, lcx.rt.captures(),
+            op_local(caps_cast), lit_i32(i as i32),
+            local,
+          );
+          ctx.instrs.push(i_get);
+        }
+      }
+      if let Cont::Expr { body, .. } = cont {
+        lower_expr(lcx, ctx, body);
+      }
+    }
+
+    ExprKind::Closure { funcref, captures, cont } => {
+      let fn_sym = ctx.lookup_fn_sym(cps_id_of_ref(funcref));
+      // Capture-position emission: if the outer is a slot, pass the
+      // Cell ref directly (NOT the unwrapped value) so writes through
+      // the captured local stay visible to the original LetRec scope.
+      let cap_operands: Vec<Operand> = captures.iter()
+        .map(|(_, outer_val)| {
+          if let ValKind::Ref(r) = &outer_val.kind {
+            let id = ref_cps_id(*r);
+            if lcx.slot_ids.contains(&id) {
+              return slot_cell_ref(lcx, ctx, id);
+            }
+          }
+          val_as_operand(lcx, ctx, outer_val)
+        })
+        .collect();
+      match cont {
+        Cont::Expr { args: cont_args, body } => {
+          let bind = cont_args.first()
+            .expect("Closure cont has no result bind");
+          let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
+          ctx.bind(bind.id, local);
+          emit_closure_construction(lcx, ctx, fn_sym, cap_operands, local);
+          lower_expr(lcx, ctx, body);
+        }
+        Cont::Ref(_) => {
+          panic!("lower: Closure with Cont::Ref not yet supported");
+        }
+      }
     }
 
     _ => panic!("lower: unsupported expr shape: {:?}", short_kind(&expr.kind)),
@@ -1124,11 +1418,18 @@ fn lower_import(
   let url = std::str::from_utf8(url_bytes)
     .unwrap_or_else(|_| panic!("lower: BuiltIn::Import URL is not valid UTF-8"));
 
-  // Pull the destructure cont (Cont::Ref).
-  let cont_id = args.iter().find_map(|a| match a {
-    Arg::Cont(Cont::Ref(id)) => Some(*id),
-    _ => None,
-  }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing cont"));
+  // Pull the destructure cont id from the LAST arg. After
+  // cont_lift, the inline Cont::Expr is lifted into a LetFn and
+  // passed as Arg::Val (Ref to the lifted fn).
+  let cont_id = match args.last() {
+    Some(Arg::Cont(Cont::Ref(id))) => *id,
+    Some(Arg::Val(v)) => match &v.kind {
+      ValKind::Ref(r) => ref_cps_id(*r),
+      ValKind::ContRef(id) => *id,
+      _ => panic!("lower: BuiltIn::Import cont arg has unexpected Val shape"),
+    },
+    other => panic!("lower: BuiltIn::Import missing cont (got {:?})", other),
+  };
 
   if crate::passes::wasm::compile_package::MIGRATED_STDLIB_FNK.contains(&url) {
     lower_import_user_fragment(lcx, ctx, url, cont_id);
@@ -1192,7 +1493,7 @@ fn lower_import_virtual_stdlib(
   let cont_local = match cont_op {
     Operand::Local(l) => l,
     other => {
-      let l = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+      let l = ctx.alloc_local(&format!(":callee_{}", cont_id.0));
       let i = push_local_set(lcx.frag, l, other);
       ctx.instrs.push(i);
       l
@@ -1270,18 +1571,20 @@ fn lower_import_user_fragment(
   let cont_local = match cont_op {
     Operand::Local(l) => l,
     other => {
-      let l = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+      let l = ctx.alloc_local(&format!(":callee_{}", cont_id.0));
       let i = push_local_set(lcx.frag, l, other);
       ctx.instrs.push(i);
       l
     }
   };
 
-  // 5. Tail-call `std/modules.fnk:import (url, mod_clos, cont)`. The
-  //    runtime helper handles init-once + delivers the producer's
-  //    exports rec to the destructure cont.
+  // 5. Tail-call `std/modules.fnk:import (ctx, url, mod_clos, cont)`.
+  //    The runtime helper invokes the producer's module body under
+  //    the importer's ctx and threads any ctx mutations back to the
+  //    destructure cont.
+  let ctx_local = ctx.ctx_local.expect("lower_import: enclosing fn must have :ctx_param");
   let i_imp = push_return_call(lcx.frag, lcx.rt.modules_import(),
-    vec![op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
+    vec![op_local(ctx_local), op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
   ctx.instrs.push(i_imp);
 }
 
@@ -1294,10 +1597,10 @@ fn is_virtual_stdlib_path(url: &str) -> bool {
 }
 
 
-/// Emit a 4-arg primitive with shape `(any, any, any, any) -> ()`.
-/// Used by `RecPut(rec, key, val, cont)` and
-/// `RecPop(rec, key, fail, succ)`. Each arg is an anyref value; conts
-/// among them get resolved through the unified id resolver.
+/// Emit a 4-arg primitive with shape `(ctx, any, any, any, any) -> ()`.
+/// After thread_ctx the CPS shape is `[ctx, ...4 user args]`; ctx is
+/// passed to the runtime as the 0th wasm arg. Used by RecPut and
+/// RecPop.
 fn emit_quaternary(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
@@ -1305,22 +1608,22 @@ fn emit_quaternary(
   args: &[Arg],
   app_id: CpsId,
 ) {
-  if args.len() != 4 {
-    panic!("lower: 4-arg primitive expects 4 args, got {}", args.len());
+  if args.len() != 5 {
+    panic!("lower: 4-arg primitive expects 5 args (ctx + 4 user args), got {}", args.len());
   }
-  let ctx_local = ctx.ctx_local.expect("emit_quaternary: enclosing fn must have :ctx_param");
-  let mut ops: Vec<Operand> = vec![op_local(ctx_local)];
-  ops.extend(args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)));
+  let _ = ctx;  // ctx_local unused; use threaded ctx from args[0]
+  let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
 }
 
-/// Emit a `(value, cont, cont)` ternary primitive (IsSeqLike,
-/// IsRecLike, SeqPop). The runtime function takes 3 anyref params:
-/// the value being tested, plus two continuations resolved as
-/// values at this layer.
+/// Emit a `(ctx, value, cont, cont)` ternary primitive (IsSeqLike,
+/// IsRecLike, SeqPop). After thread_ctx the CPS shape is
+/// `[ctx, val, succ, fail]`; ctx is passed to the runtime as the
+/// 0th wasm arg, the rest are the value being tested and two
+/// continuations resolved as values at this layer.
 fn emit_ternary_guard(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
@@ -1328,14 +1631,15 @@ fn emit_ternary_guard(
   args: &[Arg],
   app_id: CpsId,
 ) {
-  if args.len() != 3 {
-    panic!("lower: ternary primitive {:?} expects 3 args, got {}", sym, args.len());
+  if args.len() != 4 {
+    panic!("lower: ternary primitive {:?} expects 4 args (ctx + val + 2 conts), got {}", sym, args.len());
   }
-  let val_op = emit_arg_as_operand(lcx, ctx, &args[0]);
-  let cont1_op = emit_arg_as_operand(lcx, ctx, &args[1]);
-  let cont2_op = emit_arg_as_operand(lcx, ctx, &args[2]);
-  let ctx_local = ctx.ctx_local.expect("emit_ternary_guard: enclosing fn must have :ctx_param");
-  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![op_local(ctx_local), val_op, cont1_op, cont2_op]);
+  let ctx_op = emit_arg_as_operand(lcx, ctx, &args[0]);
+  let val_op = emit_arg_as_operand(lcx, ctx, &args[1]);
+  let cont1_op = emit_arg_as_operand(lcx, ctx, &args[2]);
+  let cont2_op = emit_arg_as_operand(lcx, ctx, &args[3]);
+  let _ = ctx;  // ctx_local no longer needed: use the threaded ctx arg directly
+  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![ctx_op, val_op, cont1_op, cont2_op]);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
@@ -1345,17 +1649,18 @@ fn emit_op_tail_call(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
   sym: Sym,
+  ctx_arg: &Arg,
   value_operands: Vec<Operand>,
   cont: &Arg,
   app_id: CpsId,
 ) {
+  let ctx_op = emit_arg_as_operand(lcx, ctx, ctx_arg);
   let cont_op = match cont {
     Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
     Arg::Val(v) => val_as_operand(lcx, ctx, v),
     _ => panic!("lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
   };
-  let ctx_local = ctx.ctx_local.expect("emit_op_tail_call: enclosing fn must have :ctx_param");
-  let mut operands = vec![op_local(ctx_local)];
+  let mut operands = vec![ctx_op];
   operands.extend(value_operands);
   operands.push(cont_op);
   let i = push_return_call(lcx.frag, lcx.rt.op(sym), operands);
@@ -1377,7 +1682,7 @@ fn emit_arg_as_operand(
         ValKind::Lit(lit) => {
           let lv = LitVal::from_lit(lit)
             .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
-          let local = ctx.alloc_local(&format!("v_{}", v.id.0));
+          let local = ctx.alloc_local(&format!(":lit_{}", v.id.0));
           let i = box_lit(lcx.frag, lcx.rt, &lv, local);
           if let Some(o) = origin_of(lcx.cps, lcx.ast, v.id) { set_origin(lcx.frag, i, o); }
           ctx.instrs.push(i);
@@ -1403,7 +1708,7 @@ fn emit_arg_as_operand(
 /// (typically as the fail continuation in pattern-match dispatch
 /// generated by the lifting pass).
 fn panic_closure_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx) -> Operand {
-  let local = ctx.alloc_local("v_panic_clo");
+  let local = ctx.alloc_local(":panic_clo");
   let caps_local = ctx.alloc_local_typed(":caps_arg",
     val_ref(lcx.rt.captures(), /*nullable*/ true));
   let i_caps = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
@@ -1625,7 +1930,15 @@ fn binary_op_sym(b: BuiltIn) -> Option<Sym> {
 }
 
 fn extract_fink_module_body(root: &Expr) -> Option<(CpsId, CpsId, &Expr)> {
-  let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind else {
+  // After hoist, the root is wrapped in a chain of top-level LetFns.
+  // Peel through them to find the `App(FinkModule, ...)` at the
+  // innermost cont. The lifted fns themselves are emitted separately
+  // by the lower_expr LetFn arm during the main module-body walk.
+  let mut node = root;
+  while let ExprKind::LetFn { cont: Cont::Expr { body, .. }, .. } = &node.kind {
+    node = body;
+  }
+  let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &node.kind else {
     return None;
   };
   let cont_arg = args.first()?;
@@ -1640,18 +1953,25 @@ fn extract_fink_module_body(root: &Expr) -> Option<(CpsId, CpsId, &Expr)> {
   Some((ctx_bind.id, ret_bind.id, body))
 }
 
-fn split_binary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg) {
+/// Split a binary op's args after thread_ctx: `[ctx, a, b, cont]` →
+/// `(ctx, a, b, cont)`. The ctx is passed to the runtime op as the
+/// 0th wasm arg.
+fn split_binary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg, &Arg) {
   (
-    args.first().expect("binary op: missing arg 0"),
-    args.get(1).expect("binary op: missing arg 1"),
-    args.get(2).expect("binary op: missing cont"),
+    args.first().expect("binary op: missing ctx"),
+    args.get(1).expect("binary op: missing arg 0"),
+    args.get(2).expect("binary op: missing arg 1"),
+    args.get(3).expect("binary op: missing cont"),
   )
 }
 
-fn split_unary_args(args: &[Arg]) -> (&Arg, &Arg) {
+/// Split a unary op's args after thread_ctx: `[ctx, v, cont]` →
+/// `(ctx, v, cont)`.
+fn split_unary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg) {
   (
-    args.first().expect("unary op: missing arg"),
-    args.get(1).expect("unary op: missing cont"),
+    args.first().expect("unary op: missing ctx"),
+    args.get(1).expect("unary op: missing arg"),
+    args.get(2).expect("unary op: missing cont"),
   )
 }
 
@@ -1680,27 +2000,31 @@ fn ref_cps_id(r: Ref) -> CpsId {
 }
 
 fn cps_ident_for_bind(cps: &CpsResult, ast: &Ast<'_>, b: &BindNode) -> String {
-  // BindNode carries kind directly, so we don't need bind_kinds here —
-  // special-case kinds that don't map to AST origins.
+  use crate::passes::cps::ir::{Bind, ContKind};
   match b.kind {
-    crate::passes::cps::ir::Bind::Ctx => format!(":ctx_{}", b.id.0),
-    _ => cps_ident(cps, ast, b.id),
+    Bind::Ctx                  => format!(":ctx_{}", b.id.0),
+    Bind::Caps                 => format!(":caps_{}", b.id.0),
+    Bind::Slot                 => format!(":slot_{}", b.id.0),
+    Bind::Cont(ContKind::Ret)  => format!(":ret_{}", b.id.0),
+    Bind::Cont(ContKind::Succ) => format!(":succ_{}", b.id.0),
+    Bind::Cont(ContKind::Fail) => format!(":fail_{}", b.id.0),
+    Bind::Synth                => format!(":v_{}", b.id.0),
+    Bind::SynthName            => cps_ident(cps, ast, b.id),
   }
 }
 
-/// Derive a display name for a CPS bind/ref. Uses the source ident
-/// from the origin map (`{ident}_{id}`) when available, falls back to
-/// `v_<id>`. Mirrors `collect.rs::label`. Special bind kinds with no
-/// AST origin (e.g. `Bind::Ctx`) get descriptive synth names instead
-/// of the generic `v_<id>` fallback.
+/// Derive a display name for a use-site CpsId. Uses the source ident
+/// from the origin map (`{ident}_{id}`) when available; falls back to
+/// `:v_<id>` for compiler temps. The colon prefix is lexer-rejected
+/// in user source, so it cannot collide with a user binding's name.
 fn cps_ident(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> String {
   let ast_id = cps.origin.try_get(id).and_then(|o| *o);
   match ast_id {
     Some(a) => match &ast.nodes.get(a).kind {
       crate::ast::NodeKind::Ident(s) => format!("{}_{}", s, id.0),
-      _ => format!("v_{}", id.0),
+      _ => format!(":v_{}", id.0),
     },
-    None => format!("v_{}", id.0),
+    None => format!(":v_{}", id.0),
   }
 }
 
@@ -1712,8 +2036,18 @@ fn cps_ident_kinded(
   bind_kinds: &crate::propgraph::PropGraph<CpsId, Option<crate::passes::cps::ir::Bind>>,
   id: CpsId,
 ) -> String {
-  if let Some(Some(crate::passes::cps::ir::Bind::Ctx)) = bind_kinds.try_get(id) {
-    return format!(":ctx_{}", id.0);
+  use crate::passes::cps::ir::{Bind, ContKind};
+  if let Some(Some(kind)) = bind_kinds.try_get(id) {
+    return match kind {
+      Bind::Ctx                  => format!(":ctx_{}", id.0),
+      Bind::Caps                 => format!(":caps_{}", id.0),
+      Bind::Slot                 => format!(":slot_{}", id.0),
+      Bind::Cont(ContKind::Ret)  => format!(":ret_{}", id.0),
+      Bind::Cont(ContKind::Succ) => format!(":succ_{}", id.0),
+      Bind::Cont(ContKind::Fail) => format!(":fail_{}", id.0),
+      Bind::Synth                => format!(":v_{}", id.0),
+      Bind::SynthName            => cps_ident(cps, ast, id),
+    };
   }
   cps_ident(cps, ast, id)
 }
@@ -1731,6 +2065,56 @@ fn pub_export_name(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> String {
   }
 }
 
+/// Walk the IR and collect every LetRec slot CpsId into `out`. These
+/// are the ids that lower as `(ref $Cell)`-typed storage cells; reads
+/// auto-unwrap via `struct.get $Cell.value`, writes go via
+/// `struct.set`. Captures of slots flow the Cell ref unchanged through
+/// `Bind::Slot` LetCaps locals — those also land in `out` so the same
+/// access path applies inside lifted bodies.
+fn collect_slot_ids(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetRec { slots, body } => {
+      for s in slots { out.insert(s.id); }
+      collect_slot_ids(body, out);
+    }
+    ExprKind::LetVal { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont { collect_slot_ids(body, out); }
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      collect_slot_ids(fn_body, out);
+      if let Cont::Expr { body, .. } = cont { collect_slot_ids(body, out); }
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(Cont::Expr { body, .. }) => collect_slot_ids(body, out),
+          Arg::Expr(e) => collect_slot_ids(e, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_slot_ids(then, out);
+      collect_slot_ids(else_, out);
+    }
+    ExprKind::Set { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont { collect_slot_ids(body, out); }
+    }
+    ExprKind::Closure { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont { collect_slot_ids(body, out); }
+    }
+    ExprKind::LetCaps { binds, cont, .. } => {
+      // Per-bind kind check: Bind::Slot marks a captured-slot local
+      // whose value is a Cell ref. Convert (TODO) sets this kind when
+      // the outer capture source was a slot.
+      for b in binds {
+        if matches!(b.kind, Bind::Slot) { out.insert(b.id); }
+      }
+      if let Cont::Expr { body, .. } = cont { collect_slot_ids(body, out); }
+    }
+  }
+}
+
 /// Scan the CPS tree for every `App(BuiltIn::Pub, [Val, Cont])` and
 /// return `(exported CpsId, source name)` pairs in encounter order.
 /// Mirrors `collect.rs::find_export_app` (the Pub-only branch).
@@ -1742,12 +2126,15 @@ fn find_pub_apps(
 ) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
+      // After thread_ctx: Pub args are [ctx, target_val, cont]. Only
+      // the target_val (args[1]) is the exported binding; args[0] is
+      // the threaded ctx and args[2] is the continuation.
+      if let Some(Arg::Val(v)) = args.get(1)
+        && let ValKind::Ref(Ref::Synth(id)) = v.kind
+      {
+        out.push((id, pub_export_name(cps, ast, id)));
+      }
       for arg in args {
-        if let Arg::Val(v) = arg
-          && let ValKind::Ref(Ref::Synth(id)) = v.kind
-        {
-          out.push((id, pub_export_name(cps, ast, id)));
-        }
         if let Arg::Cont(Cont::Expr { body, .. }) = arg {
           find_pub_apps(body, cps, ast, out);
         }
@@ -1777,6 +2164,24 @@ fn find_pub_apps(
       find_pub_apps(then, cps, ast, out);
       find_pub_apps(else_, cps, ast, out);
     }
+    ExprKind::LetRec { body, .. } => {
+      find_pub_apps(body, cps, ast, out);
+    }
+    ExprKind::Set { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
+    ExprKind::Closure { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
+    ExprKind::LetCaps { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
   }
 }
 
@@ -1786,6 +2191,10 @@ fn short_kind(k: &ExprKind) -> &'static str {
     ExprKind::LetFn { .. } => "LetFn",
     ExprKind::App { .. } => "App",
     ExprKind::If { .. } => "If",
+    ExprKind::LetRec { .. } => "LetRec",
+    ExprKind::Set { .. } => "Set",
+    ExprKind::Closure { .. } => "Closure",
+    ExprKind::LetCaps { .. } => "LetCaps",
   }
 }
 

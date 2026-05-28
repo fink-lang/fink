@@ -127,6 +127,32 @@ impl Threader<'_> {
           else_: Box::new(new_else),
         }
       }
+      ExprKind::LetRec { slots, body } => {
+        // The letrec's body is part of the enclosing ctx scope — no fresh
+        // ctx bind is introduced. Recurse to thread ctx through any Apps
+        // (Set, Pub, ƒret, ...) inside.
+        let new_body = self.thread_expr(*body);
+        ExprKind::LetRec { slots, body: Box::new(new_body) }
+      }
+      ExprKind::Set { name, val, cont } => {
+        // Set is a structural binding op — its cont is inlined into the
+        // enclosing scope (no fresh ctx prepended, no value args). The
+        // rendered ctx prefix is purely a formatter affordance.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::Set { name, val, cont: new_cont }
+      }
+      ExprKind::Closure { funcref, captures, cont } => {
+        // Closure construction's cont binds the resulting closure value;
+        // ctx is inherited from the enclosing scope. The cont's first arg
+        // already names the result; no fresh ctx prepended.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::Closure { funcref, captures, cont: new_cont }
+      }
+      ExprKind::LetCaps { caps, binds, cont } => {
+        // LetCaps is a compile-time destructure — no ctx threading.
+        let new_cont = self.thread_cont(cont, /*prepend_ctx*/ false);
+        ExprKind::LetCaps { caps, binds, cont: new_cont }
+      }
     };
     Expr { id, kind: new_kind }
   }
@@ -162,32 +188,30 @@ impl Threader<'_> {
 
   fn thread_args(&mut self, args: Vec<Arg>, func: &Callable) -> Vec<Arg> {
     let mut new_args: Vec<Arg> = Vec::with_capacity(args.len() + 1);
-    // Phase 2c: only `Callable::Val` calls (user fn / continuation
-    // invocation) get ctx prepended. Builtins are not ctx-aware yet —
-    // their runtime signatures (op_plus, etc.) take a fixed-arity
-    // args list with no ctx slot. When the substrate is wired up and
-    // runtime ops become ctx-aware (so `with mx: 3 * m` can dispatch
-    // through ctx), this guard goes away.
+    // Every App gets ctx threaded uniformly: there is no pure-arithmetic
+    // call, only operators that dispatch through ctx. Downstream codegen
+    // for structural builtins (Panic, FnClosure, etc.) can ignore the
+    // ctx arg if irrelevant, but every call site sees it consistently.
     //
-    // Result-conts of builtin Applies are NOT threaded either: the
-    // runtime builtin invokes its cont with `(value)` not `(ctx, value)`.
-    // The cont inherits ctx from the enclosing scope, just like a
-    // LetVal/LetFn inline cont.
-    // Callable::Val (user fn / cont) is always ctx-aware. Other
-    // builtins (op_plus, etc.) are not ctx-aware: they're fixed-arity
-    // runtime fns whose result-cont is invoked directly with (value),
-    // no ctx slot.
-    let call_is_ctx_aware = matches!(func, Callable::Val(_));
-    if call_is_ctx_aware
-      && matches!(func, Callable::Val(_))
+    // FinkModule is the one exception — it's the module entry that
+    // RECEIVES ctx from the runtime. Its sole Cont::Expr arg already
+    // binds a fresh Bind::Ctx at the module-root walk (see thread_root);
+    // we must not prepend another ctx ref here.
+    let is_module_entry = matches!(func, Callable::BuiltIn(super::ir::BuiltIn::FinkModule));
+    if !is_module_entry
       && let Some(ctx_id) = self.current_ctx() {
       let ctx_val = self.make_ctx_ref(ctx_id);
       new_args.push(Arg::Val(ctx_val));
     }
+    // Result-conts (Cont::Expr in args) also get ctx as their leading
+    // bind-arg. Same uniform rule: every cont call receives ctx as 0th
+    // value. `prepend_ctx=true` tells thread_cont to insert a fresh
+    // Bind::Ctx at the front of args.
+    let cont_gets_ctx = !is_module_entry;
     for arg in args {
       let new_arg = match arg {
         Arg::Val(_) | Arg::Spread(_) => arg,
-        Arg::Cont(c) => Arg::Cont(self.thread_cont(c, call_is_ctx_aware)),
+        Arg::Cont(c) => Arg::Cont(self.thread_cont(c, cont_gets_ctx)),
         Arg::Expr(e) => Arg::Expr(Box::new(self.thread_expr(*e))),
       };
       new_args.push(new_arg);

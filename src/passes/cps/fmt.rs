@@ -90,7 +90,7 @@ pub fn fmt(expr: &Expr) -> String {
 /// caller (passed to one of the `ast::fmt::*` entry points).
 fn build_ast(expr: &Expr, ctx: &Ctx<'_, '_>) -> Ast<'static> {
   let mut b = AstBuilder::new();
-  let root = build_expr(&mut b, expr, ctx);
+  let root = build_expr(&mut b, expr, ctx, None);
   b.finish(root)
 }
 
@@ -154,6 +154,14 @@ fn b_state_fn(b: &mut AstBuilder<'static>, body: AstId) -> AstId {
   let loc = b.read(body).loc;
   let empty_patterns = b_patterns(b, vec![]);
   b_fn(b, empty_patterns, vec![body], loc)
+}
+
+fn b_arm(b: &mut AstBuilder<'static>, lhs: AstId, body: Vec<AstId>, loc: Loc) -> AstId {
+  b.append(NodeKind::Arm { lhs, sep: dummy_tok(), body: b_exprs(body) }, loc)
+}
+
+fn b_lit_rec(b: &mut AstBuilder<'static>, items: Vec<AstId>, loc: Loc) -> AstId {
+  b.append(NodeKind::LitRec { open: tok_at(loc), close: tok_at(loc), items: b_exprs(items) }, loc)
 }
 
 
@@ -284,8 +292,8 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
 // Output name conventions:
 //   source ident "foo"   → ·foo_<cps_id>
 //   synth ident n        → ·$_<n>_<cps_id>
-//   compiler temp        → ·v_<cps_id>   (no AST origin)
-//   cont param           → ·v_<cps_id>
+//   compiler temp        → ·ƒv_<cps_id>   (no AST origin)
+//   cont param           → ·ƒv_<cps_id>
 //   builtins             → ·op_plus, ·seq_prepend, …
 // ---------------------------------------------------------------------------
 
@@ -294,9 +302,22 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
 /// ```text
 ///   Ident("foo")   → ·foo_<id>
 ///   SynthIdent(n)  → ·$_<n>_<id>
-///   no origin      → ·v_<id>
+///   no origin      → ·ƒv_<id>
 /// ```
 fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+  // bind_kinds wins over origin-Ident: only `SynthName` — the def-site
+  // that asserts a source name — follows the origin-Ident path. Every
+  // other kind (Synth, Cont, Ctx, Caps) renders by its semantic role
+  // regardless of any leaked Ident origin. Without this, a non-source
+  // bind whose origin was accidentally set to an Ident node gets two
+  // different names at use vs def — masking real id-reuse and
+  // origin-corruption bugs as cosmetic differences.
+  if let Some(bk) = ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id)
+    && !matches!(kind, Bind::SynthName)
+  {
+    return render_synth_fallback(cps_id, ctx);
+  }
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
@@ -307,19 +328,21 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
 }
 
 /// Render a compiler-generated node with no AST origin.
-/// Checks bind_kinds for cont semantic names, falls back to ·v_N.
+/// Checks bind_kinds for cont semantic names, falls back to ·ƒv_N.
 fn render_synth_fallback(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   if let Some(bk) = ctx.bind_kinds
     && let Some(Some(kind)) = bk.try_get(cps_id) {
       return match kind {
+        Bind::Caps                 => format!("·ƒcaps_{}", cps_id.0),
+        Bind::Slot                 => format!("·ƒslot_{}", cps_id.0),
         Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
         Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
         Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
         Bind::Ctx                  => format!("·ƒctx_{}", cps_id.0),
-        _ => format!("·v_{}", cps_id.0),
+        _ => format!("·ƒv_{}", cps_id.0),
       };
   }
-  format!("·v_{}", cps_id.0)
+  format!("·ƒv_{}", cps_id.0)
 }
 
 /// Render an unresolved ref as `·∅name` (source name) or `·∅_N` (no origin).
@@ -339,11 +362,13 @@ fn render_unresolved_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
 fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, ctx),
-    Bind::Synth     => format!("·v_{}", bind.id.0),
+    Bind::Synth     => format!("·ƒv_{}", bind.id.0),
     Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
     Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
     Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
     Bind::Ctx                  => format!("·ƒctx_{}", bind.id.0),
+    Bind::Caps                 => format!("·ƒcaps_{}", bind.id.0),
+    Bind::Slot                 => format!("·ƒslot_{}", bind.id.0),
   }
 }
 
@@ -419,20 +444,21 @@ fn render_builtin(op: &BuiltIn) -> String {
 }
 
 /// Render a `Cont` as a result-binding lambda for use in `·apply` / `·match_*` etc.
-/// - `Cont::Expr(bind, body)` → `fn ·v_N: body`  (N from bind.id)
+/// - `Cont::Expr(bind, body)` → `fn ·ƒv_N: body`  (N from bind.id)
 /// - `Cont::Ref(cont_id)` → `fn ·v_N: ·v_cont ·v_N`  (cosmetic lambda sugar for the tail call)
 ///
 /// `site_loc` is the source location of the surrounding call — used as
 /// the anchor for a `Cont::Ref` render (the cont itself is a synthetic
 /// token; its semantic position is the tail of the call being built).
-fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_loc: Loc) -> AstId {
+fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_loc: Loc, current_ctx: Option<CpsId>) -> AstId {
   match cont {
     Cont::Expr { args, body } => {
       // Cont params are synthetic bindings — use their CpsId loc if available.
       let params: Vec<AstId> = args.iter()
         .map(|bn| b_ident(b, &render_bind_ctx(bn, ctx), ctx_loc(bn.id, ctx)))
         .collect();
-      let body_id = build_expr(b, body, ctx);
+      let inner_ctx = first_ctx_bind(args).or(current_ctx);
+      let body_id = build_expr(b, body, ctx, inner_ctx);
       // Use the first param's loc for the fn wrapper — the cont lambda originates
       // from the same source position as its parameter.
       let fn_loc = args.first().map(|bn| ctx_loc(bn.id, ctx)).unwrap_or_else(dummy_loc);
@@ -443,6 +469,16 @@ fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_
       b_ident(b, &render_synth_fallback(*cont_id, ctx), site_loc)
     }
   }
+}
+
+fn first_ctx_bind(args: &[BindNode]) -> Option<CpsId> {
+  args.first().and_then(|bn| matches!(bn.kind, Bind::Ctx).then_some(bn.id))
+}
+
+fn first_ctx_param(params: &[Param]) -> Option<CpsId> {
+  params.first().and_then(|p| match p {
+    Param::Name(bn) | Param::Spread(bn) => matches!(bn.kind, Bind::Ctx).then_some(bn.id),
+  })
 }
 
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
@@ -456,22 +492,30 @@ fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_
 /// synthesised param, no apply wrapper) would be more truthful and is
 /// load-bearing once ctx-threading lands: the current fake-lambda hides
 /// the ctx that codegen will pass at the Cont::Ref invocation site.
-fn build_cont_body(b: &mut AstBuilder<'static>, cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> AstId {
+fn build_cont_body(b: &mut AstBuilder<'static>, cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>, current_ctx: Option<CpsId>) -> AstId {
   match cont {
-    Cont::Expr { body, .. } => build_expr(b, body, ctx),
+    Cont::Expr { args, body } => {
+      let inner_ctx = first_ctx_bind(args).or(current_ctx);
+      build_expr(b, body, ctx, inner_ctx)
+    }
     Cont::Ref(cont_id) => {
       let cont_loc = ctx_loc(*cont_id, ctx);
       let name_loc = ctx_loc(bound_id, ctx);
       let cont_name = render_synth_fallback(*cont_id, ctx);
-      let cont_id = b_ident(b, &cont_name, cont_loc);
-      let arg_id = b_ident(b, bound_name, name_loc);
-      b_apply(b, cont_id, vec![arg_id], cont_loc)
+      let cont_ident = b_ident(b, &cont_name, cont_loc);
+      let mut call_args: Vec<AstId> = Vec::new();
+      if let Some(ctx_id) = current_ctx {
+        let ctx_name = render_synth_fallback(ctx_id, ctx);
+        call_args.push(b_ident(b, &ctx_name, cont_loc));
+      }
+      call_args.push(b_ident(b, bound_name, name_loc));
+      b_apply(b, cont_ident, call_args, cont_loc)
     }
   }
 }
 
 
-pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -> AstId {
+pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>, current_ctx: Option<CpsId>) -> AstId {
   // Best-effort loc for the expression itself — used for keyword/wrapper nodes.
   let expr_loc = ctx_loc(expr.id, ctx);
 
@@ -479,7 +523,7 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
     ExprKind::LetVal { name, val, cont } => {
       let plain = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
-      let body_id = build_cont_body(b, cont, &plain, name.id, ctx);
+      let body_id = build_cont_body(b, cont, &plain, name.id, ctx, current_ctx);
       // Map ·let to the = or |= token inside the Bind AST node.
       let let_loc = ctx.ast_node(expr.id)
         .and_then(|n| match &n.kind {
@@ -522,8 +566,9 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
         fn_param_ids.insert(0, label_id);
       }
 
-      let body_id = build_cont_body(b, cont, &plain_name, name.id, ctx);
-      let inner_fn_body = build_expr(b, fn_body, ctx);
+      let body_id = build_cont_body(b, cont, &plain_name, name.id, ctx, current_ctx);
+      let fn_inner_ctx = first_ctx_param(params).or(current_ctx);
+      let inner_fn_body = build_expr(b, fn_body, ctx, fn_inner_ctx);
       let fn_pats = b_patterns(b, fn_param_ids);
       let inner_fn = b_fn(b, fn_pats, vec![inner_fn_body], expr_loc);
       let name_ident = b_ident(b, &plain_name, name_loc);
@@ -559,20 +604,114 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
           let n = build_val(b, v, ctx);
           b_spread(b, n, ctx_loc(v.id, ctx))
         }
-        Arg::Cont(c) => build_cont(b, c, ctx, expr_loc),
-        Arg::Expr(e) => build_expr(b, e, ctx),
+        Arg::Cont(c) => build_cont(b, c, ctx, expr_loc, current_ctx),
+        Arg::Expr(e) => build_expr(b, e, ctx, current_ctx),
       }).collect();
       b_apply(b, func_id, arg_ids, call_loc)
     }
 
     ExprKind::If { cond, then, else_ } => {
       let cond_id = build_val(b, cond, ctx);
-      let then_id = build_expr(b, then, ctx);
-      let else_id = build_expr(b, else_, ctx);
+      let then_id = build_expr(b, then, ctx, current_ctx);
+      let else_id = build_expr(b, else_, ctx, current_ctx);
       let then_fn = b_state_fn(b, then_id);
       let else_fn = b_state_fn(b, else_id);
       let if_keyword = b_ident(b, "·if", expr_loc);
       b_apply(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc)
+    }
+    ExprKind::LetRec { slots, body } => {
+      // Render `·letrec` followed by one `fn slot_1, ...: <body>` fn-arg
+      // — the slots are the params of a synthetic scope-fn, the body is
+      // the source-ordered sequence of `·set` calls and other effects.
+      let slot_idents: Vec<AstId> = slots.iter()
+        .map(|s| b_ident(b, &render_bind_ctx(s, ctx), ctx_loc(s.id, ctx)))
+        .collect();
+      let slots_pats = b_patterns(b, slot_idents);
+      let body_id = build_expr(b, body, ctx, current_ctx);
+      let fn_loc = slots.first().map(|s| ctx_loc(s.id, ctx)).unwrap_or(expr_loc);
+      let scope_fn = b_fn(b, slots_pats, vec![body_id], fn_loc);
+      let letrec_kw = b_ident(b, "·letrec", expr_loc);
+      b_apply(b, letrec_kw, vec![scope_fn], expr_loc)
+    }
+    ExprKind::Set { name, val, cont } => {
+      // Set is a compile-time binding op (like ·letrec, ·fn) — no ctx
+      // threading. Render `·set ·name, val, fn: <cont body>`. The cont
+      // inherits the enclosing scope's ctx.
+      let name_loc = ctx_loc(name.id, ctx);
+      let name_id = b_ident(b, &render_bind_ctx(name, ctx), name_loc);
+      let val_id = build_val(b, val, ctx);
+      let set_kw = b_ident(b, "·set", expr_loc);
+      let cont_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
+      b_apply(b, set_kw, vec![name_id, val_id, cont_id], expr_loc)
+    }
+    ExprKind::LetCaps { caps, binds, cont } => {
+      // Render `·letcaps <caps>, fn {name_1, name_2, ...}: <body>`.
+      // The cont's body sees `binds` as locals.
+      let caps_id = build_val(b, caps, ctx);
+      // Build the destructure pattern as a LitRec of bare idents.
+      let bind_idents: Vec<AstId> = binds.iter().map(|bn| {
+        let bind_loc = ctx_loc(bn.id, ctx);
+        b_ident(b, &render_bind_ctx(bn, ctx), bind_loc)
+      }).collect();
+      let pat_rec = b_lit_rec(b, bind_idents, expr_loc);
+      let body_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
+      // Wrap pattern + cont as a fn — `fn {a, b}: body`.
+      // build_cont already returns a fn-shaped node; replace its
+      // patterns with our LitRec. Simplest: build the pat-fn directly.
+      let letcaps_kw = b_ident(b, "·letcaps", expr_loc);
+      // Build pattern-fn: params = LitRec, body = cont body.
+      // We need to extract the cont's body. For Cont::Expr no value
+      // args, the cont renders as `fn: body` — we replace its empty
+      // params with our pattern record. Simpler path: emit a Patterns
+      // wrapper containing the LitRec.
+      let pats = b_patterns(b, vec![pat_rec]);
+      // Convert `body_id` (which build_cont built as a fn already) —
+      // we instead build a fresh fn with our pattern.
+      // Cheaper: build_cont returns a fn; extract its body via tree walk.
+      // Skip that — re-build the body directly here.
+      let _ = body_id;
+      let inner_body_id = match cont {
+        Cont::Expr { body, .. } => build_expr(b, body, ctx, current_ctx),
+        Cont::Ref(_) => {
+          // Direct ref cont — render as a placeholder ident.
+          b_ident(b, "·letcaps_cont_ref", expr_loc)
+        }
+      };
+      let fn_loc = binds.first().map(|bn| ctx_loc(bn.id, ctx)).unwrap_or(expr_loc);
+      let letcaps_fn = b_fn(b, pats, vec![inner_body_id], fn_loc);
+      b_apply(b, letcaps_kw, vec![caps_id, letcaps_fn], expr_loc)
+    }
+    ExprKind::Closure { funcref, captures, cont } => {
+      // Render `·closure <funcref>, {<name>: <ref>, ...}, fn <result>: <cont>`.
+      // The captures record is a synthetic literal — keys are the capture
+      // names as they appear inside the lifted fn body, values are the
+      // refs at the construction site.
+      let funcref_id = build_val(b, funcref, ctx);
+      // Build the captures record as `{name: ref, ...}` — each entry an
+      // Arm in a LitRec.
+      let cap_items: Vec<AstId> = captures.iter().map(|(name, val)| {
+        let name_loc = ctx_loc(name.id, ctx);
+        let key_str = render_bind_ctx(name, ctx);
+        // If the capture name matches the captured ref (the common case
+        // where the lifted body uses the same name as the construction
+        // site), render the entry as a bare ident `{name}` instead of
+        // the verbose `{name: name}`.
+        let val_matches_name = matches!(
+          &val.kind,
+          ValKind::Ref(Ref::Synth(id)) if *id == name.id,
+        );
+        if val_matches_name {
+          b_ident(b, &key_str, name_loc)
+        } else {
+          let key_id = b_ident(b, &key_str, name_loc);
+          let val_id = build_val(b, val, ctx);
+          b_arm(b, key_id, vec![val_id], name_loc)
+        }
+      }).collect();
+      let caps_rec = b_lit_rec(b, cap_items, expr_loc);
+      let cont_id = build_cont(b, cont, ctx, expr_loc, current_ctx);
+      let closure_kw = b_ident(b, "·closure", expr_loc);
+      b_apply(b, closure_kw, vec![funcref_id, caps_rec, cont_id], expr_loc)
     }
   }
 }

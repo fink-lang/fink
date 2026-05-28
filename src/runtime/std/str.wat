@@ -1893,6 +1893,7 @@
   ;;   $Num key   → single byte at index
   ;; Out of bounds → unreachable
   (func $op_dot (@impl "std/operators.fnk:op_dot" $Str _)
+    (param $ctx (ref null any))
     (param $str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     (local $s (ref $Str))
@@ -1933,7 +1934,7 @@
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
@@ -1953,7 +1954,7 @@
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 

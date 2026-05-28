@@ -8,7 +8,7 @@ The compiler pipeline. Each subdirectory is one stage. Stages are chained by typ
 parse(src, url)            → Ast
 desugar(Ast)               → DesugaredAst   (partial application + scopes)
 lower(DesugaredAst)        → Cps
-lift(Cps, DesugaredAst)    → LiftedCps      (closure + cont lifting)
+lift(Cps, DesugaredAst)    → LiftedCps      (thread_ctx → cont_lift → convert → hoist)
 compile_package(entry, …)  → Wasm           (collect → emit → DWARF → link)
 ```
 
@@ -17,10 +17,10 @@ The stage chain lives in [mod.rs](mod.rs). Most callers enter via the `to_ast` /
 ## Stages
 
 - [ast/](ast/) — lexer, parser, AST arena, formatter, `Transform` trait.
-- [partial/](partial/) — partial-application desugaring (`a | add ?`).
+- [ast_desugar/](ast_desugar/) — AST-level desugaring (partial application `a | add ?`, wildcard call `f _`).
 - [scopes/](scopes/) — name resolution, scope graph, capture/recursion classification.
 - [cps/](cps/) — AST → CPS lowering and the CPS IR.
-- [lifting/](lifting/) — unified closure + continuation lifting.
+- [closures/](closures/) — closure machinery as three sequential passes: `cont_lift` (lifts inline `Cont::Expr` args of user-fn / runtime-tail-call builtin calls into named LetFns), `convert` (closure conversion — every fn takes its captures as a `ƒcaps` record; the body destructures via `LetCaps`), `hoist` (flattens nested LetFns to top-level).
 - [wasm/](wasm/) — per-module WASM codegen: collect, emit, DWARF, WAT formatter, sourcemap.
 - [wasm-link/](wasm-link/) — package-level orchestration: walks the import graph, invokes `wasm/` per module, links the resulting binaries into a single WASM with the runtime.
 - [modules/](modules/) — host-neutral `SourceLoader` trait used by `wasm-link` to read module sources (file, in-memory, future browser host).

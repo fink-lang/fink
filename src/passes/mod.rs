@@ -19,11 +19,11 @@
 //! `Ast` must uphold the arena contract in `ast/arena-contract.md`.
 
 pub mod ast;
+pub mod ast_desugar;
+pub mod closures;
 pub mod cps;
 pub mod debug_marks;
-pub mod lifting;
 pub mod modules;
-pub mod partial;
 pub mod scopes;
 pub mod wasm;
 
@@ -68,7 +68,7 @@ pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::
 /// Desugar partial applications and run scope analysis.
 /// Produces the typed result needed by `lower()`.
 pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::transform::TransformError> {
-  let ast = partial::apply(parsed)?;
+  let ast = ast_desugar::apply(parsed)?;
   let scope = scopes::analyse(&ast, &[]);
   Ok(DesugaredAst { ast, scope })
 }
@@ -86,18 +86,21 @@ pub fn lower<'src>(
   Cps { result }
 }
 
-/// Lift closures in CPS IR — produces the result needed by codegen.
+/// Closure-convert CPS IR — produces the result needed by codegen.
 ///
-/// Threads the universe ctx through every Apply (`thread_ctx`) before
-/// lifting, so all downstream stages (lifting, lower, emit) see ctx as
-/// a first-class arg. The Fn3 calling convention in `lower` consumes
-/// the threaded shape directly.
+/// Threads the universe ctx through every Apply (`thread_ctx`) first,
+/// then runs `closures::convert` to lift fn definitions, build Closure
+/// nodes, and rewrite captured refs through LetCaps. Downstream codegen
+/// consumes the closure-converted shape.
 pub fn lift<'src>(
   cps: Cps,
   desugared: &'src DesugaredAst<'src>,
 ) -> LiftedCps {
   let threaded = cps::thread_ctx::thread_ctx(cps.result);
-  let result = lifting::lift(threaded, &desugared.ast);
+  let lifted = closures::cont_lift(threaded);
+  let converted = closures::convert(lifted);
+  let result = closures::hoist(converted);
+  let _ = desugared;
   LiftedCps { result }
 }
 

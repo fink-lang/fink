@@ -35,6 +35,15 @@
     (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
 
 
+  ;; $Cell — mutable storage cell for a LetRec slot.
+  ;; Field 0: the slot's current value (or null when unset; reading null
+  ;; traps at runtime). Captures pass the $Cell ref so writes through a
+  ;; captured slot stay visible to the original LetRec scope.
+  (type $Cell (@pub) (struct
+    (field $value (mut (ref null any)))
+  ))
+
+
   ;; $Captures — flat array of captured values.
   ;; Each element is (ref null any) — nullable to allow default-init
   ;; by array.new_default. Closures with zero captures use a null
@@ -55,6 +64,14 @@
   ;; Unified calling convention. $Fn3(captures, ctx, args) — caller
   ;; passes the universe context as a native wasm value, sidestepping
   ;; the args-list head/tail dance. Every closure func is Fn3-typed.
+  ;;
+  ;; TODO: type the captures param as `(ref null $Captures)` instead
+  ;; of `(ref null any)`. Currently every Fn3 body's prologue does a
+  ;; `ref.cast (ref $Captures)` of `$:caps_param` to access captures
+  ;; — typing the param directly would remove the cast. `apply_3`
+  ;; already sources the captures from `$Closure.captures` (which IS
+  ;; $Captures), so the change is local to the type definition and
+  ;; the codegen prologue.
   (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
 
   ;; $Ctx — universe context threaded through every Fn3 call. Carries a
@@ -74,6 +91,14 @@
   ;; The user payload is seeded with `ref.i31 0` (fink unit), not null,
   ;; so `get_ctx _` before any `set_ctx` returns a real value rather
   ;; than tripping non-null casts downstream.
+  ;;
+  ;; TODO: audit every use of `empty_ctx` across the codebase. The ONLY
+  ;; legitimate caller is the host runner at the universe entry point.
+  ;; Any internal runtime call that mints empty_ctx (rather than
+  ;; threading the caller's ctx) silently breaks ctx propagation —
+  ;; e.g. `import` / `_import_wrap_step` / `_init_module_step` /
+  ;; `_apply_2_nullable` currently do this, causing `set_ctx` after
+  ;; `import` to receive a null/fresh ctx instead of the importer's.
   (func $empty_ctx (@pub) (result (ref $Ctx))
     (struct.new $Ctx (ref.i31 (i32.const 0)))
   )

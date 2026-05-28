@@ -52,13 +52,13 @@
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
   (import "std/list.wat" "seq_pop"
-    (func $list_seq_pop (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
+    (func $list_seq_pop (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
   (import "std/list.wat" "seq_pop_back"
-    (func $list_seq_pop_back (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
+    (func $list_seq_pop_back (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
   (import "std/list.wat" "seq_prepend"
-    (func $list_seq_prepend (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))))
+    (func $list_seq_prepend (param $ctx (ref null any)) (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat" "seq_concat"
-    (func $list_seq_concat (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+    (func $list_seq_concat (param $ctx (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
   ;; Func imports — set ops
   (import "std/set.wat" "op_plus"     (func $set_op_plus     (param $b (ref $Set)) (result (ref $Set))))
@@ -75,7 +75,7 @@
   (import "std/set.wat" "op_in"       (func $set_op_in       (param $set (ref $Set)) (param $key (ref eq)) (result i32)))
   (import "std/set.wat" "op_notin"    (func $set_op_notin    (param $set (ref $Set)) (param $key (ref eq)) (result i32)))
   (import "std/set.wat" "op_empty"    (func $set_op_empty    (result i32)))
-  (import "std/set.wat" "seq_pop"     (func $set_seq_pop     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
+  (import "std/set.wat" "seq_pop"     (func $set_seq_pop     (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
 
   ;; Func imports — int ops
   ;; Numeric ops — all routed through num.wat (the numeric dispatcher).
@@ -105,14 +105,14 @@
 
   ;; Func imports — str ops
   (import "std/str.wat" "op_eq"  (func $str_op_eq  (param (ref $Str)) (result i32)))
-  (import "std/str.wat" "op_dot" (func $str_op_dot (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/str.wat" "op_dot" (func $str_op_dot (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — dict ops
   (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $RecImpl)) (param (ref eq)) (result i32)))
   (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $RecImpl)) (param (ref eq)) (result i32)))
   (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
-  (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — range ops
   (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
@@ -887,7 +887,7 @@
   ;; If empty: tail-call fail() with no args.
   ;; Else: tail-call succ(head, tail) with two args.
   (func $seq_pop (@pub) (@impl "std/seq.fnk:pop")
-      (param $ctx (ref null any))  ;; TODO ctx: not consulted
+      (param $ctx (ref null any))
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     ;; $Set → set:seq_pop
@@ -898,28 +898,32 @@
             (local.get $cursor))))
       (drop)
       (return_call $set_seq_pop
+        (local.get $ctx)
         (local.get $cursor) (local.get $fail) (local.get $succ)))
 
     ;; Default: list (or $Nil)
     (return_call $list_seq_pop
+      (local.get $ctx)
       (local.get $cursor) (local.get $fail) (local.get $succ)))
 
   ;; seq_prepend(val, seq, cont): cons-style prepend for any seq-like
   ;; container. Today $List only — sets and other seq types could
   ;; gain a typed impl in future.
   (func $seq_prepend (@pub) (@impl "std/seq.fnk:prepend")
-      (param $ctx (ref null any))  ;; TODO ctx: not consulted
+      (param $ctx (ref null any))
     (param $val (ref null any)) (param $seq (ref null any)) (param $cont (ref null any))
     (return_call $list_seq_prepend
+      (local.get $ctx)
       (local.get $val) (local.get $seq) (local.get $cont)))
 
   ;; seq_concat(a, b, cont): concatenate two seqs. Today $List only;
   ;; other seq types could gain a typed impl in future. Used for list
   ;; literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
   (func $seq_concat (@pub) (@impl "std/seq.fnk:concat")
-      (param $ctx (ref null any))  ;; TODO ctx: not consulted
+      (param $ctx (ref null any))
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_seq_concat
+      (local.get $ctx)
       (local.get $a) (local.get $b) (local.get $cont)))
 
   ;; seq_pop_back(cursor, fail, succ): peel one element off the END of a
@@ -928,10 +932,11 @@
   ;; If empty: tail-call fail() with no args.
   ;; Else: tail-call succ(init, last) with two args.
   (func $seq_pop_back (@pub) (@impl "std/seq.fnk:pop_back")
-      (param $ctx (ref null any))  ;; TODO ctx: not consulted
+      (param $ctx (ref null any))
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (return_call $list_seq_pop_back
+      (local.get $ctx)
       (local.get $cursor) (local.get $fail) (local.get $succ)))
 
   ;; =========================================================================
@@ -1051,7 +1056,7 @@
   ;;   $Rec  → rec_op_dot
   ;;   $List → list_op_dot
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
-      (param $ctx (ref null any))  ;; TODO ctx: not consulted
+      (param $ctx (ref null any))
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     ;; Try $Str
@@ -1062,6 +1067,7 @@
             (local.get $container))))
       (drop)
       (return_call $str_op_dot
+        (local.get $ctx)
         (local.get $container)
         (local.get $key)
         (local.get $cont)))
@@ -1074,6 +1080,7 @@
             (local.get $container))))
       (drop)
       (return_call $dict_op_dot
+        (local.get $ctx)
         (local.get $container)
         (local.get $key)
         (local.get $cont)))
@@ -1086,6 +1093,7 @@
             (local.get $container))))
       (drop)
       (return_call $list_op_dot
+        (local.get $ctx)
         (local.get $container)
         (local.get $key)
         (local.get $cont)))

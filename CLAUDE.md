@@ -40,7 +40,7 @@ See [docs/language.md](docs/language.md) for the authoritative user-facing synta
 ## Implementation Notes
 
 - Uses Pratt parser.
-- Pipeline: `parse → desugar (partial + scopes) → lower (CPS) → lift (unified closure + cont lifting) → compile_package (collect → emit → DWARF → link)`. See [src/passes/README.md](src/passes/README.md) for the per-stage chain and [src/passes/ast/arena-contract.md](src/passes/ast/arena-contract.md) / [src/passes/cps/transform-contract.md](src/passes/cps/transform-contract.md) for the contracts each pass must uphold.
+- Pipeline: `parse → desugar (partial + scopes) → lower (CPS) → lift (thread_ctx → cont_lift → convert → hoist) → compile_package (collect → emit → DWARF → link)`. See [src/passes/README.md](src/passes/README.md) for the per-stage chain and [src/passes/ast/arena-contract.md](src/passes/ast/arena-contract.md) / [src/passes/cps/transform-contract.md](src/passes/cps/transform-contract.md) for the contracts each pass must uphold.
 - Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing.
 
 ## Rust Conventions

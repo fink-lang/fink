@@ -112,3 +112,19 @@ test 'std .fnk file importable', fn:
     ctx.x
   | equals ƒink:
     42
+
+
+# Importer's ctx must thread INTO the imported module body (so the
+# imported module's `get_ctx` sees the importer's value), AND the
+# imported module's `set_ctx` mutations must be visible to the
+# importer's continuation after the import returns. Verifies ctx is
+# threaded end-to-end across import boundaries.
+test 'ctx threads through import', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'foo'
+    {unit} = import './test_modules/ctx_appender.fnk'
+    get_ctx _
+  | equals ":
+    foo -> bar

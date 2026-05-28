@@ -10,13 +10,13 @@ test 'add two literals', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
-        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -29,7 +29,7 @@ test 'add two literals', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBCAGCAQEHBcgFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBCAGIAQEHBdoFAHoA5gEAjAEA
 
 
 
@@ -39,29 +39,29 @@ test 'chained arithmetic', fn:
   | equals wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
-      (func $test:v_13 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+      (func $test::v_24 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+        (local $:v_3 (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
-        (local $v_14 (ref null any))
-        (local $v_3 (ref null any))
-        (local $v_5 (ref null any))
+        (local $:ret_19 (ref null any))
+        (local $:lit_5 (ref null any))
+        (local.set $:v_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
-        (local.set $v_14 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
-        (local.set $v_3 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_5 (struct.new $std/int.wat:I64 (i64.const 4)))
-        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $v_3) (local.get $v_5) (local.get $v_14))
+        (local.set $:ret_19 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
+        (local.set $:lit_5 (struct.new $std/int.wat:I64 (i64.const 4)))
+        (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $:v_3) (local.get $:lit_5) (local.get $:ret_19))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_18 (ref null any))
+        (local $:ret_0 (ref null any))
+        (local $:v_16 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_0)))
-        (local.set $v_18 (struct.new $rt/apply.wat:Closure (ref.func $test:v_13) (local.get $:caps_arg)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
-        (return_call $std/operators.fnk:op_mul (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_18))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
+        (local.set $:v_16 (struct.new $rt/apply.wat:Closure (ref.func $test::v_24) (local.get $:caps_arg)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
+        (return_call $std/operators.fnk:op_mul (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:v_16))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -74,7 +74,7 @@ test 'chained arithmetic', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:D-YFALoBAL4BAJIBARABggEBDwmkBwCSAQCuAQDMAQEAAYIBAQgBggEBBwXIBQB6AOYBAIwBAA
+    ;; sm:D_YFAJQBALoBAMQBARABiAEBDwnGBwCYAQC0AQDQAQEAAYgBAQgBiAEBBwXWBQB6AOYBAIwBAA
 
 
 test 'unary not', fn:
@@ -84,11 +84,11 @@ test 'unary not', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (ref.i31 (i32.const 1)))
-        (return_call $std/operators.fnk:op_not (local.get $:ctx_param) (local.get $v_1) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (ref.i31 (i32.const 1)))
+        (return_call $std/operators.fnk:op_not (local.get $:ctx_param) (local.get $:lit_1) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -101,7 +101,7 @@ test 'unary not', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:B8oEAJIBAQgEWgEHCKQFAHoA5gEAjAEA
+    ;; sm:B9YEAJgBAQgEYAEHCLAFAHoA5gEAjAEA
 
 
 test 'comparison eq', fn:
@@ -111,13 +111,13 @@ test 'comparison eq', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
-        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
+        (return_call $std/operators.fnk:op_eq (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -130,7 +130,7 @@ test 'comparison eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBCgGCAQEJBsQFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBCgGIAQEJBtYFAHoA5gEAjAEA
 
 
 test 'comparison lt', fn:
@@ -140,13 +140,13 @@ test 'comparison lt', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
-        (return_call $std/operators.fnk:op_lt (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
+        (return_call $std/operators.fnk:op_lt (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -159,7 +159,7 @@ test 'comparison lt', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBCAGCAQEHBcQFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBCAGIAQEHBdYFAHoA5gEAjAEA
 
 
 test 'logical and', fn:
@@ -169,13 +169,13 @@ test 'logical and', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (ref.i31 (i32.const 1)))
-        (local.set $v_2 (ref.i31 (i32.const 0)))
-        (return_call $std/operators.fnk:op_and (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (ref.i31 (i32.const 1)))
+        (local.set $:lit_2 (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:op_and (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -188,7 +188,7 @@ test 'logical and', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQAEWgESBVoBEQ7GBQB6AOYBAIwBAA
+    ;; sm:CJwFAJgBAQAEYAESBWABEQ7YBQB6AOYBAIwBAA
 
 
 test 'logical or', fn:
@@ -198,13 +198,13 @@ test 'logical or', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (ref.i31 (i32.const 1)))
-        (local.set $v_2 (ref.i31 (i32.const 0)))
-        (return_call $std/operators.fnk:op_or (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (ref.i31 (i32.const 1)))
+        (local.set $:lit_2 (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:op_or (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -217,7 +217,7 @@ test 'logical or', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQAEWgEQBVoBDw3EBQB6AOYBAIwBAA
+    ;; sm:CJwFAJgBAQAEYAEQBWABDw3WBQB6AOYBAIwBAA
 
 
 test 'power', fn:
@@ -227,13 +227,13 @@ test 'power', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 8)))
-        (return_call $std/operators.fnk:op_pow (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 8)))
+        (return_call $std/operators.fnk:op_pow (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -246,7 +246,7 @@ test 'power', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBCgGCAQEJBsYFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBCgGIAQEJBtgFAHoA5gEAjAEA
 
 
 skip test 'power float', fn:
@@ -263,13 +263,13 @@ test 'divmod', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 10)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
-        (return_call $std/operators.fnk:op_divmod (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 10)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
+        (return_call $std/operators.fnk:op_divmod (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -282,7 +282,7 @@ test 'divmod', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQAChAEBDAGCAQELB8wFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQACigEBDAGIAQELB94FAHoA5gEAjAEA
 
 
 test 'rotate left', fn:
@@ -292,13 +292,13 @@ test 'rotate left', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 1)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 4)))
-        (return_call $std/operators.fnk:op_rotl (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 1)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 4)))
+        (return_call $std/operators.fnk:op_rotl (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -311,7 +311,7 @@ test 'rotate left', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQABggEBDAGCAQELB8gFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQABiAEBDAGIAQELB9oFAHoA5gEAjAEA
 
 
 test 'rotate right', fn:
@@ -321,13 +321,13 @@ test 'rotate right', fn:
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (local $v_0 (ref null any))
-        (local $v_1 (ref null any))
-        (local $v_2 (ref null any))
-        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (i64.const 16)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 4)))
-        (return_call $std/operators.fnk:op_rotr (local.get $:ctx_param) (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 16)))
+        (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 4)))
+        (return_call $std/operators.fnk:op_rotr (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -340,4 +340,4 @@ test 'rotate right', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CIoFAJIBAQAChAEBDgGCAQENCMgFAHoA5gEAjAEA
+    ;; sm:CJwFAJgBAQACigEBDgGIAQENCNoFAHoA5gEAjAEA
