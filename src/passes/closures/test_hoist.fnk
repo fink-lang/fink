@@ -169,17 +169,17 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
       fn ·ƒcaps_32, ·ƒctx_27, ·ƒret_7, ·b_2: ·ƒret_7 ·ƒctx_27, ·b_2
       fn ·v_35:
         ·fn
-          fn ·ƒcaps_40, ·ƒctx_26, ·ƒret_5, ·a_1:
+          fn ·ƒcaps_42, ·ƒctx_26, ·ƒret_5, ·a_1:
             ·closure ·v_35, {}, fn ·v_6:
-              ·ƒret_5 _
-          fn ·v_43:
+              ·ƒret_5 ·ƒctx_26, ·v_6
+          fn ·v_45:
             ·ƒink_module fn ·ƒctx_24, ·ƒret_3:
               ·letrec fn ·foo_0:
-                ·closure ·v_43, {}, fn ·v_4:
+                ·closure ·v_45, {}, fn ·v_4:
                   ·set ·foo_0, ·v_4, fn:
                     ·ƒpub ·ƒctx_24, ·foo_0, fn ·ƒctx_30:
                       ·ƒret_3 ·ƒctx_30, ·foo_0
-    # sm:WAABHAcAAQAHCAAMABoAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKAAwBCwcMAAIACgEPDwABAA8IABQAGgAYARAHFgEJAQoAAgASAQoHAAEABxQBAAcMAAQBAAcAAQAHAgEABwIACgEABwoAAgAWAAAAFAACABQBDw8MAAIAEgELFQABABUkAQAVGAEAFRIAAgAWAQAVAAEAFRgBAAMOAAIAGgEMDwABAA8UAQAPDAAEAQAPAAEADwIBAA8CAAoBAA8KAAIAHgELFQABABUMAQADDgAEAQwPCgAIAAIAIgELAwABAAMQABQABAEAAw4ACgAUAAIAJgEAAwABAAMUABQABAEAAw
+    # sm:WgABHAcAAQAHCAAMABoAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKAAwBCwcMAAIACgEPDwABAA8IABQAGgAYARAHFgEJAQoAAgASAQoHAAEABxQBAAcMAAQBAAcAAQAHAgEABwIACgEABwoAAgAWAAAAFAAUAAQBAAcKABQBDw8MAAIAEgELFQABABUkAQAVGAEAFRIAAgAWAQAVAAEAFRgBAAMOAAIAGgEMDwABAA8UAQAPDAAEAQAPAAEADwIBAA8CAAoBAA8KAAIAHgELFQABABUMAQADDgAEAQwPCgAIAAIAIgELAwABAAMQABQABAEAAw4ACgAUAAIAJgEAAwABAAMUABQABAEAAw
 
 
 ---
@@ -252,17 +252,17 @@ test 'captured binding becomes leading param', fn:
           ·op_plus ·ƒctx_29, ·a_34, ·b_2, ·ƒret_7
       fn ·v_39:
         ·fn
-          fn ·ƒcaps_44, ·ƒctx_28, ·ƒret_5, ·a_1:
+          fn ·ƒcaps_46, ·ƒctx_28, ·ƒret_5, ·a_1:
             ·closure ·v_39, {·a_34: ·a_1}, fn ·v_6:
-              ·ƒret_5 _
-          fn ·v_47:
+              ·ƒret_5 ·ƒctx_28, ·v_6
+          fn ·v_49:
             ·ƒink_module fn ·ƒctx_26, ·ƒret_3:
               ·letrec fn ·foo_0:
-                ·closure ·v_47, {}, fn ·v_4:
+                ·closure ·v_49, {}, fn ·v_4:
                   ·set ·foo_0, ·v_4, fn:
                     ·ƒpub ·ƒctx_26, ·foo_0, fn ·ƒctx_32:
                       ·ƒret_3 ·ƒctx_32, ·foo_0
-    # sm:bQABHA8AAQAPCAAMABoAGAEUBRYBDQEKAAIACgEFDwABAA8UAQAPFgAKAQAPAAEADwIBCQEMAAABCg8CAAIADgEUBQABAAUUABQABAEAAQwABAEIAQoABAEHBRIADAETDwwAAgAKAQ8XAAEAFwgAFAAaABgBEA8WAQkBCgACABIBCg8AAQAPFAEADwwABAEADwABAA8CAQkBAAEAAQwABAEAAQoAAAEKDwIACgEADwoAAgAWAAAAFAACABQBDxcMAAIAEgELHQABAB0kAQAdGAEAHRIAAgAWAQAdAAEAHRgBAAMOAAIAGgEMFwABABcUAQAXDAAEAQAXAAEAFwIBABcCAAoBABcKAAIAHgELHQABAB0MAQADDgAEAQwXCgAIAAIAIgELAwABAAMQABQABAEAAw4ACgAUAAIAJgEAAwABAAMUABQABAEAAw
+    # sm:bwABHA8AAQAPCAAMABoAGAEUBRYBDQEKAAIACgEFDwABAA8UAQAPFgAKAQAPAAEADwIBCQEMAAABCg8CAAIADgEUBQABAAUUABQABAEAAQwABAEIAQoABAEHBRIADAETDwwAAgAKAQ8XAAEAFwgAFAAaABgBEA8WAQkBCgACABIBCg8AAQAPFAEADwwABAEADwABAA8CAQkBAAEAAQwABAEAAQoAAAEKDwIACgEADwoAAgAWAAAAFAAUAAQBAA8KABQBDxcMAAIAEgELHQABAB0kAQAdGAEAHRIAAgAWAQAdAAEAHRgBAAMOAAIAGgEMFwABABcUAQAXDAAEAQAXAAEAFwIBABcCAAoBABcKAAIAHgELHQABAB0MAQADDgAEAQwXCgAIAAIAIgELAwABAAMQABQABAEAAw4ACgAUAAIAJgEAAwABAAMUABQABAEAAw
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
@@ -275,28 +275,28 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
 
   | equals ƒink:
     ·fn
-      fn ·ƒcaps_68, ·ƒctx_42, ·ƒret_7, ·x_2: ·ƒret_7 ·ƒctx_42, ·x_2
-      fn ·v_71:
+      fn ·ƒcaps_70, ·ƒctx_42, ·ƒret_7, ·x_2: ·ƒret_7 ·ƒctx_42, ·x_2
+      fn ·v_73:
         ·fn
           fn ·ƒcaps_53, ·ƒctx_47, ·ƒret_15, ·b_4:
             ·letcaps ·ƒcaps_53, fn {·a_52}:
               ·op_plus ·ƒctx_47, ·a_52, ·b_4, ·ƒret_15
           fn ·v_57:
             ·fn
-              fn ·ƒcaps_62, ·ƒctx_46, ·ƒret_13, ·a_3:
+              fn ·ƒcaps_64, ·ƒctx_46, ·ƒret_13, ·a_3:
                 ·closure ·v_57, {·a_52: ·a_3}, fn ·v_14:
-                  ·ƒret_13 _
-              fn ·v_65:
+                  ·ƒret_13 ·ƒctx_46, ·v_14
+              fn ·v_67:
                 ·ƒink_module fn ·ƒctx_40, ·ƒret_5:
                   ·letrec fn ·f_0, ·g_1:
-                    ·closure ·v_71, {}, fn ·v_6:
+                    ·closure ·v_73, {}, fn ·v_6:
                       ·set ·f_0, ·v_6, fn:
                         ·ƒpub ·ƒctx_40, ·f_0, fn ·ƒctx_45:
-                          ·closure ·v_65, {}, fn ·v_12:
+                          ·closure ·v_67, {}, fn ·v_12:
                             ·set ·g_1, ·v_12, fn:
                               ·ƒpub ·ƒctx_45, ·g_1, fn ·ƒctx_50:
                                 ·ƒret_5 ·ƒctx_50, ·g_1
-    # sm:mwEAAQgJAAEACQgADAAaABgBEAEWAQkBCgAEAQoBAAEAARQAFAAEAQABCgAMAQ8JDAACAAoBLA8AAQAPCAAUABoAGAEUBRgBDQEKAAIAEgEFDwABAA8UAQAPFgAKAQAPAAEADwIBCQEMAAABCg8CAAIAFgEUBQABAAUUABQABAEAAQwABAEIAQoABAEHBRQAFAETDwwAAgASAQ8XAAEAFwgAHAAaABgBEA8YAQkBCgACABoBCg8AAQAPFAEADwwABAEADwABAA8CAQkBAAEAAQwABAEAAQoAAAEKDwIACgEADwwAAgAeAAAAFgACABwBDxcMAAIAGgEjKQABACkkAQApGAEcGxIAAgAeARspAAEAKRgBAAEOARwBCgACACIBEwkAAQAJFAEACQwABAEACQABAAkCAQAJAgAKAQAJCgACACYBBw0AAQANDAEAAQoABAEICQoACAACACoBBwEAAQABEAAUAAQBAAEKAAoAFAACAC4BJBcAAQAXFAEAFwwABAEAFwABABcCAQAXAgAKAQAXDAACADIBBxsAAQAbDAEAAQoABAEIFwwACAACADYBBwEAAQABEAAUAAQBAAEKAAoAFAACADoBAAEAAQABFAAUAAQBAAE
+    # sm:nQEAAQgJAAEACQgADAAaABgBEAEWAQkBCgAEAQoBAAEAARQAFAAEAQABCgAMAQ8JDAACAAoBLA8AAQAPCAAUABoAGAEUBRgBDQEKAAIAEgEFDwABAA8UAQAPFgAKAQAPAAEADwIBCQEMAAABCg8CAAIAFgEUBQABAAUUABQABAEAAQwABAEIAQoABAEHBRQAFAETDwwAAgASAQ8XAAEAFwgAHAAaABgBEA8YAQkBCgACABoBCg8AAQAPFAEADwwABAEADwABAA8CAQkBAAEAAQwABAEAAQoAAAEKDwIACgEADwwAAgAeAAAAFgAUAAQBAA8MABwBDxcMAAIAGgEjKQABACkkAQApGAEcGxIAAgAeARspAAEAKRgBAAEOARwBCgACACIBEwkAAQAJFAEACQwABAEACQABAAkCAQAJAgAKAQAJCgACACYBBw0AAQANDAEAAQoABAEICQoACAACACoBBwEAAQABEAAUAAQBAAEKAAoAFAACAC4BJBcAAQAXFAEAFwwABAEAFwABABcCAQAXAgAKAQAXDAACADIBBxsAAQAbDAEAAQoABAEIFwwACAACADYBBwEAAQABEAAUAAQBAAEKAAoAFAACADoBAAEAAQABFAAUAAQBAAE
 
 ---
 depth-2 closures — multiple nesting levels
@@ -317,23 +317,23 @@ test 'depth-2 closure', fn:
             ·op_plus ·ƒctx_42, ·v_13, ·c_3, ·ƒret_10
       fn ·v_54:
         ·fn
-          fn ·ƒcaps_60, ·ƒctx_39, ·ƒret_8, ·b_2:
-            ·letcaps ·ƒcaps_60, fn {·a_59}:
-              ·closure ·v_54, {·a_47: ·a_59, ·b_48: ·b_2}, fn ·v_9:
-                ·ƒret_8 _
-          fn ·v_64:
+          fn ·ƒcaps_62, ·ƒctx_39, ·ƒret_8, ·b_2:
+            ·letcaps ·ƒcaps_62, fn {·a_61}:
+              ·closure ·v_54, {·a_47: ·a_61, ·b_48: ·b_2}, fn ·v_9:
+                ·ƒret_8 ·ƒctx_39, ·v_9
+          fn ·v_66:
             ·fn
-              fn ·ƒcaps_69, ·ƒctx_38, ·ƒret_6, ·a_1:
-                ·closure ·v_64, {·a_59: ·a_1}, fn ·v_7:
-                  ·ƒret_6 _
-              fn ·v_72:
+              fn ·ƒcaps_73, ·ƒctx_38, ·ƒret_6, ·a_1:
+                ·closure ·v_66, {·a_61: ·a_1}, fn ·v_7:
+                  ·ƒret_6 ·ƒctx_38, ·v_7
+              fn ·v_76:
                 ·ƒink_module fn ·ƒctx_36, ·ƒret_4:
                   ·letrec fn ·foo_0:
-                    ·closure ·v_72, {}, fn ·v_5:
+                    ·closure ·v_76, {}, fn ·v_5:
                       ·set ·foo_0, ·v_5, fn:
                         ·ƒpub ·ƒctx_36, ·foo_0, fn ·ƒctx_45:
                           ·ƒret_4 ·ƒctx_45, ·foo_0
-    # sm:qwEAATAVAAEAFQgADAAaABgBGAkYAREBCgACAAoBBRUAAQAVFAEAFRYACgEAFQABABUCAR0BDAAEARABDAAAAQ4VAgACAA4BGAUAAQAFFAAUAAQBAAEMAAQBCAEMAAoAGAEHBQwAAgASAQAJAAEACRQAFAAEAQAFDAAEARABCgAEAQ8JFAAMARcVDAACAAoBEx8AAQAfCAAUABoAGAEUFRYBDQEKAAIAEgEFHwABAB8UAQAfFgAKAQAfAAEAHwIBCQEMAAABCh8CAAIAFgEUFQABABUUAQAVDAAEAQAVAAEAFQIBHQEAAQABDAAEAQABDAAEARABAAEAAQwABAEAAQoAAAEOFQIACgEAFQoAAgAaAAAAFAACABQBEx8MAAIAEgEPJwABACcIABwAGgAYARAfFgEJAQoAAgAaAQofAAEAHxQBAB8MAAQBAB8AAQAfAgEJAQABAAEMAAQBAAEKAAABCh8CAAoBAB8KAAIAHgAAABQAAgAcAQ8nDAACABoBCy0AAQAtJAEALRgBAC0SAAIAHgEALQABAC0YAQADDgACACIBDCcAAQAnFAEAJwwABAEAJwABACcCAQAnAgAKAQAnCgACACYBCy0AAQAtDAEAAw4ABAEMJwoACAACACoBCwMAAQADEAAUAAQBAAMOAAoAFAACAC4BAAMAAQADFAAUAAQBAAM
+    # sm:rwEAATAVAAEAFQgADAAaABgBGAkYAREBCgACAAoBBRUAAQAVFAEAFRYACgEAFQABABUCAR0BDAAEARABDAAAAQ4VAgACAA4BGAUAAQAFFAAUAAQBAAEMAAQBCAEMAAoAGAEHBQwAAgASAQAJAAEACRQAFAAEAQAFDAAEARABCgAEAQ8JFAAMARcVDAACAAoBEx8AAQAfCAAUABoAGAEUFRYBDQEKAAIAEgEFHwABAB8UAQAfFgAKAQAfAAEAHwIBCQEMAAABCh8CAAIAFgEUFQABABUUAQAVDAAEAQAVAAEAFQIBHQEAAQABDAAEAQABDAAEARABAAEAAQwABAEAAQoAAAEOFQIACgEAFQoAAgAaAAAAFAAUAAQBABUKABQBEx8MAAIAEgEPJwABACcIABwAGgAYARAfFgEJAQoAAgAaAQofAAEAHxQBAB8MAAQBAB8AAQAfAgEJAQABAAEMAAQBAAEKAAABCh8CAAoBAB8KAAIAHgAAABQAFAAEAQAfCgAcAQ8nDAACABoBCy0AAQAtJAEALRgBAC0SAAIAHgEALQABAC0YAQADDgACACIBDCcAAQAnFAEAJwwABAEAJwABACcCAQAnAgAKAQAnCgACACYBCy0AAQAtDAEAAw4ABAEMJwoACAACACoBCwMAAQADEAAUAAQBAAMOAAoAFAACAC4BAAMAAQADFAAUAAQBAAM
 
 
 test 'multiple captures at depth-2', fn:
@@ -350,23 +350,23 @@ test 'multiple captures at depth-2', fn:
           ·op_plus ·ƒctx_35, ·a_40, ·b_41, ·ƒret_10
       fn ·v_47:
         ·fn
-          fn ·ƒcaps_53, ·ƒctx_34, ·ƒret_8, ·b_2:
-            ·letcaps ·ƒcaps_53, fn {·a_52}:
-              ·closure ·v_47, {·a_40: ·a_52, ·b_41: ·b_2}, fn ·v_9:
-                ·ƒret_8 _
-          fn ·v_57:
+          fn ·ƒcaps_55, ·ƒctx_34, ·ƒret_8, ·b_2:
+            ·letcaps ·ƒcaps_55, fn {·a_54}:
+              ·closure ·v_47, {·a_40: ·a_54, ·b_41: ·b_2}, fn ·v_9:
+                ·ƒret_8 ·ƒctx_34, ·v_9
+          fn ·v_59:
             ·fn
-              fn ·ƒcaps_62, ·ƒctx_33, ·ƒret_6, ·a_1:
-                ·closure ·v_57, {·a_52: ·a_1}, fn ·v_7:
-                  ·ƒret_6 _
-              fn ·v_65:
+              fn ·ƒcaps_66, ·ƒctx_33, ·ƒret_6, ·a_1:
+                ·closure ·v_59, {·a_54: ·a_1}, fn ·v_7:
+                  ·ƒret_6 ·ƒctx_33, ·v_7
+              fn ·v_69:
                 ·ƒink_module fn ·ƒctx_31, ·ƒret_4:
                   ·letrec fn ·foo_0:
-                    ·closure ·v_65, {}, fn ·v_5:
+                    ·closure ·v_69, {}, fn ·v_5:
                       ·set ·foo_0, ·v_5, fn:
                         ·ƒpub ·ƒctx_31, ·foo_0, fn ·ƒctx_38:
                           ·ƒret_4 ·ƒctx_38, ·foo_0
-    # sm:nwEAATARAAEAEQgADAAaABgBGAUYAREBCgACAAoBBREAAQARFAEAERYACgEAEQABABECAR0BDAAEARABDAAAAQ4RAgACAA4BGAUAAQAFFAAUAAQBAAEMAAQBCAEMAAQBBwUUAAwBFxEMAAIACgETGwABABsIABQAGgAYARQRFgENAQoAAgASAQUbAAEAGxQBABsWAAoBABsAAQAbAgEJAQwAAAEKGwIAAgAWARQRAAEAERQBABEMAAQBABEAAQARAgEdAQABAAEMAAQBAAEMAAQBEAEAAQABDAAEAQABCgAAAQ4RAgAKAQARCgACABoAAAAUAAIAFAETGwwAAgASAQ8jAAEAIwgAHAAaABgBEBsWAQkBCgACABoBChsAAQAbFAEAGwwABAEAGwABABsCAQkBAAEAAQwABAEAAQoAAAEKGwIACgEAGwoAAgAeAAAAFAACABwBDyMMAAIAGgELKQABACkkAQApGAEAKRIAAgAeAQApAAEAKRgBAAMOAAIAIgEMIwABACMUAQAjDAAEAQAjAAEAIwIBACMCAAoBACMKAAIAJgELKQABACkMAQADDgAEAQwjCgAIAAIAKgELAwABAAMQABQABAEAAw4ACgAUAAIALgEAAwABAAMUABQABAEAAw
+    # sm:owEAATARAAEAEQgADAAaABgBGAUYAREBCgACAAoBBREAAQARFAEAERYACgEAEQABABECAR0BDAAEARABDAAAAQ4RAgACAA4BGAUAAQAFFAAUAAQBAAEMAAQBCAEMAAQBBwUUAAwBFxEMAAIACgETGwABABsIABQAGgAYARQRFgENAQoAAgASAQUbAAEAGxQBABsWAAoBABsAAQAbAgEJAQwAAAEKGwIAAgAWARQRAAEAERQBABEMAAQBABEAAQARAgEdAQABAAEMAAQBAAEMAAQBEAEAAQABDAAEAQABCgAAAQ4RAgAKAQARCgACABoAAAAUABQABAEAEQoAFAETGwwAAgASAQ8jAAEAIwgAHAAaABgBEBsWAQkBCgACABoBChsAAQAbFAEAGwwABAEAGwABABsCAQkBAAEAAQwABAEAAQoAAAEKGwIACgEAGwoAAgAeAAAAFAAUAAQBABsKABwBDyMMAAIAGgELKQABACkkAQApGAEAKRIAAgAeAQApAAEAKRgBAAMOAAIAIgEMIwABACMUAQAjDAAEAQAjAAEAIwIBACMCAAoBACMKAAIAJgELKQABACkMAQADDgAEAQwjCgAIAAIAKgELAwABAAMQABQABAEAAw4ACgAUAAIALgEAAwABAAMUABQABAEAAw
 
 
 test 'multi-fn module — add and main', fn:

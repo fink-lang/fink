@@ -37,7 +37,11 @@ pub fn convert(mut cps: CpsResult) -> CpsResult {
   // the local would default to `Bind::SynthName` and the renderer would
   // mis-name it as a value binding.
   let pre_bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
-  let mut cx = Cx { origin: &mut cps.origin, pre_bind_kinds: &pre_bind_kinds };
+  let mut cx = Cx {
+    origin: &mut cps.origin,
+    pre_bind_kinds: &pre_bind_kinds,
+    ctx_stack: Vec::new(),
+  };
   cps.root = cx.convert_expr(cps.root);
   drop(cx);
   cps
@@ -46,6 +50,11 @@ pub fn convert(mut cps: CpsResult) -> CpsResult {
 struct Cx<'a> {
   origin: &'a mut PropGraph<CpsId, Option<AstId>>,
   pre_bind_kinds: &'a PropGraph<CpsId, Option<Bind>>,
+  /// Stack of enclosing fns' ctx-param CpsIds. Top = innermost.
+  /// Used when synthesising a forwarding App for a Closure's
+  /// `Cont::Ref` cont: the synthesised call needs the enclosing fn's
+  /// ctx as the 0th arg.
+  ctx_stack: Vec<CpsId>,
 }
 
 impl Cx<'_> {
@@ -72,9 +81,19 @@ impl Cx<'_> {
         ExprKind::LetVal { name, val, cont }
       }
       ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+        // Track this fn's ctx param while we recurse into its body so
+        // nested closure-construction sites can reference the enclosing
+        // ctx when synthesising forwarding calls. thread_ctx inserts a
+        // `Bind::Ctx` as the leading param of every fn.
+        let ctx_param_id = params.iter().find_map(|p| {
+          let bn = match p { Param::Name(b) | Param::Spread(b) => b };
+          matches!(bn.kind, Bind::Ctx).then_some(bn.id)
+        });
+        if let Some(id) = ctx_param_id { self.ctx_stack.push(id); }
         // Recurse first — inner fns get converted before this one is
         // analysed.
         let fn_body = self.convert_expr(*fn_body);
+        if ctx_param_id.is_some() { self.ctx_stack.pop(); }
         let cont = self.convert_cont(cont);
 
         // Compute free variables in the converted body.
@@ -167,16 +186,46 @@ impl Cx<'_> {
           id: funcref_id,
           kind: ValKind::Ref(Ref::Synth(lifted_id)),
         };
+        // Build the Closure's cont. For an inline `Cont::Expr`, use
+        // its body verbatim (bind the closure result to `name`).
+        // For `Cont::Ref(cont_id)` synthesise an explicit forwarding
+        // call `App(cont_id, [enclosing_ctx, name])`. Closure
+        // construction is value-producing, not a tail-call, so the
+        // named cont must be invoked with ctx + result. The enclosing
+        // ctx is the `Bind::Ctx` param of the fn that contains this
+        // closure-construction site — tracked via `ctx_stack`.
+        let closure_cont = match cont {
+          Cont::Expr { args: _, body } => Cont::Expr {
+            args: vec![name.clone()],
+            body,
+          },
+          Cont::Ref(cont_id) => {
+            let enclosing_ctx_id = *self.ctx_stack.last()
+              .expect("convert: LetFn with Cont::Ref at top level — no enclosing ctx to thread");
+            let cont_val_id = self.fresh_id(None);
+            let cont_val = Val { id: cont_val_id, kind: ValKind::ContRef(cont_id) };
+            let ctx_ref_id = self.fresh_id(None);
+            let ctx_ref = Val { id: ctx_ref_id, kind: ValKind::Ref(Ref::Synth(enclosing_ctx_id)) };
+            let name_ref_id = self.fresh_id(name_origin);
+            let name_ref = Val { id: name_ref_id, kind: ValKind::Ref(Ref::Synth(name.id)) };
+            let app_id = self.fresh_id(None);
+            let body = Box::new(Expr {
+              id: app_id,
+              kind: ExprKind::App {
+                func: Callable::Val(cont_val),
+                args: vec![Arg::Val(ctx_ref), Arg::Val(name_ref)],
+              },
+            });
+            Cont::Expr { args: vec![name.clone()], body }
+          }
+        };
         let closure_id = self.fresh_id(name_origin);
         let closure_node = Expr {
           id: closure_id,
           kind: ExprKind::Closure {
             funcref,
             captures,
-            cont: Cont::Expr {
-              args: vec![name],
-              body: cont_to_body(cont, self),
-            },
+            cont: closure_cont,
           },
         };
 
@@ -237,31 +286,6 @@ impl Cx<'_> {
   }
 }
 
-/// Unwrap a Cont into its body Expr. For `Cont::Ref(id)`, synthesise a
-/// forwarding App `id(name)` — but here we use this only inside Closure
-/// to set up the Closure's cont body, where the original cont was the
-/// LetFn's cont (could be ref or expr).
-fn cont_to_body(cont: Cont, cx: &mut Cx<'_>) -> Box<Expr> {
-  match cont {
-    Cont::Expr { args: _, body } => body,
-    Cont::Ref(cont_id) => {
-      // Forward the closure result to the cont.
-      let cont_val_id = cx.fresh_id(None);
-      let cont_val = Val {
-        id: cont_val_id,
-        kind: ValKind::ContRef(cont_id),
-      };
-      let app_id = cx.fresh_id(None);
-      Box::new(Expr {
-        id: app_id,
-        kind: ExprKind::App {
-          func: Callable::Val(cont_val),
-          args: vec![],
-        },
-      })
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Free-variable collection
