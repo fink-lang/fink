@@ -64,7 +64,7 @@
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
   (import "std/list.wat"  "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat"  "empty"
     (func $list_empty (result (ref $List))))
   (import "std/list.wat"  "prepend"
@@ -194,7 +194,7 @@
             (local.get $key)))
         (if (i32.eqz (ref.is_null (local.get $existing)))
           (then
-            (return_call $list_apply_1
+            (return_call $apply_1
               (local.get $ctx)
               (local.get $existing)
               (local.get $cont))))))
@@ -404,7 +404,7 @@
     ;; passes its possibly-mutated ctx forward). Thread it onward so
     ;; the importer's continuation sees ctx mutations the imported
     ;; module made.
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (local.get $rec)
       (local.get $user_cont)))

@@ -25,9 +25,7 @@
   (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
-  ;; TODO: apply_1 wraps a single result and calls _apply — conceptually
-  ;; an apply concern, not a list one. Move to rt/apply.wat.
-  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref any)) (param $cont (ref null any))))
   (import "std/int.wat"  "fmt" (func $int_fmt (param (ref $Int)) (result (ref $Str))))
   (import "std/str.wat"  "from_bytes" (func $str_from_bytes
     (param (ref $ByteArray)) (result (ref $Str))))
@@ -170,7 +168,7 @@
   (func $cps_excl (@pub) (@impl "std/range.fnk:excl")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $excl
         (ref.cast (ref $I64) (local.get $a))
@@ -180,7 +178,7 @@
   (func $cps_incl (@pub) (@impl "std/range.fnk:incl")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $incl
         (ref.cast (ref $I64) (local.get $a))
@@ -190,7 +188,7 @@
   (func $cps_from (@pub) (@impl "std/range.fnk:from")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $from
         (ref.cast (ref $I64) (local.get $a)))
