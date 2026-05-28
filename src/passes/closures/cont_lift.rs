@@ -23,6 +23,23 @@
 //! - `hoist` flattens them to the top level.
 
 use crate::ast::AstId;
+use crate::passes::cps::ir::BuiltIn;
+
+/// Builtins that take their `Cont::Expr` args as **closure values**
+/// at the runtime call site (the runtime function calls them via
+/// `apply_3`). Their inline conts must be lifted into named LetFns
+/// so they become first-class `$Closure` refs.
+fn builtin_wants_closure_conts(b: BuiltIn) -> bool {
+  matches!(
+    b,
+    BuiltIn::IsSeqLike
+      | BuiltIn::IsRecLike
+      | BuiltIn::SeqPop
+      | BuiltIn::SeqPopBack
+      | BuiltIn::RecPop
+      | BuiltIn::RecPut,
+  )
+}
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, Callable, Cont, CpsFnKind, CpsId, CpsResult, Expr, ExprKind, Param,
   Ref, Val, ValKind,
@@ -82,11 +99,16 @@ impl Cx<'_> {
         // their own inner App-conts.
         let args: Vec<Arg> = args.into_iter().map(|a| self.lift_arg(a)).collect();
         let app = Expr { id, kind: ExprKind::App { func: func.clone(), args } };
-        // Only user-fn calls (Callable::Val) carry cont args that need
-        // lifting. BuiltIn calls keep inline Cont::Expr — codegen
-        // handles them as straight-line wasm.
-        match func {
+        // User-fn calls (Callable::Val) always need their Cont::Expr
+        // args lifted — the runtime apply path takes closure values.
+        // Most BuiltIn calls keep their inline Cont::Expr (codegen
+        // emits straight-line wasm), but a handful (IsSeqLike,
+        // IsRecLike, SeqPop, SeqPopBack, RecPop) pass their conts to
+        // a runtime function that calls them as closure values —
+        // those Cont::Expr args must also be lifted.
+        match &func {
           Callable::Val(_) => self.lift_user_app(app),
+          Callable::BuiltIn(b) if builtin_wants_closure_conts(*b) => self.lift_user_app(app),
           Callable::BuiltIn(_) => app,
         }
       }

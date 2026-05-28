@@ -124,12 +124,41 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
   let mut slot_ids: std::collections::HashSet<CpsId> = std::collections::HashSet::new();
   collect_slot_ids(&cps.root, &mut slot_ids);
+  // Per-slot wasm global. Pub'd slots reuse their `pub_globals`
+  // GlobalSym; non-pub'd slots get a fresh synth-named global so the
+  // Cell ref has somewhere to live. The Cell-ref globals are not
+  // exported and not registered with the runtime — they're just
+  // storage for the slot's mutable reference.
+  let mut slot_globals: HashMap<CpsId, GlobalSym> = HashMap::new();
+  for id in &slot_ids {
+    if let Some((g, _)) = pub_globals.get(id) {
+      slot_globals.insert(*id, *g);
+      continue;
+    }
+    // Non-pub slot: allocate a private global, named after the slot's
+    // source name (or `:v_<id>` for compiler temps) qualified with the
+    // module's FQN. No WASM export.
+    let raw = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
+    let _ = raw;  // dummy to silence unused warning; not used here
+    let source = pub_export_name(cps, ast, *id);
+    let qualified = format!("{fqn_prefix}:{source}_{}", id.0);
+    let sym = add_global(
+      &mut frag,
+      val_ref(rt.cell(), /*nullable*/ true),
+      true,
+      GlobalInit::RefNullConcrete(rt.cell()),
+      &qualified,
+      None,
+    );
+    slot_globals.insert(*id, sym);
+  }
   {
     let mut lcx = LowerCtx {
       cps, ast, rt: &rt, frag: &mut frag,
       pub_globals: &pub_globals, fqn_prefix,
       bind_kinds: &bind_kinds,
       slot_ids: &slot_ids,
+      slot_globals: &slot_globals,
     };
 
     // After hoist, top-level LetFns wrap the FinkModule App. Lower
@@ -318,9 +347,13 @@ struct LowerCtx<'a> {
   /// `struct.get $Cell.value`; Set stores via `struct.set`. Captures
   /// that close over a slot pass the `(ref $Cell)` itself, so the
   /// captured local stays in `slot_ids` (via convert's Bind::Slot
-  /// marker — TODO) and the same access path applies inside the
-  /// lifted body.
+  /// marker) and the same access path applies inside the lifted
+  /// body.
   slot_ids: &'a std::collections::HashSet<CpsId>,
+  /// Per-slot wasm global storage. Every module-level LetRec slot
+  /// gets one — pub'd slots share their GlobalSym with `pub_globals`;
+  /// non-pub'd slots get a synth-named global allocated here.
+  slot_globals: &'a HashMap<CpsId, GlobalSym>,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -521,10 +554,10 @@ fn slot_cell_ref(
   if let Some(local) = ctx.binds.get(&slot_id).copied() {
     return op_local(local);
   }
-  if let Some((gsym, _)) = lcx.pub_globals.get(&slot_id) {
+  if let Some(gsym) = lcx.slot_globals.get(&slot_id) {
     return op_global(*gsym);
   }
-  panic!("lower: slot {:?} has no Cell storage (not a pub global, not a captured local)", slot_id);
+  panic!("lower: slot {:?} has no Cell storage (not a slot global, not a captured local)", slot_id);
 }
 
 /// Resolve a CpsId to an `Operand`. Three cases, in order:
@@ -1038,10 +1071,8 @@ fn lower_expr(
       // before the corresponding Set traps via struct.get of a null
       // field, naturally enforcing the "empty slot traps" semantics.
       for slot in slots {
-        let gsym = match lcx.pub_globals.get(&slot.id) {
-          Some((g, _)) => *g,
-          None => panic!("lower: LetRec slot {:?} not registered as pub global (non-pub slots not yet supported)", slot.id),
-        };
+        let gsym = *lcx.slot_globals.get(&slot.id)
+          .unwrap_or_else(|| panic!("lower: LetRec slot {:?} has no slot_global registered", slot.id));
         // Allocate cell: `local.set $:cell_<slot> (struct.new $Cell (ref.null any))`.
         // Per-slot suffix keeps local names unique when a LetRec has
         // multiple slots — wasm uses indices at the binary level, but
@@ -1496,10 +1527,10 @@ fn is_virtual_stdlib_path(url: &str) -> bool {
 }
 
 
-/// Emit a 4-arg primitive with shape `(any, any, any, any) -> ()`.
-/// Used by `RecPut(rec, key, val, cont)` and
-/// `RecPop(rec, key, fail, succ)`. Each arg is an anyref value; conts
-/// among them get resolved through the unified id resolver.
+/// Emit a 4-arg primitive with shape `(ctx, any, any, any, any) -> ()`.
+/// After thread_ctx the CPS shape is `[ctx, ...4 user args]`; ctx is
+/// passed to the runtime as the 0th wasm arg. Used by RecPut and
+/// RecPop.
 fn emit_quaternary(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
@@ -1507,22 +1538,22 @@ fn emit_quaternary(
   args: &[Arg],
   app_id: CpsId,
 ) {
-  if args.len() != 4 {
-    panic!("lower: 4-arg primitive expects 4 args, got {}", args.len());
+  if args.len() != 5 {
+    panic!("lower: 4-arg primitive expects 5 args (ctx + 4 user args), got {}", args.len());
   }
-  let ctx_local = ctx.ctx_local.expect("emit_quaternary: enclosing fn must have :ctx_param");
-  let mut ops: Vec<Operand> = vec![op_local(ctx_local)];
-  ops.extend(args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)));
+  let _ = ctx;  // ctx_local unused; use threaded ctx from args[0]
+  let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
 }
 
-/// Emit a `(value, cont, cont)` ternary primitive (IsSeqLike,
-/// IsRecLike, SeqPop). The runtime function takes 3 anyref params:
-/// the value being tested, plus two continuations resolved as
-/// values at this layer.
+/// Emit a `(ctx, value, cont, cont)` ternary primitive (IsSeqLike,
+/// IsRecLike, SeqPop). After thread_ctx the CPS shape is
+/// `[ctx, val, succ, fail]`; ctx is passed to the runtime as the
+/// 0th wasm arg, the rest are the value being tested and two
+/// continuations resolved as values at this layer.
 fn emit_ternary_guard(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
@@ -1530,14 +1561,15 @@ fn emit_ternary_guard(
   args: &[Arg],
   app_id: CpsId,
 ) {
-  if args.len() != 3 {
-    panic!("lower: ternary primitive {:?} expects 3 args, got {}", sym, args.len());
+  if args.len() != 4 {
+    panic!("lower: ternary primitive {:?} expects 4 args (ctx + val + 2 conts), got {}", sym, args.len());
   }
-  let val_op = emit_arg_as_operand(lcx, ctx, &args[0]);
-  let cont1_op = emit_arg_as_operand(lcx, ctx, &args[1]);
-  let cont2_op = emit_arg_as_operand(lcx, ctx, &args[2]);
-  let ctx_local = ctx.ctx_local.expect("emit_ternary_guard: enclosing fn must have :ctx_param");
-  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![op_local(ctx_local), val_op, cont1_op, cont2_op]);
+  let ctx_op = emit_arg_as_operand(lcx, ctx, &args[0]);
+  let val_op = emit_arg_as_operand(lcx, ctx, &args[1]);
+  let cont1_op = emit_arg_as_operand(lcx, ctx, &args[2]);
+  let cont2_op = emit_arg_as_operand(lcx, ctx, &args[3]);
+  let _ = ctx;  // ctx_local no longer needed: use the threaded ctx arg directly
+  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![ctx_op, val_op, cont1_op, cont2_op]);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);

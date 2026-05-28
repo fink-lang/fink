@@ -64,6 +64,14 @@
   ;; Unified calling convention. $Fn3(captures, ctx, args) — caller
   ;; passes the universe context as a native wasm value, sidestepping
   ;; the args-list head/tail dance. Every closure func is Fn3-typed.
+  ;;
+  ;; TODO: type the captures param as `(ref null $Captures)` instead
+  ;; of `(ref null any)`. Currently every Fn3 body's prologue does a
+  ;; `ref.cast (ref $Captures)` of `$:caps_param` to access captures
+  ;; — typing the param directly would remove the cast. `apply_3`
+  ;; already sources the captures from `$Closure.captures` (which IS
+  ;; $Captures), so the change is local to the type definition and
+  ;; the codegen prologue.
   (type $Fn3 (@pub) (func (param (ref null any) (ref null any) (ref null any))))
 
   ;; $Ctx — universe context threaded through every Fn3 call. Carries a
