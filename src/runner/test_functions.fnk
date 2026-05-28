@@ -133,6 +133,26 @@ test 'mutual recursion at module scope', fn:
     true
 
 
+test 'mutual recursion inside fn body', fn:
+  expect run ƒink:
+    main = fn:
+      is_even = fn n:
+        match n:
+          0: true
+          _: is_odd  n - 1
+
+      is_odd = fn n:
+        match n:
+          0: false
+          _: is_even n - 1
+
+      is_even 4
+
+    main _
+  | equals ƒink:
+    true
+
+
 test 'fn equality — same fn', fn:
   expect run ƒink:
     foo = fn: 123
