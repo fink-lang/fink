@@ -292,8 +292,8 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
 // Output name conventions:
 //   source ident "foo"   → ·foo_<cps_id>
 //   synth ident n        → ·$_<n>_<cps_id>
-//   compiler temp        → ·v_<cps_id>   (no AST origin)
-//   cont param           → ·v_<cps_id>
+//   compiler temp        → ·ƒv_<cps_id>   (no AST origin)
+//   cont param           → ·ƒv_<cps_id>
 //   builtins             → ·op_plus, ·seq_prepend, …
 // ---------------------------------------------------------------------------
 
@@ -302,7 +302,7 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
 /// ```text
 ///   Ident("foo")   → ·foo_<id>
 ///   SynthIdent(n)  → ·$_<n>_<id>
-///   no origin      → ·v_<id>
+///   no origin      → ·ƒv_<id>
 /// ```
 fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   // bind_kinds wins over origin-Ident: only `SynthName` — the def-site
@@ -328,20 +328,21 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
 }
 
 /// Render a compiler-generated node with no AST origin.
-/// Checks bind_kinds for cont semantic names, falls back to ·v_N.
+/// Checks bind_kinds for cont semantic names, falls back to ·ƒv_N.
 fn render_synth_fallback(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   if let Some(bk) = ctx.bind_kinds
     && let Some(Some(kind)) = bk.try_get(cps_id) {
       return match kind {
         Bind::Caps                 => format!("·ƒcaps_{}", cps_id.0),
+        Bind::Slot                 => format!("·ƒslot_{}", cps_id.0),
         Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
         Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
         Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
         Bind::Ctx                  => format!("·ƒctx_{}", cps_id.0),
-        _ => format!("·v_{}", cps_id.0),
+        _ => format!("·ƒv_{}", cps_id.0),
       };
   }
-  format!("·v_{}", cps_id.0)
+  format!("·ƒv_{}", cps_id.0)
 }
 
 /// Render an unresolved ref as `·∅name` (source name) or `·∅_N` (no origin).
@@ -361,12 +362,13 @@ fn render_unresolved_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
 fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, ctx),
-    Bind::Synth     => format!("·v_{}", bind.id.0),
+    Bind::Synth     => format!("·ƒv_{}", bind.id.0),
     Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
     Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
     Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
     Bind::Ctx                  => format!("·ƒctx_{}", bind.id.0),
     Bind::Caps                 => format!("·ƒcaps_{}", bind.id.0),
+    Bind::Slot                 => format!("·ƒslot_{}", bind.id.0),
   }
 }
 
@@ -442,7 +444,7 @@ fn render_builtin(op: &BuiltIn) -> String {
 }
 
 /// Render a `Cont` as a result-binding lambda for use in `·apply` / `·match_*` etc.
-/// - `Cont::Expr(bind, body)` → `fn ·v_N: body`  (N from bind.id)
+/// - `Cont::Expr(bind, body)` → `fn ·ƒv_N: body`  (N from bind.id)
 /// - `Cont::Ref(cont_id)` → `fn ·v_N: ·v_cont ·v_N`  (cosmetic lambda sugar for the tail call)
 ///
 /// `site_loc` is the source location of the surrounding call — used as

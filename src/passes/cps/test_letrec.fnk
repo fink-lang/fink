@@ -81,16 +81,16 @@ test 'letrec mutual recursion', fn:
       ·letrec fn ·ping_0, ·pong_1:
         ·fn
           fn ·ƒctx_39, ·ƒret_6, ·x_2: ·pong_1 ·ƒctx_39, ·ƒret_6, ·x_2
-          fn ·v_5:
-            ·set ·ping_0, ·v_5, fn:
+          fn ·ƒv_5:
+            ·set ·ping_0, ·ƒv_5, fn:
               ·ƒpub ·ƒctx_37, ·ping_0, fn ·ƒctx_42:
                 ·fn
                   fn ·ƒctx_43, ·ƒret_14, ·x_3: ·ping_0 ·ƒctx_43, ·ƒret_14, ·x_3
-                  fn ·v_13:
-                    ·set ·pong_1, ·v_13, fn:
+                  fn ·ƒv_13:
+                    ·set ·pong_1, ·ƒv_13, fn:
                       ·ƒpub ·ƒctx_42, ·pong_1, fn ·ƒctx_46:
                         ·ƒret_4 ·ƒctx_46, ·pong_1
-    # sm:VwABACcAAQAnJAEAJxgBKBMSAAIABgEnJwABACcYAQAEFAEoBBAAAgAKARkMAAEADAgAFAAYAQwGFgEFAQoABAEGBgABAAQSABQABAEABhIABAEKAQoAFAEVDAoAAgASAQ0TAAEAEwwBAAQQAAQBDgwKAAgAAgAWAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAaATYMAAEADAgAJAAYAQwGGAEFAQoABAEGBgABAAQSABQABAEABhQABAEKAQoAJAEVDAwAAgAiAQ0TAAEAEwwBAAQQAAQBDgwMAAgAAgAmAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAqAQAEAAEABBQAFAAEAQAE
+    # sm:VwABACcAAQAnJAEAJxgBKBMSAAIABgEnJwABACcYAQAEFAEoBBAAAgAKARkMAAEADAgAFAAYAQwGFgEFAQoABAEGBgABAAQSABQABAEABhIABAEKAQoAFAEVDA4AAgASAQ0TAAEAEwwBAAQQAAQBDgwOAAgAAgAWAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAaATYMAAEADAgAJAAYAQwGGAEFAQoABAEGBgABAAQSABQABAEABhQABAEKAQoAJAEVDBAAAgAiAQ0TAAEAEwwBAAQQAAQBDgwQAAgAAgAmAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAqAQAEAAEABBQAFAAEAQAE
 
 
 ---
@@ -107,13 +107,13 @@ test 'letrec self-recursion', fn:
       ·letrec fn ·fib_0:
         ·fn
           fn ·ƒctx_28, ·ƒret_4, ·n_1:
-            ·op_minus ·ƒctx_28, ·n_1, (i8 1), fn ·ƒctx_30, ·v_8:
-              ·fib_0 ·ƒctx_30, ·ƒret_4, ·v_8
-          fn ·v_3:
-            ·set ·fib_0, ·v_3, fn:
+            ·op_minus ·ƒctx_28, ·n_1, (i8 1), fn ·ƒctx_30, ·ƒv_8:
+              ·fib_0 ·ƒctx_30, ·ƒret_4, ·ƒv_8
+          fn ·ƒv_3:
+            ·set ·fib_0, ·ƒv_3, fn:
               ·ƒpub ·ƒctx_26, ·fib_0, fn ·ƒctx_33:
                 ·ƒret_2 ·ƒctx_33, ·fib_0
-    # sm:QgABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUYAQADDgACAAoBDA8AAQAPCAAUABgBDAkWAQUBCgACABIBDgUAAQAFFgAUAAQBAAEKAAYBCAEAAQABBgEAAQQACgAYAQcFCgACABYBBwkAAQADEAAUAAQBAAkSAAQBCAUKABQBEw8KAAIAEgELFQABABUMAQADDgAEAQwPCgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEAAwABAAMUABQABAEAAw
+    # sm:QgABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUYAQADDgACAAoBDA8AAQAPCAAUABgBDAkWAQUBCgACABIBDgUAAQAFFgAUAAQBAAEKAAYBCAEAAQABBgEAAQQACgAYAQcFDgACABYBBwkAAQADEAAUAAQBAAkSAAQBCAUOABQBEw8OAAIAEgELFQABABUMAQADDgAEAQwPDgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEAAwABAAMUABQABAEAAw
 
 
 ---
@@ -134,18 +134,18 @@ test 'letrec fn val mixed', fn:
       ·letrec fn ·foo_0, ·spam_1, ·bar_2:
         ·fn
           fn ·ƒctx_43, ·ƒret_7, ·x_3: ·ƒret_7 ·ƒctx_43, ·x_3
-          fn ·v_6:
-            ·set ·foo_0, ·v_6, fn:
+          fn ·ƒv_6:
+            ·set ·foo_0, ·ƒv_6, fn:
               ·ƒpub ·ƒctx_41, ·foo_0, fn ·ƒctx_46:
                 ·set ·spam_1, (i16 1234), fn:
                   ·ƒpub ·ƒctx_46, ·spam_1, fn ·ƒctx_48:
                     ·fn
                       fn ·ƒctx_49, ·ƒret_14, ·y_4: ·foo_0 ·ƒctx_49, ·ƒret_14, ·y_4
-                      fn ·v_13:
-                        ·set ·bar_2, ·v_13, fn:
+                      fn ·ƒv_13:
+                        ·set ·bar_2, ·ƒv_13, fn:
                           ·ƒpub ·ƒctx_48, ·bar_2, fn ·ƒctx_52:
                             ·ƒret_5 ·ƒctx_52, ·bar_2
-    # sm:aQABACsAAQArJAEAKxgBNBESAAIABgEzKwABACsYAQADEgEcBBQBGAMOAAIACgEnBwABAAcIABQAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKABQBCwcKAAIAEgELDQABAA0MAQADDgAEAQwHCgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEcCwABAAsMAQAEEAAGAQ4EAAEABAgBAAQKAAgAAgAeAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAiASQLAAEACwgALAAYAQwFGAEFAQoABAEGBQABAAMQABQABAEABRQABAEIAQoALAETCwwAAgAqAQsRAAEAEQwBAAMOAAQBDAsMAAgAAgAuAQsDAAEAAxAAFAAEAQADDgAKABQAAgAyAQADAAEAAxQAFAAEAQAD
+    # sm:aQABACsAAQArJAEAKxgBNBESAAIABgEzKwABACsYAQADEgEcBBQBGAMOAAIACgEnBwABAAcIABQAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKABQBCwcOAAIAEgELDQABAA0MAQADDgAEAQwHDgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEcCwABAAsMAQAEEAAGAQ4EAAEABAgBAAQKAAgAAgAeAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAiASQLAAEACwgALAAYAQwFGAEFAQoABAEGBQABAAMQABQABAEABRQABAEIAQoALAETCxAAAgAqAQsRAAEAEQwBAAMOAAQBDAsQAAgAAgAuAQsDAAEAAxAAFAAEAQADDgAKABQAAgAyAQADAAEAAxQAFAAEAQAD
 
 
 ---
@@ -164,21 +164,21 @@ test 'letrec three-way mutual rec', fn:
       ·letrec fn ·a_0, ·b_1, ·c_2:
         ·fn
           fn ·ƒctx_46, ·ƒret_5: ·ƒret_5 ·ƒctx_46, ·b_1
-          fn ·v_4:
-            ·set ·a_0, ·v_4, fn:
+          fn ·ƒv_4:
+            ·set ·a_0, ·ƒv_4, fn:
               ·ƒpub ·ƒctx_44, ·a_0, fn ·ƒctx_49:
                 ·fn
                   fn ·ƒctx_50, ·ƒret_11: ·ƒret_11 ·ƒctx_50, ·c_2
-                  fn ·v_10:
-                    ·set ·b_1, ·v_10, fn:
+                  fn ·ƒv_10:
+                    ·set ·b_1, ·ƒv_10, fn:
                       ·ƒpub ·ƒctx_49, ·b_1, fn ·ƒctx_53:
                         ·fn
                           fn ·ƒctx_54, ·ƒret_17: ·ƒret_17 ·ƒctx_54, ·a_0
-                          fn ·v_16:
-                            ·set ·c_2, ·v_16, fn:
+                          fn ·ƒv_16:
+                            ·set ·c_2, ·ƒv_16, fn:
                               ·ƒpub ·ƒctx_53, ·c_2, fn ·ƒctx_57:
                                 ·ƒret_3 ·ƒctx_57, ·c_2
-    # sm:cgABAB0AAQAdJAEAHRgBKAkSAAIABgEnHQABAB0YAQABDgEUAQ4BFAEKAAIACgEfBQABAAUIABQAGAEIARIABAEAAQABAAEUABQABAEAAQoAFAEHBQoAAgASAQcJAAEACQwBAAEKAAQBCAUKAAgAAgAWAQcBAAEAARAAFAAEAQABCgAKABQAAgAaARwFAAEABQgAJAAYAQgBFAAEAQABAAEAARYAFAAEAQABCgAkAQcFDAACACIBBwkAAQAJDAEAAQoABAEIBQwACAACACYBBwEAAQABEAAUAAQBAAEKAAoAFAACACoBHAUAAQAFCAA0ABgBCAEUAAQBAAEAAQABFgAUAAQBAAEKADQBBwUMAAIAMgEHCQABAAkMAQABCgAEAQgFDAAIAAIANgEHAQABAAEQABQABAEAAQoACgAUAAIAOgEAAQABAAEUABQABAEAAQ
+    # sm:cgABAB0AAQAdJAEAHRgBKAkSAAIABgEnHQABAB0YAQABDgEUAQ4BFAEKAAIACgEfBQABAAUIABQAGAEIARIABAEAAQABAAEUABQABAEAAQoAFAEHBQ4AAgASAQcJAAEACQwBAAEKAAQBCAUOAAgAAgAWAQcBAAEAARAAFAAEAQABCgAKABQAAgAaARwFAAEABQgAJAAYAQgBFAAEAQABAAEAARYAFAAEAQABCgAkAQcFEAACACIBBwkAAQAJDAEAAQoABAEIBRAACAACACYBBwEAAQABEAAUAAQBAAEKAAoAFAACACoBHAUAAQAFCAA0ABgBCAEUAAQBAAEAAQABFgAUAAQBAAEKADQBBwUQAAIAMgEHCQABAAkMAQABCgAEAQgFEAAIAAIANgEHAQABAAEQABQABAEAAQoACgAUAAIAOgEAAQABAAEUABQABAEAAQ
 
 
 ---
@@ -202,11 +202,11 @@ test 'letrec nested fn body', fn:
               ·set ·x_1, (i8 1), fn:
                 ·set ·y_2, (i8 2), fn:
                   ·op_plus ·ƒctx_31, ·x_1, ·y_2, ·ƒret_5
-          fn ·v_4:
-            ·set ·foo_0, ·v_4, fn:
+          fn ·ƒv_4:
+            ·set ·foo_0, ·ƒv_4, fn:
               ·ƒpub ·ƒctx_29, ·foo_0, fn ·ƒctx_34:
                 ·ƒret_3 ·ƒctx_34, ·foo_0
-    # sm:TwABACEAAQAhJAEAIRgBACESAAIABgEAIQABACEYAQADDgACAAoBDBsAAQAbCAAUABgBLAUSAAIAEgErGwABABsYAQwBDgEQAQoAAgAWAQ8FAAEABQwBAAEKAAYBCAEAAQABBgEAAQQACAACABoBCAUAAQAFDAEAAQoABgEIAQABAAEGAQABBAAIAAIAHgEIBQABAAUUABQABAEAAQoABAEIAQoABAEHBRIAFAErGwoAAgASAQshAAEAIQwBAAMOAAQBDBsKAAgAAgAWAQsDAAEAAxAAFAAEAQADDgAKABQAAgAaAQADAAEAAxQAFAAEAQAD
+    # sm:TwABACEAAQAhJAEAIRgBACESAAIABgEAIQABACEYAQADDgACAAoBDBsAAQAbCAAUABgBLAUSAAIAEgErGwABABsYAQwBDgEQAQoAAgAWAQ8FAAEABQwBAAEKAAYBCAEAAQABBgEAAQQACAACABoBCAUAAQAFDAEAAQoABgEIAQABAAEGAQABBAAIAAIAHgEIBQABAAUUABQABAEAAQoABAEIAQoABAEHBRIAFAErGw4AAgASAQshAAEAIQwBAAMOAAQBDBsOAAgAAgAWAQsDAAEAAxAAFAAEAQADDgAKABQAAgAaAQADAAEAAxQAFAAEAQAD
 
 
 ---
@@ -229,18 +229,18 @@ test 'letrec nested mutual rec', fn:
             ·letrec fn ·inner-a_1, ·inner-b_2:
               ·fn
                 fn ·ƒctx_43, ·ƒret_7: ·ƒret_7 ·ƒctx_43, ·inner-b_2
-                fn ·v_6:
-                  ·set ·inner-a_1, ·v_6, fn:
+                fn ·ƒv_6:
+                  ·set ·inner-a_1, ·ƒv_6, fn:
                     ·fn
                       fn ·ƒctx_45, ·ƒret_13: ·ƒret_13 ·ƒctx_45, ·inner-a_1
-                      fn ·v_12:
-                        ·set ·inner-b_2, ·v_12, fn:
+                      fn ·ƒv_12:
+                        ·set ·inner-b_2, ·ƒv_12, fn:
                           ·ƒret_5 ·ƒctx_42, ·inner-a_1
-          fn ·v_4:
-            ·set ·foo_0, ·v_4, fn:
+          fn ·ƒv_4:
+            ·set ·foo_0, ·ƒv_4, fn:
               ·ƒpub ·ƒctx_40, ·foo_0, fn ·ƒctx_49:
                 ·ƒret_3 ·ƒctx_49, ·foo_0
-    # sm:ZQABAEMAAQBDJAEAQxgBAEMSAAIABgEAQwABAEMYAQADDgACAAoBDD0AAQA9CAAUABgBbAcSAAIAEgFrPQABAD0YAQwHGgEwBxYAAgAWARsLAAEACwgAIAAYAQgHEgAEAQAHAAEABxQAFAAEAQAHFgAgAQcLCgACAB4BExUAAQAVDAEABxYABAEUCwoACAACACIBMAsAAQALCAAsABgBCAcUAAQBAAcAAQAHFgAUAAQBAAcWACwBBwsMAAIAKgETFQABABUMAQAHFgAEARQLDAAIAAIALgEcBwABAAcUABQABAEABxYAFAFrPQoAAgASAQtDAAEAQwwBAAMOAAQBDD0KAAgAAgAWAQsDAAEAAxAAFAAEAQADDgAKABQAAgAaAQADAAEAAxQAFAAEAQAD
+    # sm:ZQABAEMAAQBDJAEAQxgBAEMSAAIABgEAQwABAEMYAQADDgACAAoBDD0AAQA9CAAUABgBbAcSAAIAEgFrPQABAD0YAQwHGgEwBxYAAgAWARsLAAEACwgAIAAYAQgHEgAEAQAHAAEABxQAFAAEAQAHFgAgAQcLDgACAB4BExUAAQAVDAEABxYABAEUCw4ACAACACIBMAsAAQALCAAsABgBCAcUAAQBAAcAAQAHFgAUAAQBAAcWACwBBwsQAAIAKgETFQABABUMAQAHFgAEARQLEAAIAAIALgEcBwABAAcUABQABAEABxYAFAFrPQ4AAgASAQtDAAEAQwwBAAMOAAQBDD0OAAgAAgAWAQsDAAEAAxAAFAAEAQADDgAKABQAAgAaAQADAAEAAxQAFAAEAQAD
 
 
 ---
@@ -269,88 +269,88 @@ test 'letrec is-even is-odd', fn:
           fn ·ƒctx_197, ·ƒret_6, ·n_2:
             ·fn
               fn ·ƒctx_198, ·ƒret_27: ·ƒret_27 ·ƒctx_198, true
-              fn ·v_31:
+              fn ·ƒv_31:
                 ·fn
-                  fn ·ƒctx_200, ·ƒsucc_9, ·ƒfail_10, ·v_8:
+                  fn ·ƒctx_200, ·ƒsucc_9, ·ƒfail_10, ·ƒv_8:
                     ·fn
-                      fn ·ƒctx_201: ·v_31 ·ƒctx_201, ·ƒsucc_9
-                      fn ·v_37:
+                      fn ·ƒctx_201: ·ƒv_31 ·ƒctx_201, ·ƒsucc_9
+                      fn ·ƒv_37:
                         ·fn
-                          fn ·ƒctx_203, ·ƒsucc_13, ·ƒfail_14, ·v_12:
-                            ·op_eq ·ƒctx_203, ·v_12, (i8 0), fn ·ƒctx_205, ·v_17:
-                              ·if ·v_17,
+                          fn ·ƒctx_203, ·ƒsucc_13, ·ƒfail_14, ·ƒv_12:
+                            ·op_eq ·ƒctx_203, ·ƒv_12, (i8 0), fn ·ƒctx_205, ·ƒv_17:
+                              ·if ·ƒv_17,
                                 fn: ·ƒsucc_13 ·ƒctx_205
                                 fn: ·ƒfail_14 ·ƒctx_205
-                          fn ·v_25: ·v_25 ·ƒctx_200, ·v_37, ·ƒfail_10, ·v_8
-                  fn ·v_43:
+                          fn ·ƒv_25: ·ƒv_25 ·ƒctx_200, ·ƒv_37, ·ƒfail_10, ·ƒv_8
+                  fn ·ƒv_43:
                     ·fn
                       fn ·ƒctx_209, ·ƒret_48:
-                        ·op_minus ·ƒctx_209, ·n_2, (i8 1), fn ·ƒctx_211, ·v_52:
-                          ·is-odd_1 ·ƒctx_211, ·ƒret_48, ·v_52
-                      fn ·v_59:
+                        ·op_minus ·ƒctx_209, ·n_2, (i8 1), fn ·ƒctx_211, ·ƒv_52:
+                          ·is-odd_1 ·ƒctx_211, ·ƒret_48, ·ƒv_52
+                      fn ·ƒv_59:
                         ·fn
-                          fn ·ƒctx_213, ·ƒsucc_45, ·ƒfail_46, ·v_44: ·v_59 ·ƒctx_213, ·ƒsucc_45
-                          fn ·v_64:
+                          fn ·ƒctx_213, ·ƒsucc_45, ·ƒfail_46, ·ƒv_44: ·ƒv_59 ·ƒctx_213, ·ƒsucc_45
+                          fn ·ƒv_64:
                             ·fn
-                              fn ·ƒctx_215, ·ƒret_66, ·v_65:
-                                ·v_43
+                              fn ·ƒctx_215, ·ƒret_66, ·ƒv_65:
+                                ·ƒv_43
                                   ·ƒctx_215
                                   ·ƒret_66
                                   fn ·ƒctx_217:
-                                    ·v_64
+                                    ·ƒv_64
                                       ·ƒctx_217
                                       ·ƒret_66
                                       fn ·ƒctx_219: ·panic ·ƒctx_219
-                                      ·v_65
-                                  ·v_65
-                              fn ·v_76: ·v_76 ·ƒctx_197, ·ƒret_6, ·n_2
-          fn ·v_5:
-            ·set ·is-even_0, ·v_5, fn:
+                                      ·ƒv_65
+                                  ·ƒv_65
+                              fn ·ƒv_76: ·ƒv_76 ·ƒctx_197, ·ƒret_6, ·n_2
+          fn ·ƒv_5:
+            ·set ·is-even_0, ·ƒv_5, fn:
               ·ƒpub ·ƒctx_195, ·is-even_0, fn ·ƒctx_223:
                 ·fn
                   fn ·ƒctx_224, ·ƒret_93, ·n_3:
                     ·fn
                       fn ·ƒctx_225, ·ƒret_114: ·ƒret_114 ·ƒctx_225, false
-                      fn ·v_118:
+                      fn ·ƒv_118:
                         ·fn
-                          fn ·ƒctx_227, ·ƒsucc_96, ·ƒfail_97, ·v_95:
+                          fn ·ƒctx_227, ·ƒsucc_96, ·ƒfail_97, ·ƒv_95:
                             ·fn
-                              fn ·ƒctx_228: ·v_118 ·ƒctx_228, ·ƒsucc_96
-                              fn ·v_124:
+                              fn ·ƒctx_228: ·ƒv_118 ·ƒctx_228, ·ƒsucc_96
+                              fn ·ƒv_124:
                                 ·fn
-                                  fn ·ƒctx_230, ·ƒsucc_100, ·ƒfail_101, ·v_99:
-                                    ·op_eq ·ƒctx_230, ·v_99, (i8 0), fn ·ƒctx_232, ·v_104:
-                                      ·if ·v_104,
+                                  fn ·ƒctx_230, ·ƒsucc_100, ·ƒfail_101, ·ƒv_99:
+                                    ·op_eq ·ƒctx_230, ·ƒv_99, (i8 0), fn ·ƒctx_232, ·ƒv_104:
+                                      ·if ·ƒv_104,
                                         fn: ·ƒsucc_100 ·ƒctx_232
                                         fn: ·ƒfail_101 ·ƒctx_232
-                                  fn ·v_112: ·v_112 ·ƒctx_227, ·v_124, ·ƒfail_97, ·v_95
-                          fn ·v_130:
+                                  fn ·ƒv_112: ·ƒv_112 ·ƒctx_227, ·ƒv_124, ·ƒfail_97, ·ƒv_95
+                          fn ·ƒv_130:
                             ·fn
                               fn ·ƒctx_236, ·ƒret_135:
-                                ·op_minus ·ƒctx_236, ·n_3, (i8 1), fn ·ƒctx_238, ·v_139:
-                                  ·is-even_0 ·ƒctx_238, ·ƒret_135, ·v_139
-                              fn ·v_146:
+                                ·op_minus ·ƒctx_236, ·n_3, (i8 1), fn ·ƒctx_238, ·ƒv_139:
+                                  ·is-even_0 ·ƒctx_238, ·ƒret_135, ·ƒv_139
+                              fn ·ƒv_146:
                                 ·fn
-                                  fn ·ƒctx_240, ·ƒsucc_132, ·ƒfail_133, ·v_131: ·v_146 ·ƒctx_240, ·ƒsucc_132
-                                  fn ·v_151:
+                                  fn ·ƒctx_240, ·ƒsucc_132, ·ƒfail_133, ·ƒv_131: ·ƒv_146 ·ƒctx_240, ·ƒsucc_132
+                                  fn ·ƒv_151:
                                     ·fn
-                                      fn ·ƒctx_242, ·ƒret_153, ·v_152:
-                                        ·v_130
+                                      fn ·ƒctx_242, ·ƒret_153, ·ƒv_152:
+                                        ·ƒv_130
                                           ·ƒctx_242
                                           ·ƒret_153
                                           fn ·ƒctx_244:
-                                            ·v_151
+                                            ·ƒv_151
                                               ·ƒctx_244
                                               ·ƒret_153
                                               fn ·ƒctx_246: ·panic ·ƒctx_246
-                                              ·v_152
-                                          ·v_152
-                                      fn ·v_163: ·v_163 ·ƒctx_224, ·ƒret_93, ·n_3
-                  fn ·v_92:
-                    ·set ·is-odd_1, ·v_92, fn:
+                                              ·ƒv_152
+                                          ·ƒv_152
+                                      fn ·ƒv_163: ·ƒv_163 ·ƒctx_224, ·ƒret_93, ·n_3
+                  fn ·ƒv_92:
+                    ·set ·is-odd_1, ·ƒv_92, fn:
                       ·ƒpub ·ƒctx_223, ·is-odd_1, fn ·ƒctx_250:
                         ·ƒret_4 ·ƒctx_250, ·is-odd_1
-    # sm:qwMAAQB3AAEAdyQBAHcaAXg7EgACAAYBd3cAAQB3GAEABxoBeAYUAAIACgFjMAABADAIABQAGgEQKBYBCQEKAAIAEgEkBwABAAcIABwAGgAUAAQBBgQAAQAEFgAWAAQBAAQIABwBBQcMAAIAGgEABwABAAcIACQAGgAYABoACgACACIBAAcAAQAHCAAsABYABAEABwABAAcOABYABAEABxQALAEABwwAAgAqAQAHAAEABwgANAAaABoAGgEAAQwAAgAyAQABAAEAARAAFgAEAQABDAAGAQABAAEAAQYBAAEEAAoAGgEAAQwAAgA2AQABAAEAAQoBAAEMAAIAPgAEAQABAAEAARgAFgA-AAQBAAEAAQABGAAWADQBAAEMAAQBAAcAAQAHDgAWAAQBAAcMAAQBAAcWAAQBAAcKACQBAAcMAAIAIgEYDwABAA8IACwAGgAUAAIAKgEUBQABAAUWABYABAEAAQoABgEIAQABAAEGAQABBAAKABoBBwUMAAIALgENDAABAAYWABYABAEADBQABAEOBQwALAETDwwAAgAqAQAPAAEADwgANAAaABoAGgAMAAQBAA8AAQAPDgAWAAQBAA8WADQBAA8MAAIAMgExKAABACgIADwAGgAYAQAoDAACADoBACgAAQAoSgBUAQAoWAAWAAIAQgEAKAABAChSAFwBAChgABYABAEAKAABACgQAFwBAChKAQAoDAA8AQAoDAAEAQAoAAEAKA4AFgAEAQAoEgAEAQwBCgAUARswCgACABIBEzoAAQA6DAEABxYABAEUMAoACAACABYBEwcAAQAHEAAWAAQBAAcWAAoAFgACABoBigEyAAEAMggAJAAaARAqGAEJAQoAAgAiASQIAAEACAgALAAaABYABAEGBQABAAUYABYABAEABQoALAEFCA4AAgAqAQAIAAEACAgANAAaABoAGgAMAAIAMgEACAABAAgIADwAFgAEAQAIAAEACBAAFgAEAQAIFgA8AQAIDgACADoBAAgAAQAICABEABoAHAAcAQABDAACAEIBAAEAAQABEAAWAAQBAAEMAAYBAAEAAQABBgEAAQQACgAaAQABDgACAEYBAAEAAQABCgEAAQ4AAgBOAAQBAAEAAQABGgAWAE4ABAEAAQABAAEaABYARAEAAQ4ABAEACAABAAgQABYABAEACA4ABAEACBYABAEACAwANAEACA4AAgAyARoQAAEAEAgAPAAaABYAAgA6ARYFAAEABRYAFgAEAQABCgAGAQgBAAEAAQYBAAEEAAoAGgEHBQ4AAgA-AQ8NAAEABxgAFgAEAQANFgAEARAFDgA8ARUQDgACADoBABAAAQAQCABEABoAHAAcAA4ABAEAEAABABAQABYABAEAEBgARAEAEA4AAgBCATMqAAEAKggATAAaABoBACoOAAIASgEAKgABACpcAGQBACpqABYAAgBSAQAqAAEAKmQAbAEAKnIAFgAEAQAqAAEAKhAAbAEAKlwBACoOAEwBACoOAAQBACoAAQAqEAAWAAQBACoUAAQBDAEKACQBGzIMAAIAIgEROwABADsMAQAGFAAEARIyDAAIAAIAJgERBgABAAYQABYABAEABhQACgAWAAIAKgEABgABAAYUABYABAEABg
+    # sm:qwMAAQB3AAEAdyQBAHcaAXg7EgACAAYBd3cAAQB3GAEABxoBeAYUAAIACgFjMAABADAIABQAGgEQKBYBCQEKAAIAEgEkBwABAAcIABwAGgAUAAQBBgQAAQAEFgAWAAQBAAQIABwBBQcQAAIAGgEABwABAAcIACQAGgAYABoADgACACIBAAcAAQAHCAAsABYABAEABwABAAcSABYABAEABxQALAEABxAAAgAqAQAHAAEABwgANAAaABoAGgEAARAAAgAyAQABAAEAARAAFgAEAQABEAAGAQABAAEAAQYBAAEEAAoAGgEAARAAAgA2AQABAAEAAQoBAAEQAAIAPgAEAQABAAEAARgAFgA-AAQBAAEAAQABGAAWADQBAAEQAAQBAAcAAQAHEgAWAAQBAAcQAAQBAAcWAAQBAAcOACQBAAcQAAIAIgEYDwABAA8IACwAGgAUAAIAKgEUBQABAAUWABYABAEAAQoABgEIAQABAAEGAQABBAAKABoBBwUQAAIALgENDAABAAYWABYABAEADBQABAEOBRAALAETDxAAAgAqAQAPAAEADwgANAAaABoAGgAQAAQBAA8AAQAPEgAWAAQBAA8WADQBAA8QAAIAMgExKAABACgIADwAGgAYAQAoEAACADoBACgAAQAoTgBUAQAoWAAWAAIAQgEAKAABAChWAFwBAChgABYABAEAKAABACgQAFwBAChOAQAoEAA8AQAoEAAEAQAoAAEAKBIAFgAEAQAoEgAEAQwBCgAUARswDgACABIBEzoAAQA6DAEABxYABAEUMA4ACAACABYBEwcAAQAHEAAWAAQBAAcWAAoAFgACABoBigEyAAEAMggAJAAaARAqGAEJAQoAAgAiASQIAAEACAgALAAaABYABAEGBQABAAUYABYABAEABQoALAEFCBIAAgAqAQAIAAEACAgANAAaABoAGgAQAAIAMgEACAABAAgIADwAFgAEAQAIAAEACBQAFgAEAQAIFgA8AQAIEgACADoBAAgAAQAICABEABoAHAAcAQABEAACAEIBAAEAAQABEAAWAAQBAAEQAAYBAAEAAQABBgEAAQQACgAaAQABEgACAEYBAAEAAQABCgEAARIAAgBOAAQBAAEAAQABGgAWAE4ABAEAAQABAAEaABYARAEAARIABAEACAABAAgUABYABAEACBIABAEACBYABAEACBAANAEACBIAAgAyARoQAAEAEAgAPAAaABYAAgA6ARYFAAEABRYAFgAEAQABCgAGAQgBAAEAAQYBAAEEAAoAGgEHBRIAAgA-AQ8NAAEABxgAFgAEAQANFgAEARAFEgA8ARUQEgACADoBABAAAQAQCABEABoAHAAcABIABAEAEAABABAUABYABAEAEBgARAEAEBIAAgBCATMqAAEAKggATAAaABoBACoSAAIASgEAKgABACpgAGQBACpqABYAAgBSAQAqAAEAKmgAbAEAKnIAFgAEAQAqAAEAKhAAbAEAKmABACoSAEwBACoSAAQBACoAAQAqFAAWAAQBACoUAAQBDAEKACQBGzIQAAIAIgEROwABADsMAQAGFAAEARIyEAAIAAIAJgERBgABAAYQABYABAEABhQACgAWAAIAKgEABgABAAYUABYABAEABg
 
 
 ---
@@ -368,26 +368,26 @@ test 'letrec with import binding', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_58, ·ƒret_3:
       ·letrec fn ·main_1:
-        ·import ·ƒctx_58, './bar.fnk', fn ·ƒctx_61, ·v_6:
+        ·import ·ƒctx_58, './bar.fnk', fn ·ƒctx_61, ·ƒv_6:
           ·fn
-            fn ·ƒctx_62, ·v_11:
-              ·let ·v_11, fn ·foo_0:
+            fn ·ƒctx_62, ·ƒv_11:
+              ·let ·ƒv_11, fn ·foo_0:
                 ·fn
                   fn ·ƒctx_63, ·ƒret_29: ·foo_0 ·ƒctx_63, ·ƒret_29, (i8 1)
-                  fn ·v_28:
-                    ·let ·v_28, fn ·main_1:
+                  fn ·ƒv_28:
+                    ·let ·ƒv_28, fn ·main_1:
                       ·ƒpub ·ƒctx_62, ·main_1, fn ·ƒctx_66:
                         ·ƒret_3 ·ƒctx_66, ·main_1
-            fn ·v_43:
+            fn ·ƒv_43:
               ·fn
-                fn ·ƒctx_68, ·ƒsucc_9, ·ƒfail_10, ·v_8:
-                  ·is_rec_like ·ƒctx_68, ·v_8,
-                    fn ·ƒctx_70, ·v_16:
-                      ·rec_pop ·ƒctx_70, ·v_16, 'foo', ·ƒfail_10, fn ·ƒctx_72, ·v_11, ·v_15:
-                        ·ƒsucc_9 ·ƒctx_72, ·v_11
+                fn ·ƒctx_68, ·ƒsucc_9, ·ƒfail_10, ·ƒv_8:
+                  ·is_rec_like ·ƒctx_68, ·ƒv_8,
+                    fn ·ƒctx_70, ·ƒv_16:
+                      ·rec_pop ·ƒctx_70, ·ƒv_16, 'foo', ·ƒfail_10, fn ·ƒctx_72, ·ƒv_11, ·ƒv_15:
+                        ·ƒsucc_9 ·ƒctx_72, ·ƒv_11
                     fn ·ƒctx_74: ·ƒfail_10 ·ƒctx_74
-                fn ·v_25: ·v_25 ·ƒctx_61, ·v_43, ·panic, ·v_6
-    # sm:jwEAAQAtAAEALSQBAC0YATYSEgACAAYBNS0AAQAtGAE2BBAAAgAKASUSAAEAEhIAFAAEAQ4LAAEACwIBAAsSAQALAgAKABgBDRIKAAIADgEPGgABABoIABgAGAEAGgwAAgAWAQIDAAEAAwwBARoMAAoBAgMOAAIAGgFCCwABAAsIACQAGAEMBRQABAEABQABAAMQABQABAEABRQABgEIAQABAAEGAQABBAAkARMLDAACACIBAwEAAQABDAEECwwACgENBBAAAgAmAQAEAAEABBAAFAAEAQAEEAAKABQAAgAqAQAEAAEABBQAFAAEAQAEEAAYATUaDAACABYBABoAAQAaCAAgABgAGAAaAQAaCgACAB4BABoAAQAaHAAUAAQBABoKAAIAKAAYAQAaDAACACYBABoAAQAaFAAUAAQBABoMAAQBABoAAQAaAgEAGgYBABoCAAQBABoWAAoAGAEAGhABABoMAAIAKgEAGgABABoWABQABAEAGgwAKAAUAAQBABoAAQAaGAAUACABABoMAAQBABoAAQAaDgAUAAQBABoMAAQBABoOAAQBEBI
+                fn ·ƒv_25: ·ƒv_25 ·ƒctx_61, ·ƒv_43, ·panic, ·ƒv_6
+    # sm:jwEAAQAtAAEALSQBAC0YATYSEgACAAYBNS0AAQAtGAE2BBAAAgAKASUSAAEAEhIAFAAEAQ4LAAEACwIBAAsSAQALAgAKABgBDRIOAAIADgEPGgABABoIABgAGAEAGhAAAgAWAQIDAAEAAwwBARoQAAoBAgMOAAIAGgFCCwABAAsIACQAGAEMBRQABAEABQABAAMQABQABAEABRQABgEIAQABAAEGAQABBAAkARMLEAACACIBAwEAAQABDAEECxAACgENBBAAAgAmAQAEAAEABBAAFAAEAQAEEAAKABQAAgAqAQAEAAEABBQAFAAEAQAEEAAYATUaEAACABYBABoAAQAaCAAgABgAGAAaAQAaDgACAB4BABoAAQAaHAAUAAQBABoOAAIAKAAYAQAaEAACACYBABoAAQAaFAAUAAQBABoQAAQBABoAAQAaAgEAGgYBABoCAAQBABoWAAoAGAEAGhQBABoQAAIAKgEAGgABABoWABQABAEAGhAAKAAUAAQBABoAAQAaGAAUACABABoQAAQBABoAAQAaEgAUAAQBABoQAAQBABoOAAQBEBI
 
 
 ---
@@ -412,16 +412,16 @@ test 'letrec closure forward ref', fn:
       ·letrec fn ·x_0, ·foo_1:
         ·fn
           fn ·ƒctx_38, ·ƒret_5: ·foo_1 ·ƒctx_38, ·ƒret_5, (i8 5)
-          fn ·v_4:
-            ·set ·x_0, ·v_4, fn:
+          fn ·ƒv_4:
+            ·set ·x_0, ·ƒv_4, fn:
               ·ƒpub ·ƒctx_36, ·x_0, fn ·ƒctx_41:
                 ·fn
                   fn ·ƒctx_42, ·ƒret_13, ·n_2: ·op_plus ·ƒctx_42, ·n_2, (i8 1), ·ƒret_13
-                  fn ·v_12:
-                    ·set ·foo_1, ·v_12, fn:
+                  fn ·ƒv_12:
+                    ·set ·foo_1, ·ƒv_12, fn:
                       ·ƒpub ·ƒctx_41, ·foo_1, fn ·ƒctx_45:
                         ·ƒret_3 ·ƒctx_45, ·foo_1
-    # sm:XAABAB8AAQAfJAEAHxgBHBESAAIABgEbHwABAB8YAQABDgEcAw4AAgAKARMJAAEACQgAFAAYAQgFEgAEAQAFAAEAAxAAFAAEAQAFEgAGAQgBAAEAAQYBAAEEABQBDwkKAAIAEgEHDQABAA0MAQABCgAEAQgJCgAIAAIAFgEHAQABAAEQABQABAEAAQoACgAUAAIAGgEoCwABAAsIACQAGAEMBRgBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRQAJAELCwwAAgAiAQsRAAEAEQwBAAMOAAQBDAsMAAgAAgAmAQsDAAEAAxAAFAAEAQADDgAKABQAAgAqAQADAAEAAxQAFAAEAQAD
+    # sm:XAABAB8AAQAfJAEAHxgBHBESAAIABgEbHwABAB8YAQABDgEcAw4AAgAKARMJAAEACQgAFAAYAQgFEgAEAQAFAAEAAxAAFAAEAQAFEgAGAQgBAAEAAQYBAAEEABQBDwkOAAIAEgEHDQABAA0MAQABCgAEAQgJDgAIAAIAFgEHAQABAAEQABQABAEAAQoACgAUAAIAGgEoCwABAAsIACQAGAEMBRgBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRQAJAELCxAAAgAiAQsRAAEAEQwBAAMOAAQBDAsQAAgAAgAmAQsDAAEAAxAAFAAEAQADDgAKABQAAgAqAQADAAEAAxQAFAAEAQAD
 
 
 ---
@@ -438,25 +438,25 @@ test 'letrec with seq destructure', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_60, ·ƒret_2:
       ·letrec fn ·a_0, ·b_1:
-        ·seq_prepend ·ƒctx_60, (i8 2), [], fn ·ƒctx_63, ·v_5:
-          ·seq_prepend ·ƒctx_63, (i8 1), ·v_5, fn ·ƒctx_65, ·v_8:
+        ·seq_prepend ·ƒctx_60, (i8 2), [], fn ·ƒctx_63, ·ƒv_5:
+          ·seq_prepend ·ƒctx_63, (i8 1), ·ƒv_5, fn ·ƒctx_65, ·ƒv_8:
             ·fn
-              fn ·ƒctx_66, ·v_13, ·v_14:
-                ·let ·v_13, fn ·a_0:
-                  ·let ·v_14, fn ·b_1:
+              fn ·ƒctx_66, ·ƒv_13, ·ƒv_14:
+                ·let ·ƒv_13, fn ·a_0:
+                  ·let ·ƒv_14, fn ·b_1:
                     ·ƒret_2 ·ƒctx_66, ·b_1
-              fn ·v_48:
+              fn ·ƒv_48:
                 ·fn
-                  fn ·ƒctx_67, ·ƒsucc_11, ·ƒfail_12, ·v_10:
-                    ·is_seq_like ·ƒctx_67, ·v_10,
-                      fn ·ƒctx_69, ·v_27:
-                        ·seq_pop ·ƒctx_69, ·v_27, ·ƒfail_12, fn ·ƒctx_71, ·v_13, ·v_28:
-                          ·seq_pop ·ƒctx_71, ·v_28, ·ƒfail_12, fn ·ƒctx_73, ·v_14, ·v_19:
-                            ·empty ·ƒctx_73, ·v_19, fn ·ƒctx_75, ·v_22:
-                              ·if ·v_22,
-                                fn: ·ƒsucc_11 ·ƒctx_75, ·v_13, ·v_14
+                  fn ·ƒctx_67, ·ƒsucc_11, ·ƒfail_12, ·ƒv_10:
+                    ·is_seq_like ·ƒctx_67, ·ƒv_10,
+                      fn ·ƒctx_69, ·ƒv_27:
+                        ·seq_pop ·ƒctx_69, ·ƒv_27, ·ƒfail_12, fn ·ƒctx_71, ·ƒv_13, ·ƒv_28:
+                          ·seq_pop ·ƒctx_71, ·ƒv_28, ·ƒfail_12, fn ·ƒctx_73, ·ƒv_14, ·ƒv_19:
+                            ·empty ·ƒctx_73, ·ƒv_19, fn ·ƒctx_75, ·ƒv_22:
+                              ·if ·ƒv_22,
+                                fn: ·ƒsucc_11 ·ƒctx_75, ·ƒv_13, ·ƒv_14
                                 fn: ·ƒfail_12 ·ƒctx_75
                       fn ·ƒctx_78: ·ƒfail_12 ·ƒctx_78
-                  fn ·v_39: ·v_39 ·ƒctx_65, ·v_48, ·panic, ·v_8
-    # sm:pQEAAQAPAAEADyQBAA8YAQAPEgACAAYBAA8AAQAPGAECAQ4BBgEKAAIACgESAQABAAEcABQABgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoAGAEIAQoAAgAOAQUBAAEAARwAFAAGAQABAAEAAQYBAAEEAAQBBgEKAAoAGAEFAQoAAgASARMPAAEADwgAHAAYAQAPEAEADwwAAgAaAQIBAAEAAQwBAQ8MAAoBAgEKAAIAHgEGAQABAAEMAQcPDAAKAQgBCgACACIBBw8AAQAPFAEADxQABAEIAQoAHAEHDwwAAgAaAQAPAAEADwgAJAAYABoAGgEADwwAAgAiAQAPAAEADxwAFAAEAQAPDAACACwAGAEADwwAAgAqAQAPAAEADxQAFAAEAQAPDAAEAQAPFgAKABgBAA8QAQAPDAACAC4BAA8AAQAPFAAUAAQBAA8MAAQBAA8WAAoAGAEADxABAA8MAAIAMgEADwABAA8QABQABAEADwwACgAYAQAPDAACADYBAA8AAQAPCgEADwwAAgA-AAQBAA8AAQAPGAAUAAQBAA8MAAQBAA8MAD4ABAEADwABAA8YABQALAAUAAQBAA8AAQAPGAAUACQBAA8MAAQBAA8AAQAPDgAUAAQBAA8MAAQBAA8OAAQBFAE
+                  fn ·ƒv_39: ·ƒv_39 ·ƒctx_65, ·ƒv_48, ·panic, ·ƒv_8
+    # sm:pQEAAQAPAAEADyQBAA8YAQAPEgACAAYBAA8AAQAPGAECAQ4BBgEKAAIACgESAQABAAEcABQABgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoAGAEIAQ4AAgAOAQUBAAEAARwAFAAGAQABAAEAAQYBAAEEAAQBBgEOAAoAGAEFAQ4AAgASARMPAAEADwgAHAAYAQAPFAEADxAAAgAaAQIBAAEAAQwBAQ8QAAoBAgEKAAIAHgEGAQABAAEMAQcPEAAKAQgBCgACACIBBw8AAQAPFAEADxQABAEIAQoAHAEHDxAAAgAaAQAPAAEADwgAJAAYABoAGgEADxAAAgAiAQAPAAEADxwAFAAEAQAPEAACACwAGAEADxAAAgAqAQAPAAEADxQAFAAEAQAPEAAEAQAPFgAKABgBAA8UAQAPEAACAC4BAA8AAQAPFAAUAAQBAA8QAAQBAA8WAAoAGAEADxQBAA8QAAIAMgEADwABAA8QABQABAEADxAACgAYAQAPEAACADYBAA8AAQAPCgEADxAAAgA-AAQBAA8AAQAPGAAUAAQBAA8QAAQBAA8QAD4ABAEADwABAA8YABQALAAUAAQBAA8AAQAPGAAUACQBAA8QAAQBAA8AAQAPEgAUAAQBAA8QAAQBAA8OAAQBFAE
 

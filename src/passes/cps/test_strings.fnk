@@ -29,9 +29,9 @@ test 'str tagged template', fn:
       3'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
-      ·seq_prepend ·ƒctx_11, '1⧵n2␊3', [], fn ·ƒctx_14, ·v_4:
-        ·∅foo ·ƒctx_14, ·ƒret_0, ..·v_4
-    # sm:IAABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0cABQABAEICAABAAgCAQAIFAEACAIABAEHDQABAA0CAQANAgAKABgBAA0KAAIACgEADQABAAMSABQABAEADRIABAEADQABAA0EAQAN
+      ·seq_prepend ·ƒctx_11, '1⧵n2␊3', [], fn ·ƒctx_14, ·ƒv_4:
+        ·∅foo ·ƒctx_14, ·ƒret_0, ..·ƒv_4
+    # sm:IAABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0cABQABAEICAABAAgCAQAIFAEACAIABAEHDQABAA0CAQANAgAKABgBAA0OAAIACgEADQABAAMSABQABAEADRIABAEADQABAA0EAQAN
 
 
 test 'str tagged template escape handling', fn:
@@ -39,11 +39,11 @@ test 'str tagged template escape handling', fn:
     foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_21, ·ƒret_0:
-      ·seq_prepend ·ƒctx_21, '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·ƒctx_24, ·v_4:
-        ·seq_prepend ·ƒctx_24, ·∅bar, ·v_4, fn ·ƒctx_26, ·v_7:
-          ·seq_prepend ·ƒctx_26, '⧵n⧵r⧵t⧵f', ·v_7, fn ·ƒctx_28, ·v_10:
-            ·∅foo ·ƒctx_28, ·ƒret_0, ..·v_10
-    # sm:OwABAC4AAQAuJAEALhgBAC4SAAIABgEALgABAC4cABQABAEkGwABABsCAQAbYgEAGwIABAEjLgABAC4CAQAuAgAKABgBAC4KAAIACgEALgABAC4cABQABAEcAxAABAEbLgoACgAYAQAuCgACAA4BAC4AAQAuHAAUAAQBCAgAAQAIAgEACCABAAgCAAQBBy4KAAoAGAEALgwAAgASAQAuAAEAAxIAFAAEAQAuEgAEAQAuAAEALgQBAC4
+      ·seq_prepend ·ƒctx_21, '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·ƒctx_24, ·ƒv_4:
+        ·seq_prepend ·ƒctx_24, ·∅bar, ·ƒv_4, fn ·ƒctx_26, ·ƒv_7:
+          ·seq_prepend ·ƒctx_26, '⧵n⧵r⧵t⧵f', ·ƒv_7, fn ·ƒctx_28, ·ƒv_10:
+            ·∅foo ·ƒctx_28, ·ƒret_0, ..·ƒv_10
+    # sm:OwABAC4AAQAuJAEALhgBAC4SAAIABgEALgABAC4cABQABAEkGwABABsCAQAbYgEAGwIABAEjLgABAC4CAQAuAgAKABgBAC4OAAIACgEALgABAC4cABQABAEcAxAABAEbLg4ACgAYAQAuDgACAA4BAC4AAQAuHAAUAAQBCAgAAQAIAgEACCABAAgCAAQBBy4OAAoAGAEALhAAAgASAQAuAAEAAxIAFAAEAQAuEgAEAQAuAAEALgQBAC4
 
 
 test 'str implicit formatting handling', fn:

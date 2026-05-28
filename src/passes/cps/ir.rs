@@ -149,6 +149,7 @@ pub enum Bind {
   Cont(ContKind),  // continuation parameter with semantic role
   Ctx,             // universe-context parameter: rendered as ·ƒctx_{cps_id}
   Caps,            // closure caps record parameter: rendered as ·ƒcaps_{cps_id}
+  Slot,            // captured LetRec slot — local that holds a Cell ref
 }
 
 /// Semantic role of a continuation parameter.

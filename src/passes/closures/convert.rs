@@ -37,9 +37,15 @@ pub fn convert(mut cps: CpsResult) -> CpsResult {
   // the local would default to `Bind::SynthName` and the renderer would
   // mis-name it as a value binding.
   let pre_bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
+  // Walk the IR collecting every LetRec slot id. Captures of a slot
+  // need Bind::Slot on the local (the local holds a cell ref, not a
+  // value) so codegen can route reads/writes through the cell.
+  let mut slot_ids: HashSet<CpsId> = HashSet::new();
+  collect_slot_ids(&cps.root, &mut slot_ids);
   let mut cx = Cx {
     origin: &mut cps.origin,
     pre_bind_kinds: &pre_bind_kinds,
+    slot_ids: &slot_ids,
     ctx_stack: Vec::new(),
   };
   cps.root = cx.convert_expr(cps.root);
@@ -47,9 +53,49 @@ pub fn convert(mut cps: CpsResult) -> CpsResult {
   cps
 }
 
+fn collect_slot_ids(expr: &Expr, out: &mut HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetRec { slots, body } => {
+      for s in slots { out.insert(s.id); }
+      collect_slot_ids(body, out);
+    }
+    ExprKind::LetVal { cont, .. } => { walk_cont(cont, out); }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      collect_slot_ids(fn_body, out);
+      walk_cont(cont, out);
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(Cont::Expr { body, .. }) => collect_slot_ids(body, out),
+          Arg::Expr(e) => collect_slot_ids(e, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_slot_ids(then, out);
+      collect_slot_ids(else_, out);
+    }
+    ExprKind::Set { cont, .. } => walk_cont(cont, out),
+    ExprKind::Closure { cont, .. } => walk_cont(cont, out),
+    ExprKind::LetCaps { cont, .. } => walk_cont(cont, out),
+  }
+}
+
+fn walk_cont(cont: &Cont, out: &mut HashSet<CpsId>) {
+  if let Cont::Expr { body, .. } = cont {
+    collect_slot_ids(body, out);
+  }
+}
+
 struct Cx<'a> {
   origin: &'a mut PropGraph<CpsId, Option<AstId>>,
   pre_bind_kinds: &'a PropGraph<CpsId, Option<Bind>>,
+  /// Every LetRec slot id in the input tree. Captures of slots get
+  /// `Bind::Slot` on the local — codegen treats the local as a cell
+  /// ref, not an unwrapped value.
+  slot_ids: &'a HashSet<CpsId>,
   /// Stack of enclosing fns' ctx-param CpsIds. Top = innermost.
   /// Used when synthesising a forwarding App for a Closure's
   /// `Cont::Ref` cont: the synthesised call needs the enclosing fn's
@@ -62,10 +108,14 @@ impl Cx<'_> {
     self.origin.push(origin)
   }
 
-  /// Look up the Bind kind of an outer CpsId from the pre-snapshot
-  /// `bind_kinds`. Defaults to `SynthName` if the id has no recorded
-  /// kind (e.g. compiler temps).
+  /// Look up the Bind kind of an outer CpsId. Slot ids → `Bind::Slot`
+  /// (the local holds a cell ref, not the unwrapped value). Otherwise
+  /// the outer's bind kind from the pre-snapshot, defaulting to
+  /// `SynthName` if not recorded.
   fn outer_bind_kind(&self, outer: CpsId) -> Bind {
+    if self.slot_ids.contains(&outer) {
+      return Bind::Slot;
+    }
     self.pre_bind_kinds
       .try_get(outer)
       .and_then(|o| *o)
@@ -441,11 +491,19 @@ fn rename_refs_in_expr(
       ExprKind::LetFn { name, params, fn_kind, fn_body, cont }
     }
     ExprKind::App { func, args } => {
+      // Pub's `val` arg (args[1] after thread_ctx) names the slot
+      // being exported. Pub'd globals are allocated keyed on the
+      // outer slot id; if we rename `x_1 → x_48` inside a lifted
+      // body, `x_48` has no global and lower will not find it. Keep
+      // the val arg pointing at the outer slot id; reads at codegen
+      // route through pub_globals.
+      let is_pub = matches!(func, Callable::BuiltIn(crate::passes::cps::ir::BuiltIn::Pub));
       let func = match func {
         Callable::Val(v) => Callable::Val(rename_in_val(v, rename)),
         Callable::BuiltIn(_) => func,
       };
-      let args = args.into_iter().map(|a| match a {
+      let args = args.into_iter().enumerate().map(|(i, a)| match a {
+        Arg::Val(v) if is_pub && i == 1 => Arg::Val(v),
         Arg::Val(v) => Arg::Val(rename_in_val(v, rename)),
         Arg::Spread(v) => Arg::Spread(rename_in_val(v, rename)),
         Arg::Cont(c) => Arg::Cont(rename_refs_in_cont(c, rename)),

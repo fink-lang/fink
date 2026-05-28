@@ -43,12 +43,12 @@ test 'closures pure fn', fn:
       ·letrec fn ·add_0:
         ·fn
           fn ·ƒcaps_29, ·ƒctx_24, ·ƒret_5, ·a_1, ·b_2: ·op_plus ·ƒctx_24, ·a_1, ·b_2, ·ƒret_5
-          fn ·v_32:
-            ·closure ·v_32, {}, fn ·v_4:
-              ·set ·add_0, ·v_4, fn:
+          fn ·ƒv_32:
+            ·closure ·ƒv_32, {}, fn ·ƒv_4:
+              ·set ·add_0, ·ƒv_4, fn:
                 ·ƒpub ·ƒctx_22, ·add_0, fn ·ƒctx_27:
                   ·ƒret_3 ·ƒctx_27, ·add_0
-    # sm:QgABABQAAQAUJAEAFBgBABQSAAIABgEAFAABABQYAQADDgACAAoBDA4AAQAOCAAUABoAGAESBRYBCwEOAQYBCgAEAQYFAAEABRQAFAAEAQABCgAEAQgBCgAEAQcFEgAUAREODAACABIBAA4AAQAOFAEADgwABAEADgABAA4CAQAOAgAKAQAOCgACABYBCxQAAQAUDAEAAw4ABAEMDgoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
+    # sm:QgABABQAAQAUJAEAFBgBABQSAAIABgEAFAABABQYAQADDgACAAoBDA4AAQAOCAAUABoAGAESBRYBCwEOAQYBCgAEAQYFAAEABRQAFAAEAQABCgAEAQgBCgAEAQcFEgAUAREOEAACABIBAA4AAQAOFAEADhAABAEADgABAA4CAQAOAgAKAQAODgACABYBCxQAAQAUDAEAAw4ABAEMDg4ACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
 
 
 ---
@@ -66,15 +66,15 @@ test 'closures self-rec', fn:
       ·letrec fn ·fib_0:
         ·fn
           fn ·ƒcaps_36, ·ƒctx_28, ·ƒret_4, ·n_1:
-            ·letcaps ·ƒcaps_36, fn {·fib_35}:
-              ·op_minus ·ƒctx_28, ·n_1, (i8 1), fn ·ƒctx_30, ·v_8:
-                ·fib_35 ·ƒctx_30, ·ƒret_4, ·v_8
-          fn ·v_40:
-            ·closure ·v_40, {·fib_35: ·fib_0}, fn ·v_3:
-              ·set ·fib_0, ·v_3, fn:
+            ·letcaps ·ƒcaps_36, fn {·ƒslot_35}:
+              ·op_minus ·ƒctx_28, ·n_1, (i8 1), fn ·ƒctx_30, ·ƒv_8:
+                ·ƒslot_35 ·ƒctx_30, ·ƒret_4, ·ƒv_8
+          fn ·ƒv_40:
+            ·closure ·ƒv_40, {·ƒslot_35: ·fib_0}, fn ·ƒv_3:
+              ·set ·fib_0, ·ƒv_3, fn:
                 ·ƒpub ·ƒctx_26, ·fib_0, fn ·ƒctx_33:
                   ·ƒret_2 ·ƒctx_33, ·fib_0
-    # sm:XgABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUYAQADDgACAAoBDA8AAQAPCAAUABoAGAEMCRYBBQEKAAIAEgEFDwABAA8UAQAPFgAKAQAPAAEADwIBCwMQAAABDA8CAAIAFgEUBQABAAUWABQABAEAAQoABgEIAQABAAEGAQABBAAKABgBBwUKAAIAGgEHCQABAAMSABQABAEACRIABAEIBQoAFAETDwwAAgASAQAPAAEADxQBAA8MAAQBAA8AAQAPAgELAwABAAMQAAQBAAMOAAABDA8CAAoBAA8KAAIAFgELFQABABUMAQADDgAEAQwPCgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
+    # sm:XgABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUYAQADDgACAAoBDA8AAQAPCAAUABoAGAEMCRYBBQEKAAIAEgEFDwABAA8UAQAPFgAKAQAPAAEADwIBCwMWAAABDA8CAAIAFgEUBQABAAUWABQABAEAAQoABgEIAQABAAEGAQABBAAKABgBBwUOAAIAGgEHCQABAAMYABQABAEACRIABAEIBQ4AFAETDxAAAgASAQAPAAEADxQBAA8QAAQBAA8AAQAPAgELAwABAAMWAAQBAAMOAAABDA8CAAoBAA8OAAIAFgELFQABABUMAQADDgAEAQwPDgAIAAIAGgELAwABAAMQABQABAEAAw4ACgAUAAIAHgEAAwABAAMUABQABAEAAw
 
 
 ---
@@ -91,22 +91,22 @@ test 'closures mutual rec', fn:
       ·letrec fn ·ping_0, ·pong_1:
         ·fn
           fn ·ƒcaps_57, ·ƒctx_39, ·ƒret_6, ·x_2:
-            ·letcaps ·ƒcaps_57, fn {·pong_56}:
-              ·pong_56 ·ƒctx_39, ·ƒret_6, ·x_2
-          fn ·v_61:
-            ·closure ·v_61, {·pong_56: ·pong_1}, fn ·v_5:
-              ·set ·ping_0, ·v_5, fn:
+            ·letcaps ·ƒcaps_57, fn {·ƒslot_56}:
+              ·ƒslot_56 ·ƒctx_39, ·ƒret_6, ·x_2
+          fn ·ƒv_61:
+            ·closure ·ƒv_61, {·ƒslot_56: ·pong_1}, fn ·ƒv_5:
+              ·set ·ping_0, ·ƒv_5, fn:
                 ·ƒpub ·ƒctx_37, ·ping_0, fn ·ƒctx_42:
                   ·fn
                     fn ·ƒcaps_49, ·ƒctx_43, ·ƒret_14, ·x_3:
-                      ·letcaps ·ƒcaps_49, fn {·ping_48}:
-                        ·ping_48 ·ƒctx_43, ·ƒret_14, ·x_3
-                    fn ·v_53:
-                      ·closure ·v_53, {·ping_48: ·ping_0}, fn ·v_13:
-                        ·set ·pong_1, ·v_13, fn:
+                      ·letcaps ·ƒcaps_49, fn {·ƒslot_48}:
+                        ·ƒslot_48 ·ƒctx_43, ·ƒret_14, ·x_3
+                    fn ·ƒv_53:
+                      ·closure ·ƒv_53, {·ƒslot_48: ·ping_0}, fn ·ƒv_13:
+                        ·set ·pong_1, ·ƒv_13, fn:
                           ·ƒpub ·ƒctx_42, ·pong_1, fn ·ƒctx_46:
                             ·ƒret_4 ·ƒctx_46, ·pong_1
-    # sm:kQEAAQAnAAEAJyQBACcYASgTEgACAAYBJycAAQAnGAEABBQBKAQQAAIACgEZDAABAAwIABQAGgAYAQwGFgEFAQoAAgASAQUMAAEADBQBAAwWAAoBAAwAAQAMAgEaBBIAAAEZDAIAAgAWAQwGAAEABBQAFAAEAQAGEgAEAQoBCgAUARUMDAACABIBAAwAAQAMFAEADAwABAEADAABAAwCARoEAAEABBIABAEABBAAAAEZDAIACgEADAoAAgAWAQ0TAAEAEwwBAAQQAAQBDgwKAAgAAgAaAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAeATYMAAEADAgAKAAaABgBDAYYAQUBCgACACYBBQwAAQAMFAEADBYACgEADAABAAwCATUEEgAAATYMAgACACoBDAYAAQAEFAAUAAQBAAYUAAQBCgEKACgBFQwMAAIAJgEADAABAAwUAQAMDAAEAQAMAAEADAIBNQQAAQAEEgAEAQAEEAAAATYMAgAKAQAMDAACACoBDRMAAQATDAEABBAABAEODAwACAACAC4BDQQAAQAEEAAUAAQBAAQQAAoAFAACADIBAAQAAQAEFAAUAAQBAAQ
+    # sm:kQEAAQAnAAEAJyQBACcYASgTEgACAAYBJycAAQAnGAEABBQBKAQQAAIACgEZDAABAAwIABQAGgAYAQwGFgEFAQoAAgASAQUMAAEADBQBAAwWAAoBAAwAAQAMAgEaBBYAAAEZDAIAAgAWAQwGAAEABBgAFAAEAQAGEgAEAQoBCgAUARUMEAACABIBAAwAAQAMFAEADBAABAEADAABAAwCARoEAAEABBYABAEABBAAAAEZDAIACgEADA4AAgAWAQ0TAAEAEwwBAAQQAAQBDgwOAAgAAgAaAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAeATYMAAEADAgAKAAaABgBDAYYAQUBCgACACYBBQwAAQAMFAEADBYACgEADAABAAwCATUEFgAAATYMAgACACoBDAYAAQAEGAAUAAQBAAYUAAQBCgEKACgBFQwQAAIAJgEADAABAAwUAQAMEAAEAQAMAAEADAIBNQQAAQAEFgAEAQAEEAAAATYMAgAKAQAMEAACACoBDRMAAQATDAEABBAABAEODBAACAACAC4BDQQAAQAEEAAUAAQBAAQQAAoAFAACADIBAAQAAQAEFAAUAAQBAAQ
 
 
 ---
@@ -130,16 +130,16 @@ test 'closures nested param capture', fn:
                 fn ·ƒcaps_43, ·ƒctx_36, ·ƒret_8, ·b_3:
                   ·letcaps ·ƒcaps_43, fn {·a_42}:
                     ·op_plus ·ƒctx_36, ·a_42, ·b_3, ·ƒret_8
-                fn ·v_47:
-                  ·closure ·v_47, {·a_42: ·a_1}, fn ·v_7:
-                    ·set ·inner_2, ·v_7, fn:
+                fn ·ƒv_47:
+                  ·closure ·ƒv_47, {·a_42: ·a_1}, fn ·ƒv_7:
+                    ·set ·inner_2, ·ƒv_7, fn:
                       ·ƒret_6 ·ƒctx_35, ·inner_2
-          fn ·v_53:
-            ·closure ·v_53, {}, fn ·v_5:
-              ·set ·foo_0, ·v_5, fn:
+          fn ·ƒv_53:
+            ·closure ·ƒv_53, {}, fn ·ƒv_5:
+              ·set ·foo_0, ·ƒv_5, fn:
                 ·ƒpub ·ƒctx_33, ·foo_0, fn ·ƒctx_40:
                   ·ƒret_4 ·ƒctx_40, ·foo_0
-    # sm:fAABACkAAQApJAEAKRgBACkSAAIABgEAKQABACkYAQADDgACAAoBDCMAAQAjCAAUABoAGAE8BRYBNQEKAAIAEgEFIwABACMYARAFEgACABYBEAsAAQALCAAgABoAGAEMBRYBBQEKAAIAHgEFCwABAAsUAQALFgAKAQALAAEACwIBGQEMAAABGgsCAAIAIgEMBQABAAUUABQABAEAAQwABAEIAQoABAEHBRIAIAELCwwAAgAeAQALAAEACxQBAAsMAAQBAAsAAQALAgEZAQABAAEMAAQBAAEKAAABGgsCAAoBAAsKAAIAIgEPEwABABMMAQAFEgAEARALCgAIAAIAJgEcBQABAAUUABQABAEABRIAFAE7IwwAAgASAQAjAAEAIxQBACMMAAQBACMAAQAjAgEAIwIACgEAIwoAAgAWAQspAAEAKQwBAAMOAAQBDCMKAAgAAgAaAQsDAAEAAxAAFAAEAQADDgAKABQAAgAeAQADAAEAAxQAFAAEAQAD
+    # sm:fAABACkAAQApJAEAKRgBACkSAAIABgEAKQABACkYAQADDgACAAoBDCMAAQAjCAAUABoAGAE8BRYBNQEKAAIAEgEFIwABACMYARAFEgACABYBEAsAAQALCAAgABoAGAEMBRYBBQEKAAIAHgEFCwABAAsUAQALFgAKAQALAAEACwIBGQEMAAABGgsCAAIAIgEMBQABAAUUABQABAEAAQwABAEIAQoABAEHBRIAIAELCxAAAgAeAQALAAEACxQBAAsQAAQBAAsAAQALAgEZAQABAAEMAAQBAAEKAAABGgsCAAoBAAsOAAIAIgEPEwABABMMAQAFEgAEARALDgAIAAIAJgEcBQABAAUUABQABAEABRIAFAE7IxAAAgASAQAjAAEAIxQBACMQAAQBACMAAQAjAgEAIwIACgEAIw4AAgAWAQspAAEAKQwBAAMOAAQBDCMOAAgAAgAaAQsDAAEAAxAAFAAEAQADDgAKABQAAgAeAQADAAEAAxQAFAAEAQAD
 
 
 ---
@@ -161,21 +161,21 @@ test 'closures multiple captures', fn:
             ·letrec fn ·helper_2, ·use_3:
               ·fn
                 fn ·ƒcaps_75, ·ƒctx_55, ·ƒret_10, ·x_4: ·op_plus ·ƒctx_55, ·x_4, (i8 1), ·ƒret_10
-                fn ·v_78:
-                  ·closure ·v_78, {}, fn ·v_9:
-                    ·set ·helper_2, ·v_9, fn:
+                fn ·ƒv_78:
+                  ·closure ·ƒv_78, {}, fn ·ƒv_9:
+                    ·set ·helper_2, ·ƒv_9, fn:
                       ·fn
                         fn ·ƒcaps_67, ·ƒctx_57, ·ƒret_18, ·y_5:
-                          ·letcaps ·ƒcaps_67, fn {·a_65, ·helper_66}:
-                            ·op_plus ·ƒctx_57, ·a_65, ·y_5, fn ·ƒctx_59, ·v_22:
-                              ·helper_66 ·ƒctx_59, ·ƒret_18, ·v_22
-                        fn ·v_72:
-                          ·closure ·v_72, {·a_65: ·a_1, ·helper_66: ·helper_2}, fn ·v_17:
-                            ·set ·use_3, ·v_17, fn:
+                          ·letcaps ·ƒcaps_67, fn {·a_65, ·ƒslot_66}:
+                            ·op_plus ·ƒctx_57, ·a_65, ·y_5, fn ·ƒctx_59, ·ƒv_22:
+                              ·ƒslot_66 ·ƒctx_59, ·ƒret_18, ·ƒv_22
+                        fn ·ƒv_72:
+                          ·closure ·ƒv_72, {·a_65: ·a_1, ·ƒslot_66: ·helper_2}, fn ·ƒv_17:
+                            ·set ·use_3, ·ƒv_17, fn:
                               ·ƒret_8 ·ƒctx_54, ·use_3
-          fn ·v_84:
-            ·closure ·v_84, {}, fn ·v_7:
-              ·set ·foo_0, ·v_7, fn:
+          fn ·ƒv_84:
+            ·closure ·ƒv_84, {}, fn ·ƒv_7:
+              ·set ·foo_0, ·ƒv_7, fn:
                 ·ƒpub ·ƒctx_52, ·foo_0, fn ·ƒctx_63:
                   ·ƒret_6 ·ƒctx_63, ·foo_0
-    # sm:uAEAAQBDAAEAQyQBAEMYAQBDEgACAAYBAEMAAQBDGAEAAw4AAgAKAQw9AAEAPQgAFAAaABgBdAMWAW0BCgACABIBBT0AAQA9GAEQBhgBLgMOAAIAFgEbCwABAAsIACAAGgAYAQwFGAEFAQoABAEGBQABAAUUABQABAEAAQoABgEIAQABAAEGAQABBAAEAQcFFAAgAQsLDAACAB4BAAsAAQALFAEACwwABAEACwABAAsCAQALAgAKAQALCgACACIBERQAAQAUDAEABhQABAESCwoACAACACYBKBIAAQASCAAwABoAGAEMDBgBBQEKAAIALgEFEgABABIUAQASFgAKAQASAAEAEgIBQwEMAAQBCgYWAAABOhICAAIAMgEaBQABAAUUABQABAEAAQwABAEIAQoACgAYAQcFDAACADYBDQwAAQAGGAAUAAQBAAwUAAQBDgUMADABGRIMAAIALgEAEgABABIUAQASDAAEAQASAAEAEgIBQwEAAQABDAAEAQABCgAEAQoGAAEABhYABAEABhQAAAE6EgIACgEAEgwAAgAyAQsYAAEAGAwBAAMOAAQBDBIMAAgAAgA2ASoDAAEAAxQAFAAEAQADDgAUAXM9DAACABIBAD0AAQA9FAEAPQwABAEAPQABAD0CAQA9AgAKAQA9CgACABYBC0MAAQBDDAEAAw4ABAEMPQoACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
+    # sm:uAEAAQBDAAEAQyQBAEMYAQBDEgACAAYBAEMAAQBDGAEAAw4AAgAKAQw9AAEAPQgAFAAaABgBdAMWAW0BCgACABIBBT0AAQA9GAEQBhgBLgMOAAIAFgEbCwABAAsIACAAGgAYAQwFGAEFAQoABAEGBQABAAUUABQABAEAAQoABgEIAQABAAEGAQABBAAEAQcFFAAgAQsLEAACAB4BAAsAAQALFAEACxAABAEACwABAAsCAQALAgAKAQALDgACACIBERQAAQAUDAEABhQABAESCw4ACAACACYBKBIAAQASCAAwABoAGAEMDBgBBQEKAAIALgEFEgABABIUAQASFgAKAQASAAEAEgIBQwEMAAQBCgYWAAABOhICAAIAMgEaBQABAAUUABQABAEAAQwABAEIAQoACgAYAQcFEAACADYBDQwAAQAGGAAUAAQBAAwUAAQBDgUQADABGRIQAAIALgEAEgABABIUAQASEAAEAQASAAEAEgIBQwEAAQABDAAEAQABCgAEAQoGAAEABhYABAEABhQAAAE6EgIACgEAEhAAAgAyAQsYAAEAGAwBAAMOAAQBDBIQAAgAAgA2ASoDAAEAAxQAFAAEAQADDgAUAXM9EAACABIBAD0AAQA9FAEAPRAABAEAPQABAD0CAQA9AgAKAQA9DgACABYBC0MAAQBDDAEAAw4ABAEMPQ4ACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
