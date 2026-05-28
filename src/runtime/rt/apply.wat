@@ -35,6 +35,15 @@
     (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
 
 
+  ;; $Cell — mutable storage cell for a LetRec slot.
+  ;; Field 0: the slot's current value (or null when unset; reading null
+  ;; traps at runtime). Captures pass the $Cell ref so writes through a
+  ;; captured slot stay visible to the original LetRec scope.
+  (type $Cell (@pub) (struct
+    (field $value (mut (ref null any)))
+  ))
+
+
   ;; $Captures — flat array of captured values.
   ;; Each element is (ref null any) — nullable to allow default-init
   ;; by array.new_default. Closures with zero captures use a null

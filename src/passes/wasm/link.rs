@@ -220,6 +220,11 @@ fn redirect_instr(kind: &mut InstrKind, lookup: &impl Fn(FuncSym) -> FuncSym) {
     InstrKind::StructNew { fields, .. } => {
       for f in fields { redirect_operand(f, lookup); }
     }
+    InstrKind::StructGet { src, .. } => redirect_operand(src, lookup),
+    InstrKind::StructSet { src, val, .. } => {
+      redirect_operand(src, lookup);
+      redirect_operand(val, lookup);
+    }
     InstrKind::ArrayNewFixed { elems, .. } => {
       for e in elems { redirect_operand(e, lookup); }
     }
@@ -420,6 +425,20 @@ fn remap_instr_kind(kind: &InstrKind, off: &Offsets) -> InstrKind {
         ty: remap_type_sym(*ty, off),
         fields: fields.iter().map(|f| remap_operand(f, off)).collect(),
         into: *into,
+      },
+    InstrKind::StructGet { ty, field, src, into } =>
+      InstrKind::StructGet {
+        ty: remap_type_sym(*ty, off),
+        field: *field,
+        src: remap_operand(src, off),
+        into: *into,
+      },
+    InstrKind::StructSet { ty, field, src, val } =>
+      InstrKind::StructSet {
+        ty: remap_type_sym(*ty, off),
+        field: *field,
+        src: remap_operand(src, off),
+        val: remap_operand(val, off),
       },
     InstrKind::ArrayNewFixed { ty, size, elems, into } =>
       InstrKind::ArrayNewFixed {

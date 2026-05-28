@@ -82,6 +82,7 @@ pub enum Sym {
   Fn3,
   Closure,
   Captures,
+  Cell,
   VarArgs,
 
   // ── calling-convention primitives (std/list.wat today) ────────
@@ -305,6 +306,7 @@ pub struct Runtime {
   fn3: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
+  cell: Option<TypeSym>,
   varargs: Option<TypeSym>,
   // Locally-declared function signature type used by the
   // virtual-stdlib import codegen path in lower (still allocates
@@ -386,6 +388,7 @@ impl Runtime {
   pub fn decimal_(&self)     -> TypeSym { self.decimal_.expect("rt: Decimal not declared") }
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
+  pub fn cell(&self)         -> TypeSym { self.cell.expect("rt: Cell not declared") }
   pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
   pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
@@ -490,6 +493,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
     Sym::Captures        => "rt/apply.wat:Captures",
+    Sym::Cell            => "rt/apply.wat:Cell",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
     Sym::Apply           => "rt/apply.wat:apply",
     Sym::Apply3          => "rt/apply.wat:apply_3",
@@ -606,6 +610,9 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   }
   if needed.contains(&Sym::Closure) {
     rt.closure = Some(TypeSym::Runtime(Sym::Closure));
+  }
+  if needed.contains(&Sym::Cell) {
+    rt.cell = Some(TypeSym::Runtime(Sym::Cell));
   }
   if needed.contains(&Sym::VarArgs) {
     rt.varargs = Some(TypeSym::Runtime(Sym::VarArgs));
