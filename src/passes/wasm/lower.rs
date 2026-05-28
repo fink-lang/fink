@@ -36,7 +36,7 @@ use std::collections::HashMap;
 use crate::passes::ast::Ast;
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
-  Lit, Param, ParamInfo, Ref, Val, ValKind, BuiltIn,
+  Lit, Param, Ref, Val, ValKind, BuiltIn,
 };
 use crate::sourcemap::native::ByteRange;
 
