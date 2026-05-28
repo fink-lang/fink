@@ -578,7 +578,7 @@
 
   (func $_list_apply (type $Fn3)
     (param $_caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cont (ref null any))
@@ -589,9 +589,9 @@
     (local.set $rest
       (ref.cast (ref $List) (call $tail_any (local.get $args))))
 
-    ;; Tail-call cont with [list].
+    ;; Tail-call cont with [list], threading caller's ctx.
     (return_call $apply_1
-      (ref.null any)
+      (local.get $ctx)
       (local.get $rest)
       (local.get $cont)))
 
