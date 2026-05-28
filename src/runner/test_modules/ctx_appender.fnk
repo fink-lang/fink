@@ -1,0 +1,5 @@
+{set_ctx, get_ctx} = import 'std/effects.fnk'
+
+set_ctx '${get_ctx _} -> bar'
+
+unit = 0

@@ -129,7 +129,7 @@ test 'multi module import', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_1 22)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/simple.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_68))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_68))
       )
       (func $./test.fnk::host_wrapper (export "./test.fnk") (type $./test.fnk::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -286,7 +286,7 @@ test 'multi module import', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_6 27)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/foobar/spam.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_87))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_87))
       )
       (func $./test_link/simple.fnk::host_wrapper (export "./test_link/simple.fnk") (type $./test_link/simple.fnk::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -353,7 +353,7 @@ test 'multi module import', fn:
       (data $d_7 "./test_link/foobar/spam.fnk")
       (data $d_8 "foo")
     )
-    ;; sm:qAHmCwCWAQC6AQDGAQECBVgBXgKMAQBuAMIBAMQBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEAzggAlgEAugEAxgEAxgEAuAEA3AEBXymSAQEAKcIGALoBAMYBAG4AzggAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEBACmcCwCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA8AEAbgC8AQDIAQC-AQCqCACYAQC0AQDeAQCWAQCCAQCaAgDYBQB6APIBAI4BAKAHAJoBAJoBAJYBALoBAMIBAG4AvgEAwgEAkAsAlgEAugEAxgEBAgNUALIBAPQBAMgBANYBAJYBAJYBAM4BANwBAG4A0gEAngcAlgEAmgEAlgEAugEAxgEAbgC-AQDsCACWAQC6AQDIAQDIAQC6AQD2AQEBIpIBAQAi4AYAugEAyAEAbgDsCACcAQCaAQCcAQCaAQCUAQDkAQD2AQC4AQD2AQEAIrQLAJQBALoBAMYBALgBAPYBAHoA9gEAegDwAQBuALwBAMgBAL4BALQJAJgBAJwBAJQBALQBAPYBAJYBAIIBAKQCAKAGAHoAigIAjgEAggYAmAEAmgEAlAEBKAGIAQEJBsIKAJgBAJgBAJYBAHoA_AEAzAEA2AEAlgEAlgEAygEA3gEAbgDOAQCwBgB6AJQCAI4BAA
+    ;; sm:qAHmCwCWAQC6AQDGAQECBVgBXgKMAQBuAMIBAMQBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEAzggAlgEAugEAxgEAxgEAuAEA3AEBXymSAQEAKcIGALoBAMYBAG4AzggAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEBACmcCwCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA8AEAbgC8AQDIAQC-AQCqCACYAQC0AQDeAQCWAQCCAQCaAgCIBgB6APIBAI4BAKAHAJoBAJoBAJYBALoBAMIBAG4AvgEAwgEAkAsAlgEAugEAxgEBAgNUALIBAPQBAMgBANYBAJYBAJYBAM4BANwBAG4A0gEAngcAlgEAmgEAlgEAugEAxgEAbgC-AQDsCACWAQC6AQDIAQDIAQC6AQD2AQEBIpIBAQAi4AYAugEAyAEAbgDsCACcAQCaAQCcAQCaAQCUAQDkAQD2AQC4AQD2AQEAIrQLAJQBALoBAMYBALgBAPYBAHoA9gEAegDwAQBuALwBAMgBAL4BALQJAJgBAJwBAJQBALQBAPYBAJYBAIIBAKQCANAGAHoAigIAjgEAggYAmAEAmgEAlAEBKAGIAQEJBsIKAJgBAJgBAJYBAHoA_AEAzAEA2AEAlgEAlgEAygEA3gEAbgDOAQCwBgB6AJQCAI4BAA
 
 
 ---
@@ -492,7 +492,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_1 23)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/diamond.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_65))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_65))
       )
       (func $./test.fnk::host_wrapper (export "./test.fnk") (type $./test.fnk::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -670,7 +670,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_6 26)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/common.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_193))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_193))
       )
       (func $./test_link/diamond.fnk::v_299 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:v_37 (ref null any))
@@ -779,7 +779,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_8 25)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/right.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_205))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_205))
       )
       (func $./test_link/diamond.fnk::v_351 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:v_13 (ref null any))
@@ -883,7 +883,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_10 24)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/left.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_217))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_217))
       )
       (func $./test_link/diamond.fnk::host_wrapper (export "./test_link/diamond.fnk") (type $./test_link/diamond.fnk::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -1067,7 +1067,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_16 26)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/common.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_85))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_85))
       )
       (func $./test_link/sub/left.fnk::host_wrapper (export "./test_link/sub/left.fnk") (type $./test_link/sub/left.fnk::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -1219,7 +1219,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:imp_url (call $std/str.fnk:from_data (data.ref $d_20 26)))
         (local.set $:imp_caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:imp_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/common.fnk::fink_module) (local.get $:imp_caps_arg)))
-        (return_call $std/modules.fnk:import (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_85))
+        (return_call $std/modules.fnk:import (local.get $:ctx_param) (local.get $:imp_url) (local.get $:imp_mod_clos) (local.get $:v_85))
       )
       (func $./test_link/sub/right.fnk::host_wrapper (export "./test_link/sub/right.fnk") (type $./test_link/sub/right.fnk::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
@@ -1256,4 +1256,4 @@ test 'diamond with two paths to same dep', fn:
       (data $d_19 "base")
       (data $d_20 "./test_link/sub/common.fnk")
     )
-    ;; sm:rgPsDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqkgEBACrCBgC6AQDGAQBuAMwIAJoBAJoBAJoBAJoBAJQBAOABANwBALYBANwBAQAqnAsAlAEAugEAxgEAuAEA3gEAegDcAQB6APABAG4AvAEAyAEAvgEAqggAmAEAtAEA3gEAlgEAggEAnAIA2AUAegDyAQCOAQCgCQCWAQC6AQDGAQDKAQDYAQCWAQCWAQDOAQDeAQBuANIBAK4IAJYBALoBAMYBANABALgBAPoBAYAJG4IKAJYBALoBAMYBANABAM4BAasDBFYA7gEA-gEBrAMP3gcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQGtAyKSAQEAIuQGALoBAMgBAG4A9AgAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEBACLkDACWAQC6AQDGAQDQAQDOAQCiAgD4AQB6APgBAHoA8AEAbgC-AQDIAQC-AQCOCwCWAQC6AQDGAQDOAQFLCWAAngIA-gEAlgEAggEAogIArgcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQEBJpIBAQAm5AYAugEAyAEAbgD0CACcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQEAJpIMAJYBALoBAMYBAM4BAOwBAPoBAHoA-AEAegDwAQBuAL4BAMgBAMABALoKAJYBALoBAMYBAUcIXgDoAQD6AQCWAQCCAQCgAgCuBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAQEkkgEBACTkBgC6AQDIAQBuAPQIAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAQAkvgsAlAEAugEAxgEAuAEA-gEAegD4AQB6APABAG4AvAEAyAEAwAEAuAkAmAEAnAEAlgEAtAEA-gEAmAEAggEAngIAqAYAegCMAgCOAQCyCQCYAQCaAQCYAQG5BASKAQDQAQDaAQCYAQCYAQDMAQDgAQBuANABAKoGAHoAkgIAkAEAqgkAlgEAugEAxAEA0gEA5gEAmAEAmAEA1AEA7AEAbgDYAQDmCACWAQC6AQDGAQHuAQRWALgBAPgBAWIBigEBDQjSBwCWAQCaAQCWAQC6AQDGAQBuAL4BAPAIAJYBALoBAMgBAMgBALoBAPoBAVUelAEBAB7kBgC6AQDIAQBuAO4IAJoBAJoBAJwBAJoBAJQBAOIBAPoBALgBAPoBAQAeuAsAlAEAugEAxgEAuAEA-gEAegD6AQB6APABAG4AvAEAyAEAvgEAvgkAmAEAogEApAEAtAEA-gEAmAEAggEAogIArAYAegCOAgCQAQCwCQCWAQC6AQDEAQDWAQDsAQCYAQCYAQDWAQDyAQBuANoBAOgIAJYBALoBAMYBAYwDBFYAuAEA-gEBbgGKAQENCNQHAJYBAJoBAJYBALoBAMYBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA_AEBYSOUAQEAI-YGALoBAMgBAG4A8AgAmgEAmgEAnAEAmgEAlAEA4gEA_AEAuAEA_AEBACO6CwCUAQC6AQDGAQC4AQD8AQB6APwBAHoA8AEAbgC8AQDIAQC-AQDCCQCYAQCkAQCqAQC0AQD8AQCYAQCCAQCiAgCyBgB6AJACAJABAA
+    ;; sm:rgPsDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqkgEBACrCBgC6AQDGAQBuAMwIAJoBAJoBAJoBAJoBAJQBAOABANwBALYBANwBAQAqnAsAlAEAugEAxgEAuAEA3gEAegDcAQB6APABAG4AvAEAyAEAvgEAqggAmAEAtAEA3gEAlgEAggEAnAIAiAYAegDyAQCOAQCgCQCWAQC6AQDGAQDKAQDYAQCWAQCWAQDOAQDeAQBuANIBAK4IAJYBALoBAMYBANABALgBAPoBAYAJG4IKAJYBALoBAMYBANABAM4BAasDBFYA7gEA-gEBrAMP3gcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQGtAyKSAQEAIuQGALoBAMgBAG4A9AgAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEBACLkDACWAQC6AQDGAQDQAQDOAQCiAgD4AQB6APgBAHoA8AEAbgC-AQDIAQC-AQCOCwCWAQC6AQDGAQDOAQFLCWAAngIA-gEAlgEAggEAogIA3gcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQEBJpIBAQAm5AYAugEAyAEAbgD0CACcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQEAJpIMAJYBALoBAMYBAM4BAOwBAPoBAHoA-AEAegDwAQBuAL4BAMgBAMABALoKAJYBALoBAMYBAUcIXgDoAQD6AQCWAQCCAQCgAgDeBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAQEkkgEBACTkBgC6AQDIAQBuAPQIAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAQAkvgsAlAEAugEAxgEAuAEA-gEAegD4AQB6APABAG4AvAEAyAEAwAEAuAkAmAEAnAEAlgEAtAEA-gEAmAEAggEAngIA2AYAegCMAgCOAQCyCQCYAQCaAQCYAQG5BASKAQDQAQDaAQCYAQCYAQDMAQDgAQBuANABAKoGAHoAkgIAkAEAqgkAlgEAugEAxAEA0gEA5gEAmAEAmAEA1AEA7AEAbgDYAQDmCACWAQC6AQDGAQHuAQRWALgBAPgBAWIBigEBDQjSBwCWAQCaAQCWAQC6AQDGAQBuAL4BAPAIAJYBALoBAMgBAMgBALoBAPoBAVUelAEBAB7kBgC6AQDIAQBuAO4IAJoBAJoBAJwBAJoBAJQBAOIBAPoBALgBAPoBAQAeuAsAlAEAugEAxgEAuAEA-gEAegD6AQB6APABAG4AvAEAyAEAvgEAvgkAmAEAogEApAEAtAEA-gEAmAEAggEAogIA3AYAegCOAgCQAQCwCQCWAQC6AQDEAQDWAQDsAQCYAQCYAQDWAQDyAQBuANoBAOgIAJYBALoBAMYBAYwDBFYAuAEA-gEBbgGKAQENCNQHAJYBAJoBAJYBALoBAMYBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA_AEBYSOUAQEAI-YGALoBAMgBAG4A8AgAmgEAmgEAnAEAmgEAlAEA4gEA_AEAuAEA_AEBACO6CwCUAQC6AQDGAQC4AQD8AQB6APwBAHoA8AEAbgC8AQDIAQC-AQDCCQCYAQCkAQCqAQC0AQD8AQCYAQCCAQCiAgDiBgB6AJACAJABAA

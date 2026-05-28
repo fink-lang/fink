@@ -1578,11 +1578,13 @@ fn lower_import_user_fragment(
     }
   };
 
-  // 5. Tail-call `std/modules.fnk:import (url, mod_clos, cont)`. The
-  //    runtime helper handles init-once + delivers the producer's
-  //    exports rec to the destructure cont.
+  // 5. Tail-call `std/modules.fnk:import (ctx, url, mod_clos, cont)`.
+  //    The runtime helper invokes the producer's module body under
+  //    the importer's ctx and threads any ctx mutations back to the
+  //    destructure cont.
+  let ctx_local = ctx.ctx_local.expect("lower_import: enclosing fn must have :ctx_param");
   let i_imp = push_return_call(lcx.frag, lcx.rt.modules_import(),
-    vec![op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
+    vec![op_local(ctx_local), op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
   ctx.instrs.push(i_imp);
 }
 
