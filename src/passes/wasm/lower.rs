@@ -623,6 +623,32 @@ fn lower_expr(
 ) {
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
+      // LetVal binding a LetRec slot id (e.g. destructure success
+      // cont's `let v_15, fn a_0:` where a_0 is a module slot) writes
+      // through the cell instead of allocating a fresh local. Reads
+      // outside the success arm go via the cell's storage.
+      if lcx.slot_ids.contains(&name.id) {
+        let cell_op = slot_cell_ref(lcx, ctx, name.id);
+        // Box the val into a scratch local if needed, then struct.set
+        // on the cell.
+        let val_op = match &val.kind {
+          ValKind::Lit(lit) => {
+            let lv = LitVal::from_lit(lit)
+              .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
+            let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
+            let i = box_lit(lcx.frag, lcx.rt, &lv, local);
+            if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
+            ctx.instrs.push(i);
+            op_local(local)
+          }
+          _ => val_as_operand(lcx, ctx, val),
+        };
+        let i_set = push_struct_set(lcx.frag, lcx.rt.cell(), 0, cell_op, val_op);
+        set_cps_id(lcx.frag, i_set, expr.id);
+        ctx.instrs.push(i_set);
+        lower_cont(lcx, ctx, cont);
+        return;
+      }
       let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
       ctx.bind(name.id, local);
       let i = emit_val_into(lcx, ctx, val, local);

@@ -290,10 +290,8 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:v_12 (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $:ret_130 (ref null any))
-        (local $x_0 (ref null any))
         (local $:v_29 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $foo_1 (ref null any))
         (local $:pub_foo_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
@@ -302,15 +300,15 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:v_12 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:ret_130 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
-        (local.set $x_0 (local.get $:v_12))
-        (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $x_0)))
+        (struct.set $rt/apply.wat:Cell 0 (global.get $test::x_0) (local.get $:v_12))
+        (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (global.get $test::x_0)))
         (local.set $:v_29 (struct.new $rt/apply.wat:Closure (ref.func $test::v_95) (local.get $:caps_arg)))
-        (local.set $foo_1 (local.get $:v_29))
+        (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_29))
         (local.set $:pub_foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $:pub_foo_1))
-        (local.set $:unwrap_foo_1 (struct.get $rt/apply.wat:Cell 0 (local.get $foo_1)))
+        (local.set $:unwrap_foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:unwrap_foo_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:ret_130))
@@ -438,6 +436,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:UrwIAJoBAJoBAJIBALoBAM4BALoBAKwBATQF4AsAlgEAugEAxgEBMQFQAK4BANABARoDVACqAQCUAQCWAQDKAQCoAQBuAM4BAPoGAJYBAJoBAJYBALoBAMYBAG4AvgEAyAgAlgEAugEAyAEAyAEAugEA0gEBGw2SAQEADbwGALoBAMgBAG4AyAgAnAEAmgEAnAEAmgEAlAEA5AEA0gEAuAEA0gEBAA2QCwCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA8AEAbgC8AQDIAQC-AQCwCQCYAQCUAQBmAJgBAGgAtAEA0gEBDAdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
+    ;; sm:UrwIAJoBAJoBAJIBALoBAM4BALoBAKwBATQF3AoAlgEAugEAxgEAogEAvAEA0AEAoAEAqgEAlAEAlgEAygEAsAEAbgDOAQD6BgCWAQCaAQCWAQC6AQDGAQBuAL4BAMgIAJYBALoBAMgBAMgBALoBANIBATMNkgEBAA28BgC6AQDIAQBuAMgIAJwBAJoBAJwBAJoBAJQBAOQBANIBALgBANIBAQANkAsAlAEAugEAxgEAuAEA0gEAegDSAQB6APABAG4AvAEAyAEAvgEAsAkAmAEAlAEAZgCYAQBoALQBANIBAQwHYAECAZABAQYCigEBBQXsBQB6AOYBAIwBAA
 
 
