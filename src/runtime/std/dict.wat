@@ -54,9 +54,9 @@
     (func $hash_i31 (param $key (ref eq)) (result i32)))
   (import "rt/protocols.wat" "deep_eq"
     (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
-  (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_2_vals" (func $list_apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
   ;; str.wat helpers used by the rec fmt impl below.
   (import "std/str.wat" "from_bytes"
     (func $str_from_bytes (param $buf (ref $ByteArray)) (result (ref $Str))))
@@ -1526,7 +1526,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $_rec_set
         (ref.cast (ref $RecImpl) (local.get $rec))
@@ -1538,7 +1538,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $_rec_merge
         (ref.cast (ref $RecImpl) (local.get $dest))
@@ -1558,10 +1558,10 @@
     (local.set $val)
     ;; null value = key not found → call fail
     (if (ref.is_null (local.get $val))
-      (then (return_call $list_apply_0
+      (then (return_call $apply_0
       (local.get $ctx) (local.get $fail))))
     ;; found → pass (value, rest) to succ
-    (return_call $list_apply_2_vals
+    (return_call $apply_2_vals
       (local.get $ctx)
       (local.get $val)
       (local.get $rest)
@@ -1570,7 +1570,7 @@
   (func $op_dot (@impl "std/operators.fnk:op_dot" $Rec _)
     (param $ctx (ref null any))
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $get
         (ref.cast (ref $RecImpl) (local.get $rec))

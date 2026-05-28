@@ -84,21 +84,15 @@
     (field $user (ref null any))
   ))
 
-  ;; Mint an empty $Ctx. Host runners call this once per module-wrapper
-  ;; entry to seed the ctx arg of $apply_3, replacing the placeholder
-  ;; ref.i31 42 that lived at the host boundary during the Fn3 flip.
+  ;; Mint an empty $Ctx. Called only at universe entry: the host
+  ;; runner's `env:empty_ctx` re-export, and `init_module` (which is
+  ;; itself only reached from the per-module `::host_wrapper` at the
+  ;; host boundary). All in-runtime continuations thread the caller's
+  ;; ctx rather than minting.
   ;;
   ;; The user payload is seeded with `ref.i31 0` (fink unit), not null,
   ;; so `get_ctx _` before any `set_ctx` returns a real value rather
   ;; than tripping non-null casts downstream.
-  ;;
-  ;; TODO: audit every use of `empty_ctx` across the codebase. The ONLY
-  ;; legitimate caller is the host runner at the universe entry point.
-  ;; Any internal runtime call that mints empty_ctx (rather than
-  ;; threading the caller's ctx) silently breaks ctx propagation —
-  ;; e.g. `import` / `_import_wrap_step` / `_init_module_step` /
-  ;; `_apply_2_nullable` currently do this, causing `set_ctx` after
-  ;; `import` to receive a null/fresh ctx instead of the importer's.
   (func $empty_ctx (@pub) (result (ref $Ctx))
     (struct.new $Ctx (ref.i31 (i32.const 0)))
   )

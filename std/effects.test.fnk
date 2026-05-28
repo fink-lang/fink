@@ -195,6 +195,121 @@ test 'ctx survives fmt as imported fn', fn:
     fmt-ctx
 
 
+# -- ctx survival across std runtime ops ------------------------------
+#
+# These cover std runtime impls (list/dict/set/str/range non-seq ops)
+# that historically passed `(ref.null any)` as ctx. Each test sets ctx,
+# exercises one op, then reads ctx back -- the op's continuation must
+# resume under the caller's ctx, not a fresh/null one.
+
+
+test 'ctx survives range membership (op_in I64 Range)', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'range-in-ctx'
+    foo = 5 in 0..10
+    get_ctx _
+  | equals ":
+    range-in-ctx
+
+
+# Set literal currently traps in rec_merge (pre-existing bug, unrelated
+# to ctx). Re-enable these once set literals work.
+skip 'ctx survives set membership (op_in _ Set)', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'set-in-ctx'
+    foo = 2 in {1, 2, 3}
+    get_ctx _
+  | equals ":
+    set-in-ctx
+
+
+skip 'ctx survives set union (op_or Set Set)', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'set-or-ctx'
+    foo = {1, 2} or {2, 3}
+    get_ctx _
+  | equals ":
+    set-or-ctx
+
+
+test 'ctx survives rec membership (op_in _ Rec)', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'rec-in-ctx'
+    foo = 'k' in {k: 1}
+    get_ctx _
+  | equals ":
+    rec-in-ctx
+
+
+test 'ctx survives rec field access (op_dot Rec)', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'rec-dot-ctx'
+    foo = {a: 1}.a
+    get_ctx _
+  | equals ":
+    rec-dot-ctx
+
+
+test 'ctx survives rec put', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'rec-put-ctx'
+    foo = {..{a: 1}, b: 2}
+    get_ctx _
+  | equals ":
+    rec-put-ctx
+
+
+test 'ctx survives list index (op_dot List Int)', fn:
+  expect run ƒink:
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'list-dot-ctx'
+    foo = [10, 20, 30].(1)
+    get_ctx _
+  | equals ":
+    list-dot-ctx
+
+
+# `list 1, 2, 3` is the user-importable constructor; its $_list_apply
+# Fn3 wrapper receives ctx as a native param but historically discarded
+# it when firing the user cont.
+test 'ctx survives list constructor', fn:
+  expect run ƒink:
+    {list} = import 'std/list.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'list-ctor-ctx'
+    foo = list 1, 2, 3
+    get_ctx _
+  | equals ":
+    list-ctor-ctx
+
+
+# `set 1, 2, 3` — same pattern, $_set_apply.
+test 'ctx survives set constructor', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    {set_ctx, get_ctx} = import 'std/effects.fnk'
+
+    set_ctx 'set-ctor-ctx'
+    foo = set 1, 2, 3
+    get_ctx _
+  | equals ":
+    set-ctor-ctx
+
+
 # -- suspend (raw cont capture, no handler) ---------------------------
 #
 # `suspend fn resume: body` is the lowest-level cont primitive: it

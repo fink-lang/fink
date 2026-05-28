@@ -44,8 +44,8 @@
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
 
   ;; Func imports — list helpers
-  (import "rt/apply.wat" "apply_0" (func $list_apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
-  (import "rt/apply.wat" "apply_1" (func $list_apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/apply.wat" "op_eq"  (func $clos_op_eq  (param (ref $Closure)) (param (ref $Closure)) (result i32)))
   (import "rt/apply.wat" "op_neq" (func $clos_op_neq (param (ref $Closure)) (param (ref $Closure)) (result i32)))
@@ -137,7 +137,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $set_op_plus
           (local.get $a_set)
@@ -145,7 +145,7 @@
         (local.get $cont)))
 
     ;; Default: $Num add
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_plus
         (ref.cast (ref $Num) (local.get $a))
@@ -164,7 +164,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $set_op_minus
           (local.get $a_set)
@@ -172,7 +172,7 @@
         (local.get $cont)))
 
     ;; Default: $Num sub
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_minus
         (ref.cast (ref $Num) (local.get $a))
@@ -182,7 +182,7 @@
   (func $op_mul (@pub) (@impl "std/operators.fnk:op_mul")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_mul
         (ref.cast (ref $Num) (local.get $a))
@@ -192,7 +192,7 @@
   (func $op_div (@pub) (@impl "std/operators.fnk:op_div")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_div
         (ref.cast (ref $Num) (local.get $a))
@@ -206,7 +206,7 @@
   (func $op_intdiv (@pub) (@impl "std/operators.fnk:op_intdiv")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_intdiv
         (ref.cast (ref $Num) (local.get $a))
@@ -216,7 +216,7 @@
   (func $op_rem (@pub) (@impl "std/operators.fnk:op_rem")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_rem
         (ref.cast (ref $Num) (local.get $a))
@@ -226,7 +226,7 @@
   (func $op_intmod (@pub) (@impl "std/operators.fnk:op_intmod")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_intmod
         (ref.cast (ref $Num) (local.get $a))
@@ -236,7 +236,7 @@
   (func $op_pow (@pub) (@impl "std/operators.fnk:op_pow")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_pow
         (ref.cast (ref $Num) (local.get $a))
@@ -246,7 +246,7 @@
   (func $op_divmod (@pub) (@impl "std/operators.fnk:op_divmod")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_divmod
         (ref.cast (ref $Num) (local.get $a))
@@ -256,7 +256,7 @@
   (func $op_rotl (@pub) (@impl "std/operators.fnk:op_rotl")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_rotl
         (ref.cast (ref $Num) (local.get $a))
@@ -266,7 +266,7 @@
   (func $op_rotr (@pub) (@impl "std/operators.fnk:op_rotr")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_rotr
         (ref.cast (ref $Num) (local.get $a))
@@ -337,7 +337,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a)))))
       ;; $a is $Num — cast $b and compare
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $num_op_eq
           (local.get $a_num)
@@ -352,7 +352,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a)))))
       ;; $a is $Str — cast $b and call str_op_eq
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $str_op_eq
           (local.get $a_str)
@@ -366,7 +366,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_eq
           (local.get $a_set)
@@ -380,7 +380,7 @@
           (br $not_i31
             (br_on_cast $is_i31 (ref null any) (ref i31)
               (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (ref.eq
           (ref.cast (ref i31) (local.get $a))
@@ -394,7 +394,7 @@
           (br $not_clos
             (br_on_cast $is_clos (ref null any) (ref $Closure)
               (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (call $clos_op_eq
           (ref.cast (ref $Closure) (local.get $a))
@@ -422,7 +422,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a)))))
       ;; $a is $Num — cast $b and compare
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $num_op_neq
           (local.get $a_num)
@@ -437,7 +437,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a)))))
       ;; $a is $Str — cast $b, call str_op_eq, invert
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (i32.eqz (call $str_op_eq
           (local.get $a_str)
@@ -451,7 +451,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (i32.eqz (call $set_op_eq
           (local.get $a_set)
@@ -465,7 +465,7 @@
           (br $not_i31
             (br_on_cast $is_i31 (ref null any) (ref i31)
               (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (i32.eqz (ref.eq
           (ref.cast (ref i31) (local.get $a))
@@ -479,7 +479,7 @@
           (br $not_clos
             (br_on_cast $is_clos (ref null any) (ref $Closure)
               (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (call $clos_op_neq
           (ref.cast (ref $Closure) (local.get $a))
@@ -504,7 +504,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_disjoint
           (local.get $a_set)
@@ -525,14 +525,14 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_lt
           (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (call $num_op_lt
         (ref.cast (ref $Num) (local.get $a))
@@ -551,14 +551,14 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_lte
           (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (call $num_op_lte
         (ref.cast (ref $Num) (local.get $a))
@@ -577,14 +577,14 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_gt
           (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (call $num_op_gt
         (ref.cast (ref $Num) (local.get $a))
@@ -603,14 +603,14 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_gte
           (local.get $a_set)
           (ref.cast (ref $Set) (local.get $b))))
         (local.get $cont)))
 
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (call $num_op_gte
         (ref.cast (ref $Num) (local.get $a))
@@ -633,13 +633,13 @@
           (br $not_num
             (br_on_cast $is_num (ref null any) (ref $Num)
               (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
         (local.get $ctx)
         (call $num_op_not (local.get $a_num))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean not
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $a)))))
       (local.get $cont)))
@@ -657,7 +657,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $set_op_and
           (local.get $a_set)
@@ -671,7 +671,7 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $num_op_and
           (local.get $a_num)
@@ -679,7 +679,7 @@
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean and
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (i32.and
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
@@ -699,7 +699,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $set_op_or
           (local.get $a_set)
@@ -713,7 +713,7 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $num_op_or
           (local.get $a_num)
@@ -721,7 +721,7 @@
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean or
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (i32.or
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
@@ -741,7 +741,7 @@
         (br $not_set
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $set_op_xor
           (local.get $a_set)
@@ -755,7 +755,7 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (call $num_op_xor
           (local.get $a_num)
@@ -763,7 +763,7 @@
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean xor
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (ref.i31 (i32.xor
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
@@ -786,7 +786,7 @@
           (br_on_cast $is_list (ref null any) (ref $List)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx) (local.get $val) (local.get $succ)))
 
     ;; $Set
@@ -796,10 +796,10 @@
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx) (local.get $val) (local.get $succ)))
 
-    (return_call $list_apply_0
+    (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
 
   ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
@@ -812,9 +812,9 @@
           (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx) (local.get $val) (local.get $succ)))
-    (return_call $list_apply_0
+    (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
 
   ;; =========================================================================
@@ -833,7 +833,7 @@
     ;; null = empty
     (if (ref.is_null (local.get $val))
       (then
-        (return_call $list_apply_1
+        (return_call $apply_1
       (local.get $ctx)
           (ref.i31 (i32.const 1))
           (local.get $cont))))
@@ -845,7 +845,7 @@
           (br_on_cast $is_list (ref null any) (ref $List)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $list_op_empty (local.get $val)))
         (local.get $cont)))
@@ -857,7 +857,7 @@
           (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $val))))
       (drop)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $dict_op_empty (local.get $val)))
         (local.get $cont)))
@@ -869,7 +869,7 @@
           (br $not_set
             (br_on_cast $is_set (ref null any) (ref $Set)
               (local.get $val)))))
-      (return_call $list_apply_1
+      (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (call $set_op_empty (local.get $a_set)))
         (local.get $cont)))
@@ -958,7 +958,7 @@
           (br_on_cast $is_range (ref null any) (ref $Range)
             (local.get $b))))
       (local.set $range)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $range_op_in
           (ref.cast (ref $I64) (local.get $a))
@@ -972,7 +972,7 @@
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $b))))
       (local.set $rec)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $dict_op_in
           (local.get $rec)
@@ -986,7 +986,7 @@
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $b))))
       (local.set $set)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_in
           (local.get $set)
@@ -1010,7 +1010,7 @@
           (br_on_cast $is_range (ref null any) (ref $Range)
             (local.get $b))))
       (local.set $range)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $range_op_not_in
           (ref.cast (ref $I64) (local.get $a))
@@ -1024,7 +1024,7 @@
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $b))))
       (local.set $rec)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $dict_op_notin
           (local.get $rec)
@@ -1038,7 +1038,7 @@
           (br_on_cast $is_set (ref null any) (ref $Set)
             (local.get $b))))
       (local.set $set)
-      (return_call $list_apply_1
+      (return_call $apply_1
       (local.get $ctx)
         (ref.i31 (call $set_op_notin
           (local.get $set)
@@ -1108,7 +1108,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_shl
         (ref.cast (ref $Num) (local.get $a))
@@ -1124,7 +1124,7 @@
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Fallback: numeric shift right
-    (return_call $list_apply_1
+    (return_call $apply_1
       (local.get $ctx)
       (call $num_op_shr
         (ref.cast (ref $Num) (local.get $a))
