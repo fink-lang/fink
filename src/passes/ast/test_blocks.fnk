@@ -124,3 +124,19 @@ test 'block with record destructure param', fn:
         InfixOp '+',
           Ident 'x'
           Ident 'y'
+
+
+test 'inline fn arg followed by trailing call', fn:
+  expect ast ƒink:
+    foo fn: 123
+    bar _
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Fn ':',
+          Patterns
+          LitInt '123'
+      Apply
+        Ident 'bar'
+        Wildcard

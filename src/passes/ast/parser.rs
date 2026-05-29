@@ -31,6 +31,9 @@ pub struct Parser<'src> {
   lexer: Lexer<'src>,
   src: &'src str,
   current: Token<'src>,
+  /// One-token lookahead slot for `peek_next`. Filled lazily; drained
+  /// into `current` on the next `bump`.
+  next: Option<Token<'src>>,
   block_names: HashMap<&'src str, BlockMode>,
   /// Append-only arena that the parser builds up. Every `node()` call
   /// pushes into this builder; `parse()` hands it back wrapped in `Ast`.
@@ -81,6 +84,7 @@ impl<'src> Parser<'src> {
       lexer,
       src,
       current,
+      next: None,
       block_names,
       ast: AstBuilder::new(),
       trivia_end: Pos { idx: 0, line: 0, col: 0 },
@@ -166,10 +170,31 @@ impl<'src> Parser<'src> {
     &self.current
   }
 
+  /// One-token lookahead: returns the token AFTER `current` without
+  /// consuming `current`. Lazily fills the `next` slot from the lexer
+  /// (skipping trivia) on first call; subsequent calls hit the cache.
+  fn peek_next(&mut self) -> &Token<'src> {
+    if self.next.is_none() {
+      let mut tok = self.lexer.next_token();
+      while matches!(tok.kind, TokenKind::Comment | TokenKind::CommentStart | TokenKind::CommentText | TokenKind::CommentEnd) {
+        if tok.loc.end.idx > self.trivia_end.idx {
+          self.trivia_end = tok.loc.end;
+        }
+        tok = self.lexer.next_token();
+      }
+      self.next = Some(tok);
+    }
+    self.next.as_ref().unwrap()
+  }
+
   fn bump(&mut self) -> Token<'src> {
     let tok = self.current;
-    self.current = self.lexer.next_token();
-    self.skip_trivia();
+    if let Some(buffered) = self.next.take() {
+      self.current = buffered;
+    } else {
+      self.current = self.lexer.next_token();
+      self.skip_trivia();
+    }
     tok
   }
 
@@ -202,8 +227,7 @@ impl<'src> Parser<'src> {
       self.current.kind,
       TokenKind::BlockStart | TokenKind::BlockCont | TokenKind::BlockEnd
     ) {
-      self.current = self.lexer.next_token();
-      self.skip_trivia();
+      self.bump();
     }
   }
 
@@ -217,6 +241,18 @@ impl<'src> Parser<'src> {
 
   fn parse_binding(&mut self) -> ParseResult {
     let lhs = self.parse_pipe()?;
+
+    // `=` / `|=` can appear inline after the lhs, OR on the next line
+    // at the same indent (BlockCont then operator). The latter shape
+    // is used by the bind-right-at-statement-top form:
+    //   foo arg1
+    //     arg2
+    //   |= result
+    let op_after_blockcont = if self.at(TokenKind::BlockCont) {
+      let next = self.peek_next();
+      next.kind == TokenKind::Sep && (next.src == "=" || next.src == "|=")
+    } else { false };
+    if op_after_blockcont { self.bump(); } // BlockCont
 
     if self.at(TokenKind::Sep) && self.peek().src == "=" {
       let op = self.bump();
@@ -249,15 +285,15 @@ impl<'src> Parser<'src> {
       return Some(self.bump()); // consume "|"
     }
     if self.at(TokenKind::BlockCont) {
-      // Consume BlockCont and check for "|"
-      self.bump();
-      if self.at(TokenKind::Sep) && self.peek().src == "|" {
-        return Some(self.bump()); // consume "|"
+      // Lookahead past the BlockCont: only consume it if a "|" follows.
+      // If not, the BlockCont is a statement separator and must stay in
+      // the stream so the enclosing apply / block loop can terminate
+      // correctly on it.
+      let next = self.peek_next();
+      if next.kind == TokenKind::Sep && next.src == "|" {
+        self.bump(); // BlockCont
+        return Some(self.bump()); // "|"
       }
-      // BlockCont consumed but no "|" — problematic (can't put back).
-      // This means the BlockCont was a statement separator, not a pipe continuation.
-      // We'll handle this gracefully: the parse_expr caller saw BlockCont but it was consumed.
-      // This should not happen in valid Fink code at the pipe level.
     }
     None
   }

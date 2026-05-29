@@ -62,9 +62,7 @@ with_tasks = fn body:
 
 pause = effect fn v:
   suspend fn resume:
-    # TODO `enqueue fn: resume v` does not work
-    todo = fn: resume v
-    enqueue todo
+    enqueue fn: resume v
     resume_scheduler _
 
 
