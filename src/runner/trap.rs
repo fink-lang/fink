@@ -16,16 +16,16 @@
 //! is usually a single innermost frame — exactly the site we want
 //! pointed at.
 
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 use crate::errors::Diagnostic;
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 use crate::passes::Wasm;
 
 /// Map a wasmtime error to a Diagnostic via the linked binary's
 /// MarkRecords. If we can't resolve the trap to a source location
 /// (no backtrace, or no nearby MarkRecord), the trap reason still
 /// becomes a useful one-line message anchored at the entry url.
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 pub fn diagnose(err: &wasmtime::Error, bundle: &Wasm, entry_url: &str) -> Diagnostic {
   let trap = err.downcast_ref::<wasmtime::Trap>();
   let bt = err.downcast_ref::<wasmtime::WasmBacktrace>();
@@ -39,7 +39,7 @@ pub fn diagnose(err: &wasmtime::Error, bundle: &Wasm, entry_url: &str) -> Diagno
 /// Translate a `Trap` (or detect a known host-stub panic) into a
 /// fink-flavoured one-line message. Falls back to the raw error
 /// display when nothing matches.
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 fn trap_message(trap: Option<&wasmtime::Trap>, err: &wasmtime::Error) -> String {
   use wasmtime::Trap::*;
   if let Some(t) = trap {
@@ -85,7 +85,7 @@ fn trap_message(trap: Option<&wasmtime::Trap>, err: &wasmtime::Error) -> String 
 /// Walk the backtrace innermost-first; for the first frame whose
 /// `module_offset` resolves to a MarkRecord, return that record's
 /// (url, loc). Falls back to the entry url and a zero-loc.
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 fn resolve_source(
   bt: Option<&wasmtime::WasmBacktrace>,
   bundle: &Wasm,
@@ -115,7 +115,7 @@ fn resolve_source(
 
 /// Closest at-or-before MarkRecord for `pc`. Linear scan; the mark
 /// list is typically short and only consulted at trap time.
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 fn nearest_mark<'a>(
   pc: u32,
   marks: &'a [crate::passes::debug_marks::MarkRecord],
@@ -146,13 +146,13 @@ fn nearest_mark<'a>(
 /// TODO: extend to multi-module by carrying the loader (or a snapshot
 /// of all module sources). Today only the entry module gets rich
 /// rendering; deps fall back to oneline.
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 pub struct PackageSourceProvider<'a> {
   _bundle: &'a Wasm,
   entry: Option<(String, String)>,
 }
 
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 impl<'a> PackageSourceProvider<'a> {
   pub fn new(bundle: &'a Wasm) -> Self {
     Self { _bundle: bundle, entry: None }
@@ -166,7 +166,7 @@ impl<'a> PackageSourceProvider<'a> {
   }
 }
 
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 impl crate::errors::SourceProvider for PackageSourceProvider<'_> {
   fn source(&self, url: &str) -> Option<&str> {
     match &self.entry {
@@ -177,7 +177,7 @@ impl crate::errors::SourceProvider for PackageSourceProvider<'_> {
 }
 
 
-#[cfg(all(test, feature = "run"))]
+#[cfg(all(test, feature = "runtime"))]
 mod tests {
   use super::*;
   use crate::passes::debug_marks::MarkRecord;

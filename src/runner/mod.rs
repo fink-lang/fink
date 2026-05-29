@@ -6,7 +6,7 @@
 use std::sync::{Arc, Mutex};
 
 pub mod wasmtime_runner;
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 pub mod trap;
 
 /// Shared, thread-safe write stream (stdout or stderr).
