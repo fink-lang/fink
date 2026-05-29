@@ -589,7 +589,10 @@
         (struct.new $ExternBox (local.get $handle))))
   )
 
-  (func $panic (@pub)
+  ;; JS interop variant: panic takes a reason code for ABI parity with
+  ;; the Rust interop but currently just traps. A future JS host
+  ;; bridge can decode the reason like the Rust runner does.
+  (func $panic (@pub) (param $reason i32)
     unreachable)
 
   (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn3)

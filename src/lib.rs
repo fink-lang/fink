@@ -49,25 +49,71 @@ pub use passes::ast::parser;
 /// `url` is the module's stable identity (file path, `"<stdin>"`, `"test"`,
 /// etc.). It's stored in the `Module` node so downstream passes — notably
 /// the WASM emitter — can recover it without a threaded parameter.
-pub fn to_ast<'src>(src: &'src str, url: &str) -> Result<passes::Ast<'src>, String> {
-  passes::parse(src, url).map_err(|e| e.message)
+pub fn to_ast<'src>(src: &'src str, url: &str) -> Result<passes::Ast<'src>, errors::Diagnostic> {
+  passes::parse(src, url).map_err(|e| errors::Diagnostic {
+    url: url.to_string(),
+    message: e.message,
+    loc: e.loc,
+    hint: None,
+  })
 }
 
 /// Parse + desugar → desugared AST with scope analysis.
-pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, String> {
-  let parsed = passes::parse(src, url).map_err(|e| e.message)?;
-  passes::desugar(parsed).map_err(|e| format!("{e:?}"))
+///
+/// Unresolved name references survive this stage as `·∅name` markers
+/// in the desugared scope output -- intentionally, so the lower-level
+/// `expect cps_module` / `expect ast` snapshot helpers can render
+/// programs with deliberately-unbound names. Compile-error reporting
+/// kicks in at the next stage (`to_cps`), which is where real
+/// compilation runs.
+pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, errors::Diagnostic> {
+  let parsed = to_ast(src, url)?;
+  passes::desugar(parsed).map_err(|e| errors::Diagnostic {
+    url: url.to_string(),
+    // TODO: TransformError doesn't yet carry a loc — fill in once it does.
+    message: format!("{e:?}"),
+    loc: crate::lexer::Loc {
+      start: crate::lexer::Pos { idx: 0, line: 1, col: 0 },
+      end:   crate::lexer::Pos { idx: 0, line: 1, col: 0 },
+    },
+    hint: None,
+  })
+}
+
+/// First unresolved name in a desugared AST, if any. Used by `to_cps`
+/// to surface compile-time name errors before lower.rs would panic.
+fn first_unresolved_diagnostic<'src>(
+  desugared: &passes::DesugaredAst<'src>,
+  url: &str,
+) -> Option<errors::Diagnostic> {
+  let unresolved = passes::scopes::unresolved_refs(&desugared.scope);
+  let (name, ast_id) = unresolved.into_iter().next()?;
+  let loc = desugared.ast.nodes.get(ast_id).loc;
+  Some(errors::Diagnostic {
+    url: url.to_string(),
+    message: format!("unbound name '{name}'"),
+    loc,
+    hint: None,
+  })
 }
 
 /// Compile source → CPS IR (+ desugared AST for context).
-pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), String> {
+///
+/// First place that rejects unresolved names: lowering would panic on
+/// them, so an "unbound name" Diagnostic is returned here before lower
+/// runs. Snapshot test helpers that go directly through `passes::lower`
+/// (bypassing this fn) still see the ·∅name shape.
+pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), errors::Diagnostic> {
   let desugared = to_desugared(src, url)?;
+  if let Some(diag) = first_unresolved_diagnostic(&desugared, url) {
+    return Err(diag);
+  }
   let cps = passes::lower(&desugared);
   Ok((cps, desugared))
 }
 
 /// Compile source → lifted CPS IR (+ desugared AST for context).
-pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
+pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), errors::Diagnostic> {
   let (cps, desugared) = to_cps(src, url)?;
   let lifted = passes::lift(cps, &desugared);
   Ok((lifted, desugared))

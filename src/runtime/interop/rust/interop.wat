@@ -84,10 +84,13 @@
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
 
-  ;; Irrefutable pattern failure — traps the instance with a diagnostic.
-  ;; TODO: pass reason / source location (offset+length into linear memory)
-  ;; so the host can render a useful message.
-  (import "env" "host_panic" (func $host_panic))
+  ;; Panic — traps the instance with a diagnostic. The i32 `reason` is
+  ;; the wire encoding of `PanicReason` (see src/passes/cps/ir.rs):
+  ;;   0 = IrrefutablePattern
+  ;;   1 = MatchExhausted
+  ;; The host translates the code into a user-facing message; trap.rs on
+  ;; the Rust side recognises both and renders accordingly.
+  (import "env" "host_panic" (func $host_panic (param i32)))
   ;; Host-side callback dispatch: invoke the Rust-registered callback
   ;; for `id` with the given args list. See `$host_cont_adapter` and
   ;; `wrap_host_cont` for how WASM-side callable refs into this.
@@ -333,8 +336,8 @@
   ;; Called from runtime `panic` (operators.wat). Delegates to the host which
   ;; traps the instance with a diagnostic. Never returns.
 
-  (func $panic (@pub)
-    (call $host_panic)
+  (func $panic (@pub) (param $reason i32)
+    (call $host_panic (local.get $reason))
     unreachable
   )
 
@@ -346,14 +349,15 @@
   ;; fail chain. Signature matches the ctx-aware $Fn3 calling convention so
   ;; `apply_3` can dispatch to it like any other continuation.
   ;;
-  ;; Delegates to `$panic`, which traps the instance via host_panic. Today
-  ;; panic carries no payload; future work will pass a reason / source
-  ;; location for better diagnostics.
+  ;; When invoked via Fn3 dispatch the panic site has no static reason
+  ;; available -- it's the fail closure value, not a known call site.
+  ;; Reports IrrefutablePattern (reason 0); inline-emitted panics carry
+  ;; their reason and call `$panic` directly.
   (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn3)
     (param $_caps (ref null any))
     (param $_ctx  (ref null any))
     (param $_args (ref null any))
-    (return_call $panic))
+    (return_call $panic (i32.const 0)))
 
 
 

@@ -87,8 +87,12 @@ pub fn run(
       let name = import.name().to_string();
       match name.as_str() {
         "host_panic" => {
-          linker.func_new("env", &name, ft, move |_caller, _params, _results| {
-            Err(Error::msg("fink panic: irrefutable pattern failed"))
+          linker.func_new("env", &name, ft, move |_caller, params, _results| {
+            let reason_code = params[0].unwrap_i32();
+            let msg = crate::passes::cps::ir::PanicReason::from_wire(reason_code)
+              .map(|r| r.message())
+              .unwrap_or("unknown panic reason");
+            Err(Error::msg(format!("fink panic: {msg}")))
           }).map_err(|e| e.to_string())?;
         }
         "host_read_sync" => {
@@ -248,10 +252,18 @@ pub fn run(
     .map_err(|e| e.to_string())?;
   let entry_cont = entry_cont_out[0];
 
-  entry_wrapper
-    .call(&mut store, &[entry_cont], &mut [])
-    .map_err(|e| crate::passes::wasm::annotate_func_indices(
-      &format!("entry wrapper: {e}"), bytes))?;
+  if let Err(e) = entry_wrapper.call(&mut store, &[entry_cont], &mut []) {
+    // Translate the wasmtime trap into a Diagnostic via the linked
+    // binary's debug marks. Render with the pretty caret+context form
+    // if we have source for the failing module; one-line otherwise.
+    let entry_url = wasm.id_to_url.values().next().cloned().unwrap_or_default();
+    let diag = super::trap::diagnose(&e, wasm, &entry_url);
+    let provider = super::trap::PackageSourceProvider::new(wasm);
+    let pretty = crate::errors::format_diagnostic(
+      &provider, &diag, &crate::errors::FormatOptions::default(),
+    );
+    return Err(pretty);
+  }
 
   // Drive any resumes the wasm scheduler handed off via host_yield.
   // Each call may itself yield further resumes, so loop until the

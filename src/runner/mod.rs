@@ -6,6 +6,8 @@
 use std::sync::{Arc, Mutex};
 
 pub mod wasmtime_runner;
+#[cfg(feature = "runtime")]
+pub mod trap;
 
 /// Shared, thread-safe write stream (stdout or stderr).
 pub type IoStream = Arc<Mutex<dyn std::io::Write + Send>>;
@@ -199,7 +201,24 @@ mod tests {
       }
       Ok(TestResult::Str(bytes)) => String::from_utf8_lossy(&bytes).into_owned(),
       Ok(TestResult::None) => String::new(),
-      Err(e) => format!("ERROR: {}", strip_wasm_offsets(&e.to_string())),
+      // Trap errors are already rendered via `format_diagnostic` --
+      // their first line is the source line where the trap occurred.
+      // Other failures (compile, link, etc.) get the legacy "ERROR: ..."
+      // prefix so the test format stays stable.
+      Err(e) => {
+        let s = e.to_string();
+        // Heuristic: if the error has a `url:line:col` reference line
+        // (any line matching `<...>:<digits>:<digits>` at column 0),
+        // it came from format_diagnostic and is already user-facing.
+        let looks_like_diag = s.lines().any(|l| {
+          let mut parts = l.rsplitn(3, ':');
+          let Some(col) = parts.next() else { return false };
+          let Some(line) = parts.next() else { return false };
+          col.chars().all(|c| c.is_ascii_digit())
+            && line.chars().all(|c| c.is_ascii_digit())
+        });
+        if looks_like_diag { s } else { format!("ERROR: {}", strip_wasm_offsets(&s)) }
+      }
     };
 
     // If IO occurred, emit the multi-stream block format.
@@ -290,8 +309,18 @@ mod tests {
     };
     let pkg = crate::passes::wasm::compile_package::compile_package(
       &entry_abs_path, &mut loader,
-    ).map_err(|e| format!("compile_package: {e}"))?;
-    let bytes = crate::passes::wasm::emit::emit(&pkg.fragment, crate::passes::wasm::emit::Interop::Rust);
+    )?;
+    let emit_out = crate::passes::wasm::emit::emit_with_offsets(
+      &pkg.fragment, crate::passes::wasm::emit::Interop::Rust,
+    );
+    let bytes = emit_out.binary.clone();
+    let (marks, mappings) = crate::passes::wasm::compile_package::finalize_marks(&pkg, &emit_out);
+    let wasm_bundle = crate::passes::Wasm {
+      binary: emit_out.binary,
+      mappings,
+      marks,
+      id_to_url: pkg.id_to_url.clone(),
+    };
 
     let mut config = Config::new();
     config.wasm_gc(true);
@@ -462,6 +491,15 @@ mod tests {
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
+          "host_panic" => {
+            linker.func_new("env", &name, ft, move |_c, params, _r| {
+              let reason_code = params[0].unwrap_i32();
+              let msg = crate::passes::cps::ir::PanicReason::from_wire(reason_code)
+                .map(|r| r.message())
+                .unwrap_or("unknown panic reason");
+              Err(Error::msg(format!("fink panic: {msg}")))
+            }).map_err(|e| e.to_string())?;
+          }
           _ => {
             let name_for_msg = name.clone();
             linker.func_new("env", &name, ft, move |_c, _p, _r| {
@@ -501,10 +539,15 @@ mod tests {
       .map_err(|e| e.to_string())?;
     let entry_cont = entry_cont_out[0];
 
-    entry_wrapper
-      .call(&mut store, &[entry_cont], &mut [])
-      .map_err(|e| crate::passes::wasm::annotate_func_indices(
-        &format!("entry wrapper: {e:#}"), &bytes))?;
+    if let Err(e) = entry_wrapper.call(&mut store, &[entry_cont], &mut []) {
+      let entry_url = pkg.entry_canonical_url.clone();
+      let diag = super::trap::diagnose(&e, &wasm_bundle, &entry_url);
+      let provider = super::trap::PackageSourceProvider::new(&wasm_bundle)
+        .with_entry(entry_url, src.to_string());
+      return Err(crate::errors::format_diagnostic(
+        &provider, &diag, &crate::errors::FormatOptions::default(),
+      ));
+    }
 
     // Drive resumes the wasm scheduler handed off via host_yield.
     if let Some(invoke) = instance.get_func(&mut store, "invoke_resume") {
@@ -753,6 +796,7 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_sets.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_lists.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_math.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
   mod stdlib {
     use super::*;
