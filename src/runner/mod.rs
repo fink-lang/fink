@@ -309,7 +309,7 @@ mod tests {
     };
     let pkg = crate::passes::wasm::compile_package::compile_package(
       &entry_abs_path, &mut loader,
-    ).map_err(|e| format!("compile_package: {e}"))?;
+    )?;
     let emit_out = crate::passes::wasm::emit::emit_with_offsets(
       &pkg.fragment, crate::passes::wasm::emit::Interop::Rust,
     );

@@ -336,6 +336,30 @@ impl<'src> Ctx<'src> {
 // Public entry point
 // ---------------------------------------------------------------------------
 
+/// Walk the scope events and collect every `RefKind::Unresolved` entry
+/// as `(name, ast_id)`. Use the AstId to look up the Loc in the AST
+/// for diagnostic rendering. Sorted by AstId order (which corresponds
+/// roughly to source order), so callers can pick the earliest one if
+/// they want a single error.
+pub fn unresolved_refs(result: &ScopeResult) -> Vec<(String, crate::ast::AstId)> {
+  let mut out: Vec<(String, crate::ast::AstId)> = Vec::new();
+  // PropGraph indexes by scope id; walk all scopes.
+  for scope_id in 0..result.scopes.len() {
+    let sid = ScopeId(scope_id as u32);
+    if let Some(events) = result.scope_events.try_get(sid) {
+      for ev in events {
+        if let ScopeEvent::Ref(r) = ev
+          && r.kind == RefKind::Unresolved
+        {
+          out.push((r.name.clone(), r.ast_id));
+        }
+      }
+    }
+  }
+  out.sort_by_key(|(_, ast_id)| ast_id.0);
+  out
+}
+
 pub fn analyse<'src>(ast: &Ast<'src>, builtins: &[&str]) -> ScopeResult {
   let mut ctx = Ctx::new(ast.nodes.len());
   let module_scope = ctx.push_scope(ScopeKind::Module, None, ast.root);

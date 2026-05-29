@@ -213,7 +213,13 @@ fn compile_one(
 ) -> Result<(Fragment, DebugMarks), String> {
   let source = loader.load(disk_path)?;
   let (lifted, desugared) = crate::to_lifted(&source, canonical_url)
-    .map_err(|d| format!("{}:{}:{}: {}", d.url, d.loc.start.line, d.loc.start.col, d.message))?;
+    .map_err(|d| {
+      // Render with the diagnostic formatter so the CLI sees the same
+      // caret + context block as `fink ast` / `fink cps`. The pipeline
+      // returns String here; the source loaded above provides context.
+      let provider = crate::errors::SingleSource { url: &d.url, src: &source };
+      crate::errors::format_diagnostic(&provider, &d, &crate::errors::FormatOptions::default())
+    })?;
   let marks = crate::passes::debug_marks::analyse(&lifted, &desugared);
   let fqn_prefix = format!("{canonical_url}:");
   let mut frag = super::lower::lower(&lifted.result, &desugared.ast, &fqn_prefix);

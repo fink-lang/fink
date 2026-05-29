@@ -77,11 +77,11 @@ test 'runtime error: integer divide by zero', fn:
 # Unbound name today panics inside lower.rs with "lower: unbound CpsId
 # cps#N" -- internal IDs that mean nothing to the user. This should
 # be a scope-time error.
-skip 'compile error: unbound name', fn:
+test 'compile error: unbound name', fn:
   expect run ":
     foo bar
   | equals ":
     foo bar
     ^^^
     unbound name 'foo'
-    test.fnk:1:1
+    ./test.fnk:1:1
