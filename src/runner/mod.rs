@@ -753,6 +753,7 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_sets.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_lists.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_math.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
   mod stdlib {
     use super::*;

@@ -96,7 +96,7 @@ fn main() {
 
     "ast" => {
       if desugar {
-        let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
+        let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
         if source_map {
           let (output, srcmap) = desugared.ast.print_mapped_native();
           println!("{output}\n# sm:{}", srcmap.encode_base64url());
@@ -104,7 +104,7 @@ fn main() {
           println!("{}", desugared.ast.print());
         }
       } else {
-        let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
+        let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
         if source_map {
           let (output, srcmap) = ast.print_mapped_native();
           println!("{output}\n# sm:{}", srcmap.encode_base64url());
@@ -115,7 +115,7 @@ fn main() {
     }
 
     "fmt" => {
-      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
+      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
       if source_map {
         let (output, srcmap) = fink::ast::fmt::fmt_mapped_native(&ast);
         println!("{output}\n# sm:{}", srcmap.encode_base64url());
@@ -125,7 +125,7 @@ fn main() {
     }
 
     "fmt2" => {
-      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
+      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
       let cfg = fink::fmt::FmtConfig::default();
       let laid_out = fink::fmt::layout::layout(&ast, &cfg);
       if source_map {
@@ -137,7 +137,7 @@ fn main() {
     }
 
     "cps" => {
-      let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
+      let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
       let cps = fink::passes::lower(&desugared);
 
       let result = if lifted {
@@ -168,7 +168,7 @@ fn main() {
       // Skeleton commit: policy marks nothing, so output is just the
       // (empty) sm line. Used by the vscode-fink extension to decorate
       // source ranges that will become stops.
-      let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die(&e));
+      let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
       let debug_marks = fink::passes::debug_marks::analyse(&lifted, &desugared);
       let (output, srcmap) = fink::passes::debug_marks::fmt::render_mapped_native(
         &debug_marks, &lifted, &desugared,
@@ -347,6 +347,15 @@ fn main() {
 
 fn die(msg: &str) -> ! {
   eprintln!("error: {msg}");
+  process::exit(1);
+}
+
+fn die_diag(src: &str, diag: &fink::errors::Diagnostic) -> ! {
+  let provider = fink::errors::SingleSource { url: &diag.url, src };
+  let pretty = fink::errors::format_diagnostic(
+    &provider, diag, &fink::errors::FormatOptions::default(),
+  );
+  eprintln!("{pretty}");
   process::exit(1);
 }
 

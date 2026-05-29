@@ -212,7 +212,8 @@ fn compile_one(
   loader: &mut dyn SourceLoader,
 ) -> Result<(Fragment, DebugMarks), String> {
   let source = loader.load(disk_path)?;
-  let (lifted, desugared) = crate::to_lifted(&source, canonical_url)?;
+  let (lifted, desugared) = crate::to_lifted(&source, canonical_url)
+    .map_err(|d| format!("{}:{}:{}: {}", d.url, d.loc.start.line, d.loc.start.col, d.message))?;
   let marks = crate::passes::debug_marks::analyse(&lifted, &desugared);
   let fqn_prefix = format!("{canonical_url}:");
   let mut frag = super::lower::lower(&lifted.result, &desugared.ast, &fqn_prefix);

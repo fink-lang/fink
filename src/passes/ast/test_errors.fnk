@@ -1,0 +1,45 @@
+---
+parser error tests
+
+`parse_debug` (in parser.rs) renders parse errors as
+`ERROR [line:col]: message`. Tests below pin the user-visible shape.
+
+Aim: every parse error tells the user (a) where (line + col) and (b) what
+went wrong, in plain language.
+---
+
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'parse error: unclosed paren', fn:
+  expect ast ":
+    foo (1, 2
+  | equals ":
+    foo (1, 2
+          ^
+    expected BracketClose, got Comma
+    test.fnk:1:7
+
+
+test 'parse error: bare colon at module top', fn:
+  expect ast ":
+    : foo
+  | equals ":
+    : foo
+    ^
+    unexpected token Colon
+    test.fnk:1:1
+
+
+# Trailing comma at end of an inline arg list silently drops, parsing
+# `foo 1,` as `foo 1` with no error. That's wrong — there's no second
+# arg, but the comma promised one. Bug to fix.
+test 'parse bug: trailing comma drops silently', fn:
+  expect ast ":
+    foo 1,
+  | equals ":
+    Module
+      Apply
+        Ident 'foo'
+        LitInt '1'

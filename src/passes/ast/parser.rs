@@ -1964,9 +1964,19 @@ mod tests {
   }
 
   fn parse_debug(src: &str) -> String {
-    match super::parse_with_blocks(src, "test", &[("test_block", BlockMode::Ast)]) {
+    let url = "test.fnk";
+    match super::parse_with_blocks(src, url, &[("test_block", BlockMode::Ast)]) {
       Ok(ast) => ast.print(),
-      Err(e) => format!("ERROR [{}:{}]: {}", e.loc.start.line, e.loc.start.col, e.message),
+      Err(e) => {
+        let diag = crate::errors::Diagnostic {
+          url: url.to_string(),
+          message: e.message,
+          loc: e.loc,
+          hint: None,
+        };
+        let provider = crate::errors::SingleSource { url, src };
+        crate::errors::format_diagnostic(&provider, &diag, &crate::errors::FormatOptions::default())
+      }
     }
   }
 
@@ -2082,4 +2092,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_block_modes.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_member_apply.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_errors.fnk");
 }
