@@ -60,6 +60,23 @@ test 'runtime error: rec destructure missing field', fn:
     ./test.fnk:1:1
 
 
+# --- type mismatch ----------------------------------------------------
+
+# `1 + 'foo'` traps inside the runtime op_plus dispatcher when the
+# string can't cast to $Num. Today's message is generic ("type
+# mismatch"); a per-op reason ("op_plus: expected number, got string")
+# is a follow-up that requires runtime br_on_cast with reason-tagged
+# panics at each cast site.
+test 'runtime error: type mismatch on +', fn:
+  expect run ƒink:
+    1 + 'foo'
+  | equals ":
+    1 + 'foo'
+    ^
+    type mismatch
+    ./test.fnk:1:1
+
+
 # --- divide by zero ---------------------------------------------------
 
 test 'runtime error: integer divide by zero', fn:

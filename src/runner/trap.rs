@@ -54,6 +54,13 @@ fn trap_message(trap: Option<&wasmtime::Trap>, err: &wasmtime::Error) -> String 
       TableOutOfBounds       => "out of bounds table access".to_string(),
       ArrayOutOfBounds       => "out of bounds array access".to_string(),
       StackOverflow          => "call stack exhausted".to_string(),
+      // WasmGC ref.cast failure. In fink today this surfaces when a
+      // value flows into an op that expects a different type (e.g.
+      // `1 + 'foo'` -- string into op_plus' $Num cast). Real fix is
+      // either static type checking or runtime br_on_cast with a
+      // reason-tagged panic per op; for now the message just signals
+      // a type mismatch to the user.
+      CastFailure            => "type mismatch".to_string(),
       other                  => format!("trap: {other}"),
     };
   }
@@ -228,6 +235,7 @@ mod tests {
     assert_eq!(trap_message(Some(&UnreachableCodeReached), &dummy), "trap: unreachable code reached");
     assert_eq!(trap_message(Some(&NullReference),          &dummy), "null reference");
     assert_eq!(trap_message(Some(&StackOverflow),          &dummy), "call stack exhausted");
+    assert_eq!(trap_message(Some(&CastFailure),            &dummy), "type mismatch");
   }
 
   #[test]
