@@ -214,25 +214,25 @@ test 'ctx survives range membership (op_in I64 Range)', fn:
     range-in-ctx
 
 
-# Set literal currently traps in rec_merge (pre-existing bug, unrelated
-# to ctx). Re-enable these once set literals work.
-skip 'ctx survives set membership (op_in _ Set)', fn:
+test 'ctx survives set membership (op_in _ Set)', fn:
   expect run ƒink:
+    {set} = import 'std/set.fnk'
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'set-in-ctx'
-    foo = 2 in {1, 2, 3}
+    foo = 2 in set 1, 2, 3
     get_ctx _
   | equals ":
     set-in-ctx
 
 
-skip 'ctx survives set union (op_or Set Set)', fn:
+test 'ctx survives set union (op_or Set Set)', fn:
   expect run ƒink:
+    {set} = import 'std/set.fnk'
     {set_ctx, get_ctx} = import 'std/effects.fnk'
 
     set_ctx 'set-or-ctx'
-    foo = {1, 2} or {2, 3}
+    foo = (set 1, 2) or (set 2, 3)
     get_ctx _
   | equals ":
     set-or-ctx

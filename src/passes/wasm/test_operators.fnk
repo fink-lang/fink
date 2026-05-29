@@ -249,11 +249,33 @@ test 'power', fn:
     ;; sm:CJwFAJgBAQABiAEBCgGIAQEJBtgFAHoA5gEAjAEA
 
 
-skip test 'power float', fn:
+test 'power float', fn:
   expect wat ƒink:
     2.0 ** 0.5
   | equals wat":
-    TODO
+    (module
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
+      (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
+        (local $:ret_0 (ref null any))
+        (local $:lit_1 (ref null any))
+        (local $:lit_2 (ref null any))
+        (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:lit_1 (struct.new $std/float.wat:F64 (f64.const 2)))
+        (local.set $:lit_2 (struct.new $std/float.wat:F64 (f64.const 0.5)))
+        (return_call $std/operators.fnk:op_pow (local.get $:ctx_param) (local.get $:lit_1) (local.get $:lit_2) (local.get $:ret_0))
+      )
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
+        (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:mod_clos (ref null any))
+        (local $:url (ref null any))
+        (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
+        (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
+      )
+      (data $d_0 "test")
+    )
+    ;; sm:CJwFAJgBAQADjAEBDgOQAQENCtgFAHoA5gEAjAEA
 
 
 test 'divmod', fn:
