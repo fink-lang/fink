@@ -37,7 +37,7 @@ fn builtin_keeps_inline_conts(b: BuiltIn) -> bool {
   matches!(
     b,
     BuiltIn::Pub          // structural: descend into cont body
-      | BuiltIn::Panic    // no cont (trap)
+      | BuiltIn::Panic(_)    // no cont (trap)
       | BuiltIn::FnClosure // closure construction — cont takes the new closure
       | BuiltIn::FinkModule, // module root — cont is the module body
   )

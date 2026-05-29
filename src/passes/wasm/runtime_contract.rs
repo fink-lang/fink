@@ -150,11 +150,17 @@ pub enum Sym {
   // the BuiltIn::Import handler to build the import rec at module-load
   // time without going through the CPS-style rec_set chain.
   RecSetField,
-  // `panic` runtime function — `Fn3` shape. Used when `BuiltIn::Panic`
-  // appears in value position (passed as fail continuation in
-  // pattern-match dispatch). Wrapped in a no-capture `$Closure` at
-  // the call site.
+  // `panic` runtime function — `(param i32) -> trap`. Used when
+  // `BuiltIn::Panic(reason)` appears in tail position; emitter passes
+  // the wire-encoded reason as an `i32.const` arg.
   Panic,
+  // `panic_apply` runtime function — `Fn3` shape. Used when
+  // `BuiltIn::Panic(_)` appears in value position (passed as the fail
+  // continuation in pattern-match dispatch). Wrapped in a no-capture
+  // `$Closure` at the call site. The Fn3 wrapper internally forwards
+  // to `$panic` with reason 0 (IrrefutablePattern) -- the value-
+  // position form is reason-agnostic.
+  PanicApply,
   // `std/modules.fnk:pub` — direct call, `(mod_url, name, val) -> ()`.
   // Emitted at every `·ƒpub` site to register the binding into the
   // module's exports rec in the runtime registry. No return value;
@@ -281,6 +287,11 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     ],
     // Closure construction needs both $Closure struct + $Captures array types.
     BuiltIn::FnClosure => &[Sym::Closure, Sym::Captures],
+    // Tail-position panic emits `(i32.const reason) (call $panic)`.
+    // Value-position panic (handled in scan_val_kind) needs the Fn3
+    // wrapper instead -- see scan path for BuiltIn::Panic in value
+    // position which marks Sym::PanicApply / Closure / Captures.
+    BuiltIn::Panic(_) => &[Sym::Panic],
     // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
@@ -360,6 +371,7 @@ pub struct Runtime {
   rec_empty:    Option<FuncSym>,
   rec_set_field: Option<FuncSym>,
   panic:        Option<FuncSym>,
+  panic_apply:  Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
   str_match:    Option<FuncSym>,
   op_shl:     Option<FuncSym>,
@@ -410,6 +422,7 @@ impl Runtime {
     self.fn_nil_to_list.expect("rt: fn_nil_to_list sig not declared")
   }
   pub fn panic(&self)        -> FuncSym { self.panic.expect("rt: panic not declared") }
+  pub fn panic_apply(&self)  -> FuncSym { self.panic_apply.expect("rt: panic_apply not declared") }
   pub fn str_fmt(&self)      -> FuncSym { self.str_fmt.expect("rt: str_fmt not declared") }
   pub fn str_match(&self)    -> FuncSym { self.str_match.expect("rt: str_match not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
@@ -488,7 +501,8 @@ impl Runtime {
 pub(super) fn import_key(sym: Sym) -> &'static str {
   match sym {
 
-    Sym::Panic           => "std/interop.fnk:panic",
+    Sym::Panic           => "interop.wat:panic",
+    Sym::PanicApply      => "std/interop.fnk:panic",
 
     Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
@@ -674,6 +688,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
 if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecPut)); }
   if needed.contains(&Sym::RecPop)  { rt.rec_pop = Some(FuncSym::Runtime(Sym::RecPop)); }
   if needed.contains(&Sym::Panic)   { rt.panic   = Some(FuncSym::Runtime(Sym::Panic)); }
+  if needed.contains(&Sym::PanicApply) { rt.panic_apply = Some(FuncSym::Runtime(Sym::PanicApply)); }
 
   if needed.contains(&Sym::RecEmpty) {
     // `rec_new : () -> anyref` — virtual-stdlib `import` codegen
@@ -1070,12 +1085,12 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
     }
     ValKind::BuiltIn(b) => {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }
-      // When a builtin appears in *value* position (e.g. `panic` as a
-      // fail-cont arg), the lowering also needs the runtime symbol
-      // for the underlying `Fn3`, plus the Closure/Captures types to
-      // wrap it.
-      if matches!(b, BuiltIn::Panic) {
-        usage.mark(Sym::Panic);
+      // Panic in value position lowers to a no-capture $Closure over
+      // the Fn3-shaped $panic_apply. The tail-position emit (handled
+      // via syms_for_builtin above) still needs Sym::Panic for the
+      // direct i32-taking helper; value position swaps in PanicApply.
+      if matches!(b, BuiltIn::Panic(_)) {
+        usage.mark(Sym::PanicApply);
         usage.mark(Sym::Closure);
         usage.mark(Sym::Captures);
       }

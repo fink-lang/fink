@@ -407,7 +407,11 @@ test 'trailing comma dedent error', fn:
       bar,
     spam
   | equals ":
-    ERROR [2:5]: unexpected , followed by dedent
+    foo
+      bar,
+         ^
+    unexpected , followed by dedent
+    test.fnk:2:6
 
 
 test 'trailing semicolon dedent error', fn:
@@ -416,7 +420,11 @@ test 'trailing semicolon dedent error', fn:
       bar;
     spam
   | equals ":
-    ERROR [2:5]: unexpected ; followed by dedent
+    foo
+      bar;
+         ^
+    unexpected ; followed by dedent
+    test.fnk:2:6
 
 
 test 'nested right-to-left application', fn:

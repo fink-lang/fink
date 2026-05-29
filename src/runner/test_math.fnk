@@ -355,9 +355,10 @@ test 'math neg uint traps', fn:
     {neg} = import 'std/math.fnk'
     neg 0xff
   | equals ":
-    ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:  <unknown>!std/int.wat:neg
-        1:  <unknown>!std/math.wat:_neg_apply: wasm trap: wasm `unreachable` instruction executed
+    {neg} = import 'std/math.fnk'
+    ^
+    trap: unreachable code reached
+    ./test.fnk:1:1
 
 
 # --- sign on Int ---
@@ -496,9 +497,10 @@ test 'math copysign uint traps', fn:
     {copysign} = import 'std/math.fnk'
     copysign 0x3, 0x2
   | equals ":
-    ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:  <unknown>!std/int.wat:copysign
-        1:  <unknown>!std/math.wat:_copysign_apply: wasm trap: wasm `unreachable` instruction executed
+    {copysign} = import 'std/math.fnk'
+    ^
+    trap: unreachable code reached
+    ./test.fnk:1:1
 
 
 # --- clamp on Int ---

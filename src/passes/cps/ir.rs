@@ -304,12 +304,53 @@ pub enum BuiltIn {
   // tail call to ƒret. At runtime, the host provides `fink_module` which
   // invokes the cont with a done continuation.
   FinkModule,
-  // Irrefutable-pattern failure sentinel. The compiler wires this in as the
-  // "fail continuation" at match sites with no alternative. At runtime it
-  // delegates through operators.wat → interop-rust.wat → host_panic, which
-  // traps the WASM instance. Zero args today; future work: pass a reason
-  // string / source location for diagnostics.
-  Panic,
+  // Panic sentinel. The compiler wires this in as the "fail
+  // continuation" at sites with no alternative (irrefutable destructure,
+  // match exhausted, etc.). The reason is encoded structurally so the
+  // runtime can produce a user-facing message specific to the failure
+  // mode. At runtime it delegates through interop's `panic` -> host's
+  // `host_panic(reason: i32)`, which traps the WASM instance.
+  Panic(PanicReason),
+}
+
+/// Why a `BuiltIn::Panic` was emitted. The wire form (i32 const passed
+/// to `host_panic`) is an implementation detail of WAT codegen; the
+/// rest of the pipeline treats reasons structurally.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PanicReason {
+  /// Irrefutable binding pattern failed (`{a, b} = x` where x doesn't
+  /// have those fields, etc.).
+  IrrefutablePattern,
+  /// `match` expression had no matching arm and no wildcard.
+  MatchExhausted,
+}
+
+impl PanicReason {
+  /// Wire encoding for the `host_panic` call. Keep this in sync with
+  /// `from_wire` and any runtime-side decoder.
+  pub fn wire(self) -> i32 {
+    match self {
+      Self::IrrefutablePattern => 0,
+      Self::MatchExhausted     => 1,
+    }
+  }
+
+  pub fn from_wire(n: i32) -> Option<Self> {
+    match n {
+      0 => Some(Self::IrrefutablePattern),
+      1 => Some(Self::MatchExhausted),
+      _ => None,
+    }
+  }
+
+  /// User-facing message rendered when this reason fires. Picked up by
+  /// the runtime trap translator.
+  pub fn message(self) -> &'static str {
+    match self {
+      Self::IrrefutablePattern => "irrefutable pattern failed",
+      Self::MatchExhausted     => "match exhausted: no arm matched",
+    }
+  }
 }
 
 impl BuiltIn {

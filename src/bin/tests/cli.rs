@@ -99,8 +99,12 @@ fn ast_source_map_appends_sm_line() {
 
 #[test]
 fn ast_on_parse_error_exits_nonzero() {
+  // Diagnostic shape (no leading "error: "): caret on the failing line,
+  // a message line, then `<path>:<line>:<col>`. We just check the
+  // location reference + nonzero exit; the exact wording of the
+  // message is intentionally not pinned here so it can evolve.
   fink().args(["ast", &fixture_str("parse_error.fnk")]).assert().failure().code(1)
-    .stderr(predicate::str::contains("error: "));
+    .stderr(predicate::str::contains("parse_error.fnk:"));
 }
 
 #[test]

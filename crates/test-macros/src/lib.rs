@@ -352,16 +352,14 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
   let ast = fink::parser::parse(&src, &rel_path)
     .unwrap_or_else(|e| {
       let diag = fink::errors::Diagnostic {
+        url: rel_path.clone(),
         loc: e.loc,
         message: e.message,
         hint: None,
       };
-      let opts = fink::errors::FormatOptions {
-        lines_before: 1,
-        lines_after: 0,
-        path: Some(&rel_path),
-      };
-      let pretty = fink::errors::format_diagnostic(&src, &diag, &opts);
+      let provider = fink::errors::SingleSource { url: &rel_path, src: &src };
+      let opts = fink::errors::FormatOptions { lines_before: 1, lines_after: 0 };
+      let pretty = fink::errors::format_diagnostic(&provider, &diag, &opts);
       panic!("include_fink_tests: parse error\n\n{pretty}\n");
     });
 
