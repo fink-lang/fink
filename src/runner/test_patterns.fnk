@@ -64,7 +64,7 @@ test 'predicate guard in match — list of rec with spread', fn:
     4
 
 
-skip test 'predicate guard in match — closure-valued field, 2-elem list', fn:
+test 'predicate guard in match — closure-valued field, 2-elem list', fn:
   expect run ƒink:
     g = fn: 2
     is_eq_g = fn v: v == g
