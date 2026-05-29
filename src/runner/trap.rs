@@ -116,10 +116,10 @@ fn resolve_source(
 /// Closest at-or-before MarkRecord for `pc`. Linear scan; the mark
 /// list is typically short and only consulted at trap time.
 #[cfg(feature = "runtime")]
-fn nearest_mark<'a>(
+fn nearest_mark(
   pc: u32,
-  marks: &'a [crate::passes::debug_marks::MarkRecord],
-) -> Option<&'a crate::passes::debug_marks::MarkRecord> {
+  marks: &[crate::passes::debug_marks::MarkRecord],
+) -> Option<&crate::passes::debug_marks::MarkRecord> {
   let mut best: Option<&crate::passes::debug_marks::MarkRecord> = None;
   for m in marks {
     if m.wasm_pc <= pc {
