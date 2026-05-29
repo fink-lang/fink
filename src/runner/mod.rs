@@ -6,6 +6,8 @@
 use std::sync::{Arc, Mutex};
 
 pub mod wasmtime_runner;
+#[cfg(feature = "run")]
+pub mod trap;
 
 /// Shared, thread-safe write stream (stdout or stderr).
 pub type IoStream = Arc<Mutex<dyn std::io::Write + Send>>;
