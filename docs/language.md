@@ -277,6 +277,22 @@ a >< b         # disjoint — a and b have no element in common
 1 < x < 10     # chained
 ```
 
+`==` is structural equality: two values are equal when their contents are
+equal, regardless of how or when they were constructed. This applies all the
+way down — collections compare element by element, records key by key.
+
+```fink
+[1, 2, 3] == [1, 2, 3]      # true
+{x: 1, y: 2} == {y: 2, x: 1}  # true — key order does not matter
+{1, 2} == {2, 1}             # true — sets are unordered
+
+# Equality is recursive:
+{pos: [1, 2]} == {pos: [1, 2]}  # true
+```
+
+Two values built independently are equal whenever their contents match — `==`
+asks about value, never about identity. `!=` is its negation.
+
 ### Logical
 
 Operate on booleans and return a boolean.

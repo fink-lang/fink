@@ -39,7 +39,6 @@
   (import "std/math.wat"     "abs_f64"
     (func $_link_math_anchor (param (ref $F64)) (result (ref $F64))))
   (import "std/dict.wat"     "Rec"         (type $Rec         (sub any)))
-  (import "std/dict.wat"     "RecImpl"     (type $RecImpl     (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
 
@@ -108,8 +107,9 @@
   (import "std/str.wat" "op_dot" (func $str_op_dot (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — dict ops
-  (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $RecImpl)) (param (ref eq)) (result i32)))
-  (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $RecImpl)) (param (ref eq)) (result i32)))
+  (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $Rec)) (param (ref eq)) (result i32)))
+  (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Rec)) (param (ref eq)) (result i32)))
+  (import "std/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Rec)) (param (ref $Rec)) (result i32)))
   (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
   (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
@@ -315,6 +315,19 @@
       (return (call $str_op_eq
         (ref.cast (ref $Str) (local.get $b)))))
 
+    ;; Try $Rec — structural compare. If b is not a $Rec, not equal.
+    (block $not_rec
+      (block $is_rec (result (ref $Rec))
+        (br $not_rec
+          (br_on_cast $is_rec (ref eq) (ref $Rec)
+            (local.get $a))))
+      (drop)
+      (if (i32.eqz (ref.test (ref $Rec) (local.get $b)))
+        (then (return (i32.const 0))))
+      (return (call $rec_deep_eq
+        (ref.cast (ref $Rec) (local.get $a))
+        (ref.cast (ref $Rec) (local.get $b)))))
+
     ;; Fallback: ref.eq (i31ref, other GC types)
     (ref.eq (local.get $a) (local.get $b)))
 
@@ -401,7 +414,37 @@
           (ref.cast (ref $Closure) (local.get $b))))
         (local.get $cont)))
 
+    ;; Try $Rec — structural. ref.eq short-circuits identical recs; a
+    ;; non-Rec b is never equal (mixed-type == is false, not a trap).
+    (block $not_rec
+      (drop
+        (block $is_rec (result (ref $Rec))
+          (br $not_rec
+            (br_on_cast $is_rec (ref null any) (ref $Rec)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31 (call $_rec_eq (local.get $a) (local.get $b)))
+        (local.get $cont)))
+
     (unreachable))
+
+  ;; Record equality kernel shared by op_eq / op_neq.
+  ;;   ref.eq    → identical allocation, equal
+  ;;   b non-Rec → not equal (mixed-type)
+  ;;   else      → structural rec_deep_eq
+  ;; (A hash-inequality fast-reject slots between ref.eq and rec_deep_eq
+  ;; once records carry a content hash; today the hash is stubbed to 0.)
+  (func $_rec_eq (param $a (ref null any)) (param $b (ref null any)) (result i32)
+    (if (ref.eq
+          (ref.cast (ref eq) (local.get $a))
+          (ref.cast (ref eq) (local.get $b)))
+      (then (return (i32.const 1))))
+    (if (i32.eqz (ref.test (ref $Rec) (local.get $b)))
+      (then (return (i32.const 0))))
+    (call $rec_deep_eq
+      (ref.cast (ref $Rec) (local.get $a))
+      (ref.cast (ref $Rec) (local.get $b))))
 
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
@@ -484,6 +527,18 @@
         (ref.i31 (call $clos_op_neq
           (ref.cast (ref $Closure) (local.get $a))
           (ref.cast (ref $Closure) (local.get $b))))
+        (local.get $cont)))
+
+    ;; Try $Rec — negation of the structural equality kernel.
+    (block $not_rec
+      (drop
+        (block $is_rec (result (ref $Rec))
+          (br $not_rec
+            (br_on_cast $is_rec (ref null any) (ref $Rec)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31 (i32.eqz (call $_rec_eq (local.get $a) (local.get $b))))
         (local.get $cont)))
 
     (unreachable))
@@ -948,7 +1003,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
-    (local $rec (ref $RecImpl))
+    (local $rec (ref $Rec))
     (local $set (ref $Set))
 
     ;; Try $Range
@@ -967,9 +1022,9 @@
 
     ;; Try $Rec
     (block $not_rec
-      (block $is_rec (result (ref $RecImpl))
+      (block $is_rec (result (ref $Rec))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+          (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $b))))
       (local.set $rec)
       (return_call $apply_1
@@ -1000,7 +1055,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
-    (local $rec (ref $RecImpl))
+    (local $rec (ref $Rec))
     (local $set (ref $Set))
 
     ;; Try $Range
@@ -1019,9 +1074,9 @@
 
     ;; Try $Rec
     (block $not_rec
-      (block $is_rec (result (ref $RecImpl))
+      (block $is_rec (result (ref $Rec))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+          (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $b))))
       (local.set $rec)
       (return_call $apply_1
@@ -1074,9 +1129,9 @@
 
     ;; Try $Rec
     (block $not_rec
-      (block $is_rec (result (ref $RecImpl))
+      (block $is_rec (result (ref $Rec))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+          (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $container))))
       (drop)
       (return_call $dict_op_dot

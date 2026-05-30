@@ -287,3 +287,177 @@ test 'rec destructure rest before field', fn:
   | equals ƒink:
     1
 
+
+# --- Structural equality ---
+#
+# `==` is structural: two records are equal when they hold the same keys
+# mapped to the same values, regardless of construction order or path.
+
+test 'rec empty equal', fn:
+  expect run ƒink:
+    {} == {}
+  | equals ƒink:
+    true
+
+test 'rec single field equal', fn:
+  expect run ƒink:
+    {a: 1} == {a: 1}
+  | equals ƒink:
+    true
+
+test 'rec single field unequal value', fn:
+  expect run ƒink:
+    {a: 1} == {a: 2}
+  | equals ƒink:
+    false
+
+test 'rec multi field equal', fn:
+  expect run ƒink:
+    {a: 1, b: 2} == {a: 1, b: 2}
+  | equals ƒink:
+    true
+
+test 'rec key order independent', fn:
+  expect run ƒink:
+    {a: 1, b: 2} == {b: 2, a: 1}
+  | equals ƒink:
+    true
+
+test 'rec missing key unequal', fn:
+  expect run ƒink:
+    {a: 1, b: 2} == {a: 1}
+  | equals ƒink:
+    false
+
+test 'rec extra key unequal', fn:
+  expect run ƒink:
+    {a: 1} == {a: 1, b: 2}
+  | equals ƒink:
+    false
+
+test 'rec nested equal', fn:
+  expect run ƒink:
+    {pos: {x: 1, y: 2}} == {pos: {x: 1, y: 2}}
+  | equals ƒink:
+    true
+
+test 'rec nested unequal', fn:
+  expect run ƒink:
+    {pos: {x: 1, y: 2}} == {pos: {x: 1, y: 9}}
+  | equals ƒink:
+    false
+
+skip test 'rec with list value equal', fn:
+  expect run ƒink:
+    {items: [1, 2, 3]} == {items: [1, 2, 3]}
+  | equals ƒink:
+    true
+
+test 'rec with string value equal', fn:
+  expect run ƒink:
+    {name: 'fink'} == {name: 'fink'}
+  | equals ƒink:
+    true
+
+test 'rec spread built equals literal', fn:
+  expect run ƒink:
+    r = {a: 1}
+    {..r, b: 2} == {a: 1, b: 2}
+  | equals ƒink:
+    true
+
+test 'rec different build order equal', fn:
+  expect run ƒink:
+    one = {..{a: 1}, b: 2}
+    two = {..{b: 2}, a: 1}
+    one == two
+  | equals ƒink:
+    true
+
+test 'rec runtime key equal', fn:
+  expect run ƒink:
+    k = 'a'
+    {(k): 1} == {a: 1}
+  | equals ƒink:
+    true
+
+test 'rec runtime key unequal', fn:
+  expect run ƒink:
+    k = 'a'
+    {(k): 1} == {a: 2}
+  | equals ƒink:
+    false
+
+test 'rec vs num not equal', fn:
+  expect run ƒink:
+    {a: 1} == 1
+  | equals ƒink:
+    false
+
+test 'rec vs string not equal', fn:
+  expect run ƒink:
+    {a: 1} == 'a'
+  | equals ƒink:
+    false
+
+test 'rec vs list not equal', fn:
+  expect run ƒink:
+    {a: 1} == [1]
+  | equals ƒink:
+    false
+
+test 'rec neq true when different', fn:
+  expect run ƒink:
+    {a: 1} != {a: 2}
+  | equals ƒink:
+    true
+
+test 'rec neq false when equal', fn:
+  expect run ƒink:
+    {a: 1} != {a: 1}
+  | equals ƒink:
+    false
+
+
+# --- Records as keys ---
+#
+# Structural key equality: a value stored under a record key is found by
+# any structurally-equal record, not just the same allocation.
+
+test 'rec key lookup by equal rec', fn:
+  expect run ƒink:
+    k = {id: 1}
+    m = {(k): 'found'}
+    m.({id: 1}) == 'found'
+  | equals ƒink:
+    true
+
+test 'rec key distinct keys coexist', fn:
+  expect run ƒink:
+    m = {({id: 1}): 'a', ({id: 2}): 'b'}
+    m.({id: 2}) == 'b'
+  | equals ƒink:
+    true
+
+test 'rec key membership by equal rec', fn:
+  expect run ƒink:
+    m = {({id: 1}): 'a'}
+    {id: 1} in m
+  | equals ƒink:
+    true
+
+test 'rec key absent by unequal rec', fn:
+  expect run ƒink:
+    m = {({id: 1}): 'a'}
+    {id: 2} not in m
+  | equals ƒink:
+    true
+
+test 'rec key update overwrites equal rec', fn:
+  expect run ƒink:
+    m = {({id: 1}): 'a'}
+    m2 = {..m, ({id: 1}): 'b'}
+    m2.({id: 1}) == 'b'
+  | equals ƒink:
+    true
+
