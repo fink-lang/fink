@@ -15,7 +15,7 @@ content = try read_file 'config.toml'
 
 ## Dicts
 
-The runtime has a HAMT-based dict type and most operations are wired (get / set / delete / size / merge / equality), but there's no user-facing constructor exposed under `std/dict.fnk` yet. Records today are structurally dicts at runtime — they share the same HAMT implementation — but the language-level `dict {...}` form with dynamic string keys (as opposed to records' compile-time-known identifier keys) isn't reachable from source.
+Records are HAMT-backed and carry the dynamic-key machinery already (get / set / delete / size / merge / structural equality), so a dict is the same runtime structure as a record. What's missing is the language-level distinction: a `dict` constructor with dynamic string keys, as opposed to records' compile-time-known identifier keys, isn't reachable from source, and there's no dedicated dict type — records do both jobs today.
 
 ```fink
 {dict} = import 'std/dict.fnk'

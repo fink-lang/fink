@@ -347,7 +347,7 @@ test 'rec nested unequal', fn:
   | equals ƒink:
     false
 
-skip test 'rec with list value equal', fn:
+test 'rec with list value equal', fn:
   expect run ƒink:
     {items: [1, 2, 3]} == {items: [1, 2, 3]}
   | equals ƒink:

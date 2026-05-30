@@ -34,6 +34,10 @@
   (import "std/repr.wat" "repr_val"
     (func $repr_val (param (ref any)) (result (ref $Str))))
 
+  ;; deep_eq — structural element comparison for list equality.
+  (import "rt/protocols.wat" "deep_eq"
+    (func $deep_eq (param (ref eq)) (param (ref eq)) (result i32)))
+
   ;; Range / I64 imports for $op_dot indexing & slicing.
   (import "std/int.wat"   "I64"      (type $I64   (sub any) (struct (field $ival i64))))
   (import "std/range.wat" "Range"    (type $Range (sub any)))
@@ -87,6 +91,45 @@
   (func $op_empty (@impl "std/operators.fnk:op_empty" $List)
     (param $val (ref null any)) (result i32)
     (ref.test (ref $Nil) (local.get $val)))
+
+
+  ;; -- Structural equality --------------------------------------------
+  ;;
+  ;; Two lists are equal iff they have the same length and equal elements
+  ;; in the same positions (ordered, unlike records). Walks both lists in
+  ;; lockstep; elements compared through deep_eq, so nesting is recursive.
+  ;; Direct-style — used by the == operator's $List arm and by deep_eq for
+  ;; structural list keys/values.
+  (func $list_deep_eq (@pub)
+    (param $a (ref $List)) (param $b (ref $List)) (result i32)
+    (local $ca (ref $Cons))
+    (local $cb (ref $Cons))
+
+    (block $done
+      (loop $walk
+        ;; both empty -> equal
+        (if (ref.test (ref $Nil) (local.get $a))
+          (then (return (ref.test (ref $Nil) (local.get $b)))))
+        ;; a non-empty, b empty -> unequal
+        (if (ref.test (ref $Nil) (local.get $b))
+          (then (return (i32.const 0))))
+
+        (local.set $ca (ref.cast (ref $Cons) (local.get $a)))
+        (local.set $cb (ref.cast (ref $Cons) (local.get $b)))
+
+        ;; heads must be deep-equal
+        (if (i32.eqz
+              (call $deep_eq
+                (ref.cast (ref eq) (struct.get $Cons $head (local.get $ca)))
+                (ref.cast (ref eq) (struct.get $Cons $head (local.get $cb)))))
+          (then (return (i32.const 0))))
+
+        ;; advance both tails
+        (local.set $a (struct.get $Cons $tail (local.get $ca)))
+        (local.set $b (struct.get $Cons $tail (local.get $cb)))
+        (br $walk)))
+
+    (i32.const 1))
 
 
   ;; -- Head / Tail -----------------------------------------------------

@@ -110,6 +110,7 @@
   (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $Rec)) (param (ref eq)) (result i32)))
   (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Rec)) (param (ref eq)) (result i32)))
   (import "std/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Rec)) (param (ref $Rec)) (result i32)))
+  (import "std/list.wat" "list_deep_eq" (func $list_deep_eq (param (ref $List)) (param (ref $List)) (result i32)))
   (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
   (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
@@ -328,6 +329,33 @@
         (ref.cast (ref $Rec) (local.get $a))
         (ref.cast (ref $Rec) (local.get $b)))))
 
+    ;; Try $List — structural compare. If b is not a $List, not equal.
+    (block $not_list
+      (block $is_list (result (ref $List))
+        (br $not_list
+          (br_on_cast $is_list (ref eq) (ref $List)
+            (local.get $a))))
+      (drop)
+      (if (i32.eqz (ref.test (ref $List) (local.get $b)))
+        (then (return (i32.const 0))))
+      (return (call $list_deep_eq
+        (ref.cast (ref $List) (local.get $a))
+        (ref.cast (ref $List) (local.get $b)))))
+
+    ;; Try $Set — structural compare via set's own op_eq. If b is not a
+    ;; $Set, not equal.
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref eq) (ref $Set)
+            (local.get $a))))
+      (drop)
+      (if (i32.eqz (ref.test (ref $Set) (local.get $b)))
+        (then (return (i32.const 0))))
+      (return (call $set_op_eq
+        (ref.cast (ref $Set) (local.get $a))
+        (ref.cast (ref $Set) (local.get $b)))))
+
     ;; Fallback: ref.eq (i31ref, other GC types)
     (ref.eq (local.get $a) (local.get $b)))
 
@@ -427,6 +455,18 @@
         (ref.i31 (call $_rec_eq (local.get $a) (local.get $b)))
         (local.get $cont)))
 
+    ;; Try $List — structural, positional. Same kernel shape as $Rec.
+    (block $not_list
+      (drop
+        (block $is_list (result (ref $List))
+          (br $not_list
+            (br_on_cast $is_list (ref null any) (ref $List)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31 (call $_list_eq (local.get $a) (local.get $b)))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; Record equality kernel shared by op_eq / op_neq.
@@ -445,6 +485,21 @@
     (call $rec_deep_eq
       (ref.cast (ref $Rec) (local.get $a))
       (ref.cast (ref $Rec) (local.get $b))))
+
+  ;; List equality kernel shared by op_eq / op_neq.
+  ;;   ref.eq     → identical allocation, equal
+  ;;   b non-List → not equal (mixed-type)
+  ;;   else       → structural list_deep_eq
+  (func $_list_eq (param $a (ref null any)) (param $b (ref null any)) (result i32)
+    (if (ref.eq
+          (ref.cast (ref eq) (local.get $a))
+          (ref.cast (ref eq) (local.get $b)))
+      (then (return (i32.const 1))))
+    (if (i32.eqz (ref.test (ref $List) (local.get $b)))
+      (then (return (i32.const 0))))
+    (call $list_deep_eq
+      (ref.cast (ref $List) (local.get $a))
+      (ref.cast (ref $List) (local.get $b))))
 
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
@@ -539,6 +594,18 @@
       (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (i32.eqz (call $_rec_eq (local.get $a) (local.get $b))))
+        (local.get $cont)))
+
+    ;; Try $List — negation of the structural equality kernel.
+    (block $not_list
+      (drop
+        (block $is_list (result (ref $List))
+          (br $not_list
+            (br_on_cast $is_list (ref null any) (ref $List)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31 (i32.eqz (call $_list_eq (local.get $a) (local.get $b))))
         (local.get $cont)))
 
     (unreachable))
