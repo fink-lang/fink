@@ -4,15 +4,17 @@
 
 test 'spawning', fn:
   expect run ƒink:
-    {upd_ctx, get_ctx, set_ctx} = import 'std/effects.fnk'
+    {upd_ctx_for, get_ctx_for, set_ctx_for, unique} = import 'std/effects.fnk'
     {spawn, pause, with_tasks} = import 'std/tasks.fnk'
 
-    set_ctx {foo: 'start'}
+    testing = unique _
+
+    set_ctx_for testing, {foo: 'start'}
 
     pause_with_update = fn msg:
       pause msg
-      {foo} = get_ctx _
-      upd_ctx {foo: '${foo} -> ${msg}'}
+      {foo} = get_ctx_for testing
+      upd_ctx_for testing,  {foo: '${foo} -> ${msg}'}
 
     with_tasks fn:
       spawn fn:
@@ -26,7 +28,7 @@ test 'spawning', fn:
         pause_with_update 'B1'
         'B-done'
 
-    {foo} = get_ctx _
+    {foo} = get_ctx_for testing
     foo
 
   | equals ":
@@ -35,10 +37,7 @@ test 'spawning', fn:
 
 test 'awaiting future', fn:
   expect run ƒink:
-    {set_ctx} = import 'std/effects.fnk'
     {spawn, pause, with_tasks, await} = import 'std/tasks.fnk'
-
-    set_ctx {}
 
     with_tasks fn:
       fut = spawn fn:

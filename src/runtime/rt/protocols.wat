@@ -48,6 +48,9 @@
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/apply.wat" "op_eq"  (func $clos_op_eq  (param (ref $Closure)) (param (ref $Closure)) (result i32)))
   (import "rt/apply.wat" "op_neq" (func $clos_op_neq (param (ref $Closure)) (param (ref $Closure)) (result i32)))
+  (import "rt/opaque.wat" "Opaque" (type $Opaque (sub any)))
+  (import "rt/opaque.wat" "op_eq"  (func $opaque_op_eq  (param (ref $Opaque)) (param (ref $Opaque)) (result i32)))
+  (import "rt/opaque.wat" "op_neq" (func $opaque_op_neq (param (ref $Opaque)) (param (ref $Opaque)) (result i32)))
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
   (import "std/list.wat" "seq_pop"
@@ -467,6 +470,24 @@
           (ref.cast (ref $Closure) (local.get $b))))
         (local.get $cont)))
 
+    ;; Try $Opaque -- identity equality. A non-Opaque b is never equal
+    ;; (mixed-type == is false, not a trap).
+    (block $not_opaque
+      (drop
+        (block $is_opaque (result (ref $Opaque))
+          (br $not_opaque
+            (br_on_cast $is_opaque (ref null any) (ref $Opaque)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Opaque) (local.get $b))
+            (then (call $opaque_op_eq
+              (ref.cast (ref $Opaque) (local.get $a))
+              (ref.cast (ref $Opaque) (local.get $b))))
+            (else (i32.const 0))))
+        (local.get $cont)))
+
     ;; Try $Rec — structural. ref.eq short-circuits identical recs; a
     ;; non-Rec b is never equal (mixed-type == is false, not a trap).
     (block $not_rec
@@ -634,6 +655,24 @@
         (ref.i31 (call $clos_op_neq
           (ref.cast (ref $Closure) (local.get $a))
           (ref.cast (ref $Closure) (local.get $b))))
+        (local.get $cont)))
+
+    ;; Try $Opaque -- identity inequality. A non-Opaque b is never equal,
+    ;; so != is true.
+    (block $not_opaque
+      (drop
+        (block $is_opaque (result (ref $Opaque))
+          (br $not_opaque
+            (br_on_cast $is_opaque (ref null any) (ref $Opaque)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Opaque) (local.get $b))
+            (then (call $opaque_op_neq
+              (ref.cast (ref $Opaque) (local.get $a))
+              (ref.cast (ref $Opaque) (local.get $b))))
+            (else (i32.const 1))))
         (local.get $cont)))
 
     ;; Try $Rec — negation of the structural equality kernel.

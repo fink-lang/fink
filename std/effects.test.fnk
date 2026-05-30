@@ -2,109 +2,48 @@
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-test 'set_ctx threads new universe forward', fn:
-  expect run ƒink:
-    {set_ctx} = import 'std/effects.fnk'
-    set_ctx 'first'
-    set_ctx 'second'
-  | equals ":
-    first
-
-
 test 'set_ctx survives a builtin op in between', fn:
   expect run ƒink:
-    {set_ctx} = import 'std/effects.fnk'
-    set_ctx 'foo'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
+
+    set_ctx_for testing, 'foo'
     x = 1 + 2
-    set_ctx 'bar ${x}'
+    get_ctx_for testing
   | equals ":
     foo
 
 
 test 'ctx set in outer scope reads in nested fn', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    # we don't know what the starting point is, 42?
-    set_ctx 1
-
-    ni = set_ctx 1
+    ni = set_ctx_for testing, 1
 
     inner = fn foo:
-      x = set_ctx foo + 1
+      x = set_ctx_for testing, foo + 1
       x
 
     inner ni
-    get_ctx _
+    get_ctx_for testing
   | equals ƒink:
     2
 
 
 
-# test 'ctx survives yield/resume', fn:
-#   expect run ƒink:
-#     {set_ctx, get_ctx} = import 'std/effects.fnk'
-#     set_ctx 'yielded'
-#     yield 0
-#     get_ctx _
-#   | equals ":
-#     yielded
-
-
-# test 'ctx survives channel receive', fn:
-#   expect run ƒink:
-#     {set_ctx, get_ctx} = import 'std/effects.fnk'
-
-#     ch = channel 0
-#     spawn fn:
-#       'msg' >> ch
-
-#     set_ctx 'receiver-ctx'
-#     receive ch
-#     get_ctx _
-#   | equals ":
-#     receiver-ctx
-
-
-# test 'ctx survives await of spawned task', fn:
-#   expect run ƒink:
-#     {set_ctx, get_ctx} = import 'std/effects.fnk'
-
-#     fut = spawn fn:
-#       42
-
-#     set_ctx 'awaiter-ctx'
-#     await fut
-#     get_ctx _
-#   | equals ":
-#     awaiter-ctx
-
-
 test 'ctx survives stdout write', fn:
   expect run ƒink:
     {stdout, write} = import 'std/io.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'writer-ctx'
+    set_ctx_for testing, 'writer-ctx'
     write stdout, ''
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     writer-ctx
 
-
-# # A spawned task body now runs under the SPAWNER's ctx (we captured it
-# # in $_spawn_task_fn's captures).
-# test 'spawned task body inherits spawner ctx', fn:
-#   expect run ƒink:
-#     {set_ctx, get_ctx} = import 'std/effects.fnk'
-
-#     set_ctx 'spawner-ctx'
-#     fut = spawn fn:
-#       get_ctx _
-
-#     await fut
-#   | equals ":
-#     spawner-ctx
 
 
 # Protocols dispatchers (op_plus etc.) forward ctx to their cont without
@@ -112,11 +51,12 @@ test 'ctx survives stdout write', fn:
 # should still be the caller's.
 test 'ctx survives arithmetic chain', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'math-ctx'
+    set_ctx_for testing, 'math-ctx'
     foo = 1 + 2 * 3 - 4
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     math-ctx
 
@@ -125,13 +65,14 @@ test 'ctx survives arithmetic chain', fn:
 # match dispatch.
 test 'ctx survives match', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'match-ctx'
+    set_ctx_for testing, 'match-ctx'
     match 'x':
       'x': 1
       _: 0
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     match-ctx
 
@@ -141,11 +82,12 @@ test 'ctx survives match', fn:
 test 'ctx survives stderr write', fn:
   expect run ƒink:
     {stderr, write} = import 'std/io.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'stderr-ctx'
+    set_ctx_for testing, 'stderr-ctx'
     write stderr, ''
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     stderr-ctx
 
@@ -155,11 +97,12 @@ test 'ctx survives stderr write', fn:
 test 'ctx survives sqrt', fn:
   expect run ƒink:
     {sqrt} = import 'std/math.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'math-fn-ctx'
+    set_ctx_for testing, 'math-fn-ctx'
     sqrt 16.0
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     math-fn-ctx
 
@@ -172,11 +115,12 @@ test 'ctx survives sqrt', fn:
 test 'ctx survives repr', fn:
   expect run ƒink:
     {repr} = import 'std/repr.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'repr-ctx'
+    set_ctx_for testing, 'repr-ctx'
     repr 42
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     repr-ctx
 
@@ -186,11 +130,12 @@ test 'ctx survives repr', fn:
 test 'ctx survives fmt as imported fn', fn:
   expect run ƒink:
     {fmt} = import 'std/str.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'fmt-ctx'
+    set_ctx_for testing, 'fmt-ctx'
     fmt 42
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     fmt-ctx
 
@@ -205,11 +150,12 @@ test 'ctx survives fmt as imported fn', fn:
 
 test 'ctx survives range membership (op_in I64 Range)', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'range-in-ctx'
+    set_ctx_for testing, 'range-in-ctx'
     foo = 5 in 0..10
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     range-in-ctx
 
@@ -217,11 +163,12 @@ test 'ctx survives range membership (op_in I64 Range)', fn:
 test 'ctx survives set membership (op_in _ Set)', fn:
   expect run ƒink:
     {set} = import 'std/set.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'set-in-ctx'
+    set_ctx_for testing, 'set-in-ctx'
     foo = 2 in set 1, 2, 3
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     set-in-ctx
 
@@ -229,55 +176,60 @@ test 'ctx survives set membership (op_in _ Set)', fn:
 test 'ctx survives set union (op_or Set Set)', fn:
   expect run ƒink:
     {set} = import 'std/set.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'set-or-ctx'
+    set_ctx_for testing, 'set-or-ctx'
     foo = (set 1, 2) or (set 2, 3)
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     set-or-ctx
 
 
 test 'ctx survives rec membership (op_in _ Rec)', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'rec-in-ctx'
+    set_ctx_for testing, 'rec-in-ctx'
     foo = 'k' in {k: 1}
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     rec-in-ctx
 
 
 test 'ctx survives rec field access (op_dot Rec)', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'rec-dot-ctx'
+    set_ctx_for testing, 'rec-dot-ctx'
     foo = {a: 1}.a
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     rec-dot-ctx
 
 
 test 'ctx survives rec put', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'rec-put-ctx'
+    set_ctx_for testing, 'rec-put-ctx'
     foo = {..{a: 1}, b: 2}
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     rec-put-ctx
 
 
 test 'ctx survives list index (op_dot List Int)', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'list-dot-ctx'
+    set_ctx_for testing, 'list-dot-ctx'
     foo = [10, 20, 30].(1)
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     list-dot-ctx
 
@@ -288,11 +240,12 @@ test 'ctx survives list index (op_dot List Int)', fn:
 test 'ctx survives list constructor', fn:
   expect run ƒink:
     {list} = import 'std/list.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'list-ctor-ctx'
+    set_ctx_for testing, 'list-ctor-ctx'
     foo = list 1, 2, 3
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     list-ctor-ctx
 
@@ -301,11 +254,12 @@ test 'ctx survives list constructor', fn:
 test 'ctx survives set constructor', fn:
   expect run ƒink:
     {set} = import 'std/set.fnk'
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx 'set-ctor-ctx'
+    set_ctx_for testing, 'set-ctor-ctx'
     foo = set 1, 2, 3
-    get_ctx _
+    get_ctx_for testing
   | equals ":
     set-ctor-ctx
 
@@ -341,20 +295,22 @@ test 'suspend: round-trip via captured cont', fn:
 # downstream code can re-fire it on later phases.
 test 'suspend: cont can be fired more than once', fn:
   expect run ƒink:
-    {suspend, set_ctx, get_ctx} = import 'std/effects.fnk'
+    {suspend, unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx {count: 0, results: [], k: false}
+    set_ctx_for testing, {count: 0, results: [], k: false}
+
     r = suspend fn resume:
       # Stash resume so it can be re-fired from the cont below.
-      {results} = get_ctx _
-      set_ctx {count: 1, results: [..results, 'init'], k: resume}
+      {results} = get_ctx_for testing
+      set_ctx_for testing, {count: 1, results: [..results, 'init'], k: resume}
       resume 'a'
 
-    {count, results, k} = get_ctx _
+    {count, results, k} = get_ctx_for testing
     match count:
       1:
         # k holds resume; r is 'a'. Fire k again with 'b'.
-        set_ctx {count: 2, results: [..results, r], k}
+        set_ctx_for testing, {count: 2, results: [..results, r], k}
         k 'b'
       _:
         # r is 'b'. Final pass.
@@ -364,3 +320,16 @@ test 'suspend: cont can be fired more than once', fn:
   | equals ":
     ['init', 'a', 'b']
 
+
+test 'unique identity', fn:
+  expect run ƒink:
+    {unique} = import 'std/effects.fnk'
+
+    id1 = unique _
+    {pause} = import 'std/tasks.fnk'
+    id2 = unique _
+
+    id1 != id2
+
+  | equals ƒink:
+    true

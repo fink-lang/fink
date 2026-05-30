@@ -92,23 +92,13 @@ test 'diamond with two paths to same dep', fn:
       33
 
 
-test 'wat file importable', fn:
-  expect run ƒink:
-    {set_ctx, get_ctx} = import 'rt/apply.wat'
-
-    set_ctx {x: 42}
-    ctx = get_ctx _
-    ctx.x
-  | equals ƒink:
-    42
-
-
 test 'std .fnk file importable', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    testing = unique _
 
-    set_ctx {x: 42}
-    ctx = get_ctx _
+    set_ctx_for testing, {x: 42}
+    ctx = get_ctx_for testing
     ctx.x
   | equals ƒink:
     42
@@ -121,10 +111,11 @@ test 'std .fnk file importable', fn:
 # threaded end-to-end across import boundaries.
 test 'ctx threads through import', fn:
   expect run ƒink:
-    {set_ctx, get_ctx} = import 'std/effects.fnk'
+    {set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    {foobar} = import './test_modules/ctx_common.fnk'
 
-    set_ctx 'foo'
+    set_ctx_for foobar, 'foo'
     {unit} = import './test_modules/ctx_appender.fnk'
-    get_ctx _
+    get_ctx_for foobar
   | equals ":
     foo -> bar

@@ -16,6 +16,7 @@
   (import "std/num.wat" "Num" (type $Num (sub any)))
   (import "std/str.wat" "Str" (type $Str (sub any)))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
+  (import "rt/opaque.wat" "Opaque" (type $Opaque (sub any)))
   (import "std/dict.wat" "Rec" (type $Rec (sub any)))
 
   (import "std/num.wat" "hash_i31"
@@ -24,6 +25,8 @@
     (func $str_hash_i31 (param (ref $Str)) (result i32)))
   (import "rt/apply.wat" "hash_i31"
     (func $clos_hash_i31 (param (ref $Closure)) (result i32)))
+  (import "rt/opaque.wat" "hash_i31"
+    (func $opaque_hash_i31 (param (ref $Opaque)) (result i32)))
 
 
   ;; -- Hash dispatch ------------------------------------------------------
@@ -69,6 +72,14 @@
           (br_on_cast $is_clos (ref eq) (ref $Closure)
             (local.get $key))))
       (return (call $clos_hash_i31)))
+
+    ;; Try $Opaque -- delegate to opaque.wat (identity hash, constant 0).
+    (block $not_opaque
+      (block $is_opaque (result (ref $Opaque))
+        (br $not_opaque
+          (br_on_cast $is_opaque (ref eq) (ref $Opaque)
+            (local.get $key))))
+      (return (call $opaque_hash_i31)))
 
     ;; Try $Rec -- structural content hash. Stubbed to 0 for now: all
     ;; records share one bucket and deep_eq disambiguates. Correct but

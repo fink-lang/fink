@@ -160,6 +160,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
     let modules: &[(&str, &str)] = &[
       ("interop.wat",      interop_src),
       ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
+      ("rt/opaque.wat",    include_str!("../../runtime/rt/opaque.wat")),
       ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
       ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
       ("std/num.wat",      include_str!("../../runtime/std/num.wat")),
