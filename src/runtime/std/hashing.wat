@@ -72,7 +72,16 @@
 
     ;; Try $Rec -- structural content hash. Stubbed to 0 for now: all
     ;; records share one bucket and deep_eq disambiguates. Correct but
-    ;; unoptimized; a real incremental content hash replaces this later.
+    ;; unoptimized -- records-as-keys degrade to a linear bucket scan.
+    ;;
+    ;; TODO: real content hash. Prefer lazy-memoized (compute the full
+    ;; content hash on first request, cache it on the wrapper) over
+    ;; eager-on-write -- the lazy form is the common approach (Clojure,
+    ;; Scala, Java) and avoids taxing every record build/update for a
+    ;; hash most records never need. Must satisfy a == b => hash(a) ==
+    ;; hash(b): order-independent for records (commutative combine of
+    ;; per-entry hashes). Only worth doing once records-as-keys are a
+    ;; measured hot path. See list.wat / set.wat for the sibling TODOs.
     (block $not_rec
       (block $is_rec (result (ref $Rec))
         (br $not_rec
