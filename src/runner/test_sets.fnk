@@ -94,6 +94,30 @@ test 'set eq via ==', fn:
   | equals ƒink:
     true
 
+test 'set nested in rec equal', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    {a: set 1, 2} == {a: set 2, 1}
+  | equals ƒink:
+    true
+
+test 'set nested in rec unequal', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    {a: set 1, 2} == {a: set 1, 3}
+  | equals ƒink:
+    false
+
+test 'set nested in list equal', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    [set 1, 2] == [set 2, 1]
+  | equals ƒink:
+    true
+
 
 test 'set neq via !=', fn:
   expect run ƒink:

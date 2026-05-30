@@ -12,8 +12,10 @@
 ;;
 ;; ## Registry
 ;;
-;; A single process-wide $DictImpl, keyed by URL ($Str), value = module
-;; rec ($RecImpl). Created lazily on first `init`. The presence of a key
+;; A single process-wide $Rec, keyed by URL ($Str), value = module
+;; rec ($Rec). Module export keys are known at compile time, so the
+;; registry and its values are records, not dicts. Created lazily on
+;; first `init`. The presence of a key
 ;; in the registry IS the "module already initialised" flag — no
 ;; separate bool. The empty rec is created up front by `init` so `pub`
 ;; only ever mutates an existing rec.
@@ -35,8 +37,7 @@
 (module
 
   ;; Type imports
-  (import "std/dict.wat"  "DictImpl" (type $DictImpl (sub any)))
-  (import "std/dict.wat"  "RecImpl"  (type $RecImpl  (sub any)))
+  (import "std/dict.wat"  "Rec"      (type $Rec      (sub any)))
   (import "std/list.wat"  "List"     (type $List     (sub any)))
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
@@ -50,16 +51,10 @@
       (param $callee (ref null any))))
   (import "rt/apply.wat"  "empty_ctx"
     (func $empty_ctx (result (ref any))))
-  (import "std/dict.wat"  "dict_empty"
-    (func $dict_empty (result (ref $DictImpl))))
-  (import "std/dict.wat"  "dict_get"
-    (func $dict_get (param $dict (ref $DictImpl)) (param $key (ref eq)) (result (ref null eq))))
-  (import "std/dict.wat"  "dict_set"
-    (func $dict_set (param $dict (ref $DictImpl)) (param $key (ref eq)) (param $val (ref eq)) (result (ref $DictImpl))))
   (import "std/dict.wat"  "_rec_new"
-    (func $rec_new (result (ref $RecImpl))))
+    (func $rec_new (result (ref $Rec))))
   (import "std/dict.wat"  "get"
-    (func $rec_get (param $rec (ref $RecImpl)) (param $key (ref eq)) (result (ref null eq))))
+    (func $rec_get (param $rec (ref $Rec)) (param $key (ref eq)) (result (ref null eq))))
   (import "std/dict.wat"  "_set_field"
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
   (import "std/list.wat"  "head_any"
@@ -74,8 +69,8 @@
   ;; -- Registry -------------------------------------------------------
 
   ;; The URL→rec map. Lazy-initialised on first `init` call.
-  ;; Stored as $DictImpl so we can call dict_get/dict_set directly.
-  (global $registry (mut (ref null $DictImpl)) (ref.null $DictImpl))
+  ;; Stored as $Rec so we can call rec_get/put_field directly.
+  (global $registry (mut (ref null $Rec)) (ref.null $Rec))
 
   ;; -- init -----------------------------------------------------------
   ;;
@@ -86,7 +81,7 @@
     (param $mod_url (ref null any))
     (result i32)
 
-    (local $reg (ref $DictImpl))
+    (local $reg (ref $Rec))
     (local $key (ref eq))
     (local $existing (ref null eq))
 
@@ -94,13 +89,13 @@
     (if (ref.is_null (global.get $registry))
       (then
         (global.set $registry
-          (call $dict_empty))))
+          (call $rec_new))))
 
     (local.set $reg (ref.as_non_null (global.get $registry)))
     (local.set $key (ref.cast (ref eq) (local.get $mod_url)))
 
     (local.set $existing
-      (call $dict_get (local.get $reg) (local.get $key)))
+      (call $rec_get (local.get $reg) (local.get $key)))
 
     (if (i32.eqz (ref.is_null (local.get $existing)))
       (then
@@ -109,10 +104,11 @@
 
     ;; First call — create empty rec and register it.
     (global.set $registry
-      (call $dict_set
-        (local.get $reg)
-        (local.get $key)
-        (call $rec_new)))
+      (ref.cast (ref $Rec)
+        (call $put_field
+          (local.get $reg)
+          (local.get $key)
+          (call $rec_new))))
     (i32.const 1))
 
 
@@ -131,10 +127,10 @@
     (param $name    (ref null any))
     (param $val     (ref null any))
 
-    (local $reg (ref $DictImpl))
+    (local $reg (ref $Rec))
     (local $key (ref eq))
-    (local $rec (ref $RecImpl))
-    (local $new_rec (ref $RecImpl))
+    (local $rec (ref $Rec))
+    (local $new_rec (ref $Rec))
 
     ;; Ensure registry[mod_url] exists (init is a no-op if already there).
     (drop (call $init (local.get $mod_url)))
@@ -143,24 +139,25 @@
     (local.set $key (ref.cast (ref eq) (local.get $mod_url)))
 
     (local.set $rec
-      (ref.cast (ref $RecImpl)
+      (ref.cast (ref $Rec)
         (ref.as_non_null
-          (call $dict_get (local.get $reg) (local.get $key)))))
+          (call $rec_get (local.get $reg) (local.get $key)))))
 
     ;; new_rec = rec_set(rec, name, val) — _set_field is the direct
     ;; (non-CPS) shape that returns the updated rec.
     (local.set $new_rec
-      (ref.cast (ref $RecImpl)
+      (ref.cast (ref $Rec)
         (call $put_field
           (local.get $rec)
           (local.get $name)
           (local.get $val))))
 
     (global.set $registry
-      (call $dict_set
-        (local.get $reg)
-        (local.get $key)
-        (local.get $new_rec))))
+      (ref.cast (ref $Rec)
+        (call $put_field
+          (local.get $reg)
+          (local.get $key)
+          (local.get $new_rec)))))
 
 
   ;; -- import ---------------------------------------------------------
@@ -176,7 +173,7 @@
     (param $mod_ref (ref null any))
     (param $cont    (ref null any))
 
-    (local $reg (ref null $DictImpl))
+    (local $reg (ref null $Rec))
     (local $key (ref eq))
     (local $existing (ref null eq))
     (local $caps (ref $Captures))
@@ -189,7 +186,7 @@
     (if (i32.eqz (ref.is_null (local.get $reg)))
       (then
         (local.set $existing
-          (call $dict_get
+          (call $rec_get
             (ref.as_non_null (local.get $reg))
             (local.get $key)))
         (if (i32.eqz (ref.is_null (local.get $existing)))
@@ -284,7 +281,7 @@
     (param $mod_clos (ref null any))
     (param $cont     (ref null any))
 
-    (local $reg (ref null $DictImpl))
+    (local $reg (ref null $Rec))
     (local $key_eq (ref eq))
     (local $existing (ref null eq))
     (local $exports (ref null any))
@@ -298,7 +295,7 @@
     (if (i32.eqz (ref.is_null (local.get $reg)))
       (then
         (local.set $existing
-          (call $dict_get
+          (call $rec_get
             (ref.as_non_null (local.get $reg))
             (local.get $key_eq)))
         (if (i32.eqz (ref.is_null (local.get $existing)))
@@ -361,7 +358,7 @@
 
     ;; Read the now-populated exports rec.
     (local.set $exports
-      (call $dict_get
+      (call $rec_get
         (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $mod_url))))
 
@@ -396,7 +393,7 @@
     (local.set $user_cont (array.get $Captures (local.get $cap_arr) (i32.const 1)))
 
     (local.set $rec
-      (call $dict_get
+      (call $rec_get
         (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $url))))
 

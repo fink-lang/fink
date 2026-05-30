@@ -14,8 +14,6 @@
 ;;   - Type hierarchy:
 ;;       $Rec                        — opaque record type
 ;;       └── $RecImpl (sub $Rec)     — wrapper: single $HamtNode field
-;;       $Dict                       — opaque dict type
-;;       └── $DictImpl (sub $Dict)   — wrapper: single $HamtNode field
 ;;       $HamtLeaf                   — key-value pair (internal)
 ;;       $HamtNode                   — bitmap + children array (internal)
 ;;       $HamtCollision              — hash + flat leaf array (internal)
@@ -78,16 +76,15 @@
     (func $str_repr (param $str (ref $Str)) (result (ref $Str))))
 
 
-  ;; -- $Rec / $Dict public types --------------------------------------------
+  ;; -- $Rec public type -----------------------------------------------------
 
   (type $Rec  (@pub) (sub (struct)))
-  (type $Dict (@pub) (sub (struct)))
 
 
   ;; -- Type definitions -----------------------------------------------
 
   ;; Internal HAMT types. These are implementation details — user code
-  ;; sees $Rec / $Dict via the wrapper types below.
+  ;; sees $Rec via the wrapper type below.
   ;; Children array uses structref as the common base for leaves, nodes,
   ;; and collision nodes.
 
@@ -117,18 +114,13 @@
       (field $col_leaves (ref $HamtChildren))
     ))
 
-    ;; -- Wrapper types (user-visible) ------------------------------------
-    ;; Single-field wrappers that participate in the canonical type hierarchy.
-    ;; Casting happens only at the runtime API boundary.
-
-    ;; TODO: $RecImpl and $DictImpl are leaking out via public APIs
-    ;; (modules.wat needs them). Hide behind $Rec/$Dict in signatures
-    ;; and downcast internally; then drop the (@pub) here.
-    (type $RecImpl (@pub) (sub $Rec (struct
-      (field $hamt (ref $HamtNode))
-    )))
-
-    (type $DictImpl (@pub) (sub $Dict (struct
+    ;; -- Wrapper type (private) ------------------------------------------
+    ;; Single-field wrapper around the HAMT node. Private to this module:
+    ;; cross-module APIs take/return the public $Rec and downcast to
+    ;; $RecImpl internally, so the wrapper never appears in another
+    ;; module's signatures. Casting happens only at the runtime API
+    ;; boundary.
+    (type $RecImpl (sub $Rec (struct
       (field $hamt (ref $HamtNode))
     )))
   )
@@ -1359,14 +1351,20 @@
   ;; -- Record: direct-style API ------------------------------------------
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $RecImpl))
+  ;; Returns the public $Rec type; the concrete $RecImpl wrapper stays
+  ;; private to this module.
+  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $Rec))
     (struct.new $RecImpl (global.get $empty_node))
   )
 
+  ;; Takes the public $Rec and downcasts to the wrapper internally, so
+  ;; cross-module callers never name $RecImpl.
   (func $get (@pub)
-    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (param $rec (ref $Rec)) (param $key (ref eq))
     (result (ref null eq))
-    (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+    (call $hamt_get
+      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec)))
+      (local.get $key))
   )
 
   ;; Host-friendly $Rec field accessor. Takes anyref-typed args so
@@ -1376,20 +1374,148 @@
     (param $rec (ref null any)) (param $key (ref null any))
     (result (ref null any))
     (call $get
-      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref $Rec) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))))
 
+  ;; -- Structural equality --------------------------------------------
+  ;;
+  ;; Two records are equal iff they have the same size and every entry in
+  ;; `a` is present in `b` with a deep-equal value. Walks a's entries and
+  ;; probes b via hamt_get; the size check rules out b having extra keys.
+  ;; Values are compared through deep_eq (imported from protocols.wat), so
+  ;; nesting is recursive. Direct-style — used by the == operator's $Rec
+  ;; arm and by deep_eq for structural rec keys.
+  (func $rec_deep_eq (@pub)
+    (param $a (ref $Rec)) (param $b (ref $Rec)) (result i32)
+    (local $a_node (ref $HamtNode))
+    (local $b_node (ref $HamtNode))
+
+    (local.set $a_node
+      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $a))))
+    (local.set $b_node
+      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $b))))
+
+    ;; Differing sizes can't be equal.
+    (if (i32.ne
+          (call $_hamt_size_node (local.get $a_node))
+          (call $_hamt_size_node (local.get $b_node)))
+      (then (return (i32.const 0))))
+
+    ;; Every entry in a must match in b.
+    (call $_rec_eq_node (local.get $a_node) (local.get $b_node)))
+
+  ;; Walk every entry of `a_node`; for each, look it up in `b_node` and
+  ;; require a deep-equal value. Returns 0 on the first mismatch, 1 if all
+  ;; entries match.
+  (func $_rec_eq_node
+    (param $a_node (ref $HamtNode)) (param $b_node (ref $HamtNode))
+    (result i32)
+    (local $children (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $child (ref null struct))
+
+    (local.set $children
+      (struct.get $HamtNode $children (local.get $a_node)))
+    (local.set $len (array.len (local.get $children)))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $child
+          (array.get $HamtChildren (local.get $children) (local.get $i)))
+
+        ;; leaf — probe b and compare value
+        (if (ref.test (ref $HamtLeaf) (local.get $child))
+          (then
+            (if (i32.eqz
+                  (call $_rec_eq_leaf
+                    (ref.cast (ref $HamtLeaf) (local.get $child))
+                    (local.get $b_node)))
+              (then (return (i32.const 0))))))
+
+        ;; sub-node — recurse
+        (if (ref.test (ref $HamtNode) (local.get $child))
+          (then
+            (if (i32.eqz
+                  (call $_rec_eq_node
+                    (ref.cast (ref $HamtNode) (local.get $child))
+                    (local.get $b_node)))
+              (then (return (i32.const 0))))))
+
+        ;; collision — check each colliding leaf
+        (if (ref.test (ref $HamtCollision) (local.get $child))
+          (then
+            (if (i32.eqz
+                  (call $_rec_eq_collision
+                    (ref.cast (ref $HamtCollision) (local.get $child))
+                    (local.get $b_node)))
+              (then (return (i32.const 0))))))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (i32.const 1))
+
+  ;; A single leaf matches iff b has its key with a deep-equal value.
+  (func $_rec_eq_leaf
+    (param $leaf (ref $HamtLeaf)) (param $b_node (ref $HamtNode))
+    (result i32)
+    (local $found (ref null eq))
+
+    (local.set $found
+      (call $hamt_get (local.get $b_node)
+        (struct.get $HamtLeaf $key (local.get $leaf))))
+
+    (if (ref.is_null (local.get $found))
+      (then (return (i32.const 0))))
+
+    (call $deep_eq
+      (struct.get $HamtLeaf $val (local.get $leaf))
+      (ref.as_non_null (local.get $found))))
+
+  ;; Every leaf in a collision node must match in b.
+  (func $_rec_eq_collision
+    (param $col (ref $HamtCollision)) (param $b_node (ref $HamtNode))
+    (result i32)
+    (local $leaves (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+
+    (local.set $leaves
+      (struct.get $HamtCollision $col_leaves (local.get $col)))
+    (local.set $len (array.len (local.get $leaves)))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+        (if (i32.eqz
+              (call $_rec_eq_leaf
+                (ref.cast (ref $HamtLeaf)
+                  (array.get $HamtChildren (local.get $leaves) (local.get $i)))
+                (local.get $b_node)))
+          (then (return (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (i32.const 1))
+
   (func $op_in (@impl "std/operators.fnk:op_in" _ $Rec)
-    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (param $rec (ref $Rec)) (param $key (ref eq))
     (result i32)
     (ref.is_null
-      (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key)))
+      (call $hamt_get
+        (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec)))
+        (local.get $key)))
     (i32.const 1)
     (i32.xor)
   )
 
   (func $op_not_in (@impl "std/operators.fnk:op_notin" _ $Rec)
-    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (param $rec (ref $Rec)) (param $key (ref eq))
     (result i32)
     (i32.eqz (call $op_in (local.get $rec) (local.get $key)))
   )
@@ -1442,62 +1568,6 @@
     (param $val (ref null any)) (result i32)
     (i32.eqz (call $size (ref.cast (ref $RecImpl) (local.get $val))))
   )
-
-  ;; -- Dict wrappers (user-visible API) ----------------------------------
-  ;; Same as record wrappers but for $DictImpl ↔ $HamtNode.
-
-  (func $dict_empty (@pub) (result (ref $DictImpl))
-    (struct.new $DictImpl (global.get $empty_node))
-  )
-
-  (func $dict_get (@pub)
-    (param $dict (ref $DictImpl)) (param $key (ref eq))
-    (result (ref null eq))
-    (call $hamt_get (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
-  )
-
-  (func $dict_set (@pub)
-    (param $dict (ref $DictImpl)) (param $key (ref eq)) (param $val (ref eq))
-    (result (ref $DictImpl))
-    (struct.new $DictImpl
-      (call $hamt_set (struct.get $DictImpl $hamt (local.get $dict))
-        (local.get $key) (local.get $val)))
-  )
-
-  (func $dict_delete (@pub)
-    (param $dict (ref $DictImpl)) (param $key (ref eq))
-    (result (ref $DictImpl))
-    (struct.new $DictImpl
-      (call $hamt_delete (struct.get $DictImpl $hamt (local.get $dict))
-        (local.get $key)))
-  )
-
-  (func $dict_pop (@pub)
-    (param $dict (ref $DictImpl)) (param $key (ref eq))
-    (result (ref null eq) (ref $DictImpl))
-    (local $val (ref null eq))
-    (local $rest (ref $HamtNode))
-    (call $hamt_pop (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
-    (local.set $rest)
-    (local.set $val)
-    (local.get $val)
-    (struct.new $DictImpl (local.get $rest))
-  )
-
-  (func $dict_merge (@pub)
-    (param $dest (ref $DictImpl)) (param $src (ref $DictImpl))
-    (result (ref $DictImpl))
-    (struct.new $DictImpl
-      (call $hamt_merge
-        (struct.get $DictImpl $hamt (local.get $dest))
-        (struct.get $DictImpl $hamt (local.get $src))))
-  )
-
-  (func $dict_size (@pub)
-    (param $dict (ref $DictImpl)) (result i32)
-    (call $hamt_size (struct.get $DictImpl $hamt (local.get $dict)))
-  )
-
 
   ;; CPS wrappers — compiler-facing interface
   ;; All params/results are (ref null any). Continuation dispatch via _apply_N.

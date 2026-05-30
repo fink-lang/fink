@@ -16,6 +16,7 @@
   (import "std/num.wat" "Num" (type $Num (sub any)))
   (import "std/str.wat" "Str" (type $Str (sub any)))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
+  (import "std/dict.wat" "Rec" (type $Rec (sub any)))
 
   (import "std/num.wat" "hash_i31"
     (func $num_hash_i31 (param (ref $Num)) (result i32)))
@@ -68,6 +69,26 @@
           (br_on_cast $is_clos (ref eq) (ref $Closure)
             (local.get $key))))
       (return (call $clos_hash_i31)))
+
+    ;; Try $Rec -- structural content hash. Stubbed to 0 for now: all
+    ;; records share one bucket and deep_eq disambiguates. Correct but
+    ;; unoptimized -- records-as-keys degrade to a linear bucket scan.
+    ;;
+    ;; TODO: real content hash. Prefer lazy-memoized (compute the full
+    ;; content hash on first request, cache it on the wrapper) over
+    ;; eager-on-write -- the lazy form is the common approach (Clojure,
+    ;; Scala, Java) and avoids taxing every record build/update for a
+    ;; hash most records never need. Must satisfy a == b => hash(a) ==
+    ;; hash(b): order-independent for records (commutative combine of
+    ;; per-entry hashes). Only worth doing once records-as-keys are a
+    ;; measured hot path. See list.wat / set.wat for the sibling TODOs.
+    (block $not_rec
+      (block $is_rec (result (ref $Rec))
+        (br $not_rec
+          (br_on_cast $is_rec (ref eq) (ref $Rec)
+            (local.get $key))))
+      (drop)
+      (return (i32.const 0)))
 
     ;; Unknown type — unreachable for valid keys
     (unreachable)
