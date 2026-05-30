@@ -1,31 +1,38 @@
-{stdout, write} = import 'std/io.fnk'
+{suspend: _suspend, get_ctx, set_ctx} = import 'rt/apply.wat'
+{opaque} = import 'rt/opaque.wat'
 
-
-{suspend: _suspend, get_ctx: _get_ctx, set_ctx: _set_ctx} = import 'rt/apply.wat'
-# TODO: reexport will be made easier
 suspend = _suspend
-get_ctx = _get_ctx
-set_ctx = _set_ctx
 
 
-upd_ctx = fn updates:
+# Initialize the universe
+set_ctx {}
+
+
+set_ctx_for = fn ctx_id, value:
   ctx = get_ctx _
-  set_ctx {..ctx, ..updates}
+  set_ctx {..ctx, (ctx_id): value}
+  value
 
 
-set_ctx_for = fn eff, value:
-  upd_ctx {(eff): value}
-
-
-get_ctx_for = fn eff:
-  {(eff): ctx} = get_ctx _
+get_ctx_for = fn ctx_id:
+  {(ctx_id): ctx} = get_ctx _
   ctx
 
 
-upd_ctx_for = fn eff, updates:
-  ctx = get_ctx_for eff
-  set_ctx_for eff, {..ctx, ..updates}
+upd_ctx_for = fn ctx_id, updates:
+  ctx = get_ctx_for ctx_id
+  set_ctx_for ctx_id, {..ctx, ..updates}
 
+
+
+unique = fn:
+  {id} = get_ctx_for unique
+  upd_ctx_for unique, {id: id + 1}
+  # Wrap the counter so the identity is nominal (per mint) rather than a
+  # bare int that could collide with a literal under structural equality.
+  opaque id
+
+set_ctx_for unique, {id: 0}
 
 
 has_handler = fn perform, frames:
@@ -38,7 +45,7 @@ has_handler = fn perform, frames:
 
 get_perform = fn handler:
   perform = fn ..args:
-    {frames} = get_ctx _
+    {frames} = get_ctx_for with
 
     match has_handler perform, frames:
       true: handler ..args
@@ -48,20 +55,20 @@ get_perform = fn handler:
 
 
 effect = fn handler:
-  # {with_reg, ..ctx} = get_ctx _
+  # {reg} = get_ctx_for with
   perform = get_perform handler
-  # set_ctx {..ctx1, with_reg: {..with_reg, (perform): handler}}
+  # upd_ctx_for with, {reg: {..reg, (perform): handler}}
   perform
 
 
 push_frame = fn frame:
-  {frames} = get_ctx _
-  upd_ctx {frames: [frame, ..frames]}
+  {frames} = get_ctx_for with
+  upd_ctx_for with, {frames: [frame, ..frames]}
 
 
 pop_frame = fn:
-  {frames: [frame, ..frames]} = get_ctx _
-  upd_ctx {frames}
+  {frames: [frame, ..frames]} = get_ctx_for with
+  upd_ctx_for with, {frames}
   frame
 
 
@@ -73,6 +80,6 @@ with = fn perform, body:
   pop_frame _
   result
 
-
+set_ctx_for with, {frames: []}
 
 
