@@ -156,6 +156,48 @@
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
 
+  ;; -- Structural equality --------------------------------------------
+  ;;
+  ;; Two ranges are equal iff same inclusivity, same start, and same end
+  ;; (both open, or both closed with equal bounds). Bounds are $I64, so
+  ;; compared on the raw i64 field. Direct-style — used by the == operator's
+  ;; $Range arm and by deep_eq for ranges nested in collections.
+  (func $range_deep_eq (@pub)
+    (param $a (ref $Range)) (param $b (ref $Range)) (result i32)
+    (local $ra (ref $RangeImpl))
+    (local $rb (ref $RangeImpl))
+    (local $ea (ref null $I64))
+    (local $eb (ref null $I64))
+
+    (local.set $ra (ref.cast (ref $RangeImpl) (local.get $a)))
+    (local.set $rb (ref.cast (ref $RangeImpl) (local.get $b)))
+
+    ;; inclusivity must match
+    (if (i32.ne
+          (struct.get $RangeImpl $incl (local.get $ra))
+          (struct.get $RangeImpl $incl (local.get $rb)))
+      (then (return (i32.const 0))))
+
+    ;; start bounds must match
+    (if (i64.ne
+          (struct.get $I64 $ival (struct.get $RangeImpl $start (local.get $ra)))
+          (struct.get $I64 $ival (struct.get $RangeImpl $start (local.get $rb))))
+      (then (return (i32.const 0))))
+
+    ;; end bounds: both open (null) or both closed with equal value
+    (local.set $ea (struct.get $RangeImpl $end (local.get $ra)))
+    (local.set $eb (struct.get $RangeImpl $end (local.get $rb)))
+    (if (i32.ne
+          (ref.is_null (local.get $ea))
+          (ref.is_null (local.get $eb)))
+      (then (return (i32.const 0))))
+    (if (ref.is_null (local.get $ea))
+      (then (return (i32.const 1))))
+    (i64.eq
+      (struct.get $I64 $ival (ref.as_non_null (local.get $ea)))
+      (struct.get $I64 $ival (ref.as_non_null (local.get $eb)))))
+
+
   ;; -- CPS wrappers ---------------------------------------------------------
   ;;
   ;; User-imported via `import 'std/range.fnk'`. Wrap direct-style ctors

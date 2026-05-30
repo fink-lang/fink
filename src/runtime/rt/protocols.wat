@@ -111,6 +111,7 @@
   (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Rec)) (param (ref eq)) (result i32)))
   (import "std/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Rec)) (param (ref $Rec)) (result i32)))
   (import "std/list.wat" "list_deep_eq" (func $list_deep_eq (param (ref $List)) (param (ref $List)) (result i32)))
+  (import "std/range.wat" "range_deep_eq" (func $range_deep_eq (param (ref $Range)) (param (ref $Range)) (result i32)))
   (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
   (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
@@ -356,6 +357,19 @@
         (ref.cast (ref $Set) (local.get $a))
         (ref.cast (ref $Set) (local.get $b)))))
 
+    ;; Try $Range — structural compare. If b is not a $Range, not equal.
+    (block $not_range
+      (block $is_range (result (ref $Range))
+        (br $not_range
+          (br_on_cast $is_range (ref eq) (ref $Range)
+            (local.get $a))))
+      (drop)
+      (if (i32.eqz (ref.test (ref $Range) (local.get $b)))
+        (then (return (i32.const 0))))
+      (return (call $range_deep_eq
+        (ref.cast (ref $Range) (local.get $a))
+        (ref.cast (ref $Range) (local.get $b)))))
+
     ;; Fallback: ref.eq (i31ref, other GC types)
     (ref.eq (local.get $a) (local.get $b)))
 
@@ -363,6 +377,17 @@
   ;;   $Num    → f64.eq
   ;;   $Str    → str_op_eq
   ;;   $Set    → set:op_eq
+  ;;
+  ;; TODO: protocols.wat should be a pure dispatcher -- each arm should
+  ;; call the type's own op_eq impl, which then decides how to compare
+  ;; (it may call deep_eq, or compare fields directly). The $Set arm does
+  ;; this correctly (-> set:op_eq). The $Rec / $List / $Range arms instead
+  ;; call protocols-local _rec_eq / _list_eq / _range_eq kernels that hold
+  ;; the ref.eq / mixed-type / deep_eq logic here -- that comparison logic
+  ;; belongs in dict.wat / list.wat / range.wat as those types' op_eq
+  ;; impls, with these arms reduced to a single dispatch call. Same applies
+  ;; to op_neq below. (deep_eq's per-type arms are already correct: they
+  ;; dispatch to each type's deep_eq impl.)
   (func $op_eq (@pub) (@impl "std/operators.fnk:op_eq")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
@@ -467,6 +492,18 @@
         (ref.i31 (call $_list_eq (local.get $a) (local.get $b)))
         (local.get $cont)))
 
+    ;; Try $Range — structural. Same kernel shape as $Rec / $List.
+    (block $not_range
+      (drop
+        (block $is_range (result (ref $Range))
+          (br $not_range
+            (br_on_cast $is_range (ref null any) (ref $Range)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31 (call $_range_eq (local.get $a) (local.get $b)))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; Record equality kernel shared by op_eq / op_neq.
@@ -500,6 +537,21 @@
     (call $list_deep_eq
       (ref.cast (ref $List) (local.get $a))
       (ref.cast (ref $List) (local.get $b))))
+
+  ;; Range equality kernel shared by op_eq / op_neq.
+  ;;   ref.eq      → identical allocation, equal
+  ;;   b non-Range → not equal (mixed-type)
+  ;;   else        → structural range_deep_eq
+  (func $_range_eq (param $a (ref null any)) (param $b (ref null any)) (result i32)
+    (if (ref.eq
+          (ref.cast (ref eq) (local.get $a))
+          (ref.cast (ref eq) (local.get $b)))
+      (then (return (i32.const 1))))
+    (if (i32.eqz (ref.test (ref $Range) (local.get $b)))
+      (then (return (i32.const 0))))
+    (call $range_deep_eq
+      (ref.cast (ref $Range) (local.get $a))
+      (ref.cast (ref $Range) (local.get $b))))
 
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
@@ -606,6 +658,18 @@
       (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (i32.eqz (call $_list_eq (local.get $a) (local.get $b))))
+        (local.get $cont)))
+
+    ;; Try $Range — negation of the structural equality kernel.
+    (block $not_range
+      (drop
+        (block $is_range (result (ref $Range))
+          (br $not_range
+            (br_on_cast $is_range (ref null any) (ref $Range)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31 (i32.eqz (call $_range_eq (local.get $a) (local.get $b))))
         (local.get $cont)))
 
     (unreachable))
