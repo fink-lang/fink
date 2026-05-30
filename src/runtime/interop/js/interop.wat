@@ -83,12 +83,11 @@
   (import "rt/apply.wat" "get_ctx"
     (func $get_ctx_inner (result (ref any))))
 
-  ;; std/dict.wat:get is typed for the concrete $RecImpl subtype; JS only
-  ;; ever holds opaque (ref any), so we wrap with a JS-friendly shim
-  ;; (rec_get below) that does the cast.
-  (import "std/dict.wat" "RecImpl" (type $RecImpl (sub any)))
+  ;; std/dict.wat:get takes the public $Rec type; JS only ever holds
+  ;; opaque (ref any), so we wrap with a JS-friendly shim (rec_get below)
+  ;; that does the cast.
   (import "std/dict.wat" "get"
-    (func $rec_get_inner (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (func $rec_get_inner (param $rec (ref $Rec)) (param $key (ref eq))
       (result (ref null eq))))
 
   ;; Host imports — stubbed by fink.js. Signatures must match
@@ -394,7 +393,7 @@
   (func $rec_get (@pub) (export "env:rec_get")
     (param $rec (ref any)) (param $key (ref any)) (result (ref null any))
     (return_call $rec_get_inner
-      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref $Rec) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))))
 
 

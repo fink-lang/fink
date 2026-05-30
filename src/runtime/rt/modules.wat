@@ -12,8 +12,8 @@
 ;;
 ;; ## Registry
 ;;
-;; A single process-wide $RecImpl, keyed by URL ($Str), value = module
-;; rec ($RecImpl). Module export keys are known at compile time, so the
+;; A single process-wide $Rec, keyed by URL ($Str), value = module
+;; rec ($Rec). Module export keys are known at compile time, so the
 ;; registry and its values are records, not dicts. Created lazily on
 ;; first `init`. The presence of a key
 ;; in the registry IS the "module already initialised" flag — no
@@ -37,7 +37,7 @@
 (module
 
   ;; Type imports
-  (import "std/dict.wat"  "RecImpl"  (type $RecImpl  (sub any)))
+  (import "std/dict.wat"  "Rec"      (type $Rec      (sub any)))
   (import "std/list.wat"  "List"     (type $List     (sub any)))
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
@@ -52,9 +52,9 @@
   (import "rt/apply.wat"  "empty_ctx"
     (func $empty_ctx (result (ref any))))
   (import "std/dict.wat"  "_rec_new"
-    (func $rec_new (result (ref $RecImpl))))
+    (func $rec_new (result (ref $Rec))))
   (import "std/dict.wat"  "get"
-    (func $rec_get (param $rec (ref $RecImpl)) (param $key (ref eq)) (result (ref null eq))))
+    (func $rec_get (param $rec (ref $Rec)) (param $key (ref eq)) (result (ref null eq))))
   (import "std/dict.wat"  "_set_field"
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
   (import "std/list.wat"  "head_any"
@@ -69,8 +69,8 @@
   ;; -- Registry -------------------------------------------------------
 
   ;; The URL→rec map. Lazy-initialised on first `init` call.
-  ;; Stored as $RecImpl so we can call rec_get/put_field directly.
-  (global $registry (mut (ref null $RecImpl)) (ref.null $RecImpl))
+  ;; Stored as $Rec so we can call rec_get/put_field directly.
+  (global $registry (mut (ref null $Rec)) (ref.null $Rec))
 
   ;; -- init -----------------------------------------------------------
   ;;
@@ -81,7 +81,7 @@
     (param $mod_url (ref null any))
     (result i32)
 
-    (local $reg (ref $RecImpl))
+    (local $reg (ref $Rec))
     (local $key (ref eq))
     (local $existing (ref null eq))
 
@@ -104,7 +104,7 @@
 
     ;; First call — create empty rec and register it.
     (global.set $registry
-      (ref.cast (ref $RecImpl)
+      (ref.cast (ref $Rec)
         (call $put_field
           (local.get $reg)
           (local.get $key)
@@ -127,10 +127,10 @@
     (param $name    (ref null any))
     (param $val     (ref null any))
 
-    (local $reg (ref $RecImpl))
+    (local $reg (ref $Rec))
     (local $key (ref eq))
-    (local $rec (ref $RecImpl))
-    (local $new_rec (ref $RecImpl))
+    (local $rec (ref $Rec))
+    (local $new_rec (ref $Rec))
 
     ;; Ensure registry[mod_url] exists (init is a no-op if already there).
     (drop (call $init (local.get $mod_url)))
@@ -139,21 +139,21 @@
     (local.set $key (ref.cast (ref eq) (local.get $mod_url)))
 
     (local.set $rec
-      (ref.cast (ref $RecImpl)
+      (ref.cast (ref $Rec)
         (ref.as_non_null
           (call $rec_get (local.get $reg) (local.get $key)))))
 
     ;; new_rec = rec_set(rec, name, val) — _set_field is the direct
     ;; (non-CPS) shape that returns the updated rec.
     (local.set $new_rec
-      (ref.cast (ref $RecImpl)
+      (ref.cast (ref $Rec)
         (call $put_field
           (local.get $rec)
           (local.get $name)
           (local.get $val))))
 
     (global.set $registry
-      (ref.cast (ref $RecImpl)
+      (ref.cast (ref $Rec)
         (call $put_field
           (local.get $reg)
           (local.get $key)
@@ -173,7 +173,7 @@
     (param $mod_ref (ref null any))
     (param $cont    (ref null any))
 
-    (local $reg (ref null $RecImpl))
+    (local $reg (ref null $Rec))
     (local $key (ref eq))
     (local $existing (ref null eq))
     (local $caps (ref $Captures))
@@ -281,7 +281,7 @@
     (param $mod_clos (ref null any))
     (param $cont     (ref null any))
 
-    (local $reg (ref null $RecImpl))
+    (local $reg (ref null $Rec))
     (local $key_eq (ref eq))
     (local $existing (ref null eq))
     (local $exports (ref null any))

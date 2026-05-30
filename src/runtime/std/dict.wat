@@ -114,14 +114,13 @@
       (field $col_leaves (ref $HamtChildren))
     ))
 
-    ;; -- Wrapper type (user-visible) -------------------------------------
-    ;; Single-field wrapper around the HAMT node.
-    ;; Casting happens only at the runtime API boundary.
-
-    ;; TODO: $RecImpl is leaking out via public APIs (modules.wat needs it).
-    ;; Hide behind $Rec in signatures and downcast internally; then drop
-    ;; the (@pub) here.
-    (type $RecImpl (@pub) (sub $Rec (struct
+    ;; -- Wrapper type (private) ------------------------------------------
+    ;; Single-field wrapper around the HAMT node. Private to this module:
+    ;; cross-module APIs take/return the public $Rec and downcast to
+    ;; $RecImpl internally, so the wrapper never appears in another
+    ;; module's signatures. Casting happens only at the runtime API
+    ;; boundary.
+    (type $RecImpl (sub $Rec (struct
       (field $hamt (ref $HamtNode))
     )))
   )
@@ -1352,14 +1351,20 @@
   ;; -- Record: direct-style API ------------------------------------------
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $RecImpl))
+  ;; Returns the public $Rec type; the concrete $RecImpl wrapper stays
+  ;; private to this module.
+  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $Rec))
     (struct.new $RecImpl (global.get $empty_node))
   )
 
+  ;; Takes the public $Rec and downcasts to the wrapper internally, so
+  ;; cross-module callers never name $RecImpl.
   (func $get (@pub)
-    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (param $rec (ref $Rec)) (param $key (ref eq))
     (result (ref null eq))
-    (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+    (call $hamt_get
+      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec)))
+      (local.get $key))
   )
 
   ;; Host-friendly $Rec field accessor. Takes anyref-typed args so
@@ -1369,7 +1374,7 @@
     (param $rec (ref null any)) (param $key (ref null any))
     (result (ref null any))
     (call $get
-      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref $Rec) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))))
 
   ;; -- Structural equality --------------------------------------------
