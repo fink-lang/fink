@@ -760,11 +760,11 @@ bytes = read stdin, 1024
 
 ## Effects
 
-ƒink's effects substrate is intentionally minimal -- just three primitives, exposed from `std/effects.fnk`:
+ƒink's effects substrate is intentionally minimal, exposed from `std/effects.fnk`:
 
-- `get_ctx _` -- read the current threaded context value.
-- `set_ctx new_ctx` -- replace the context value for all downstream calls.
 - `suspend fn resume: ...` -- capture the current continuation as `resume`, then run the user fn with `resume` as its argument. `resume v` transfers control back to the point just after `suspend ...` with `v` as the suspend expression's value. Multi-shot: `resume` may be called any number of times (or zero -- if user_fn never calls it, that thread of execution ends).
+- `unique _` -- mint a fresh `opaque` identity, used to key an effect's own slot in the threaded context.
+- `get_ctx_for key` / `set_ctx_for key, value` / `upd_ctx_for key, updates` -- read, write, and merge the slot for `key`. The context is a keyed record; each effect owns a slot keyed by its `unique` identity, so effects never collide. (The raw whole-context primitives are substrate-internal and not exposed.)
 
 Combined, these are enough to express effect handlers, generators, coroutines, schedulers, backtracking, and exceptions as plain ƒink library code.
 
@@ -774,6 +774,14 @@ Combined, these are enough to express effect handlers, generators, coroutines, s
 result = suspend fn resume:
   resume 42
 # result == 42
+```
+
+```fink
+{unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+
+state = unique _
+set_ctx_for state, {count: 0}
+{count} = get_ctx_for state
 ```
 
 The `with H: B` syntactic form is still parsed by the language, but the **library shape on top of `suspend` is in flight**. `abort`, named handlers, retry/return semantics, and the rest of the effect-handler vocabulary are being rebuilt as userland code in `std/effects.fnk`. The substrate exists so they can be -- the surface above it is not yet stable.

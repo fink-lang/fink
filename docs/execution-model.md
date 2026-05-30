@@ -111,7 +111,7 @@ Notable current gaps:
 
 - Type-guards in patterns are not yet implemented. Without them, the registration syntax in 4.1 cannot be written in ƒink source. The compiler hard-codes the currently-possible resolutions (operator dispatch on known types, container ops on known containers, etc.) in WAT instead of consulting a registry populated by ƒink-level registrations. The model is unchanged; the realisation is narrower than the model allows.
 - The module-lifecycle handshake in section 5 is not staged in today's implementation. The host calls a single fixed entry; runtime and stdlib impls are wired in at link time rather than through host-driven registration.
-- User-level handlers (section 7) ship as a minimal runtime substrate: `suspend fn resume: ...` (delimited continuation capture) plus threaded ctx (`get_ctx` / `set_ctx`). The handler vocabulary above this -- the `with H: B` form's semantics, `abort`, named handlers, retry/return -- is being rebuilt as userland code in `std/effects.fnk` on top of `suspend`. Higher-level libraries (`cancel` / `catch` / `find`, multi-operation effects, resource cleanup) layer on top of the handler library once it stabilises.
+- User-level handlers (section 7) ship as a minimal runtime substrate: `suspend fn resume: ...` (delimited continuation capture) plus threaded ctx. The ctx is a keyed record; each effect owns a slot, read and written through the public `get_ctx_for` / `set_ctx_for` / `upd_ctx_for` helpers in `std/effects.fnk`. Slots are keyed by `unique _` -- a fresh `opaque` identity per effect, so two effects never collide on a key. The raw whole-ctx primitives (`get_ctx` / `set_ctx`) are substrate-internal and not re-exported. The handler vocabulary above this -- the `with H: B` form's semantics, `abort`, named handlers, retry/return -- is being rebuilt as userland code in `std/effects.fnk` on top of `suspend`. Higher-level libraries (`cancel` / `catch` / `find`, multi-operation effects, resource cleanup) layer on top of the handler library once it stabilises.
 
 Each implementation file documents its own deviation from the concept. For the compiler's backend realisation story — how pure vs. effectful computations lower to WASM, how scopes and registries are realised, where compile-time resolution happens — see [src/passes/wasm/](../src/passes/wasm/).
 
@@ -136,6 +136,18 @@ result = suspend fn resume:
 ```
 
 `suspend fn resume: body` captures the suspend expression's continuation as `resume`, then invokes the user fn with `resume` as its argument. `resume v` transfers control to the captured cont with `v` becoming the value of the suspend expression. Multi-shot: `resume` may be called any number of times. If the user fn never calls `resume`, that thread of execution ends.
+
+State that must survive across suspensions lives in the threaded ctx. An effect mints a key with `unique _` (a fresh `opaque` identity) and reads/writes its own slot through `get_ctx_for` / `set_ctx_for` / `upd_ctx_for`:
+
+```fink
+{unique, set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+
+state = unique _
+set_ctx_for state, {count: 0}
+{count} = get_ctx_for state
+```
+
+Because the key is an opaque identity rather than a name, slots never collide -- even across modules that import the same key value. `opaque x` wraps any value in a fresh identity (equal only to itself); it is the runtime's first nominal type, the counterpart to the structurally-equal record/list/set values.
 
 The handler vocabulary -- the `with H: B` form's runtime semantics, `abort` / non-local return, retry, named handlers, op dispatch -- is being rebuilt as userland code in `std/effects.fnk` on top of `suspend` + ctx. Specific effect libraries (cancel/raise/find/state/...) layer on top of that handler library once it stabilises.
 

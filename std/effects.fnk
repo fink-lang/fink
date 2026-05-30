@@ -1,8 +1,6 @@
-{stdout, write} = import 'std/io.fnk'
-
-
 {suspend: _suspend, get_ctx, set_ctx} = import 'rt/apply.wat'
 {opaque} = import 'rt/opaque.wat'
+
 suspend = _suspend
 
 
