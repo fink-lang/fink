@@ -1,0 +1,18 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'fold', fn:
+  expect run ƒink:
+    {fold} = import 'std/iter.fnk'
+
+    [1, 2, 3, 4]
+    | fold 0, fn acc, val:
+      acc + val
+
+  | equals ƒink:
+    10
+
+
+
+

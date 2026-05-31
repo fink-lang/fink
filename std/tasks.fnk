@@ -1,7 +1,8 @@
 {stdout, write} = import 'std/io.fnk'
 
 {interop_yield} = import 'interop.wat'
-{suspend, get_ctx_for, set_ctx_for, upd_ctx_for, with, unique} = import 'std/effects.fnk'
+{suspend, init_ctx, get_ctx_for, with, unique} = import 'std/effects.fnk'
+{for_each} = import 'std/iter.fnk'
 
 # TODO: for now we are not going through with-block frames, tasks are global
 effect = fn handler: handler
@@ -14,46 +15,42 @@ log = fn msg:
 tasks = fn TODO:
   TODO
 
-
-has_more = fn:
-  {queue} = get_ctx_for tasks
-  match queue:
-    []: false
-    [..]: true
+upd_ctx_tasks = init_ctx tasks, {queue: [], futures: {}}
 
 
 dequeue = fn:
   {queue: [resume, ..queue]} = get_ctx_for tasks
-  upd_ctx_for tasks, {queue}
+  upd_ctx_tasks fn: {queue}
+
   resume
 
 
 enqueue = fn resume:
-  {queue} = get_ctx_for tasks
-  upd_ctx_for tasks, {queue: [..queue, resume]}
+  upd_ctx_tasks fn {queue}:
+    {queue: [..queue, resume]}
 
 
 yield_to_host = fn:
   interop_yield _
+  {queue} = get_ctx_for tasks
 
-  match has_more _:
-    true:
-      resume_scheduler _
-    false:
-      false
+  match queue:
+    [...]: resume_scheduler _
+    []: false
 
 
 resume_scheduler = fn:
-  match has_more _:
-    true:
+  {queue} = get_ctx_for tasks
+
+  match queue:
+    [...]:
       resume = dequeue _
       resume _
-    false:
+    []:
       yield_to_host _
 
 
 with_tasks = fn body:
-  set_ctx_for tasks, {queue: [], futures: {}}
   result = body _
   resume_scheduler _
   result
@@ -66,21 +63,23 @@ pause = effect fn v:
     resume_scheduler _
 
 
+
 settle_future = effect fn fut, result:
-  {futures} = get_ctx_for tasks
-  match futures:
-    {(fut): settle, ..rest}:
-      upd_ctx_for tasks, {futures: rest}
-      todo = fn: settle result
-      enqueue todo
-    _: false
+  #TODO: bug: upd_ctx_tasks fn {futures: {(fut): settlers, ..futures}}:
+  upd_ctx_tasks fn ctx:
+    {futures: {(fut): settlers, ..futures}} = ctx
+    settlers | for_each fn settle:
+      enqueue fn: settle result
+    {futures}
 
   resume_scheduler _
 
 
 spawn = effect fn task_fn:
-  # TODO: that is not a great way to just create a key
   fut = unique _
+
+  upd_ctx_tasks fn {futures}:
+    {futures: {..futures, (fut): []}}
 
   wrapped = fn:
     result = task_fn _
@@ -92,8 +91,11 @@ spawn = effect fn task_fn:
 
 await = fn fut:
   suspend fn resume:
-    {futures} = get_ctx_for tasks
-    upd_ctx_for tasks, {futures: {..futures, (fut): resume}}
+    #TODO: bug: upd_ctx_tasks fn {futures: {(fut): settlers, ..futures}}:
+    upd_ctx_tasks fn ctx:
+      {futures: {(fut): settlers, ..futures}} = ctx
+      {futures: {..futures, (fut): [..settlers, resume]}}
+
     resume_scheduler _
 
 

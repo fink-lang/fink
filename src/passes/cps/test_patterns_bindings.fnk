@@ -112,23 +112,22 @@ test 'seq pattern with non-empty rest', fn:
   expect cps_module ƒink:
     [a, ..] = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_38, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_33, ·ƒret_1:
       ·letrec fn ·a_0:
         ·fn
-          fn ·ƒctx_40, ·ƒv_6:
+          fn ·ƒctx_35, ·ƒv_6:
             ·let ·ƒv_6, fn ·a_0:
-              ·ƒret_1 ·ƒctx_40, ·a_0
-          fn ·ƒv_30:
+              ·ƒret_1 ·ƒctx_35, ·a_0
+          fn ·ƒv_25:
             ·fn
-              fn ·ƒctx_41, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
-                ·is_seq_like ·ƒctx_41, ·ƒv_3,
-                  fn ·ƒctx_43, ·ƒv_16:
-                    ·seq_pop ·ƒctx_43, ·ƒv_16, ·ƒfail_5, fn ·ƒctx_45, ·ƒv_6, ·ƒv_10:
-                      ·seq_pop ·ƒctx_45, ·ƒv_10, ·ƒfail_5, fn ·ƒctx_47, ·ƒv_12, ·ƒv_13:
-                        ·ƒsucc_4 ·ƒctx_47, ·ƒv_6
-                  fn ·ƒctx_49: ·ƒfail_5 ·ƒctx_49
-              fn ·ƒv_24: ·ƒv_24 ·ƒctx_38, ·ƒv_30, ·panic, ·∅foo
-    # sm:ZwABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0YAQIBCgACAAoBAQ0AAQANCAAUABgBAA0OAAIAEgECAQABAAEMAQENDgAKAQIBCgACABYBAQ0AAQANFAEADRQABAECAQoAFAEBDRAAAgASAQANAAEADQgAHAAYABgAGAEADQ4AAgAaAQANAAEADRwAFAAEAQANDgACACQAGAEADRAAAgAiAQANAAEADRQAFAAEAQANEAAEAQANFAAKABgBAA0SAQANEAACACYBAA0AAQANFAAUAAQBAA0QAAQBAA0UAAoAGAEADRQBAA0QAAIAKgEADQABAA0WABQABAEADQ4AJAAUAAQBAA0AAQANFgAUABwBAA0QAAQBAA0AAQANEgAUAAQBAA0QAAQBAA0OAAQBFAM
+              fn ·ƒctx_36, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
+                ·is_seq_like ·ƒctx_36, ·ƒv_3,
+                  fn ·ƒctx_38, ·ƒv_11:
+                    ·seq_pop ·ƒctx_38, ·ƒv_11, ·ƒfail_5, fn ·ƒctx_40, ·ƒv_6, ·ƒv_10:
+                      ·ƒsucc_4 ·ƒctx_40, ·ƒv_6
+                  fn ·ƒctx_42: ·ƒfail_5 ·ƒctx_42
+              fn ·ƒv_19: ·ƒv_19 ·ƒctx_33, ·ƒv_25, ·panic, ·∅foo
+    # sm:WgABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0YAQIBCgACAAoBAQ0AAQANCAAUABgBAA0OAAIAEgECAQABAAEMAQENDgAKAQIBCgACABYBAQ0AAQANFAEADRQABAECAQoAFAEBDRAAAgASAQANAAEADQgAHAAYABgAGAEADQ4AAgAaAQANAAEADRwAFAAEAQANDgACACQAGAEADRAAAgAiAQANAAEADRQAFAAEAQANEAAEAQANFAAKABgBAA0SAQANEAACACYBAA0AAQANFgAUAAQBAA0OACQAFAAEAQANAAEADRYAFAAcAQANEAAEAQANAAEADRIAFAAEAQANEAAEAQANDgAEARQD
 
 test 'seq pattern with bound rest', fn:
   expect cps_module ƒink:

@@ -326,6 +326,7 @@ pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/effects.fnk",
   "std/tasks.fnk",
   "std/io.fnk",
+  "std/iter.fnk",
 ];
 
 #[cfg(feature = "compile")]

@@ -58,6 +58,16 @@ test 'bare spread in sequence pattern', fn:
       LitSeq '[..]',
         Spread '..'
 
+
+test 'bare triple spread in sequence pattern', fn:
+  expect ast ƒink:
+    [...]
+  | equals ƒink:
+    Module
+      LitSeq '[..]',
+        Spread '...'
+
+
 test 'bare spread in record pattern', fn:
   expect ast ƒink:
     {..}

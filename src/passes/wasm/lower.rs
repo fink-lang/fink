@@ -878,6 +878,10 @@ fn lower_expr(
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Panic(reason)), .. } => {
       let i = push_call(lcx.frag, lcx.rt.panic(),
         vec![Operand::I32(reason.wire())], None);
+      // Tag the panic call with its CpsId so trap::diagnose can resolve a
+      // MarkRecord at this PC -- without it the panic has no mark and the
+      // trap location falls back to the entry module's line 1.
+      set_cps_id(lcx.frag, i, expr.id);
       ctx.instrs.push(i);
       let u = push_unreachable(lcx.frag);
       ctx.instrs.push(u);
