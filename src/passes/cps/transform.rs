@@ -2393,13 +2393,19 @@ fn emit_seq_pattern(
   // Separate front, spread, trailing.
   // Pattern shape: [front..., (..spread)?, trailing...]
   // Trailing elements only exist if there's a spread before them.
-  // The spread's inner is `Option<AstId>` — None for bare `..`, Some for `..rest`.
+  // The spread's inner is `Option<AstId>` — None for bare `..`/`...`, Some for `..rest`.
+  // `bare_requires_more` records whether a bare spread used `...` (>= 1 remaining
+  // element required) vs `..` (>= 0 — matches even an empty rest).
   let mut regular: Vec<AstId> = vec![];
   let mut spread: Option<Option<AstId>> = None;
+  let mut bare_requires_more = false;
   let mut trailing: Vec<AstId> = vec![];
   for &elem in elems.iter() {
-    if let NodeKind::Spread { inner, .. } = &g.node(elem).kind {
+    if let NodeKind::Spread { inner, op } = &g.node(elem).kind {
       spread = Some(*inner);
+      if inner.is_none() && op.src == "..." {
+        bare_requires_more = true;
+      }
       continue;
     }
     if spread.is_some() {
@@ -2437,7 +2443,7 @@ fn emit_seq_pattern(
     tail_temps: &tail_temps,
   };
   let terminal = build_seq_terminal(
-    g, &binds, spread,
+    g, &binds, spread, bare_requires_more,
     succ_param.id, fail_param.id, origin,
   );
   // Note: terminal.0 is the wrapped expression (Empty/SeqPop/LetVal).
@@ -2541,6 +2547,7 @@ fn build_seq_terminal(
   g: &mut Gen,
   binds: &SeqBinds<'_>,
   spread: Option<Option<AstId>>,
+  bare_requires_more: bool,
   succ_id: CpsId,
   fail_id: CpsId,
   origin: Option<AstId>,
@@ -2593,8 +2600,15 @@ fn build_seq_terminal(
       }, origin);
       (empty_call, cursor_bind)
     }
+    Some(None) if !bare_requires_more => {
+      // Bare spread `..` (>= 0 remaining): no constraint on the rest. The
+      // cursor may be empty or not; either way the pattern matches. Just
+      // call succ directly without inspecting the cursor.
+      (succ_call, cursor_bind)
+    }
     Some(None) => {
-      // Bare spread `..`: assert remaining cursor is non-empty by doing one more seq_pop.
+      // Bare spread `...` (>= 1 remaining): assert the rest is non-empty by
+      // doing one more seq_pop, failing if the cursor is empty.
       // seq_pop(cursor, fail, fn _, _: succ(...))
       let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
       let discard_h = g.fresh_result(origin);

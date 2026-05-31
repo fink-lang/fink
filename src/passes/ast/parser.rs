@@ -848,6 +848,13 @@ impl<'src> Parser<'src> {
     tok.kind == TokenKind::Sep && matches!(tok.src, ".." | "...")
   }
 
+  /// A spread operator in literal/pattern context: bare `..` (>= 0 more)
+  /// or `...` (>= 1 more). Same token family as the range operators;
+  /// context (inside a `[..]`/`{..}` literal) selects spread over range.
+  fn is_spread_op(tok: &Token) -> bool {
+    tok.kind == TokenKind::Sep && matches!(tok.src, ".." | "...")
+  }
+
   fn is_cmp_op(tok: &Token) -> bool {
     // Comparison ops sit at bp 60 in infix_bp; "in" is also a comparison.
     matches!(Self::infix_bp(tok), Some((60, 61)))
@@ -1306,7 +1313,7 @@ impl<'src> Parser<'src> {
           self.close_lit_str(&mut parts, expr_start);
           // Inside string interpolation: parse a full expression
           // But spread inside string is special: `..rest` in StrTempl
-          let expr = if self.at(TokenKind::Sep) && self.peek().src == ".." {
+          let expr = if Self::is_spread_op(self.peek()) {
             self.parse_spread()?
           } else {
             self.parse_expr()?
@@ -1354,7 +1361,7 @@ impl<'src> Parser<'src> {
       self.skip_block_tokens();
     }
     while !self.at(TokenKind::BracketClose) && !self.at(TokenKind::EOF) {
-      if self.at(TokenKind::Sep) && self.peek().src == ".." {
+      if Self::is_spread_op(self.peek()) {
         items.push(self.parse_spread()?);
       } else {
         // Use parse_single_arg so that `;` acts as a seq element separator
@@ -1400,7 +1407,7 @@ impl<'src> Parser<'src> {
     let mut seps = vec![];
     self.skip_block_tokens();
     while !self.at(TokenKind::BracketClose) && !self.at(TokenKind::EOF) {
-      if self.at(TokenKind::Sep) && self.peek().src == ".." {
+      if Self::is_spread_op(self.peek()) {
         items.push(self.parse_spread()?);
       } else {
         // Parse the key. If it starts with "(", preserve the Group wrapper
@@ -1620,7 +1627,7 @@ impl<'src> Parser<'src> {
 
     self.skip_block_tokens();
     while !self.at(TokenKind::Colon) && !self.at(TokenKind::EOF) {
-      if self.at(TokenKind::Sep) && self.peek().src == ".." {
+      if Self::is_spread_op(self.peek()) {
         items.push(self.parse_spread()?);
       } else {
         // Parse param without block detection (no `:` consumption).
@@ -1765,7 +1772,7 @@ impl<'src> Parser<'src> {
     let mut pat_seps = vec![];
 
     loop {
-      if self.at(TokenKind::Sep) && self.peek().src == ".." {
+      if Self::is_spread_op(self.peek()) {
         patterns.push(self.parse_spread()?);
       } else {
         // Use parse_apply_no_block: application patterns like `str s` are supported,

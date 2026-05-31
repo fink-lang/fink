@@ -449,8 +449,24 @@ Any pattern position accepts a guard — a boolean expression that must hold for
 ```fink
 {a} = {a: 1, b: 2}       # fine — keyed patterns match partially
 [a] = [1, 2]             # fails — sequential pattern has extra elements
-[a, ..] = [1, 2]         # fine — ..  discards the rest
+[a, ..] = [1, 2]         # fine — `..` discards the rest
 ```
+
+A sequential pattern matches a list of exactly its length unless it ends in a
+spread. The two spread forms differ in how many trailing elements they require,
+mirroring the range operators (`...` is the larger of the two):
+
+```fink
+[a, ..]                  # a, then zero or more — matches [1] and [1, 2]
+[a, ...]                 # a, then one or more  — matches [1, 2] but not [1]
+[a, ..rest]              # a, then the rest captured (may be empty) into `rest`
+
+[..]                     # matches any list, including []
+[...]                    # matches any non-empty list
+```
+
+`..` is the loose form (`>= 0` remaining); `...` demands at least one more. Use
+a bound spread (`..rest`) when you want the remaining elements as a value.
 
 ### String patterns
 

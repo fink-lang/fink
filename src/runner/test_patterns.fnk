@@ -100,12 +100,70 @@ test 'list trailing only — bare spread plus tail', fn:
     4
 
 
-skip test 'list bare empty rest', fn:
+
+test 'list bare spread matches empty', fn:
+  expect run ƒink:
+    match []:
+      [..]: true
+  | equals ƒink:
+    true
+
+test 'list bare spread matches non empty', fn:
+  expect run ƒink:
+    match [1]:
+      [..]: true
+  | equals ƒink:
+    true
+
+
+test 'list triple spread does not match empty', fn:
+  expect run ƒink:
+    match []:
+      [...]: true
+      _: false
+  | equals ƒink:
+    false
+
+
+test 'list triple spread matches non empty', fn:
+  expect run ƒink:
+    match [1]:
+      [...]: true
+  | equals ƒink:
+    true
+
+
+test 'list bare spread matches empty rest', fn:
   expect run ƒink:
     match [1]:
       [foo, ..]: foo
   | equals ƒink:
     1
+
+
+test 'list bare spread matches non empty rest', fn:
+  expect run ƒink:
+    match [1, 2]:
+      [foo, ..]: foo
+  | equals ƒink:
+    1
+
+
+test 'list bare triple spread does not match empty rest', fn:
+  expect run ƒink:
+    match [1]:
+      [foo, ...]: foo
+      _: false
+  | equals ƒink:
+    false
+
+test 'list bare triple spread matches non empty rest', fn:
+  expect run ƒink:
+    match [1, 2]:
+      [foo, ...]: foo
+  | equals ƒink:
+    1
+
 
 
 test 'list trailing only — multiple back elements', fn:

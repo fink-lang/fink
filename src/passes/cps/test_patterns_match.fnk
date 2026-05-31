@@ -340,58 +340,57 @@ test 'match — seq literal guard', fn:
       [1, val, ..]: val
       _: 0
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_120, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_115, ·ƒret_1:
       ·fn
-        fn ·ƒctx_122, ·ƒret_53, ·val_0: ·ƒret_53 ·ƒctx_122, ·val_0
-        fn ·ƒv_57:
+        fn ·ƒctx_117, ·ƒret_48, ·val_0: ·ƒret_48 ·ƒctx_117, ·val_0
+        fn ·ƒv_52:
           ·fn
-            fn ·ƒctx_124, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
+            fn ·ƒctx_119, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
               ·fn
-                fn ·ƒctx_125, ·ƒv_10, ·ƒv_11:
+                fn ·ƒctx_120, ·ƒv_10, ·ƒv_11:
                   ·fn
-                    fn ·ƒctx_126:
+                    fn ·ƒctx_121:
                       ·let ·ƒv_11, fn ·val_0:
-                        ·ƒv_57 ·ƒctx_126, ·ƒsucc_4, ·ƒv_11
-                    fn ·ƒv_64:
+                        ·ƒv_52 ·ƒctx_121, ·ƒsucc_4, ·ƒv_11
+                    fn ·ƒv_59:
                       ·fn
-                        fn ·ƒctx_128, ·ƒsucc_37, ·ƒfail_38, ·ƒv_36:
-                          ·op_eq ·ƒctx_128, ·ƒv_36, (i8 1), fn ·ƒctx_130, ·ƒv_41:
-                            ·if ·ƒv_41,
-                              fn: ·ƒsucc_37 ·ƒctx_130
-                              fn: ·ƒfail_38 ·ƒctx_130
-                        fn ·ƒv_49: ·ƒv_49 ·ƒctx_125, ·ƒv_64, ·ƒfail_5, ·ƒv_10
-                fn ·ƒv_72:
+                        fn ·ƒctx_123, ·ƒsucc_32, ·ƒfail_33, ·ƒv_31:
+                          ·op_eq ·ƒctx_123, ·ƒv_31, (i8 1), fn ·ƒctx_125, ·ƒv_36:
+                            ·if ·ƒv_36,
+                              fn: ·ƒsucc_32 ·ƒctx_125
+                              fn: ·ƒfail_33 ·ƒctx_125
+                        fn ·ƒv_44: ·ƒv_44 ·ƒctx_120, ·ƒv_59, ·ƒfail_5, ·ƒv_10
+                fn ·ƒv_67:
                   ·fn
-                    fn ·ƒctx_134, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
-                      ·is_seq_like ·ƒctx_134, ·ƒv_7,
-                        fn ·ƒctx_136, ·ƒv_22:
-                          ·seq_pop ·ƒctx_136, ·ƒv_22, ·ƒfail_9, fn ·ƒctx_138, ·ƒv_10, ·ƒv_23:
-                            ·seq_pop ·ƒctx_138, ·ƒv_23, ·ƒfail_9, fn ·ƒctx_140, ·ƒv_11, ·ƒv_16:
-                              ·seq_pop ·ƒctx_140, ·ƒv_16, ·ƒfail_9, fn ·ƒctx_142, ·ƒv_18, ·ƒv_19:
-                                ·ƒsucc_8 ·ƒctx_142, ·ƒv_10, ·ƒv_11
-                        fn ·ƒctx_144: ·ƒfail_9 ·ƒctx_144
-                    fn ·ƒv_34: ·ƒv_34 ·ƒctx_124, ·ƒv_72, ·ƒfail_5, ·ƒv_3
-            fn ·ƒv_79:
+                    fn ·ƒctx_129, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
+                      ·is_seq_like ·ƒctx_129, ·ƒv_7,
+                        fn ·ƒctx_131, ·ƒv_17:
+                          ·seq_pop ·ƒctx_131, ·ƒv_17, ·ƒfail_9, fn ·ƒctx_133, ·ƒv_10, ·ƒv_18:
+                            ·seq_pop ·ƒctx_133, ·ƒv_18, ·ƒfail_9, fn ·ƒctx_135, ·ƒv_11, ·ƒv_16:
+                              ·ƒsucc_8 ·ƒctx_135, ·ƒv_10, ·ƒv_11
+                        fn ·ƒctx_137: ·ƒfail_9 ·ƒctx_137
+                    fn ·ƒv_29: ·ƒv_29 ·ƒctx_119, ·ƒv_67, ·ƒfail_5, ·ƒv_3
+            fn ·ƒv_74:
               ·fn
-                fn ·ƒctx_147, ·ƒret_84: ·ƒret_84 ·ƒctx_147, (i8 0)
-                fn ·ƒv_88:
+                fn ·ƒctx_140, ·ƒret_79: ·ƒret_79 ·ƒctx_140, (i8 0)
+                fn ·ƒv_83:
                   ·fn
-                    fn ·ƒctx_149, ·ƒsucc_81, ·ƒfail_82, ·ƒv_80: ·ƒv_88 ·ƒctx_149, ·ƒsucc_81
-                    fn ·ƒv_93:
+                    fn ·ƒctx_142, ·ƒsucc_76, ·ƒfail_77, ·ƒv_75: ·ƒv_83 ·ƒctx_142, ·ƒsucc_76
+                    fn ·ƒv_88:
                       ·fn
-                        fn ·ƒctx_151, ·ƒret_95, ·ƒv_94:
-                          ·ƒv_79
-                            ·ƒctx_151
-                            ·ƒret_95
-                            fn ·ƒctx_153:
-                              ·ƒv_93
-                                ·ƒctx_153
-                                ·ƒret_95
-                                fn ·ƒctx_155: ·panic ·ƒctx_155
-                                ·ƒv_94
-                            ·ƒv_94
-                        fn ·ƒv_105: ·ƒv_105 ·ƒctx_120, ·ƒret_1, ·∅items
-    # sm:kgIAAQAnAAEAJyQBACcaAQAnEgACAAYBHhEAAQARCAAQABoAGAEIAw4ABAEUAwABAAMWABYABAEAAw4AEAEbERAAAgAOAQARAAEAEQgAGAAaABgAGAAOAAIAFgEADAABAAwIACAAGgEADBQBAAwQAAIAHgECAQABAAEIACgAFgACACYBBgMAAQADDAEHDBAACgEIAw4AAgAqAQcRAAEAERIAFgAEAQARFAAEAQAMEAAoAQIBEAACACYBAAEAAQABCAAwABoAGgAaAQABEAACAC4BAAEAAQABEAAWAAQBAAEQAAYBAAEAAQABBgEAAQQACgAaAQABEAACADIBAAEAAQABCgEAARAAAgA6AAQBAAEAAQABGAAWADoABAEAAQABAAEYABYAMAEAARAABAEAAQABAAESABYABAEAARAABAEAARQABAEBDBAAIAEADBAAAgAeAQAMAAEADAgAKAAaABgAGAEADA4AAgAmAQAMAAEADBwAFgAEAQAMDgACADAAGgEADBAAAgAuAQAMAAEADBQAFgAEAQAMEAAEAQAMFAAKABoBAAwUAQAMEAACADIBAAwAAQAMFAAWAAQBAAwQAAQBAAwUAAoAGgEADBQBAAwQAAIANgEADAABAAwUABYABAEADBAABAEADBQACgAaAQAMFAEADBAAAgA6AQAMAAEADBYAFgAEAQAMEAAEAQAMEAAwABYABAEADAABAAwWABYAKAEADBAABAEADAABAAwSABYABAEADBAABAEADBQABAEADA4AGAEAERAAAgAWASgEAAEABAgAIAAaABQABAEGAQABAAEWABYABgEAAQABAAEGAQABBAAgAQUEEAACAB4BAAQAAQAECAAoABoAGgAaABAABAEABAABAAQSABYABAEABBYAKAEABBAAAgAmAUUnAAEAJwgAMAAaABgBACcQAAIALgEAJwABACdCAEgBACdMABYAAgA2AQAnAAEAJ0oAUAEAJ1QAFgAEAQAnAAEAJxAAUAEAJ0IBACcQADABACcSAAQBACcAAQAnFAAWAAQBACcSAAQBDAU
+                        fn ·ƒctx_144, ·ƒret_90, ·ƒv_89:
+                          ·ƒv_74
+                            ·ƒctx_144
+                            ·ƒret_90
+                            fn ·ƒctx_146:
+                              ·ƒv_88
+                                ·ƒctx_146
+                                ·ƒret_90
+                                fn ·ƒctx_148: ·panic ·ƒctx_148
+                                ·ƒv_89
+                            ·ƒv_89
+                        fn ·ƒv_100: ·ƒv_100 ·ƒctx_115, ·ƒret_1, ·∅items
+    # sm:hQIAAQAnAAEAJyQBACcaAQAnEgACAAYBHhEAAQARCAAQABoAGAEIAw4ABAEUAwABAAMWABYABAEAAw4AEAEbERAAAgAOAQARAAEAEQgAGAAaABgAGAAOAAIAFgEADAABAAwIACAAGgEADBQBAAwQAAIAHgECAQABAAEIACgAFgACACYBBgMAAQADDAEHDBAACgEIAw4AAgAqAQcRAAEAERIAFgAEAQARFAAEAQAMEAAoAQIBEAACACYBAAEAAQABCAAwABoAGgAaAQABEAACAC4BAAEAAQABEAAWAAQBAAEQAAYBAAEAAQABBgEAAQQACgAaAQABEAACADIBAAEAAQABCgEAARAAAgA6AAQBAAEAAQABGAAWADoABAEAAQABAAEYABYAMAEAARAABAEAAQABAAESABYABAEAARAABAEAARQABAEBDBAAIAEADBAAAgAeAQAMAAEADAgAKAAaABgAGAEADA4AAgAmAQAMAAEADBwAFgAEAQAMDgACADAAGgEADBAAAgAuAQAMAAEADBQAFgAEAQAMEAAEAQAMFAAKABoBAAwUAQAMEAACADIBAAwAAQAMFAAWAAQBAAwQAAQBAAwUAAoAGgEADBQBAAwQAAIANgEADAABAAwWABYABAEADBAABAEADBAAMAAWAAQBAAwAAQAMFgAWACgBAAwQAAQBAAwAAQAMEgAWAAQBAAwQAAQBAAwUAAQBAAwOABgBABEQAAIAFgEoBAABAAQIACAAGgAUAAQBBgEAAQABFgAWAAYBAAEAAQABBgEAAQQAIAEFBBAAAgAeAQAEAAEABAgAKAAaABoAGgAQAAQBAAQAAQAEEgAWAAQBAAQWACgBAAQQAAIAJgFFJwABACcIADAAGgAYAQAnEAACAC4BACcAAQAnQgBIAQAnTAAWAAIANgEAJwABACdKAFABACdUABYABAEAJwABACcQAFABACdCAQAnEAAwAQAnEgAEAQAnAAEAJxQAFgAEAQAnEgAEAQwF
 
 
 test 'match — rec literal guard', fn:

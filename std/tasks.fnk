@@ -35,7 +35,7 @@ yield_to_host = fn:
   {queue} = get_ctx_for tasks
 
   match queue:
-    [..]: resume_scheduler _
+    [...]: resume_scheduler _
     []: false
 
 
@@ -43,7 +43,7 @@ resume_scheduler = fn:
   {queue} = get_ctx_for tasks
 
   match queue:
-    [..]:
+    [...]:
       resume = dequeue _
       resume _
     []:
