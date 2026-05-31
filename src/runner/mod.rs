@@ -802,6 +802,7 @@ mod tests {
     use super::*;
     test_macros::include_fink_tests!("std/effects.test.fnk", skip-ir);
     test_macros::include_fink_tests!("std/tasks.test.fnk", skip-ir);
+    test_macros::include_fink_tests!("std/iter.test.fnk", skip-ir);
     test_macros::include_fink_tests!("std/io.test.fnk", skip-ir);
   }
 }

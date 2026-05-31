@@ -4,17 +4,17 @@
 
 test 'spawning', fn:
   expect run ƒink:
-    {upd_ctx_for, get_ctx_for, set_ctx_for, unique} = import 'std/effects.fnk'
+    {init_ctx, get_ctx_for, unique} = import 'std/effects.fnk'
     {spawn, pause, with_tasks} = import 'std/tasks.fnk'
 
     testing = unique _
 
-    set_ctx_for testing, {foo: 'start'}
+    upd_ctx_testing = init_ctx testing, {foo: 'start'}
 
     pause_with_update = fn msg:
       pause msg
-      {foo} = get_ctx_for testing
-      upd_ctx_for testing,  {foo: '${foo} -> ${msg}'}
+      upd_ctx_testing fn {foo}:
+        {foo: '${foo} -> ${msg}'}
 
     with_tasks fn:
       spawn fn:

@@ -1,0 +1,43 @@
+
+
+---
+Call `handle` on each item in `items`, in order.
+
+For effectful iteration: `for_each` discards `handle`'s results and returns
+nothing useful, so reaching for it signals "do this per item for its side
+effects" -- clearer than abusing `fold` or `map` for the same purpose.
+---
+for_each = fn handle: fn items:
+  match items:
+    []: 0
+    [item, ..rest]:
+      handle item
+      rest | for_each handle
+
+
+
+_fold = fn acc, combine, items: match items:
+  []: acc
+  [item, ..rest]:
+    _fold
+      combine acc, item
+      combine
+      rest
+
+
+---
+Reduce `items` to a single value by threading an accumulator through a
+combining function.
+
+Starting from `acc`, `fold` applies `combine acc, item` to each item in turn,
+using the result as the accumulator for the next item. The final accumulator
+is returned. On an empty iterable, `acc` is returned unchanged.
+
+```
+[1, 2, 3, 4]
+| fold 0, fn acc, item:
+  acc + item
+```
+---
+fold = fn acc, combine: fn items:
+  _fold acc, combine, items

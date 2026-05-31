@@ -7,7 +7,6 @@ suspend = _suspend
 # Initialize the universe
 set_ctx {}
 
-
 set_ctx_for = fn ctx_id, value:
   ctx = get_ctx _
   set_ctx {..ctx, (ctx_id): value}
@@ -19,20 +18,52 @@ get_ctx_for = fn ctx_id:
   ctx
 
 
-upd_ctx_for = fn ctx_id, updates:
+---
+TODO
+
+```
+upd_ctx_for foo, fn {spam}:
+  {spam: '${spam} -> ham'}
+```
+---
+# TODO, do we even need an upd_ctx_for as public API?
+upd_ctx_for = fn ctx_id, update:
+  start_ctx = get_ctx_for ctx_id
+  updates = update start_ctx
   ctx = get_ctx_for ctx_id
   set_ctx_for ctx_id, {..ctx, ..updates}
 
 
+---
+TODO
 
+```
+foo = fn: 42
+
+upd_ctx_foo = init_ctx foo, {spam: 0}
+
+upd_ctx_foo fn {spam}:
+  {spam: spam + 1}
+```
+---
+init_ctx = fn ctx_id, initial:
+  set_ctx_for ctx_id, initial
+  upd_ctx_for ctx_id, ?
+
+
+---
+TODO
+---
 unique = fn:
-  {id} = get_ctx_for unique
-  upd_ctx_for unique, {id: id + 1}
+  {id} = upd_ctx_unique fn {id}:
+    {id: id + 1}
   # Wrap the counter so the identity is nominal (per mint) rather than a
   # bare int that could collide with a literal under structural equality.
-  opaque id
+  # opaque id
+  id
 
-set_ctx_for unique, {id: 0}
+upd_ctx_unique = init_ctx unique, {id: 0}
+
 
 
 has_handler = fn perform, frames:
@@ -57,29 +88,50 @@ get_perform = fn handler:
 effect = fn handler:
   # {reg} = get_ctx_for with
   perform = get_perform handler
-  # upd_ctx_for with, {reg: {..reg, (perform): handler}}
+  # upd_ctx_with fn ..: {reg: {..reg, (perform): handler}}
   perform
 
 
 push_frame = fn frame:
-  {frames} = get_ctx_for with
-  upd_ctx_for with, {frames: [frame, ..frames]}
+  upd_ctx_with fn {frames}:
+    {frames: [frame, ..frames]}
 
 
-pop_frame = fn:
-  {frames: [frame, ..frames]} = get_ctx_for with
-  upd_ctx_for with, {frames}
+pop_frame = fn id:
+  # TODO need to pop all to frame with `id` and call any finalizers
+  upd_ctx_with fn {frames: [frame, ..frames]}:
+    # TODO run finalizers on frame
+    {frames}
+
+
+get_curr_frame = fn:
+  {frames: [frame]} = get_ctx_for with
   frame
+
+
+upd_curr_frame = fn updates:
+  upd_ctx_with fn {frames: [frame, ..frames]}:
+    updated_frame = {..frame, ..updates}
+    {frames: [updated_frame, ..frames]}
+
+
+
+add_finallizer = fn final_fn:
+  upd_curr_frame fn {finalizers}:
+    {finalizers: [..finalizers, final_fn]}
 
 
 
 with = fn perform, body:
+  id = unique _
+
   result = suspend fn return:
-    push_frame {retry: body, return, perform}
+    push_frame {id, retry: body, return, perform}
     return body _
-  pop_frame _
+
+  pop_frame id
   result
 
-set_ctx_for with, {frames: []}
+upd_ctx_with = init_ctx with, {frames: []}
 
 

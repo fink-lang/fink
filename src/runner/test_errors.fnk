@@ -24,10 +24,9 @@ test 'runtime error: irrefutable match fails with no matching arm', fn:
       'bar': 1
   | equals ":
     match 'foo':
-      'bar': 1
-             ^
+    ^^^^^^^^^^^^
     match exhausted: no arm matched
-    ./test.fnk:2:10
+    ./test.fnk:1:1
 
 
 # Same, deeper inside the program — line should point at the match,
@@ -39,11 +38,11 @@ test 'runtime error: irrefutable match in nested fn', fn:
         'bar': 1
     f 'foo'
   | equals ":
+    f = fn x:
       match x:
-        'bar': 1
-               ^
+      ^^^^^^^^
     match exhausted: no arm matched
-    ./test.fnk:3:12
+    ./test.fnk:2:3
 
 
 # --- bad destructure --------------------------------------------------
