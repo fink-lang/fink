@@ -95,6 +95,13 @@ pub fn run(
             Err(Error::msg(format!("fink panic: {msg}")))
           }).map_err(|e| e.to_string())?;
         }
+        "host_mono_ns" => {
+          let base = std::time::Instant::now();
+          linker.func_new("env", &name, ft, move |_caller, _params, results| {
+            results[0] = Val::I64(base.elapsed().as_nanos() as i64);
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
         "host_read_sync" => {
           let input = stdin.clone();
           linker.func_new("env", &name, ft, move |mut caller, params, results| {
@@ -215,7 +222,11 @@ pub fn run(
             // via cont id 2.
             exit.lock().unwrap().exit_code = 0;
 
-            apply_main(&mut caller, main_clo, &argv)?;
+            // params[2] = the module body's post-init ctx, carrying the
+            // seeded effect slots. Apply `main` against it so effectful
+            // programs (tasks/channels/unique) see the live universe.
+            let post_init_ctx = params[2].unwrap_anyref().copied();
+            apply_main(&mut caller, main_clo, &argv, post_init_ctx)?;
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
@@ -348,10 +359,10 @@ fn apply_main(
   caller: &mut Caller<'_, ()>,
   main_clo: Rooted<AnyRef>,
   argv: &[Vec<u8>],
+  ctx: Option<Rooted<AnyRef>>,
 ) -> Result<(), Error> {
-  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with an empty ctx minted
-  // by the wasm-side `env:empty_ctx` — same shape as the per-module
-  // wrapper's entry call.
+  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with the post-init ctx the
+  // entry module body produced (carries the seeded effect slots).
   let wrap_host_cont = caller.get_export("wrap_host_cont_3")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no wrap_host_cont_3 export"))?;
@@ -402,10 +413,19 @@ fn apply_main(
     acc = next[0];
   }
 
-  let mut ctx_out = [Val::AnyRef(None)];
-  empty_ctx_fn.call(&mut *caller, &[], &mut ctx_out)?;
+  // Apply main against the post-init ctx. Fall back to a fresh
+  // empty_ctx only if the host received no ctx (should not happen on
+  // the ctx-aware pipeline).
+  let ctx_val = match ctx {
+    Some(c) => Val::AnyRef(Some(c)),
+    None => {
+      let mut ctx_out = [Val::AnyRef(None)];
+      empty_ctx_fn.call(&mut *caller, &[], &mut ctx_out)?;
+      ctx_out[0]
+    }
+  };
   apply_fn.call(&mut *caller,
-    &[acc, ctx_out[0], Val::AnyRef(Some(main_clo))],
+    &[acc, ctx_val, Val::AnyRef(Some(main_clo))],
     &mut [])?;
   Ok(())
 }

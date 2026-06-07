@@ -1,26 +1,22 @@
-{stdout, write} = import 'std/io.fnk'
-
 {interop_yield} = import 'interop.wat'
 {suspend, init_ctx, get_ctx_for, with, unique} = import 'std/effects.fnk'
 {for_each} = import 'std/iter.fnk'
+
+
 
 # TODO: for now we are not going through with-block frames, tasks are global
 effect = fn handler: handler
 
 
-log = fn msg:
-  write stdout, '${msg}\n'
-
-
 tasks = fn TODO:
   TODO
 
-upd_ctx_tasks = init_ctx tasks, {queue: [], futures: {}}
+upd_ctx_tasks = init_ctx tasks, {queue: []}
 
 
 dequeue = fn:
-  {queue: [resume, ..queue]} = get_ctx_for tasks
-  upd_ctx_tasks fn: {queue}
+  resume = upd_ctx_tasks fn {queue: [resume, ..queue]}:
+    [resume, {queue}]
 
   resume
 
@@ -28,6 +24,7 @@ dequeue = fn:
 enqueue = fn resume:
   upd_ctx_tasks fn {queue}:
     {queue: [..queue, resume]}
+  true
 
 
 yield_to_host = fn:
@@ -35,11 +32,11 @@ yield_to_host = fn:
   {queue} = get_ctx_for tasks
 
   match queue:
-    [...]: resume_scheduler _
+    [...]: yield_to_next_resumable _
     []: false
 
 
-resume_scheduler = fn:
+yield_to_next_resumable = fn:
   {queue} = get_ctx_for tasks
 
   match queue:
@@ -52,7 +49,7 @@ resume_scheduler = fn:
 
 with_tasks = fn body:
   result = body _
-  resume_scheduler _
+  yield_to_next_resumable _
   result
 
 
@@ -60,26 +57,43 @@ with_tasks = fn body:
 pause = effect fn v:
   suspend fn resume:
     enqueue fn: resume v
-    resume_scheduler _
+    yield_to_next_resumable _
+
+
+future = fn:
+  fut = unique _
+  upd_ctx_future fn {futures}:
+    # TODO are multiple awaits possible? Should they?
+    {futures: {..futures, (fut): {awaits: []}}}
+  fut
+
+upd_ctx_future = init_ctx future, {futures: {}}
 
 
 
 settle_future = effect fn fut, result:
-  #TODO: bug: upd_ctx_tasks fn {futures: {(fut): settlers, ..futures}}:
-  upd_ctx_tasks fn ctx:
-    {futures: {(fut): settlers, ..futures}} = ctx
-    settlers | for_each fn settle:
-      enqueue fn: settle result
-    {futures}
+  #TODO: bug: upd_ctx_future fn {futures: {(fut): settlers, ..futures}}:
+  settlers = upd_ctx_future fn {futures}:
+    match futures:
+      # settle before await
+      {(fut): {awaits: []}, ..futures}:
+        [[], {futures: {..futures, (fut): {rslt: result, awaits: []}}}]
+      # settle with awaits
+      {(fut): {awaits}, ..futures}:
+        [awaits, {futures}]
+      _:
+        [[], {futures}]
 
-  resume_scheduler _
+  settlers | for_each fn settle:
+    enqueue fn:
+      settle result
+
+  yield_to_next_resumable _
+
 
 
 spawn = effect fn task_fn:
-  fut = unique _
-
-  upd_ctx_tasks fn {futures}:
-    {futures: {..futures, (fut): []}}
+  fut = future _
 
   wrapped = fn:
     result = task_fn _
@@ -91,11 +105,19 @@ spawn = effect fn task_fn:
 
 await = fn fut:
   suspend fn resume:
-    #TODO: bug: upd_ctx_tasks fn {futures: {(fut): settlers, ..futures}}:
-    upd_ctx_tasks fn ctx:
-      {futures: {(fut): settlers, ..futures}} = ctx
-      {futures: {..futures, (fut): [..settlers, resume]}}
+    yield_or_resume = upd_ctx_future fn {futures}:
+      match futures:
+        # future already settled before awaiting
+        {(fut): {rslt}, ..futures}:
+          resume_with_rslt = fn: resume rslt
+          [resume_with_rslt, {futures}]
+        # we park ourselves on the unsettled future
+        {(fut): {awaits}, ..futures}:
+          updates = {futures: {..futures, (fut): {awaits: [..awaits, resume]}}}
+          [yield_to_next_resumable, updates]
+        _:
+          # TODO: panic!
+          [resume, {futures}]
 
-    resume_scheduler _
-
+    yield_or_resume _
 

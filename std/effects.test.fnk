@@ -19,6 +19,21 @@ test 'init_ctx and updates', fn:
     spam 42
 
 
+test 'ctx updates with custom result', fn:
+  expect run ƒink:
+    {unique, init_ctx} = import 'std/effects.fnk'
+    testing = unique _
+
+    upd_ctx_testing = init_ctx testing, {foo: 'spam', bar: 21}
+
+    upd_ctx_testing fn {bar: old, foo}:
+      bar = old * 2
+      ['${foo} ${bar}', {bar}]
+
+  | equals ":
+    spam 42
+
+
 
 test 'unique identity', fn:
   expect run ƒink:
@@ -340,5 +355,46 @@ test 'ctx survives set constructor', fn:
     get_ctx_for testing
   | equals ":
     set-ctor-ctx
+
+
+# Seq-literal elements must evaluate left-to-right (source order). The
+# cons-list build is right-to-left internally, but evaluation order is
+# observable through side effects and must follow source order. A
+# ctx-threaded counter reveals the order: slot 0 must hold the first
+# tick, not the last.
+test 'seq literal evaluates elements left to right', fn:
+  expect run ƒink:
+    {unique, init_ctx} = import 'std/effects.fnk'
+    counter = unique _
+    upd = init_ctx counter, {n: 0}
+
+    tick = fn:
+      {n} = upd fn {n}:
+        {n: n + 1}
+      n
+
+    '${[tick _; tick _; tick _]}'
+  | equals ":
+    [1, 2, 3]
+
+
+# Rec fields are unordered for storage, but the field-value expressions
+# still evaluate left-to-right (source order) -- observable via side
+# effects. Read fields back by name: `a` (written first) must hold the
+# first tick, `c` the last.
+test 'rec literal evaluates fields left to right', fn:
+  expect run ƒink:
+    {unique, init_ctx} = import 'std/effects.fnk'
+    counter = unique _
+    upd = init_ctx counter, {n: 0}
+
+    tick = fn:
+      {n} = upd fn {n}:
+        {n: n + 1}
+      n
+
+    '${{a: (tick _); b: (tick _); c: (tick _)}}'
+  | equals ":
+    {b: 2, a: 1, c: 3}
 
 

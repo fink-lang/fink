@@ -148,18 +148,20 @@ fn nearest_mark(
 /// rendering; deps fall back to oneline.
 #[cfg(feature = "runtime")]
 pub struct PackageSourceProvider<'a> {
-  _bundle: &'a Wasm,
+  bundle: &'a Wasm,
   entry: Option<(String, String)>,
 }
 
 #[cfg(feature = "runtime")]
 impl<'a> PackageSourceProvider<'a> {
   pub fn new(bundle: &'a Wasm) -> Self {
-    Self { _bundle: bundle, entry: None }
+    Self { bundle, entry: None }
   }
 
-  /// Attach the entry module's url and source so the formatter can
-  /// render caret+context for traps that resolve to the entry.
+  /// Attach the entry module's url and source as a fallback for compiles
+  /// that don't populate `bundle.module_sources` (e.g. single-file paths).
+  /// Package compiles serve every module's source from the bundle, so this
+  /// is only consulted when the bundle has no entry for the url.
   pub fn with_entry(mut self, url: String, src: String) -> Self {
     self.entry = Some((url, src));
     self
@@ -169,6 +171,12 @@ impl<'a> PackageSourceProvider<'a> {
 #[cfg(feature = "runtime")]
 impl crate::errors::SourceProvider for PackageSourceProvider<'_> {
   fn source(&self, url: &str) -> Option<&str> {
+    // Prefer the per-module source captured during package compilation --
+    // this is what lets a trap inside a dependency render its own source
+    // line + caret. Fall back to the explicitly-attached entry source.
+    if let Some(src) = self.bundle.module_sources.get(url) {
+      return Some(src);
+    }
     match &self.entry {
       Some((entry_url, entry_src)) if entry_url == url => Some(entry_src),
       _ => None,
@@ -252,18 +260,38 @@ mod tests {
   }
 
   #[test]
-  fn package_source_provider_returns_entry_source_only() {
+  fn package_source_provider_entry_fallback() {
     use crate::errors::SourceProvider;
     let bundle = Wasm {
       binary: Vec::new(),
       mappings: Vec::new(),
       marks: Vec::new(),
       id_to_url: std::collections::BTreeMap::new(),
+      module_sources: std::collections::BTreeMap::new(),
     };
     let provider = PackageSourceProvider::new(&bundle)
       .with_entry("./test.fnk".to_string(), "hello".to_string());
     assert_eq!(provider.source("./test.fnk"), Some("hello"));
     assert_eq!(provider.source("./other.fnk"), None);
+  }
+
+  #[test]
+  fn package_source_provider_serves_every_module() {
+    use crate::errors::SourceProvider;
+    let mut module_sources = std::collections::BTreeMap::new();
+    module_sources.insert("./test.fnk".to_string(), "entry-src".to_string());
+    module_sources.insert("./dep.fnk".to_string(), "dep-src".to_string());
+    let bundle = Wasm {
+      binary: Vec::new(),
+      mappings: Vec::new(),
+      marks: Vec::new(),
+      id_to_url: std::collections::BTreeMap::new(),
+      module_sources,
+    };
+    let provider = PackageSourceProvider::new(&bundle);
+    assert_eq!(provider.source("./test.fnk"), Some("entry-src"));
+    assert_eq!(provider.source("./dep.fnk"), Some("dep-src"));
+    assert_eq!(provider.source("./missing.fnk"), None);
   }
 
   #[test]
@@ -274,6 +302,7 @@ mod tests {
       mappings: Vec::new(),
       marks: Vec::new(),
       id_to_url: std::collections::BTreeMap::new(),
+      module_sources: std::collections::BTreeMap::new(),
     };
     let provider = PackageSourceProvider::new(&bundle);
     assert_eq!(provider.source("./test.fnk"), None);

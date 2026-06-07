@@ -1,0 +1,47 @@
+
+{suspend, init_ctx, get_ctx_for, with, unique} = import 'std/effects.fnk'
+{future, settle_future, pause} = import 'std/tasks.fnk'
+
+
+channel = fn name:
+  id = unique _
+  ch = {id, name, messages: []}
+  upd_ctx_channels fn _:
+    {(id): ch}
+  ch
+
+upd_ctx_channels = init_ctx channel, {}
+
+
+
+add_message = fn ch_id, msg:
+  upd_ctx_channels fn channels:
+    {(ch_id): {messages, ..rest}} = channels
+    {(ch_id): {..rest, messages: [..messages, msg]}}
+
+
+poll_msg = fn ch_id:
+  deliver = upd_ctx_channels fn channels:
+    {(ch_id): {messages, ..rest}} = channels
+    match messages:
+      [msg, ..messages]:
+        deliver = fn: msg
+        [deliver, {(ch_id): {..rest, messages}}]
+      _:
+        deliver = fn:
+          pause 0
+          poll_msg ch_id
+        [deliver, {(ch_id): {..rest, messages}}]
+
+  deliver _
+
+
+recv = fn {id}:
+  msg = poll_msg id
+  msg
+
+
+send = fn {id}, msg:
+  add_message id, msg
+  pause 0
+

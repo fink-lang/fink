@@ -54,7 +54,7 @@ test 'runtime error: rec destructure missing field', fn:
     a + 1
   | equals ":
     {a, b} = {x: 1}
-    ^
+    ^^^^^^^^^^^^^^^
     irrefutable pattern failed
     ./test.fnk:1:1
 
@@ -101,3 +101,21 @@ test 'compile error: unbound name', fn:
     ^^^
     unbound name 'foo'
     ./test.fnk:1:1
+
+
+# --- trap inside an imported module ----------------------------------
+
+# A trap that fires inside a function defined in a dependency module
+# must resolve to that module's source line, not the entry module's
+# line 1. `boom` lives in bad_destructure.fnk and fails an irrefutable
+# destructure on line 7.
+test 'runtime error: trap inside imported module', fn:
+  expect run ƒink:
+    {boom} = import './test_modules/bad_destructure.fnk'
+    boom {x: 1}
+  | equals ":
+    boom = fn rec:
+      {missing} = rec
+      ^^^^^^^^^^^^^^^
+    irrefutable pattern failed
+    ./test_modules/bad_destructure.fnk:8:3

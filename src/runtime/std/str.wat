@@ -37,6 +37,7 @@
   (import "rt/apply.wat"   "VarArgs"   (type $VarArgs   (sub any)))
   (import "rt/apply.wat"   "Closure"   (type $Closure   (sub any)))
   (import "rt/apply.wat"   "Captures"  (type $Captures  (sub any)))
+  (import "rt/opaque.wat"  "Opaque"    (type $Opaque (sub (struct (field $inner (ref eq))))))
   (import "rt/apply.wat"   "Fn3"       (type $Fn3       (sub any)))
   (import "rt/apply.wat"   "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
@@ -1651,6 +1652,15 @@
             (local.get $val))))
       (return_call $closure_fmt))
 
+    ;; Try $Opaque -- "<opq INNER>" so the wrapper is visible without
+    ;; masquerading as its inner value.
+    (block $not_opq
+      (block $is_opq (result (ref $Opaque))
+        (br $not_opq
+          (br_on_cast $is_opq (ref any) (ref $Opaque)
+            (local.get $val))))
+      (return_call $opaque_fmt))
+
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
@@ -2145,5 +2155,53 @@
   (func $closure_fmt (@pub) (@impl "std/str.fnk:fmt" $Closure)
     (param $clos (ref $Closure)) (result (ref $Str))
     (return_call $closure_repr (local.get $clos)))
+
+  ;; Opaque fmt -- renders "<opq INNER>" where INNER is the inner value
+  ;; formatted via the central dispatcher. Shows the wrapper distinctly so
+  ;; it never reads as the bare inner value, while still being useful for
+  ;; debugging (you can see what an opaque wraps). Layout: "<opq " (5) +
+  ;; inner bytes + ">" (1). Mirrors range.wat:fmt's byte-splice shape.
+  (func $opaque_fmt (@pub) (param $opq (ref $Opaque)) (result (ref $Str))
+    (local $inner_str (ref $Str))
+    (local $inner_bytes (ref $ByteArray))
+    (local $inner_len i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local $i i32)
+
+    (local.set $inner_str
+      (call $fmt_val
+        (ref.cast (ref any)
+          (struct.get $Opaque $inner (local.get $opq)))))
+    (local.set $inner_bytes (call $bytes (local.get $inner_str)))
+    (local.set $inner_len (array.len (local.get $inner_bytes)))
+
+    ;; total = 5 ("<opq ") + inner_len + 1 (">")
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (i32.add (local.get $inner_len) (i32.const 5)) (i32.const 1))))
+
+    ;; "<opq " = 3C 6F 70 71 20
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x3C)) ;; <
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x6F)) ;; o
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x70)) ;; p
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x71)) ;; q
+    (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x20)) ;; space
+
+    ;; Copy inner bytes after the prefix.
+    (local.set $pos (i32.const 5))
+    (local.set $i (i32.const 0))
+    (block $done (loop $copy
+      (br_if $done (i32.ge_u (local.get $i) (local.get $inner_len)))
+      (array.set $ByteArray (local.get $buf) (local.get $pos)
+        (array.get_u $ByteArray (local.get $inner_bytes) (local.get $i)))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $copy)))
+
+    ;; ">" = 3E
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x3E))
+
+    (return_call $from_bytes (local.get $buf)))
 
 )

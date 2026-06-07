@@ -10,9 +10,9 @@ test 'seq literal', fn:
     [1, 2, 3]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_0:
-      ·seq_prepend ·ƒctx_16, (i8 3), [], fn ·ƒctx_19, ·ƒv_3:
-        ·seq_prepend ·ƒctx_19, (i8 2), ·ƒv_3, fn ·ƒctx_21, ·ƒv_6:
-          ·seq_prepend ·ƒctx_21, (i8 1), ·ƒv_6, ·ƒret_0
+      ·seq_prepend ·ƒctx_16, (i8 3), [], fn ·ƒctx_19, ·ƒv_5:
+        ·seq_prepend ·ƒctx_19, (i8 2), ·ƒv_5, fn ·ƒctx_21, ·ƒv_7:
+          ·seq_prepend ·ƒctx_21, (i8 1), ·ƒv_7, ·ƒret_0
     # sm:LwABAAkAAQAJJAEACRgBAAkSAAIABgEOAQABAAEcABQABgEAAQABAAEGAQABBAAEAQ0JAAEACQIBAAkCAAoAGAEOAQ4AAgAKAQUBAAEAARwAFAAGAQABAAEAAQYBAAEEAAQBBgEOAAoAGAEFAQ4AAgAOAQUBAAEAARwAFAAGAQABAAEAAQYBAAEEAAQBBgEOAAQBBQE
 
 
@@ -109,8 +109,8 @@ test 'seq spread', fn:
     [..xs, 1]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
-      ·seq_prepend ·ƒctx_11, (i8 1), [], fn ·ƒctx_14, ·ƒv_3:
-        ·seq_concat ·ƒctx_14, ·∅xs, ·ƒv_3, ·ƒret_0
+      ·seq_prepend ·ƒctx_11, (i8 1), [], fn ·ƒctx_14, ·ƒv_4:
+        ·seq_concat ·ƒctx_14, ·∅xs, ·ƒv_4, ·ƒret_0
     # sm:HwABAAkAAQAJJAEACRgBAAkSAAIABgEOAQABAAEcABQABgEAAQABAAEGAQABBAAEAQ0JAAEACQIBAAkCAAoAGAEOAQ4AAgAKAQsEAAEABBoAFAAEAQQCDgAEAQgBDgAEAQsE
 
 
@@ -150,9 +150,9 @@ test 'seq literal with spread', fn:
     [1, ..a, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_0:
-      ·seq_prepend ·ƒctx_16, (i8 2), [], fn ·ƒctx_19, ·ƒv_3:
-        ·seq_concat ·ƒctx_19, ·∅a, ·ƒv_3, fn ·ƒctx_21, ·ƒv_6:
-          ·seq_prepend ·ƒctx_21, (i8 1), ·ƒv_6, ·ƒret_0
+      ·seq_prepend ·ƒctx_16, (i8 2), [], fn ·ƒctx_19, ·ƒv_5:
+        ·seq_concat ·ƒctx_19, ·∅a, ·ƒv_5, fn ·ƒctx_21, ·ƒv_7:
+          ·seq_prepend ·ƒctx_21, (i8 1), ·ƒv_7, ·ƒret_0
     # sm:LQABAAsAAQALJAEACxgBAAsSAAIABgESAQABAAEcABQABgEAAQABAAEGAQABBAAEARELAAEACwIBAAsCAAoAGAESAQ4AAgAKAQkDAAEAAxoAFAAEAQQBDAAEAQYBDgAKABgBCQMOAAIADgEFAQABAAEcABQABgEAAQABAAEGAQABBAAEAQYDDgAEAQUB
 
 test 'seq literal leading spread', fn:
@@ -160,8 +160,8 @@ test 'seq literal leading spread', fn:
     [..a, ..b]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
-      ·seq_concat ·ƒctx_11, ·∅b, [], fn ·ƒctx_14, ·ƒv_3:
-        ·seq_concat ·ƒctx_14, ·∅a, ·ƒv_3, ·ƒret_0
+      ·seq_concat ·ƒctx_11, ·∅b, [], fn ·ƒctx_14, ·ƒv_4:
+        ·seq_concat ·ƒctx_14, ·∅a, ·ƒv_4, ·ƒret_0
     # sm:HQABAAoAAQAKJAEAChgBAAoSAAIABgEMAwABAAMaABQABAEEAQwABAEPCgABAAoCAQAKAgAKABgBDAMOAAIACgEJAwABAAMaABQABAEEAQwABAEGAw4ABAEJAw
 
 test 'rec literal with spread', fn:

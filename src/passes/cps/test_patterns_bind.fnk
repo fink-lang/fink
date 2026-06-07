@@ -51,40 +51,46 @@ test 'simple guard', fn:
   expect cps_module ƒink:
     a > 0 = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_31, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_34, ·ƒret_1:
       ·letrec fn ·a_0:
         ·set ·a_0, ·∅foo, fn:
           ·fn
-            fn ·ƒctx_33, ·a_0: ·ƒret_1 ·ƒctx_33, ·a_0
+            fn ·ƒctx_36, ·a_0: ·ƒret_1 ·ƒctx_36, ·a_0
             fn ·ƒv_18:
               ·fn
-                fn ·ƒctx_35, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
-                  ·op_gt ·ƒctx_35, ·ƒv_3, (i8 0), fn ·ƒctx_37, ·ƒv_8:
+                fn ·ƒctx_38, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
+                  ·op_gt ·ƒctx_38, ·ƒv_3, (i8 0), fn ·ƒctx_40, ·ƒv_8:
                     ·if ·ƒv_8,
-                      fn: ·ƒsucc_4 ·ƒctx_37, ·ƒv_3
-                      fn: ·ƒfail_5 ·ƒctx_37
-                fn ·ƒv_16: ·ƒv_16 ·ƒctx_31, ·ƒv_18, ·panic, ·∅foo
-    # sm:VQABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsYAQABCgACAAoBAAsAAQALDAEAAQoABAEQAxAACAACAA4BDwsAAQALCAAYABgBAAEKAAQBAAsAAQALFAAUAAQBAAsKABgBAAsQAAIAFgEACwABAAsIACAAGAAYABgBAAsOAAIAHgEABQABAAUQABQABAEACw4ABgEIAQABAAEGAQABBAAKABgBBwUOAAIAIgEABQABAAUKAQAFDgACACoABAEACwABAAsWABQABAEACw4AKgAEAQALAAEACxYAFAAgAQALEAAEAQALAAEACxIAFAAEAQALEAAEAQALDgAEARAD
+                      fn: ·ƒsucc_4 ·ƒctx_40, ·ƒv_3
+                      fn: ·ƒfail_5 ·ƒctx_40
+                fn ·ƒv_16:
+                  ·fn
+                    fn ·ƒctx_43: ·panic ·ƒctx_43
+                    fn ·ƒv_21: ·ƒv_16 ·ƒctx_34, ·ƒv_18, ·ƒv_21, ·∅foo
+    # sm:YQABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsYAQABCgACAAoBAAsAAQALDAEAAQoABAEQAxAACAACAA4BDwsAAQALCAAYABgBAAEKAAQBAAsAAQALFAAUAAQBAAsKABgBAAsQAAIAFgEACwABAAsIACAAGAAYABgBAAsOAAIAHgEABQABAAUQABQABAEACw4ABgEIAQABAAEGAQABBAAKABgBBwUOAAIAIgEABQABAAUKAQAFDgACACoABAEACwABAAsWABQABAEACw4AKgAEAQALAAEACxYAFAAgAQALEAACAB4BAAsAAQALCAAoABQABAEACwABAAsQABQAKAEACxAABAEACwABAAsSABQABAEACxAABAEACxAABAEQAw
 
 
 test 'nested guard', fn:
   expect cps_module ƒink:
     a > 0 or a < 9 = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_35, ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_38, ·ƒret_1:
       ·letrec fn ·a_0:
         ·set ·a_0, ·∅foo, fn:
           ·fn
-            fn ·ƒctx_37, ·a_0: ·ƒret_1 ·ƒctx_37, ·a_0
+            fn ·ƒctx_40, ·a_0: ·ƒret_1 ·ƒctx_40, ·a_0
             fn ·ƒv_22:
               ·fn
-                fn ·ƒctx_39, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
-                  ·op_lt ·ƒctx_39, ·a_0, (i8 9), fn ·ƒctx_41, ·ƒv_8:
-                    ·op_or ·ƒctx_41, ·ƒv_3, ·ƒv_8, fn ·ƒctx_43, ·ƒv_11:
+                fn ·ƒctx_42, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
+                  ·op_lt ·ƒctx_42, ·a_0, (i8 9), fn ·ƒctx_44, ·ƒv_8:
+                    ·op_or ·ƒctx_44, ·ƒv_3, ·ƒv_8, fn ·ƒctx_46, ·ƒv_11:
                       ·if ·ƒv_11,
-                        fn: ·ƒsucc_4 ·ƒctx_43, ·ƒv_3
-                        fn: ·ƒfail_5 ·ƒctx_43
-                fn ·ƒv_20: ·ƒv_20 ·ƒctx_35, ·ƒv_22, ·panic, ·∅foo
-    # sm:YQABABQAAQAUJAEAFBgBABQSAAIABgEAFAABABQYAQABCgACAAoBABQAAQAUDAEAAQoABAEiAxAACAACAA4BIRQAAQAUCAAYABgBAAEKAAQBABQAAQAUFAAUAAQBABQKABgBABQQAAIAFgEAFAABABQIACAAGAAYABgBABQOAAIAHgESBQABAAUQABQABAEAAQoABgEIAQABAAEGAQABBAAKABgBBwUOAAIAIgERDgABAA4QABQABAEAFA4ABAESBQ4ACgAYAREOEAACACYBAA4AAQAOCgEADhAAAgAuAAQBABQAAQAUFgAUAAQBABQOAC4ABAEAFAABABQWABQAIAEAFBAABAEAFAABABQSABQABAEAFBAABAEAFA4ABAEiAw
+                        fn: ·ƒsucc_4 ·ƒctx_46, ·ƒv_3
+                        fn: ·ƒfail_5 ·ƒctx_46
+                fn ·ƒv_20:
+                  ·fn
+                    fn ·ƒctx_49: ·panic ·ƒctx_49
+                    fn ·ƒv_25: ·ƒv_20 ·ƒctx_38, ·ƒv_22, ·ƒv_25, ·∅foo
+    # sm:bQABABQAAQAUJAEAFBgBABQSAAIABgEAFAABABQYAQABCgACAAoBABQAAQAUDAEAAQoABAEiAxAACAACAA4BIRQAAQAUCAAYABgBAAEKAAQBABQAAQAUFAAUAAQBABQKABgBABQQAAIAFgEAFAABABQIACAAGAAYABgBABQOAAIAHgESBQABAAUQABQABAEAAQoABgEIAQABAAEGAQABBAAKABgBBwUOAAIAIgERDgABAA4QABQABAEAFA4ABAESBQ4ACgAYAREOEAACACYBAA4AAQAOCgEADhAAAgAuAAQBABQAAQAUFgAUAAQBABQOAC4ABAEAFAABABQWABQAIAEAFBAAAgAeAQAUAAEAFAgAKAAUAAQBABQAAQAUEAAUACgBABQQAAQBABQAAQAUEgAUAAQBABQQAAQBABQQAAQBIgM
 
 

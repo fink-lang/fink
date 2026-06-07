@@ -1,0 +1,57 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+test 'send to buffered channel and recv after', fn:
+  expect run ƒink:
+    {send, recv, channel} = import 'std/channels.fnk'
+
+    ch = channel 'testing'
+
+    send ch, 'foo'
+    send ch, 'bar'
+    send ch, 'spam'
+
+    '${[recv ch; recv ch; recv ch]}'
+  | equals ":
+    ['foo', 'bar', 'spam']
+
+
+
+test 'recv blocks until message is sent', fn:
+  expect run ƒink:
+    {spawn, await} = import 'std/tasks.fnk'
+    {send, recv, channel} = import 'std/channels.fnk'
+
+    ch = channel 'testing'
+
+    receiver = fn name: fn:
+      msg = recv ch
+      match msg:
+        [.., 'spam']:
+          msg
+        _:
+          send ch, [..msg, name]
+          msg
+
+
+    t1 = spawn receiver 'foo'
+    t2 = spawn receiver 'bar'
+    t3 = spawn receiver 'spam'
+
+    t4 = spawn fn:
+      send ch, ['ni']
+      't4-done'
+
+    t5 = spawn fn:
+      [
+        await t1
+        await t2
+        await t3
+        await t4
+      ]
+
+    '${await t5}'
+  | equals ":
+    [['ni'], ['ni', 'foo'], ['ni', 'foo', 'bar'], 't4-done']

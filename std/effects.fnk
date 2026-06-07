@@ -28,10 +28,16 @@ upd_ctx_for foo, fn {spam}:
 ---
 # TODO, do we even need an upd_ctx_for as public API?
 upd_ctx_for = fn ctx_id, update:
-  start_ctx = get_ctx_for ctx_id
-  updates = update start_ctx
   ctx = get_ctx_for ctx_id
-  set_ctx_for ctx_id, {..ctx, ..updates}
+
+  upd_rslt = update ctx
+
+  match upd_rslt:
+    [result, updates]:
+      set_ctx_for ctx_id, {..ctx, ..updates}
+      result
+    updates:
+      set_ctx_for ctx_id, {..ctx, ..updates}
 
 
 ---
@@ -59,8 +65,7 @@ unique = fn:
     {id: id + 1}
   # Wrap the counter so the identity is nominal (per mint) rather than a
   # bare int that could collide with a literal under structural equality.
-  # opaque id
-  id
+  opaque id
 
 upd_ctx_unique = init_ctx unique, {id: 0}
 
