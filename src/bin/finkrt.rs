@@ -47,6 +47,7 @@ fn main() {
     mappings: Vec::new(),
     marks: Vec::new(),
     id_to_url: std::collections::BTreeMap::new(),
+    module_sources: std::collections::BTreeMap::new(),
   };
   match fink::runner::wasmtime_runner::run(&opts, &wasm_bundle, cli_args, stdin, stdout, stderr) {
     Ok(exit_code) => process::exit(exit_code as i32),

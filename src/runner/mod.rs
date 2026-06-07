@@ -83,6 +83,7 @@ pub fn run_file(
       mappings: Vec::new(),
       marks: Vec::new(),
       id_to_url: std::collections::BTreeMap::new(),
+      module_sources: std::collections::BTreeMap::new(),
     };
     wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
   } else {
@@ -172,7 +173,28 @@ mod tests {
   /// Pure-value programs render as a single line (the value's textual
   /// representation), matching the existing test conventions.
   #[allow(unused)]
+  /// Default test runner: asserts on the program's return value only.
+  /// stdout/stderr are still captured internally (the host needs the
+  /// IO channels) but are NOT rendered into the result, so incidental
+  /// stream output (debug probes, a program that writes to stderr for
+  /// its own reasons) never pollutes the assertion. Use
+  /// `run_capture_io` for tests that deliberately assert on stream
+  /// output.
+  #[allow(unused)]
   fn run(src: &str) -> String {
+    run_inner(src, false)
+  }
+
+  /// IO-asserting test runner: appends `stdout == ":` / `stderr == ":`
+  /// blocks after the headline value, so tests can assert on captured
+  /// stream output. Used only by the IO tests (std/io.test.fnk,
+  /// test_linking.fnk).
+  #[allow(unused)]
+  fn run_capture_io(src: &str) -> String {
+    run_inner(src, true)
+  }
+
+  fn run_inner(src: &str, capture_io: bool) -> String {
     let io_capture: Arc<Mutex<IoCapture>> = Arc::new(Mutex::new(IoCapture::default()));
     let result = exec_ir_module(src, io_capture.clone());
 
@@ -180,8 +202,9 @@ mod tests {
     // success is rendered as Bool(false) by the runtime; module bodies
     // that end with a side-effect propagate that) are suppressed when
     // IO blocks follow — the test fixtures expect just the IO content
-    // when there's no meaningful return value.
-    let cap_has_io = {
+    // when there's no meaningful return value. Only relevant when
+    // rendering IO blocks.
+    let cap_has_io = capture_io && {
       let cap = io_capture.lock().unwrap();
       !cap.stdout.is_empty() || !cap.stderr.is_empty()
     };
@@ -220,6 +243,11 @@ mod tests {
         if looks_like_diag { s } else { format!("ERROR: {}", strip_wasm_offsets(&s)) }
       }
     };
+
+    // Default runner: return value only, ignore captured streams.
+    if !capture_io {
+      return headline;
+    }
 
     // If IO occurred, emit the multi-stream block format.
     let cap = io_capture.lock().unwrap();
@@ -320,6 +348,7 @@ mod tests {
       mappings,
       marks,
       id_to_url: pkg.id_to_url.clone(),
+      module_sources: pkg.module_sources.clone(),
     };
 
     let mut config = Config::new();
@@ -405,7 +434,11 @@ mod tests {
               // callback for cont_id=2 will capture main's actual result.
               *captured_clone.lock().unwrap() = None;
 
-              run_main_in_callback(&mut caller, main_clo)?;
+              // params[2] = the module body's post-init ctx (seeded
+              // effect slots). Apply `main` against it so effectful
+              // programs see the live universe.
+              let post_init_ctx = params[2].unwrap_anyref().copied();
+              run_main_in_callback(&mut caller, main_clo, post_init_ctx)?;
 
               Ok(())
             }).map_err(|e| e.to_string())?;
@@ -421,6 +454,13 @@ mod tests {
                 None => None,
               };
               cap.lock().unwrap().pending_resumes.push((resume_owned, ctx_owned));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_mono_ns" => {
+            let base = std::time::Instant::now();
+            linker.func_new("env", &name, ft, move |_caller, _params, results| {
+              results[0] = Val::I64(base.elapsed().as_nanos() as i64);
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
@@ -720,6 +760,7 @@ mod tests {
   fn run_main_in_callback(
     caller: &mut wasmtime::Caller<'_, ()>,
     main_clo: Rooted<AnyRef>,
+    ctx: Option<Rooted<AnyRef>>,
   ) -> Result<(), Error> {
     // Fn3 / ctx-aware pipeline: use wrap_host_cont_3 so done_cont's
     // adapter funcref is Fn3-typed; apply via apply_3 so the callee's
@@ -772,12 +813,15 @@ mod tests {
     }
     let main_args = acc;
 
-    // apply_3(main_args, ctx, main_clo). Placeholder ctx (i31 42) — same
-    // shape the per-module wrapper uses; once the substrate lands, the
-    // host-supplied ctx replaces this.
-    let ctx_arg = AnyRef::from_i31(&mut *caller, I31::wrapping_i32(42));
+    // apply_3(main_args, ctx, main_clo). Use the module body's post-init
+    // ctx (seeded effect slots) so effectful mains see the live
+    // universe; fall back to a placeholder i31 only if absent.
+    let ctx_arg = match ctx {
+      Some(c) => Val::AnyRef(Some(c)),
+      None => Val::AnyRef(Some(AnyRef::from_i31(&mut *caller, I31::wrapping_i32(42)))),
+    };
     apply_fn.call(&mut *caller,
-      &[main_args, Val::AnyRef(Some(ctx_arg)), Val::AnyRef(Some(main_clo))],
+      &[main_args, ctx_arg, Val::AnyRef(Some(main_clo))],
       &mut [])?;
     Ok(())
   }
@@ -802,6 +846,7 @@ mod tests {
     use super::*;
     test_macros::include_fink_tests!("std/effects.test.fnk", skip-ir);
     test_macros::include_fink_tests!("std/tasks.test.fnk", skip-ir);
+    test_macros::include_fink_tests!("std/channels.test.fnk", skip-ir);
     test_macros::include_fink_tests!("std/iter.test.fnk", skip-ir);
     test_macros::include_fink_tests!("std/io.test.fnk", skip-ir);
   }

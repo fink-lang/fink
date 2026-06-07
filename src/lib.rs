@@ -173,6 +173,7 @@ pub fn compile_package(
     mappings,
     marks,
     id_to_url: pkg.id_to_url,
+    module_sources: pkg.module_sources,
   })
 }
 

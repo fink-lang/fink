@@ -99,7 +99,7 @@
   ;; opaque externref the host originally handed to wrap_host_cont — JS
   ;; uses it directly (call it, look it up, whatever) to find the
   ;; callback. No wasm-side id table.
-  (import "env" "host_invoke_cont"  (func $host_invoke_cont  (param externref (ref null any))))
+  (import "env" "host_invoke_cont"  (func $host_invoke_cont  (param externref (ref null any) (ref null any))))
 
   ;; Host yields control to the userland scheduler when its queue is
   ;; empty. JS host stashes the `resume` closure (rooted) and calls
@@ -552,7 +552,7 @@
 
   (func $host_cont_adapter (type $Fn3)
     (param $caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $captures (ref $Captures))
@@ -564,7 +564,7 @@
         (ref.cast (ref $ExternBox)
           (array.get $Captures (local.get $captures) (i32.const 0)))))
 
-    (call $host_invoke_cont (local.get $handle) (local.get $args))
+    (call $host_invoke_cont (local.get $handle) (local.get $args) (local.get $ctx))
   )
 
   ;; Fn3-typed host cont — same wrap as the Rust interop. JS hosts use

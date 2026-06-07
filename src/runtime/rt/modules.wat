@@ -230,11 +230,14 @@
   ;; Internal: like `std/list.wat:apply_2_vals` but allows null
   ;; values. Substitutes `$Nil` for null since `$Cons.head` is
   ;; `(ref any)` (non-null). Used to fire the host-supplied cont at
-  ;; module-init completion. No ctx in scope (init_module is the
-  ;; universe entry point), so we mint an empty ctx for the cont.
+  ;; module-init completion. The caller threads the ctx the cont
+  ;; should see — for the entry module's wrapper-done cont this is the
+  ;; post-init ctx carrying the seeded effect slots, so the host can
+  ;; apply `main` against the live universe.
   (func $_apply_2_nullable
     (param $a (ref null any))
     (param $b (ref null any))
+    (param $ctx (ref null any))
     (param $cont (ref null any))
 
     (return_call $apply_3
@@ -243,7 +246,7 @@
         (call $list_prepend
           (call $_or_nil (local.get $b))
           (call $list_empty)))
-      (call $empty_ctx)
+      (local.get $ctx)
       (local.get $cont)))
 
   ;; If `v` is null, returns a sentinel non-null (an empty list as a
@@ -304,6 +307,7 @@
             (return_call $_apply_2_nullable
               (ref.null any)
               (local.get $exports)
+              (call $empty_ctx)
               (local.get $cont))))))
 
     ;; Not inited — ensure registry[mod_url] exists, then invoke the
@@ -339,7 +343,7 @@
 
   (func $_init_module_step (type $Fn3)
     (param $caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $cap_arr (ref $Captures))
@@ -362,9 +366,15 @@
         (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $mod_url))))
 
+    ;; Fire the host cont with the module body's post-init ctx, not a
+    ;; fresh empty one. The entry module's body seeds the universe's
+    ;; effect slots (unique/tasks/future/with) into ctx via top-level
+    ;; init_ctx side-effects; threading that ctx forward lets the host
+    ;; apply `main` against the seeded universe instead of empty_ctx.
     (return_call $_apply_2_nullable
       (local.get $last_expr)
       (local.get $exports)
+      (local.get $ctx)
       (local.get $user_cont)))
 
 

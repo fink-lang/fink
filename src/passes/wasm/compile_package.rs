@@ -84,9 +84,13 @@ pub fn compile_package(
 
   let mut compiled: BTreeMap<String, Fragment> = BTreeMap::new();
   let mut marks_by_module: BTreeMap<ModuleId, DebugMarks> = BTreeMap::new();
+  // Per-module source text, keyed by canonical URL. Retained so trap
+  // diagnostics can render the source line + caret for a failure inside
+  // any module, not just the entry.
+  let mut module_sources: BTreeMap<String, String> = BTreeMap::new();
 
   // Compile entry first.
-  let (entry_frag, entry_marks) = compile_one(
+  let (entry_frag, entry_marks, entry_src) = compile_one(
     &entry_canonical_url,
     entry_path,
     ModuleId(0),
@@ -95,6 +99,7 @@ pub fn compile_package(
   let entry_imports = entry_frag.module_imports.clone();
   compiled.insert(entry_canonical_url.clone(), entry_frag);
   marks_by_module.insert(ModuleId(0), entry_marks);
+  module_sources.insert(entry_canonical_url.clone(), entry_src);
   visited.insert(entry_canonical_url.clone());
 
   // Seed the queue with the entry's direct deps.
@@ -120,7 +125,7 @@ pub fn compile_package(
     let dep_id = *url_to_id.get(&dep_canonical_url)
       .expect("BFS-enqueued dep should have a ModuleId");
 
-    let (dep_frag, dep_marks) = compile_one(
+    let (dep_frag, dep_marks, dep_src) = compile_one(
       &dep_canonical_url,
       &dep_path,
       dep_id,
@@ -129,6 +134,7 @@ pub fn compile_package(
     let dep_imports = dep_frag.module_imports.clone();
     compiled.insert(dep_canonical_url.clone(), dep_frag);
     marks_by_module.insert(dep_id, dep_marks);
+    module_sources.insert(dep_canonical_url.clone(), dep_src);
 
     for raw_url in dep_imports.keys() {
       enqueue_dep(
@@ -171,6 +177,7 @@ pub fn compile_package(
     entry_canonical_url,
     marks_by_module,
     instr_to_module,
+    module_sources,
   })
 }
 
@@ -196,6 +203,10 @@ pub struct CompiledPackage {
   pub entry_canonical_url: String,
   pub marks_by_module: BTreeMap<ModuleId, DebugMarks>,
   pub instr_to_module: Vec<ModuleId>,
+  /// Source text of every compiled module, keyed by canonical URL. Lets
+  /// trap diagnostics render the source line + caret for a failure in any
+  /// module, not just the entry.
+  pub module_sources: BTreeMap<String, String>,
 }
 
 /// Compile one source file as a Fragment under the given canonical URL.
@@ -210,7 +221,7 @@ fn compile_one(
   disk_path: &Path,
   module_id: ModuleId,
   loader: &mut dyn SourceLoader,
-) -> Result<(Fragment, DebugMarks), String> {
+) -> Result<(Fragment, DebugMarks, String), String> {
   let source = loader.load(disk_path)?;
   let (lifted, desugared) = crate::to_lifted(&source, canonical_url)
     .map_err(|d| {
@@ -238,7 +249,7 @@ fn compile_one(
   for raw_url in lifted.result.module_imports.keys() {
     frag.module_imports.insert(raw_url.clone(), ModuleId(u32::MAX));
   }
-  Ok((frag, marks))
+  Ok((frag, marks, source))
 }
 
 /// Enqueue a dep for BFS — canonicalise its URL, allocate a ModuleId
@@ -325,6 +336,7 @@ pub fn finalize_marks(
 pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/effects.fnk",
   "std/tasks.fnk",
+  "std/channels.fnk",
   "std/io.fnk",
   "std/iter.fnk",
 ];

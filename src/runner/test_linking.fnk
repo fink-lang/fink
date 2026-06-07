@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, expect, equals, run, run_capture_io} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -61,7 +61,7 @@ test 'nested import minimal', fn:
 
 
 test 'multi module import', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
     {shrub} = import './test_modules/entry.fnk'
 
@@ -81,7 +81,7 @@ common.fnk must be linked exactly once; both left_val and right_val
 must see the same `base = 10`, and the program must actually execute.
 ---
 test 'diamond with two paths to same dep', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
     {total} = import './test_modules/diamond/entry.fnk'
 

@@ -258,7 +258,7 @@ export const init_wasm = async (bytes, host = {}) => {
     host_yield:        (_resume, _ctx) => {},
     host_write,
     host_read_sync:    (_fd, _size, _ptr) => 0,
-    host_invoke_cont:  (resolver, args) => resolver(args),
+    host_invoke_cont:  (resolver, args, _ctx) => resolver(args),
   };
 
   const { instance } = await WebAssembly.instantiate(bytes, { env });

@@ -68,6 +68,8 @@
   (import "rt/apply.wat" "get_ctx"
     (func $get_ctx (result (ref any))))
 
+  (import "std/int.wat"     "_box_i64"
+    (func $_box_i64 (param $v i64) (result (ref $I64))))
   (import "std/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
   (import "std/dict.wat"    "get_any"
@@ -79,7 +81,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -94,7 +96,7 @@
   ;; Host-side callback dispatch: invoke the Rust-registered callback
   ;; for `id` with the given args list. See `$host_cont_adapter` and
   ;; `wrap_host_cont` for how WASM-side callable refs into this.
-  (import "env" "host_invoke_cont" (func $host_invoke_cont (param i32 (ref null any))))
+  (import "env" "host_invoke_cont" (func $host_invoke_cont (param i32 (ref null any) (ref null any))))
 
   ;; Host yields control to the userland scheduler when its queue is
   ;; empty. The host stores the `resume` closure and decides when to
@@ -117,6 +119,12 @@
     (param $fd (ref null any))
     (param $size (ref null any))
     (result (ref $ByteArray))))
+
+  ;; Monotonic clock: nanoseconds since an arbitrary host epoch. For
+  ;; elapsed-time measurement only (not wall-clock); fink computes
+  ;; deltas. Impure -- exposed as a debug/perf primitive, not a pure
+  ;; value.
+  (import "env" "host_mono_ns" (func $host_mono_ns (result i64)))
 
 
   ;; Host-callable entry point: fire a previously-yielded resume
@@ -274,6 +282,41 @@
     (global.get $io_read_closure))
 
 
+  ;; -- monotonic clock -------------------------------------------------
+  ;;
+  ;; args = [k_caller]. Calls host_mono_ns, boxes the i64 as $I64,
+  ;; tail-calls k_caller with it. The `_` placeholder arg is ignored.
+  (elem declare func $interop_now_apply)
+
+  (func $interop_now_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $ns (ref $I64))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $ns (call $_box_i64 (call $host_mono_ns)))
+
+    (local.set $k_args
+      (call $args_prepend (local.get $ns) (call $args_empty)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $interop_now_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $interop_now_apply)
+      (ref.null $Captures)))
+
+  (func $interop_now (@pub) (@impl "interop.fnk:now")
+    (result (ref any))
+    (global.get $interop_now_closure))
+
+
   ;; -- Host callable (inbound contract) --------------------------------------
   ;;
   ;; The host cannot hand WASM a raw funcref and have it pass as a
@@ -296,11 +339,12 @@
   ;; $Fn3 / funcref directly. Internals are interop's business.
 
   ;; $Fn3 adapter body — fires when WASM invokes a host-wrapped cont
-  ;; via the ctx-aware `apply_3` dispatcher. The host cont doesn't
-  ;; participate in the substrate, so $ctx is ignored.
+  ;; via the ctx-aware `apply_3` dispatcher. Forwards the threaded ctx
+  ;; to the host so the entry's wrapper-done cont can apply `main`
+  ;; against the post-init universe (the seeded effect slots).
   (func $host_cont_adapter_3 (type $Fn3)
     (param $caps (ref null any))
-    (param $_ctx (ref null any))
+    (param $ctx (ref null any))
     (param $args (ref null any))
 
     (local $captures (ref $Captures))
@@ -313,7 +357,8 @@
 
     (call $host_invoke_cont
       (i31.get_s (local.get $id_box))
-      (local.get $args))
+      (local.get $args)
+      (local.get $ctx))
   )
 
   ;; Fn3 variant — used by the ctx-aware pipeline (the only one now).

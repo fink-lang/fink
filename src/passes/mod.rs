@@ -117,6 +117,11 @@ pub struct Wasm {
   /// the mark belongs to (entry-relative `./helper.fnk`, virtual
   /// `std/io.fnk`, etc.). Empty for non-package compiles.
   pub id_to_url: std::collections::BTreeMap<wasm::ir::ModuleId, String>,
+  /// Source text of every compiled module, keyed by canonical URL. Lets
+  /// `trap::diagnose` + the source provider render the source line + caret
+  /// for a failure inside any module, not just the entry. Empty for
+  /// non-package compiles.
+  pub module_sources: std::collections::BTreeMap<String, String>,
 }
 
 /// Emit WAT text from a WASM binary.

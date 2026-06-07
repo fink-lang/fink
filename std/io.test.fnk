@@ -1,10 +1,10 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, expect, equals, run_capture_io} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 
 test 'stdout single message no main', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
 
     write stdout, 'hello'
@@ -15,7 +15,7 @@ test 'stdout single message no main', fn:
 
 
 test 'stdout single message', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
 
     main = fn:
@@ -28,7 +28,7 @@ test 'stdout single message', fn:
 
 
 test 'stdout multiple messages', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
 
     main = fn:
@@ -42,7 +42,7 @@ test 'stdout multiple messages', fn:
 
 
 test 'stderr output', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stderr, write} = import 'std/io.fnk'
 
     main = fn:
@@ -55,7 +55,7 @@ test 'stderr output', fn:
 
 
 test 'stdout and stderr', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, stderr, write} = import 'std/io.fnk'
 
     main = fn:
@@ -71,7 +71,7 @@ test 'stdout and stderr', fn:
 
 
 test 'write returns the stream (chaining)', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
 
     main = fn:
@@ -86,7 +86,7 @@ test 'write returns the stream (chaining)', fn:
 
 
 test 'read from stdin', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdin, stdout, read, write} = import 'std/io.fnk'
 
     main = fn:
@@ -100,7 +100,7 @@ test 'read from stdin', fn:
 
 
 test 'cli args printed via stdout', fn:
-  expect run ƒink:
+  expect run_capture_io ƒink:
     {stdout, write} = import 'std/io.fnk'
 
     main = fn ..args:

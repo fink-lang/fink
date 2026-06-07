@@ -130,6 +130,7 @@ impl<L: SourceLoader> StdlibLoader<L> {
 const STDLIB_EMBED: &[(&str, &str)] = &[
   ("/std/effects.fnk", include_str!("../../../std/effects.fnk")),
   ("/std/tasks.fnk",   include_str!("../../../std/tasks.fnk")),
+  ("/std/channels.fnk", include_str!("../../../std/channels.fnk")),
   ("/std/io.fnk",      include_str!("../../../std/io.fnk")),
 ];
 
