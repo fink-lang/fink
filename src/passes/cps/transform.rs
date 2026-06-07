@@ -894,12 +894,19 @@ fn lower_member(
 // Sequence literal: `[a, b, ..c]`
 // ---------------------------------------------------------------------------
 
-// Build right-to-left: SeqPrepend(1, SeqPrepend(2, SeqPrepend(3, []))) — O(1) cons each.
-// Spreads use SeqConcat(spread, acc) — prepend spread list onto accumulator.
+// Evaluation order is observable through side effects, so element
+// expressions MUST be evaluated left-to-right (source order). The
+// cons-list is built right-to-left (SeqPrepend(1, SeqPrepend(2, ...)) —
+// O(1) cons each), but build order is decoupled from eval order: first
+// lower every element forward (emitting their evaluations in source
+// order), then fold the already-evaluated value refs in reverse.
+// Spreads use SeqConcat(spread, acc) — prepend spread list onto acc.
 fn lower_lit_seq(g: &mut Gen, elems: &[AstId], origin: Option<AstId>) -> Lower {
-  let mut acc = lit_val(g, Lit::Seq, origin);
   let mut pending: Vec<Pending> = vec![];
-  for &elem in elems.iter().rev() {
+
+  // Pass 1: evaluate elements left-to-right, collecting their value refs.
+  let mut evaluated: Vec<(Val, bool, AstId)> = Vec::with_capacity(elems.len());
+  for &elem in elems.iter() {
     let elem_kind = g.node(elem).kind.clone();
     let is_spread = matches!(elem_kind, NodeKind::Spread { .. });
     let inner = if is_spread {
@@ -909,6 +916,12 @@ fn lower_lit_seq(g: &mut Gen, elems: &[AstId], origin: Option<AstId>) -> Lower {
     };
     let (ev, ep) = lower(g, inner);
     pending.extend(ep);
+    evaluated.push((ev, is_spread, elem));
+  }
+
+  // Pass 2: build the cons-list right-to-left over the evaluated refs.
+  let mut acc = lit_val(g, Lit::Seq, origin);
+  for (ev, is_spread, elem) in evaluated.into_iter().rev() {
     let (op, args) = if is_spread {
       // SeqConcat(spread, acc) — prepend spread onto accumulator
       (BuiltIn::SeqConcat, args_val(vec![ev, acc]))
@@ -1476,6 +1489,25 @@ fn wrap_with_fail(
       Some(id) => g.val(ValKind::ContRef(id), origin),
     }
   };
+  // Build the failure *call*. For an irrefutable bind (`fail_id: None`) this
+  // emits `App { func: Callable::BuiltIn(Panic) }` directly, so wasm lowering
+  // tags the panic call with the destructure's source id (lower.rs Panic arm).
+  // Routing the panic through a `Callable::Val` instead would tail-call into
+  // the runtime `$panic` helper, whose frame is all that survives TCO -- it
+  // carries no source mark, so the trap location falls back to entry line 1.
+  // For an arm matcher (`fail_id: Some`) the fail is a cont call, unchanged.
+  let make_fail_call = |g: &mut Gen, origin: Option<AstId>| -> Expr {
+    match fail_id {
+      None => g.expr(ExprKind::App {
+        func: Callable::BuiltIn(BuiltIn::Panic(PanicReason::IrrefutablePattern)),
+        args: vec![],
+      }, origin),
+      Some(id) => {
+        let cont_ref = g.val(ValKind::ContRef(id), origin);
+        g.expr(ExprKind::App { func: Callable::Val(cont_ref), args: vec![] }, origin)
+      }
+    }
+  };
   let acc = bindings.into_iter().rev().fold(Acc::Tail(tail), |acc, pending| {
     let cont: Cont = match acc {
       Acc::Tail(cont) => cont,
@@ -1528,13 +1560,8 @@ fn wrap_with_fail(
       Pending::MatchGuard { func, args, origin } => {
         // Guard check: call func(args...) → if result then cont else fail.
         // Inlined as plain App + If (no dedicated guard builtin).
-        let fail_val = make_fail_val(g, origin);
-
-        // Build: fail()
-        let fail_call = g.expr(ExprKind::App {
-          func: Callable::Val(fail_val),
-          args: vec![],
-        }, origin);
+        // Build: fail()  (panic builtin for irrefutable binds, cont call for arms)
+        let fail_call = make_fail_call(g, origin);
 
         // Build: <cont body> — inline the continuation as the then-branch.
         // The fold may attach a fresh_result param that MatchGuard doesn't use;
@@ -1574,16 +1601,48 @@ fn wrap_with_fail(
         let body_name = g.fresh_result(origin);
         let body_ref = g.val(ValKind::Ref(Ref::Synth(body_name.id)), origin);
         let matcher_ref = g.val(ValKind::Ref(Ref::Synth(matcher_name.id)), origin);
-        let fail_val = make_fail_val(g, origin);
 
-        // Build: matcher(body, panic, subject) — conts first
+        // The matcher receives `fail` as a value param and applies it as
+        // `fail()` on mismatch. For an irrefutable bind we wrap the panic in a
+        // zero-arg fail thunk whose body is `App { Callable::BuiltIn(Panic) }`,
+        // so the panic surfaces at a source-marked call site. Passing the bare
+        // Panic value instead would have the matcher tail-call into the runtime
+        // `$panic` helper, whose frame (all that survives TCO) carries no mark
+        // -- collapsing the trap location to entry line 1. `fail_id: Some`
+        // keeps the existing cont-ref value (arm matchers chain their fail).
+        let fail_thunk_name = g.fresh_result(origin);
+        let fail_arg: Val = match fail_id {
+          Some(_) => make_fail_val(g, origin),
+          None => g.val(ValKind::Ref(Ref::Synth(fail_thunk_name.id)), origin),
+        };
+
+        // Build: matcher(body, fail, subject) — conts first
         let call = g.expr(
           ExprKind::App {
             func: Callable::Val(matcher_ref),
-            args: vec![Arg::Val(body_ref), Arg::Val(fail_val), Arg::Val(subject)],
+            args: vec![Arg::Val(body_ref), Arg::Val(fail_arg), Arg::Val(subject)],
           },
           origin,
         );
+
+        // For irrefutable binds, wrap the matcher call in a LetFn defining the
+        // fail thunk: `LetFn fail_thunk() = panic(); <call>`.
+        let call = match fail_id {
+          Some(_) => call,
+          None => {
+            let panic_body = make_fail_call(g, origin);
+            g.expr(
+              ExprKind::LetFn {
+                name: fail_thunk_name,
+                params: vec![],
+                fn_kind: CpsFnKind::CpsClosure,
+                fn_body: Box::new(panic_body),
+                cont: Cont::Expr { args: vec![], body: Box::new(call) },
+              },
+              origin,
+            )
+          }
+        };
 
         // Build: LetFn matcher = fn(succ, fail, subj): matcher_body; <call>
         let with_matcher = g.expr(
