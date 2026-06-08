@@ -1,0 +1,13 @@
+{test, equals, test_all} = import 'std/testing.fnk'
+
+import './iter.test.fnk'
+import './tasks.test.fnk'
+import './channels.test.fnk'
+import './effects.test.fnk'
+import './io.test.fnk'
+
+
+
+main = fn ..args:
+ test_all _
+

@@ -1,0 +1,87 @@
+
+{write, stderr} = import 'std/io.fnk'
+{suspend, unique, init_ctx} = import 'std/effects.fnk'
+
+
+test = fn name, body:
+  test_case = {name, body}
+  add_test test_case
+
+upd_tests = init_ctx test, {tests: [], curr: {}}
+
+
+upd_curr_test = fn upd_fn:
+  upd_tests fn {curr: test_case}:
+    [r, upd] = upd_fn test_case
+    [r, {curr: {..test_case, ..upd}}]
+
+
+set_curr_test = fn test_case:
+  upd_tests fn ctx:
+    [test_case, {curr: test_case}]
+
+
+add_test = fn test_case:
+  upd_tests fn {tests}:
+    [test_case, {tests: [..tests, test_case]}]
+
+
+run_test = fn test_case:
+  set_curr_test test_case
+
+  run_result = suspend fn resume:
+    {name, body} = upd_curr_test fn {name, body}:
+      [{name, body}, {abort: resume}]
+
+    write stderr, '${name} ... '
+
+    body _
+
+    resume {success: true}
+
+  match run_result:
+    {failure}:
+      write stderr, 'FAIL\n  ${failure}\n\n'
+      false
+    _:
+      write stderr, 'SUCCESS\n'
+      true
+
+
+fail = fn failure:
+  abort = upd_curr_test fn {abort}:
+    [abort, {result: {failure}}]
+
+  abort {failure}
+
+
+
+run_tests = fn tests, fail_cnt:
+  match tests:
+    []: fail_cnt
+    [test, ..rest]:
+      succ = run_test test
+
+      cnt = match succ:
+        true: fail_cnt
+        false: fail_cnt + 1
+
+      run_tests rest, cnt
+
+
+
+test_all = fn:
+  tests = upd_tests fn {tests}:
+    [tests, {tests: []}]
+
+  run_tests tests, 0
+
+
+
+equals = fn actual, expected:
+  match actual == expected:
+    true: true
+    false: fail '${actual}\n  !=\n  ${expected}'
+
+
+

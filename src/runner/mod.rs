@@ -842,14 +842,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_math.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
-  mod stdlib {
-    use super::*;
-    test_macros::include_fink_tests!("std/effects.test.fnk", skip-ir);
-    test_macros::include_fink_tests!("std/tasks.test.fnk", skip-ir);
-    test_macros::include_fink_tests!("std/channels.test.fnk", skip-ir);
-    test_macros::include_fink_tests!("std/iter.test.fnk", skip-ir);
-    test_macros::include_fink_tests!("std/io.test.fnk", skip-ir);
-  }
 }
 
 /// End-to-end tests for `run_source` — exercise `wasmtime_runner::run`
@@ -898,6 +890,39 @@ mod cli_runner_tests {
     assert_eq!(exit, 42);
     assert_eq!(out, "");
     assert_eq!(err, "");
+  }
+
+  /// Runs the fink-native test suite (`std/all.test.fnk`) through the
+  /// real file-based runner during `cargo test`. `test_all` returns a
+  /// non-zero exit code when any fink test fails, so this gates the
+  /// whole fink-native suite on `cargo test`. On failure, the captured
+  /// stderr (each test's SUCCESS/FAIL + diff) is surfaced in the panic.
+  #[test]
+  fn fink_native_test_suite_runs() {
+    use super::IoReadStream;
+
+    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stdout: IoStream = stdout_buf.clone();
+    let stderr: IoStream = stderr_buf.clone();
+
+    let exit = super::run_file(
+      RunOptions::default(),
+      "std/all.test.fnk",
+      vec![],
+      stdin,
+      stdout,
+      stderr,
+    ).expect("run std/all.test.fnk");
+
+    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
+    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
+    assert_eq!(
+      exit, 0,
+      "fink-native test suite reported failures (exit {exit})\n\
+       --- stdout ---\n{out}\n--- stderr ---\n{err}",
+    );
   }
 
 }

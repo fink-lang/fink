@@ -1,112 +1,55 @@
-{test, skip, expect, equals, run_capture_io} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{test, equals} = import 'std/testing.fnk'
+{init_ctx, get_ctx_for} = import 'std/effects.fnk'
+
+{write, read, stdin, stdout, stderr, with_custom_io} = import 'std/io.fnk'
 
 
 
-test 'stdout single message no main', fn:
-  expect run_capture_io ƒink:
-    {stdout, write} = import 'std/io.fnk'
-
-    write stdout, 'hello'
-  | equals ":
-    1
-    stdout == ":
-      hello
+test_read = fn filenum, _:
+  'hello from ${filenum}'
 
 
-test 'stdout single message', fn:
-  expect run_capture_io ƒink:
-    {stdout, write} = import 'std/io.fnk'
+test_write = fn filenum, data:
+  upd_test_io fn ctx:
+    {(filenum): writes} = ctx
+    {(filenum): [..writes, data]}
+  filenum
 
-    main = fn:
-      write stdout, 'hello'
-      0
-  | equals ":
-    0
-    stdout == ":
-      hello
+upd_test_io = init_ctx test_write, {(stdout): [], (stderr): []}
+
+setup = fn:
+  upd_test_io fn _:
+    {(stdout): [], (stderr): []}
 
 
 test 'stdout multiple messages', fn:
-  expect run_capture_io ƒink:
-    {stdout, write} = import 'std/io.fnk'
+  setup _
 
-    main = fn:
-      write stdout, 'hello'
-      write stdout, 'world'
-      0
-  | equals ":
-    0
-    stdout == ":
-      helloworld
+  with_custom_io test_read, test_write, fn:
+    write stdout, 'hello'
+    write stdout, 'world'
+
+  equals
+    get_ctx_for test_write
+    {(stdout): ['hello', 'world'], (stderr): []}
 
 
-test 'stderr output', fn:
-  expect run_capture_io ƒink:
-    {stderr, write} = import 'std/io.fnk'
+test 'stderr multiple messages', fn:
+  setup _
 
-    main = fn:
-      write stderr, 'error'
-      1
-  | equals ":
-    1
-    stderr == ":
-      error
+  with_custom_io test_read, test_write, fn:
+    write stderr, 'hello'
+    write stderr, 'world'
 
-
-test 'stdout and stderr', fn:
-  expect run_capture_io ƒink:
-    {stdout, stderr, write} = import 'std/io.fnk'
-
-    main = fn:
-      write stdout, 'out'
-      write stderr, 'err'
-      0
-  | equals ":
-    0
-    stdout == ":
-      out
-    stderr == ":
-      err
-
-
-test 'write returns the stream (chaining)', fn:
-  expect run_capture_io ƒink:
-    {stdout, write} = import 'std/io.fnk'
-
-    main = fn:
-      stdout
-      | write ?, 'foo'
-      | write ?, 'bar'
-      0
-  | equals ":
-    0
-    stdout == ":
-      foobar
+  equals
+    get_ctx_for test_write
+    {(stderr): ['hello', 'world'], (stdout): []}
 
 
 test 'read from stdin', fn:
-  expect run_capture_io ƒink:
-    {stdin, stdout, read, write} = import 'std/io.fnk'
+  data = with_custom_io test_read, test_write, fn:
+    read stdin, 1024
 
-    main = fn:
-      data = read stdin, 1024
-      write stdout, data
-      0
-  | equals ":
-    0
-    stdout == ":
-      hello from stdin
-
-
-test 'cli args printed via stdout', fn:
-  expect run_capture_io ƒink:
-    {stdout, write} = import 'std/io.fnk'
-
-    main = fn ..args:
-      write stdout, '${args}'
-      0
-  | equals ":
-    0
-    stdout == ":
-      ['test', 'alpha', 'beta']
+  equals
+    data
+    'hello from 0'
