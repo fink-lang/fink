@@ -202,10 +202,11 @@ async fn apply_main_dap(
   caller: &mut wasmtime::Caller<'_, DebugState>,
   main_clo: wasmtime::Rooted<wasmtime::AnyRef>,
   argv: &[Vec<u8>],
+  ctx: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> Result<(), wasmtime::Error> {
-  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with an empty ctx minted
-  // by the wasm-side `env:empty_ctx` — same shape as the per-module
-  // wrapper's entry call.
+  // Fn3 pipeline: wrap_host_cont_3 + apply_3 with the module body's
+  // post-init ctx (seeded effect slots); falls back to empty_ctx only
+  // if the host received none.
   let wrap_host_cont = caller.get_export("wrap_host_cont_3")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no wrap_host_cont_3 export"))?;
@@ -261,11 +262,17 @@ async fn apply_main_dap(
     acc = next[0];
   }
 
-  let mut ctx_out = [wasmtime::Val::AnyRef(None)];
-  empty_ctx_fn.call_async(&mut *caller, &[], &mut ctx_out).await?;
+  let ctx_val = match ctx {
+    Some(c) => wasmtime::Val::AnyRef(Some(c)),
+    None => {
+      let mut ctx_out = [wasmtime::Val::AnyRef(None)];
+      empty_ctx_fn.call_async(&mut *caller, &[], &mut ctx_out).await?;
+      ctx_out[0]
+    }
+  };
   apply_fn
     .call_async(&mut *caller,
-      &[acc, ctx_out[0], wasmtime::Val::AnyRef(Some(main_clo))],
+      &[acc, ctx_val, wasmtime::Val::AnyRef(Some(main_clo))],
       &mut [])
     .await?;
   Ok(())
@@ -610,7 +617,11 @@ pub fn run<R: Read, W: Write + Send + 'static>(
               };
 
               *exit.lock().unwrap() = 0;
-              apply_main_dap(&mut caller, main_clo, &argv).await?;
+              // params[2] = the module body's post-init ctx (seeded
+              // effect slots, e.g. std/io.fnk's provider). Apply main
+              // against it so effectful programs see the live universe.
+              let post_init_ctx = params[2].unwrap_anyref().copied();
+              apply_main_dap(&mut caller, main_clo, &argv, post_init_ctx).await?;
               Ok(())
             })
           }).map_err(|e| e.to_string())?;

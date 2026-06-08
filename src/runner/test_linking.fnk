@@ -119,3 +119,18 @@ test 'ctx threads through import', fn:
     get_ctx_for foobar
   | equals ":
     foo -> bar
+
+
+# Bare side-effecting import: `import 'url'` with no `{..} =` destructure
+# must still compile + run the imported module's body (for its side
+# effects). Same as above but the appender is imported for effect only.
+test 'bare import runs module body', fn:
+  expect run ƒink:
+    {set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
+    {foobar} = import './test_modules/ctx_common.fnk'
+
+    set_ctx_for foobar, 'foo'
+    import './test_modules/ctx_appender.fnk'
+    get_ctx_for foobar
+  | equals ":
+    foo -> bar

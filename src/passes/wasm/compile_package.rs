@@ -337,6 +337,7 @@ pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/effects.fnk",
   "std/tasks.fnk",
   "std/channels.fnk",
+  "std/testing.fnk",
   "std/io.fnk",
   "std/iter.fnk",
 ];

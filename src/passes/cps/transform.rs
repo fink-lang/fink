@@ -1809,15 +1809,36 @@ fn parse_decimal_lit(s: &str) -> Lit {
 // ---------------------------------------------------------------------------
 
 /// Lower a top-level block of statements (module body).
+/// Extract the URL string from an `import 'url'` Apply node, if `node_id`
+/// is exactly that shape. Returns None otherwise.
+fn import_call_url(ast: &Ast<'_>, node_id: AstId) -> Option<String> {
+  use crate::passes::ast::NodeKind;
+  let NodeKind::Apply { func, args } = &ast.nodes.get(node_id).kind else { return None };
+  let NodeKind::Ident("import") = &ast.nodes.get(*func).kind else { return None };
+  args.items.iter().find_map(|&a| {
+    if let NodeKind::LitStr { content, .. } = &ast.nodes.get(a).kind { Some(content.clone()) } else { None }
+  })
+}
+
 /// Collect module-scope import declarations: url → [name, ...].
 ///
-/// Matches the pattern `{foo, bar} = import './url'` at module scope.
-/// Reads names directly from the AST LHS before CPS lowering, so the result
-/// is stable even after lifting scatters the rec_pop chain into separate fns.
+/// Matches `{foo, bar} = import './url'` (value import, names harvested
+/// from the rec LHS) and bare `import './url'` statements (side-effect-only
+/// import, empty name list — the module body still runs). Reads names
+/// directly from the AST before CPS lowering, so the result is stable even
+/// after lifting scatters the rec_pop chain into separate fns.
 fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::BTreeMap<String, Vec<String>> {
   use crate::passes::ast::NodeKind;
   let mut result: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
   for &expr_id in exprs {
+    // Bare side-effecting import: `import './url'` as a statement (no
+    // binding). Register the url so the package BFS compiles the module;
+    // empty names, since nothing is destructured. User-fragment lowering
+    // ignores the name list, so this is sufficient to run the body.
+    if let Some(url) = import_call_url(ast, expr_id) {
+      result.entry(url).or_default();
+      continue;
+    }
     let NodeKind::Bind { lhs, rhs, .. } = &ast.nodes.get(expr_id).kind else { continue };
     let lhs = *lhs;
     let rhs = *rhs;

@@ -1,50 +1,43 @@
-{test, skip, expect, equals, run} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{test, equals} = import 'std/testing.fnk'
+
+{init_ctx, get_ctx_for, unique} = import 'std/effects.fnk'
+{spawn, pause, with_tasks, await} = import 'std/tasks.fnk'
 
 
 test 'spawning', fn:
-  expect run ƒink:
-    {init_ctx, get_ctx_for, unique} = import 'std/effects.fnk'
-    {spawn, pause, with_tasks} = import 'std/tasks.fnk'
+  testing = unique _
 
-    testing = unique _
+  upd_ctx_testing = init_ctx testing, {foo: 'start'}
 
-    upd_ctx_testing = init_ctx testing, {foo: 'start'}
+  pause_with_update = fn msg:
+    pause msg
+    upd_ctx_testing fn {foo}:
+      {foo: '${foo} -> ${msg}'}
 
-    pause_with_update = fn msg:
-      pause msg
-      upd_ctx_testing fn {foo}:
-        {foo: '${foo} -> ${msg}'}
+  with_tasks fn:
+    spawn fn:
+      pause_with_update 'A1'
+      pause_with_update 'A2'
+      pause_with_update 'A3'
+      'A-done'
 
-    with_tasks fn:
-      spawn fn:
-        pause_with_update 'A1'
-        pause_with_update 'A2'
-        pause_with_update 'A3'
-        'A-done'
+    spawn fn:
+      pause_with_update 'B1'
+      pause_with_update 'B1'
+      'B-done'
 
-      spawn fn:
-        pause_with_update 'B1'
-        pause_with_update 'B1'
-        'B-done'
+  {foo} = get_ctx_for testing
 
-    {foo} = get_ctx_for testing
-    foo
-
-  | equals ":
+  equals foo, ":
     start -> A1 -> B1 -> A2 -> B1 -> A3
 
 
+
 test 'awaiting future', fn:
-  expect run ƒink:
-    {spawn, pause, with_tasks, await} = import 'std/tasks.fnk'
-
-    with_tasks fn:
-      fut = spawn fn:
-        pause 'A pause'
-        42
-
-      await fut
-
-  | equals ƒink:
+  fut = spawn fn:
+    pause 'A pause'
     42
+
+  rslt = await fut
+
+  equals rslt, 42
