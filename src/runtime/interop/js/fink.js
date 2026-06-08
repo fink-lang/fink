@@ -155,7 +155,7 @@ const make_args_from_js = (exports, {to_fink}) => (jsArgs) =>
 // Callable Proxy over a fink $Closure. Apply trap marshals JS args,
 // prepends a host-cont, and tail-calls the runtime's apply. The cont
 // resolves a Promise on completion.
-const make_fn_proxy = (exports, {wrap, args_from_js}) => (ref) => {
+const make_fn_proxy = (exports, {wrap, args_from_js, ctx_state}) => (ref) => {
   const target = () => {};
   target[FINK_REF] = ref;
   return new Proxy(target, {
@@ -170,7 +170,12 @@ const make_fn_proxy = (exports, {wrap, args_from_js}) => (ref) => {
         const cont = (result) => resolve(wrap(exports.list_head(result)));
         const cont_ref = exports.wrap_host_cont_3(cont);
         const fink_args = exports.args_prepend(cont_ref, args_from_js(args));
-        exports.apply_3(fink_args, exports.empty_ctx(), ref);
+        // Apply against the universe ctx captured at import time (carries
+        // seeded effect slots, e.g. std/io.fnk's provider) so effectful
+        // fink fns called from JS see the live universe. Falls back to a
+        // fresh empty ctx if nothing has been imported yet.
+        const ctx = ctx_state.current ?? exports.empty_ctx();
+        exports.apply_3(fink_args, ctx, ref);
       });
     },
   });
@@ -205,9 +210,12 @@ const make_wrap = (exports, deps) => (ref) => {
 // last_expr and the full exports rec (CPS args order: head =
 // last_expr, tail.head = exports). Hosts that want a named export do
 // their own rec_get against the exports rec.
-const make_import = (exports, {wrap}) => (name) =>
+const make_import = (exports, {wrap, ctx_state}) => (name) =>
   new Promise((resolve, _reject) => {
-    const cont = (args) => {
+    const cont = (args, ctx) => {
+      // Capture the module body's post-init ctx (seeded effect slots)
+      // so later fn-proxy calls run against the live universe.
+      if (ctx != null) ctx_state.current = ctx;
       const last_expr = exports.list_head(args);
       const tail      = exports.list_tail(args);
       const rec       = exports.list_head(tail);
@@ -258,7 +266,7 @@ export const init_wasm = async (bytes, host = {}) => {
     host_yield:        (_resume, _ctx) => {},
     host_write,
     host_read_sync:    (_fd, _size, _ptr) => 0,
-    host_invoke_cont:  (resolver, args, _ctx) => resolver(args),
+    host_invoke_cont:  (resolver, args, ctx) => resolver(args, ctx),
   };
 
   const { instance } = await WebAssembly.instantiate(bytes, { env });
@@ -270,6 +278,10 @@ export const init_wasm = async (bytes, host = {}) => {
   // create a single `deps` object and fill it in topological order
   // — `wrap` reads through `deps.*` at call time, not at build time.
   const deps = {};
+  // Holds the universe ctx captured at import time (seeded effect
+  // slots); fn-proxy applies read it so effectful fink fns called from
+  // JS see the live universe. Null until the first import.
+  deps.ctx_state    = { current: null };
   deps.type_of      = make_type_of(exports);
   deps.fink_bytes   = make_fink_bytes(exports, scratch);
   deps.str_from_js  = make_str_from_js(exports, scratch);
