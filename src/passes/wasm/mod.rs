@@ -306,6 +306,22 @@ mod tests {
   /// helpers (args_empty + args_prepend) to construct. That full
   /// execution handshake is exercised by emit_executes_42 below.
   #[cfg(feature = "run")]
+  /// A user-function call site emits a `trace_push` recording the
+  /// call-site `(module_id, cps_id)` into the trace buffer, before the
+  /// `apply_3` dispatch. Builtin/runtime calls do NOT push.
+  #[test]
+  fn user_call_emits_trace_push() {
+    let out = wat("\
+add = fn a, b:
+  a + b
+add 3, 4
+");
+    assert!(
+      out.contains("rt/trace.wat:trace_push"),
+      "user-fn call should emit a trace_push at the call site; got:\n{out}"
+    );
+  }
+
   #[test]
   fn emit_instantiates_in_wasmtime() {
     use wasmtime::{Config, Engine, Module, Store, Linker, Error, ExternType};

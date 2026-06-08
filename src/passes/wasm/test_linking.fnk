@@ -28,6 +28,7 @@ test 'multi module import', fn:
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_28) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_114) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 31))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $shrub_0))
       )
       (func $./test.fnk::v_81 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -118,6 +119,7 @@ test 'multi module import', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_5) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_38) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_35) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 40))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_24))
       )
       (func $./test.fnk::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -158,6 +160,7 @@ test 'multi module import', fn:
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $ham_3) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_30) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 35))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $foo_95))
       )
       (func $./test_link/simple.fnk::v_146 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -276,6 +279,7 @@ test 'multi module import', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_7) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_47) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_44) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 49))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_26))
       )
       (func $./test_link/simple.fnk::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -361,7 +365,7 @@ test 'multi module import', fn:
       (data $d_7 "./test_link/foobar/spam.fnk")
       (data $d_8 "foo")
     )
-    ;; sm:rAHmCwCWAQC6AQDGAQECBVgBXgKMAQBuAMIBAMQBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEAzggAlgEAugEAxgEAxgEAuAEA3AEBXymSAQEAKcIGALoBAMYBAG4AzggAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEBACnABABYALAJAJQBALoBAMYBALgBAN4BAHoA3gEAegDeAQBuALwBAL4BAL4BAKoIAJgBALQBAN4BAJYBAIIBAJoCAIgGAHoA8gEAjgEAogcAmgEAmgEAlgEAugEAwgEAbgC-AQDCAQCQCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlgEAlgEAzgEA3AEAbgDSAQCgBwCWAQCaAQCWAQC6AQDIAQBuAL4BAO4IAJYBALoBAMgBAMgBALoBAPYBAQEikgEBACLgBgC6AQDIAQBuAOwIAJwBAJoBAJwBAJoBAJQBAOQBAPYBALgBAPYBAQAi2AQAWADICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQC0CQCYAQCcAQCUAQC0AQD2AQCWAQCCAQCkAgDQBgB6AIoCAI4BAIIGAJgBAJoBAJQBASgBiAEBCQbCCgCYAQCYAQCWAQB6APwBAMwBANgBAJYBAJYBAMoBAN4BAG4AzgEAsAYAegCUAgCOAQA
+    ;; sm:sAHmCwCWAQC6AQDGAQECBVgBXgKMAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEAzggAlgEAugEAxgEAxgEAuAEA3AEBXymSAQEAKcIGALoBAMYBAG4AzggAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEBACnABABYALAJAJQBALoBAMYBALgBAN4BAHoA3gEAegDeAQBuALwBAL4BAL4BAIIBAKoIAJgBALQBAN4BAJYBAIIBAJoCAIgGAHoA8gEAjgEAogcAmgEAmgEAlgEAugEAwgEAbgC-AQDCAQCCAQCQCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlgEAlgEAzgEA3AEAbgDSAQCgBwCWAQCaAQCWAQC6AQDIAQBuAL4BAO4IAJYBALoBAMgBAMgBALoBAPYBAQEikgEBACLgBgC6AQDIAQBuAOwIAJwBAJoBAJwBAJoBAJQBAOQBAPYBALgBAPYBAQAi2AQAWADICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCCAQC0CQCYAQCcAQCUAQC0AQD2AQCWAQCCAQCkAgDQBgB6AIoCAI4BAIIGAJgBAJoBAJQBASgBiAEBCQbCCgCYAQCYAQCWAQB6APwBAMwBANgBAJYBAJYBAMoBAN4BAG4AzgEAsAYAegCUAgCOAQA
 
 
 ---
@@ -489,6 +493,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_5) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_35) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_32) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 37))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_24))
       )
       (func $./test.fnk::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -663,6 +668,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_56) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_97) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_94) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 99))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_75))
       )
       (func $./test_link/diamond.fnk::v_360 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -778,6 +784,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_32) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_112) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_109) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 114))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_51))
       )
       (func $./test_link/diamond.fnk::v_416 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -889,6 +896,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_8) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_127) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_124) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 129))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_27))
       )
       (func $./test_link/diamond.fnk::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1077,6 +1085,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_6) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_42) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_39) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 44))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_25))
       )
       (func $./test_link/sub/left.fnk::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1233,6 +1242,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_6) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_42) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_39) (local.get $:args)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 44))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_25))
       )
       (func $./test_link/sub/right.fnk::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1288,4 +1298,4 @@ test 'diamond with two paths to same dep', fn:
       (data $d_19 "base")
       (data $d_20 "./test_link/sub/common.fnk")
     )
-    ;; sm:ugPsDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqkgEBACrCBgC6AQDGAQBuAM4IAJoBAJoBAJoBAJoBAJQBAOABANwBALYBANwBAQAqwAQAWACwCQCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA3gEAbgC8AQC-AQC-AQCqCACYAQC0AQDeAQCWAQCCAQCcAgCIBgB6APIBAI4BAKAJAJYBALoBAMYBAMoBANgBAJYBAJYBAM4BAN4BAG4A0gEArggAlgEAugEAxgEA0AEAuAEA-gEBgAkbggoAlgEAugEAxgEA0AEAzgEBqwMEVgDuAQD6AQGsAw_eBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAa0DIpIBAQAi5AYAugEAyAEAbgD0CACcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQEAIuAEAFgA8goAlgEAugEAxgEA0AEAzgEAogIA-AEAegD4AQB6APgBAG4AvgEAvgEAvgEAjgsAlgEAugEAxgEAzgEBSwlgAJ4CAPoBAJYBAIIBAKICAN4HAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBASaSAQEAJuQGALoBAMgBAG4A9AgAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEBACbgBABYAKIKAJYBALoBAMYBAM4BAOwBAPoBAHoA-AEAegD6AQBuAL4BAMABAMABALoKAJYBALoBAMYBAUcIXgDoAQD6AQCWAQCCAQCgAgDeBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAQEkkgEBACTkBgC6AQDIAQBuAPQIAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAQAk4AQAWADOCQCUAQC6AQDGAQC4AQD6AQB6APgBAHoA-gEAbgC8AQDAAQDAAQC4CQCYAQCcAQCWAQC0AQD6AQCYAQCCAQCeAgDYBgB6AIwCAI4BALIJAJgBAJoBAJgBAbkEBIoBANABANoBAJgBAJgBAMwBAOABAG4A0AEAqgYAegCSAgCQAQCqCQCWAQC6AQDEAQDSAQDmAQCYAQCYAQDUAQDsAQBuANgBAOYIAJYBALoBAMYBAe4BBFYAuAEA-AEBYgGKAQENCNQHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBVR6UAQEAHuQGALoBAMgBAG4A7ggAmgEAmgEAnAEAmgEAlAEA4gEA-gEAuAEA-gEBAB7cBABYAMwJAJQBALoBAMYBALgBAPoBAHoA-gEAegD6AQBuALwBAL4BAL4BAL4JAJgBAKIBAKQBALQBAPoBAJgBAIIBAKICANwGAHoAjgIAkAEAsAkAlgEAugEAxAEA1gEA7AEAmAEAmAEA1gEA8gEAbgDaAQDoCACWAQC6AQDGAQGMAwRWALgBAPoBAW4BigEBDQjWBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPQIAJYBALoBAMgBAMgBALoBAPwBAWEjlAEBACPmBgC6AQDIAQBuAPAIAJoBAJoBAJwBAJoBAJQBAOIBAPwBALgBAPwBAQAj3gQAWADOCQCUAQC6AQDGAQC4AQD8AQB6APwBAHoA_AEAbgC8AQC-AQC-AQDCCQCYAQCkAQCqAQC0AQD8AQCYAQCCAQCiAgDiBgB6AJACAJABAA
+    ;; sm:wAPsDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqkgEBACrCBgC6AQDGAQBuAM4IAJoBAJoBAJoBAJoBAJQBAOABANwBALYBANwBAQAqwAQAWACwCQCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA3gEAbgC8AQC-AQC-AQCCAQCqCACYAQC0AQDeAQCWAQCCAQCcAgCIBgB6APIBAI4BAKAJAJYBALoBAMYBAMoBANgBAJYBAJYBAM4BAN4BAG4A0gEArggAlgEAugEAxgEA0AEAuAEA-gEBgAkbggoAlgEAugEAxgEA0AEAzgEBqwMEVgDuAQD6AQGsAw_eBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAa0DIpIBAQAi5AYAugEAyAEAbgD0CACcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQEAIuAEAFgA8goAlgEAugEAxgEA0AEAzgEAogIA-AEAegD4AQB6APgBAG4AvgEAvgEAvgEAggEAjgsAlgEAugEAxgEAzgEBSwlgAJ4CAPoBAJYBAIIBAKICAN4HAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBASaSAQEAJuQGALoBAMgBAG4A9AgAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEBACbgBABYAKIKAJYBALoBAMYBAM4BAOwBAPoBAHoA-AEAegD6AQBuAL4BAMABAMABAIQBALoKAJYBALoBAMYBAUcIXgDoAQD6AQCWAQCCAQCgAgDeBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAQEkkgEBACTkBgC6AQDIAQBuAPQIAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAQAk4AQAWADOCQCUAQC6AQDGAQC4AQD6AQB6APgBAHoA-gEAbgC8AQDAAQDAAQCEAQC4CQCYAQCcAQCWAQC0AQD6AQCYAQCCAQCeAgDYBgB6AIwCAI4BALIJAJgBAJoBAJgBAbkEBIoBANABANoBAJgBAJgBAMwBAOABAG4A0AEAqgYAegCSAgCQAQCqCQCWAQC6AQDEAQDSAQDmAQCYAQCYAQDUAQDsAQBuANgBAOYIAJYBALoBAMYBAe4BBFYAuAEA-AEBYgGKAQENCNQHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBVR6UAQEAHuQGALoBAMgBAG4A7ggAmgEAmgEAnAEAmgEAlAEA4gEA-gEAuAEA-gEBAB7cBABYAMwJAJQBALoBAMYBALgBAPoBAHoA-gEAegD6AQBuALwBAL4BAL4BAIIBAL4JAJgBAKIBAKQBALQBAPoBAJgBAIIBAKICANwGAHoAjgIAkAEAsAkAlgEAugEAxAEA1gEA7AEAmAEAmAEA1gEA8gEAbgDaAQDoCACWAQC6AQDGAQGMAwRWALgBAPoBAW4BigEBDQjWBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPQIAJYBALoBAMgBAMgBALoBAPwBAWEjlAEBACPmBgC6AQDIAQBuAPAIAJoBAJoBAJwBAJoBAJQBAOIBAPwBALgBAPwBAQAj3gQAWADOCQCUAQC6AQDGAQC4AQD8AQB6APwBAHoA_AEAbgC8AQC-AQC-AQCCAQDCCQCYAQCkAQCqAQC0AQD8AQCYAQCCAQCiAgDiBgB6AJACAJABAA

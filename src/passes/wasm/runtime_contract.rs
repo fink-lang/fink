@@ -99,6 +99,9 @@ pub enum Sym {
   // 2c-B; until then, references are emitted as imports that will
   // remain unresolved (Phase A is shape-only, not runnable).
   Apply3,
+  // TracePush records a call site (module_id, cps_id) into the trace
+  // buffer ring. Signature `(i32, i32) -> ()`. Defined in rt/trace.wat.
+  TracePush,
 
   // ── polymorphic protocol operators (rt/protocols.wat) ─────────
   // All binary operators share the shape (anyref, anyref, anyref)
@@ -333,6 +336,7 @@ pub struct Runtime {
   args_concat:  Option<FuncSym>,
   apply:        Option<FuncSym>,
   apply_3:      Option<FuncSym>,
+  trace_push:   Option<FuncSym>,
   // polymorphic protocol operators
   op_plus:    Option<FuncSym>,
   op_minus:   Option<FuncSym>,
@@ -427,6 +431,7 @@ impl Runtime {
   pub fn str_match(&self)    -> FuncSym { self.str_match.expect("rt: str_match not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
   pub fn apply_3(&self)      -> FuncSym { self.apply_3.expect("rt: apply_3 not declared") }
+  pub fn trace_push(&self)   -> FuncSym { self.trace_push.expect("rt: trace_push not declared") }
   pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -511,6 +516,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
     Sym::Apply           => "rt/apply.wat:apply",
     Sym::Apply3          => "rt/apply.wat:apply_3",
+    Sym::TracePush       => "rt/trace.wat:trace_push",
 
     Sym::ArgsHead        => "rt/apply.wat:args_head",
     Sym::ArgsTail        => "rt/apply.wat:args_tail",
@@ -663,6 +669,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::ArgsConcat)  { rt.args_concat  = Some(FuncSym::Runtime(Sym::ArgsConcat)); }
   if needed.contains(&Sym::Apply)       { rt.apply        = Some(FuncSym::Runtime(Sym::Apply)); }
   if needed.contains(&Sym::Apply3)      { rt.apply_3      = Some(FuncSym::Runtime(Sym::Apply3)); }
+  if needed.contains(&Sym::TracePush)   { rt.trace_push   = Some(FuncSym::Runtime(Sym::TracePush)); }
 
   for sym in BINARY_OPS {
     if needed.contains(sym) {

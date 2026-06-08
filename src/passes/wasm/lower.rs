@@ -70,6 +70,9 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // harmless here; lower_ctx never emits a call to it.
   usage.mark(runtime_contract::Sym::Apply3);
   usage.mark(runtime_contract::Sym::Fn3);
+  // Every user-fn call site emits a trace_push recording the call site
+  // into the trace buffer (rt/trace.wat).
+  usage.mark(runtime_contract::Sym::TracePush);
   // Per-module wrapper synthesised below uses init_module and the
   // closure/captures/str primitives.
   usage.mark(runtime_contract::Sym::ModulesInitModule);
@@ -1069,6 +1072,7 @@ fn lower_expr(
 
       let (ctx_op, rest_args) = split_ctx_arg(lcx, ctx, args);
       let l_args_list = build_args_list(lcx, ctx, rest_args);
+      push_trace_point(lcx, ctx, expr.id);
       let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
         vec![op_local(l_args_list), ctx_op, op_local(callee)]);
       set_cps_id(lcx.frag, i_app, expr.id);
@@ -1328,6 +1332,17 @@ fn unbox_anyref(
 /// `done`) or a Cont::Expr (lifted into a closure — not handled here
 /// since the lifting pass already produces that as App(FnClosure)
 /// ahead of the tail call).
+/// Emit a `trace_push(module_id, cps_id)` recording this call site into
+/// the trace buffer, immediately before the user-fn dispatch. `cps_id`
+/// is the Apply node's id (the call site); `module_id` is the fragment's
+/// own id. Together they identify the site package-wide.
+fn push_trace_point(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, call_site: CpsId) {
+  let module_id = lit_i32(lcx.frag.module_id.0 as i32);
+  let cps_id = lit_i32(call_site.0 as i32);
+  let i = push_call(lcx.frag, lcx.rt.trace_push(), vec![module_id, cps_id], None);
+  ctx.instrs.push(i);
+}
+
 /// Build the `apply_3` args list from a heterogeneous arg sequence.
 ///
 /// Two-phase to keep the locals/instr order stable across changes:
