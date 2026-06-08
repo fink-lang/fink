@@ -273,6 +273,48 @@ test 'str_block_interpolation', fn:
     StrEnd '', loc [18, 2, 15], [18, 2, 15]
     BlockEnd loc [18, 2, 15], [18, 2, 15]
 
+
+skip test 'bug str block interpolation indentation', fn:
+  expect tokenize ƒink:
+    ":
+      hello
+      ${name}
+  | equals ƒink:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart '":', loc [0, 1, 0], [2, 1, 2]
+    StrText 'hello\n', loc [5, 2, 2], [11, 2, 8]
+    StrExprStart '\${', loc [11, 2, 8], [13, 2, 10]
+    Ident 'name', loc [13, 3, 10], [17, 3, 14]
+    StrExprEnd '}', loc [17, 3, 14], [18, 3, 15]
+    StrEnd '', loc [18, 3, 15], [18, 3, 15]
+    BlockEnd loc [18, 3, 15], [18, 3, 15]
+    TODO guessed locs, need checking
+
+
+--- BUG: multi-line interpolated string drops leading indentation on a
+plain-text continuation line, but keeps it on a line that precedes an
+interpolation. For `'${a}\n      !=\n      ${b}'` the lexer emits:
+  StrText '\n'              (the 6 spaces before `!=` are SWALLOWED)
+  StrText '!=\n'            (starts at col 6, indent gone)
+  StrText '      '          (the 6 spaces before `${b}` are KEPT)
+Both continuation lines have identical 6-space indent in source, so the
+emitted text must be consistent. Whatever the chosen semantics (preserve
+raw vs dedent), text-segment and interp-segment continuation lines must
+agree. Fix lives in the lexer's string-text scan (leading-whitespace
+handling after a newline must not depend on what follows). Skipped until
+the indentation semantics are decided + fixed.
+---
+skip test 'bug str interpolation indentation', fn:
+  expect tokenize ƒink:
+    '
+      hello
+      ${name}
+    '
+  | equals ƒink:
+    TODO
+
+
+
 test 'str_block_same_line_content', fn:
   expect tokenize ƒink:
     ": foo
