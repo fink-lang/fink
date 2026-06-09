@@ -32,7 +32,7 @@ test 'set_ctx import + call', fn:
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_28) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_114) (local.get $:args)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 31))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 31))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $set_ctx_0))
       )
       (func $test::v_81 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))

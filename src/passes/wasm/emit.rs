@@ -61,17 +61,18 @@ use super::runtime_contract::import_key;
 //
 // Layout of the single memory page (64 KiB):
 //
-//   [0, RING_BYTES)            trace ring region (reserved)
-//   [RING_BYTES, SCRATCH_BASE) literal data pool (grows up at compile time)
-//   [SCRATCH_BASE, 64 KiB)     host-IO scratch window
+//   [0, TRACE_BYTES)            trace activation-stack region (reserved)
+//   [TRACE_BYTES, SCRATCH_BASE) literal data pool (grows up at compile time)
+//   [SCRATCH_BASE, 64 KiB)      host-IO scratch window
 //
 // SCRATCH_BASE is the host-exchange window the JS interop bounces
 // bytes through. It is declared in the runtime WAT today; this constant
 // is the layout authority's copy used to bound the data pool.
 
-/// Trace-ring region at the bottom of memory. 64 frames x 8 bytes
-/// (`(module_id, cps_id)` pairs) = 512 bytes.
-const RING_BYTES: u32 = 64 * 8;
+/// Trace activation-stack region at the bottom of memory. Must match
+/// rt/trace.wat's window: TRACE_CAP (64) frames x FRAME_BYTES (16, four
+/// i32s `{fn_mid, fn_cid, call_mid, call_cid}`) = 1024 bytes.
+const RING_BYTES: u32 = 64 * 16;
 
 /// Host-IO scratch window base. Must match the runtime WAT's
 /// `SCRATCH_BASE` global (`interop/js/interop.wat`).

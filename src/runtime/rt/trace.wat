@@ -1,26 +1,33 @@
-;; Trace buffer -- a fixed-size ring of recent user-fn call sites.
+;; Trace buffer -- a bounded stack of userland function activations.
 ;;
-;; Every user-function call site emits a trace_push before dispatching.
-;; The push records the call site into a ring in linear memory,
-;; overwriting the oldest entry once full. Because Fink compiles every
-;; call to a tail call, there is no native wasm call stack to walk; this
-;; ring is the portable substitute -- it lives in linear memory so a host
-;; can read it even after a hard trap, on any runtime, not just the
-;; wasmtime debugger.
+;; This is a real backtrace, not a recency log. Each frame is one userland
+;; function activation; the live stack of frames is the current call chain.
+;; Because Fink compiles every call to a tail call, there is no native wasm
+;; call stack to walk; this stack is the portable substitute -- it lives in
+;; linear memory so a host can read it even after a hard trap, on any
+;; runtime, not just the wasmtime debugger.
 ;;
-;; Layout: the ring occupies the reserved region at the bottom of linear
-;; memory, [0, trace_len*8). emit.rs owns the linear-memory map and keeps
-;; this region clear of the literal data pool. Each slot is two i32s --
-;; module_id then cps_id. Together they identify a call site package-wide
-;; -- cps_id is only unique per module.
+;; Three primitives drive it (all carry the full (mid, cid) pair; the
+;; redundancy is a dev-time balance check, removable later):
+;;   trace_push(mid, cid) -- enter a userland fn defined at (mid, cid):
+;;                           push a frame stamped with that identity.
+;;   trace_mark(mid, cid) -- a call site (mid, cid) within the current fn:
+;;                           update the top frame's current-call-site fields.
+;;   trace_pop(mid, cid)  -- leave fn (mid, cid): pop the top frame.
 ;;
-;; trace_next is the slot index of the next write; it wraps at trace_len.
-;; The reader derives the valid range from it. Slot count and base are
-;; compile-time constants here -- clarity over micro-opt for now; an
-;; optimizer can inline/specialise later.
+;; Frame = 4 x i32 = 16 bytes: { fn_mid, fn_cid, call_mid, call_cid }.
+;;   fn_*   -- the function's identity (stamped by push).
+;;   call_* -- where in the function we currently are (set by mark; 0 until
+;;             the first call).
 ;;
-;; The user fragment brings memory 0; this module doesn't declare its
-;; own, matching interop.wat.
+;; Bounded window of TRACE_CAP frames. trace_depth is the logical depth and
+;; may exceed TRACE_CAP; storage is a ring of TRACE_CAP frames indexed by
+;; (depth mod TRACE_CAP), so a push when full overwrites the oldest (bottom,
+;; main-ward) frame and a pop at depth 0 is a no-op. The window size is all
+;; that bounds how deep the backtrace goes.
+;;
+;; The user fragment brings memory 0; this module doesn't declare its own,
+;; matching interop.wat.
 
 (module
 
@@ -53,101 +60,124 @@
   (import "std/int.wat" "_int_ival"
     (func $int_ival (param (ref $Int)) (result i64)))
 
-  ;; Ring capacity in slots. 64 frames.
-  (global $trace_len i32 (i32.const 64))
-  ;; Byte offset of the ring region (bottom of memory).
+  ;; Host resolves (module_id, cps_id) -> source line (0 if unknown), via
+  ;; the compiled debug marks. Backs the fink-callable get_loc.
+  (import "env" "host_resolve_loc"
+    (func $host_resolve_loc (param i32) (param i32) (result i32)))
+
+  ;; Window capacity in frames.
+  (global $TRACE_CAP i32 (i32.const 64))
+  ;; Bytes per frame: 4 x i32 = { fn_mid, fn_cid, call_mid, call_cid }.
+  (global $FRAME_BYTES i32 (i32.const 16))
+  ;; Byte offset of the frame region (bottom of memory).
   (global $trace_base i32 (i32.const 0))
-  ;; Slot index of the next write. Wraps at trace_len.
-  (global $trace_next (mut i32) (i32.const 0))
+  ;; Logical stack depth. May exceed TRACE_CAP; storage wraps mod TRACE_CAP.
+  (global $trace_depth (mut i32) (i32.const 0))
 
-  ;; Record a call site into the ring at trace_next, then advance
-  ;; trace_next modulo trace_len. Args: module_id, cps_id.
+  ;; Byte address of the frame at logical index `idx` (idx mod TRACE_CAP).
+  (func $frame_addr (param $idx i32) (result i32)
+    (i32.add
+      (global.get $trace_base)
+      (i32.mul
+        (i32.rem_u (local.get $idx) (global.get $TRACE_CAP))
+        (global.get $FRAME_BYTES))))
+
+  ;; Enter a userland fn defined at (mid, cid): push a frame stamped with
+  ;; that identity, call site cleared. depth++ (storage wraps when full,
+  ;; dropping the oldest frame).
   (func $trace_push (@pub)
-      (param $module_id i32)
-      (param $cps_id i32)
-    (local $slot_addr i32)
+      (param $fn_mid i32)
+      (param $fn_cid i32)
+    (local $addr i32)
+    (local.set $addr (call $frame_addr (global.get $trace_depth)))
+    (i32.store         (local.get $addr)                  (local.get $fn_mid))
+    (i32.store offset=4  (local.get $addr)                (local.get $fn_cid))
+    (i32.store offset=8  (local.get $addr) (i32.const 0))  ;; call_mid
+    (i32.store offset=12 (local.get $addr) (i32.const 0))  ;; call_cid
+    (global.set $trace_depth (i32.add (global.get $trace_depth) (i32.const 1))))
 
-    ;; slot_addr = trace_base + trace_next * 8
-    (local.set $slot_addr
-      (i32.add
-        (global.get $trace_base)
-        (i32.mul (global.get $trace_next) (i32.const 8))))
+  ;; A call site (mid, cid) within the current fn: update the top frame's
+  ;; current-call-site fields. No-op if the stack is empty.
+  (func $trace_mark (@pub)
+      (param $call_mid i32)
+      (param $call_cid i32)
+    (local $addr i32)
+    (if (i32.eqz (global.get $trace_depth))
+      (then (return)))
+    (local.set $addr
+      (call $frame_addr (i32.sub (global.get $trace_depth) (i32.const 1))))
+    (i32.store offset=8  (local.get $addr) (local.get $call_mid))
+    (i32.store offset=12 (local.get $addr) (local.get $call_cid)))
 
-    ;; mem[slot_addr]   = module_id
-    (i32.store (local.get $slot_addr) (local.get $module_id))
-    ;; mem[slot_addr+4] = cps_id
-    (i32.store
-      (i32.add (local.get $slot_addr) (i32.const 4))
-      (local.get $cps_id))
+  ;; Leave fn (mid, cid): pop the top frame. No-op at depth 0 (a pop of a
+  ;; frame that aged out of the bounded window). The (mid, cid) args are
+  ;; carried for a future balance assert; unused for now.
+  (func $trace_pop (@pub)
+      (param $fn_mid i32)
+      (param $fn_cid i32)
+    (if (i32.eqz (global.get $trace_depth))
+      (then (return)))
+    (global.set $trace_depth (i32.sub (global.get $trace_depth) (i32.const 1))))
 
-    ;; trace_next = (trace_next + 1) mod trace_len
-    (global.set $trace_next
-      (i32.rem_u
-        (i32.add (global.get $trace_next) (i32.const 1))
-        (global.get $trace_len))))
-
-  ;; Read up to `depth` most-recent call sites as a fink list of
-  ;; [module_id, cps_id] pairs. Walks back from trace_next (the most
-  ;; recent write) toward older entries, stopping at the first unwritten
-  ;; slot (cps_id == 0) or after `depth` entries. Each frame is prepended
-  ;; as it is read, so the resulting list runs oldest-to-newest (the
-  ;; newest call site is the last element). Raw i32 worker; the fink-
-  ;; callable entry is the Fn3 wrapper below.
+  ;; Read up to `depth` innermost frames as a fink list of
+  ;; [call_mid, call_cid] pairs -- the current call site of each live
+  ;; function, newest (innermost) first. Walks the stack top-down. A frame
+  ;; whose call site is still 0 (entered, not yet at a call) is emitted as
+  ;; [fn_mid, fn_cid] instead, so the innermost frame always carries a
+  ;; useful location.
   (func $read_trace
       (param $depth i32)
       (result (ref $List))
     (local $n i32)
+    (local $avail i32)
     (local $i i32)
-    (local $slot i32)
-    (local $slot_addr i32)
+    (local $addr i32)
     (local $mid i32)
     (local $cid i32)
     (local $result (ref $List))
     (local $frame (ref $List))
 
-    ;; n = min(depth, trace_len)
+    ;; avail = min(trace_depth, TRACE_CAP); n = min(depth, avail).
+    (local.set $avail
+      (select (global.get $trace_depth) (global.get $TRACE_CAP)
+        (i32.le_u (global.get $trace_depth) (global.get $TRACE_CAP))))
     (local.set $n
-      (select
-        (local.get $depth)
-        (global.get $trace_len)
-        (i32.le_u (local.get $depth) (global.get $trace_len))))
+      (select (local.get $depth) (local.get $avail)
+        (i32.le_u (local.get $depth) (local.get $avail))))
 
     (local.set $result (call $list_empty))
 
-    ;; Walk back from the newest write. The i-th-newest slot is
-    ;; (trace_next - 1 - i) mod trace_len. Add trace_len before the rem to
-    ;; keep the operand non-negative.
+    ;; Walk bottom-up over the window so that prepending leaves the
+    ;; newest (innermost) frame at the head - conventional backtrace order
+    ;; (get_trace's own call site first, callers after). The oldest
+    ;; in-window frame is logical index (trace_depth - n); the i-th walked
+    ;; is (trace_depth - n + i).
     (local.set $i (i32.const 0))
     (block $done (loop $next
       (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
 
-      (local.set $slot
-        (i32.rem_u
+      (local.set $addr
+        (call $frame_addr
           (i32.add
-            (i32.sub (global.get $trace_next) (i32.const 1))
-            (i32.sub (global.get $trace_len) (local.get $i)))
-          (global.get $trace_len)))
+            (i32.sub (global.get $trace_depth) (local.get $n))
+            (local.get $i))))
 
-      (local.set $slot_addr
-        (i32.add
-          (global.get $trace_base)
-          (i32.mul (local.get $slot) (i32.const 8))))
+      ;; Prefer the current call site; fall back to fn identity if no call
+      ;; has been marked yet (call_cid == 0).
+      (local.set $cid (i32.load offset=12 (local.get $addr)))
+      (if (i32.eqz (local.get $cid))
+        (then
+          (local.set $mid (i32.load        (local.get $addr)))
+          (local.set $cid (i32.load offset=4 (local.get $addr))))
+        (else
+          (local.set $mid (i32.load offset=8 (local.get $addr)))))
 
-      (local.set $mid (i32.load (local.get $slot_addr)))
-      (local.set $cid (i32.load (i32.add (local.get $slot_addr) (i32.const 4))))
-
-      ;; Stop at the first unwritten slot (cps_id == 0).
-      (br_if $done (i32.eqz (local.get $cid)))
-
-      ;; frame = [module_id, cps_id]
       (local.set $frame
         (call $list_prepend
           (call $box_i64 (i64.extend_i32_u (local.get $mid)))
           (call $list_prepend
             (call $box_i64 (i64.extend_i32_u (local.get $cid)))
             (call $list_empty))))
-      ;; prepend frame; walking newest-first means the result ends up
-      ;; oldest-to-newest.
       (local.set $result
         (call $list_prepend (local.get $frame) (local.get $result)))
 
@@ -157,8 +187,8 @@
     (local.get $result))
 
   ;; Fink-callable entry: `get_trace depth`.
-  ;; CPS-lowered args = [k_caller, depth]. `depth` arrives as a boxed
-  ;; $Int; unbox it, read the ring, tail-call k_caller with the list.
+  ;; CPS-lowered args = [k_caller, depth]. `depth` arrives as a boxed $Int;
+  ;; unbox it, read the stack, tail-call k_caller with the list.
   (elem declare func $get_trace_apply)
 
   (func $get_trace_apply (type $Fn3)
@@ -195,4 +225,49 @@
   (func $get_trace (@pub)
       (result (ref any))
     (global.get $get_trace_closure))
+
+  ;; Fink-callable entry: `get_loc mid, cid` -> source line (0 if unknown).
+  ;; CPS-lowered args = [k_caller, mid, cid], both boxed $Int.
+  (elem declare func $get_loc_apply)
+
+  (func $get_loc_apply (type $Fn3)
+      (param $_caps (ref null any))
+      (param $ctx (ref null any))
+      (param $args (ref null any))
+    (local $k_caller (ref any))
+    (local $rest (ref null any))
+    (local $mid (ref null any))
+    (local $cid (ref null any))
+    (local $line i32)
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $mid (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $cid (call $args_head (local.get $rest)))
+
+    (local.set $line
+      (call $host_resolve_loc
+        (i32.wrap_i64 (call $int_ival (ref.cast (ref $Int) (local.get $mid))))
+        (i32.wrap_i64 (call $int_ival (ref.cast (ref $Int) (local.get $cid))))))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args
+      (call $args_prepend
+        (call $box_i64 (i64.extend_i32_u (local.get $line)))
+        (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $get_loc_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_loc_apply)
+      (ref.null $Captures)))
+
+  (func $get_loc (@pub)
+      (result (ref any))
+    (global.get $get_loc_closure))
 )

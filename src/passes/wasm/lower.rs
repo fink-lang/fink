@@ -80,9 +80,12 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
   // harmless here; lower_ctx never emits a call to it.
   usage.mark(runtime_contract::Sym::Apply3);
   usage.mark(runtime_contract::Sym::Fn3);
-  // Every user-fn call site emits a trace_push recording the call site
-  // into the trace buffer (rt/trace.wat).
+  // Trace instrumentation (rt/trace.wat): each userland fn body pushes a
+  // frame on entry and pops on return; each userland call site marks the
+  // current frame's call site.
   usage.mark(runtime_contract::Sym::TracePush);
+  usage.mark(runtime_contract::Sym::TraceMark);
+  usage.mark(runtime_contract::Sym::TracePop);
   // Each fink_module self-registers its (module_id, url) so trace frames
   // resolve to a source url (rt/modules.wat).
   usage.mark(runtime_contract::Sym::RegisterModule);
@@ -192,7 +195,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
     // CpsId. We walk the chain pre-order: outer LetFn first.
     let mut top_fn_syms: HashMap<CpsId, FuncSym> = HashMap::new();
     let mut node = &lcx.cps.root;
-    while let ExprKind::LetFn { name, params, fn_body, cont, .. } = &node.kind {
+    while let ExprKind::LetFn { name, params, fn_body, cont, fn_kind, .. } = &node.kind {
       let mut cap_ids: Vec<CpsId> = Vec::new();
       let mut user_ids: Vec<(CpsId, bool)> = Vec::new();
       for p in params {
@@ -208,10 +211,16 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
       }
       let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
       let display = format!("{}{}", lcx.fqn_prefix, raw_display);
+      use crate::passes::cps::ir::CpsFnKind;
+      let trace = match fn_kind {
+        CpsFnKind::CpsFunction => TraceFrame::entry(name.id),
+        CpsFnKind::CpsClosure  => TraceFrame::cont(None),  // top-level: no enclosing
+      };
       let fn_sym = lower_fn(
         &mut lcx,
         &cap_ids, &user_ids, fn_body, &display,
         &top_fn_syms,
+        trace,
       );
       top_fn_syms.insert(name.id, fn_sym);
       node = match cont {
@@ -227,6 +236,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
       module_body,
       &module_display,
       &top_fn_syms,
+      TraceFrame::cont(None),  // module body is synth: no frame, no enclosing
     );
     let FuncSym::Local(_) = fink_module else { panic!("lower: fink_module must be Local"); };
     // No WASM-level export for fink_module — host accesses the module
@@ -432,6 +442,24 @@ struct LowerCtx<'a> {
 
 /// Lower a CPS function — either the module body or a LetFn'd helper.
 ///
+/// Trace identity for a lowered function. `entry = Some(id)` means this
+/// is a real userland function entry: push a frame for `id` at the
+/// prologue and pops inside it target `id`. `entry = None` means a lifted
+/// continuation (CpsClosure) - no push; its ret-cont pops target the
+/// *enclosing* userland fn in `enclosing`.
+#[derive(Clone, Copy, Default)]
+struct TraceFrame {
+  entry: Option<CpsId>,
+  enclosing: Option<CpsId>,
+}
+
+impl TraceFrame {
+  /// A real userland function entry, traced under its own id.
+  fn entry(id: CpsId) -> Self { Self { entry: Some(id), enclosing: None } }
+  /// A lifted continuation: no frame; ret-cont pops target `enclosing`.
+  fn cont(enclosing: Option<CpsId>) -> Self { Self { entry: None, enclosing } }
+}
+
 /// `cap_params` and `user_params` are the CpsIds of the function's
 /// cap-params (read from `$_caps` via `array.get`) and user-params
 /// (unpacked from `$_args` via successive `args_head`/`args_tail`).
@@ -444,6 +472,7 @@ fn lower_fn(
   body: &Expr,
   display: &str,
   fn_syms: &HashMap<CpsId, FuncSym>,
+  trace: TraceFrame,
 ) -> FuncSym {
   // CRITICAL: `fn_syms` is cloned (not shared) into the child FnCtx.
   // Sibling and ancestor LetFn FuncSyms must be visible to this fn's
@@ -514,6 +543,20 @@ fn lower_fn(
     }
   }
 
+  // Trace: a real userland function entry pushes an activation frame
+  // stamped with its own identity; pops inside it (when it invokes its
+  // return cont) target that frame. A lifted continuation (CpsClosure)
+  // does NOT push - it is part of the enclosing function - but its
+  // ret-cont invocations must pop the enclosing function's frame, so it
+  // inherits the enclosing fn's id for pop targeting.
+  ctx.trace_fn_id = trace.entry.or(trace.enclosing);
+  if let Some(fn_id) = trace.entry {
+    let mid = lit_i32(lcx.frag.module_id.0 as i32);
+    let cid = lit_i32(fn_id.0 as i32);
+    let i = push_call(lcx.frag, lcx.rt.trace_push(), vec![mid, cid], None);
+    ctx.instrs.push(i);
+  }
+
   // Walk the body.
   lower_expr(lcx, &mut ctx, body);
 
@@ -558,6 +601,12 @@ struct FnCtx {
   /// every "fresh" ctx CpsId at thread_ctx time aliases to the same
   /// wasm value at runtime.
   ctx_local: Option<LocalIdx>,
+  /// This function's own identity for trace instrumentation: the
+  /// defining LetFn's CpsId. `Some` for userland source functions (which
+  /// push/pop an activation frame); `None` for synth/runtime functions
+  /// (module body, host wrapper) which are not traced. Read by the
+  /// ret-cont arm to emit `trace_pop(module_id, fn_id)`.
+  trace_fn_id: Option<CpsId>,
 }
 
 impl FnCtx {
@@ -570,6 +619,7 @@ impl FnCtx {
       next_local_idx: 0,
       fn_syms,
       ctx_local: None,
+      trace_fn_id: None,
     }
   }
 
@@ -727,7 +777,7 @@ fn lower_expr(
       lower_cont(lcx, ctx, cont);
     }
 
-    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
+    ExprKind::LetFn { name, params, fn_body, cont, fn_kind, .. } => {
       // Collect cap + user params by role. The `Bind::Caps` param is
       // the ƒcaps record (post closure-conversion); everything else is
       // a user param. User params carry their spread flag so the
@@ -750,10 +800,19 @@ fn lower_expr(
       // module's FQN prefix so cross-fragment merges stay collision-free.
       let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
       let display = format!("{}{}", lcx.fqn_prefix, raw_display);
+      // A CpsFunction is a real userland fn (push its own frame); a
+      // CpsClosure is a lifted continuation (no push; its ret-cont pops
+      // the enclosing fn, inherited via ctx.trace_fn_id).
+      use crate::passes::cps::ir::CpsFnKind;
+      let trace = match fn_kind {
+        CpsFnKind::CpsFunction => TraceFrame::entry(name.id),
+        CpsFnKind::CpsClosure  => TraceFrame::cont(ctx.trace_fn_id),
+      };
       let fn_sym = lower_fn(
         lcx,
         &cap_ids, &user_ids, fn_body, &display,
         &ctx.fn_syms,
+        trace,
       );
       // The LetFn binds `name.id` to a funcref-valued local; we model
       // it as an anyref local holding a `ref.func` funcref. Actual
@@ -1106,6 +1165,20 @@ fn lower_expr(
         }
       };
 
+      // Trace pop: invoking this fn's return cont is the fn returning -
+      // pop its activation frame. Only for userland fns (trace_fn_id Some)
+      // and only when the cont being applied is this fn's Ret-kind cont.
+      if let Some(fn_id) = ctx.trace_fn_id
+        && matches!(
+          lcx.bind_kinds.try_get(cont_id).and_then(|b| *b),
+          Some(Bind::Cont(crate::passes::cps::ir::ContKind::Ret)))
+      {
+        let mid = lit_i32(lcx.frag.module_id.0 as i32);
+        let cid = lit_i32(fn_id.0 as i32);
+        let i = push_call(lcx.frag, lcx.rt.trace_pop(), vec![mid, cid], None);
+        ctx.instrs.push(i);
+      }
+
       let (ctx_op, rest_args) = split_ctx_arg(lcx, ctx, args);
       let l_args_list = build_args_list(lcx, ctx, rest_args);
       let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
@@ -1134,7 +1207,7 @@ fn lower_expr(
 
       let (ctx_op, rest_args) = split_ctx_arg(lcx, ctx, args);
       let l_args_list = build_args_list(lcx, ctx, rest_args);
-      push_trace_point(lcx, ctx, expr.id);
+      mark_call_site(lcx, ctx, expr.id);
       let i_app = push_return_call(lcx.frag, lcx.rt.apply_3(),
         vec![op_local(l_args_list), ctx_op, op_local(callee)]);
       set_cps_id(lcx.frag, i_app, expr.id);
@@ -1394,22 +1467,22 @@ fn unbox_anyref(
 /// `done`) or a Cont::Expr (lifted into a closure — not handled here
 /// since the lifting pass already produces that as App(FnClosure)
 /// ahead of the tail call).
-/// Emit a `trace_push(module_id, cps_id)` recording this call site into
-/// the trace buffer, immediately before the user-fn dispatch. `cps_id`
-/// is the Apply node's id (the call site); `module_id` is the fragment's
-/// own id. Together they identify the site package-wide.
+/// Emit `trace_mark(module_id, cps_id)` recording this call site into the
+/// current (top) activation frame, immediately before the user-fn dispatch.
+/// `cps_id` is the Apply node's id (the call site); `module_id` is the
+/// fragment's own id. Updates "where in the current function we are".
 ///
-/// Only userland calls are traced: an Apply is traced iff it has a source
+/// Only userland calls are marked: an Apply is marked iff it has a source
 /// origin. Desugar-synthesised applies (pipe expansion, partial
 /// application, etc.) have no origin and are skipped, so the trace
 /// reflects source-level calls, not the finer post-desugar CPS structure.
-fn push_trace_point(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, call_site: CpsId) {
+fn mark_call_site(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, call_site: CpsId) {
   if !is_source_apply(lcx.cps, lcx.ast, call_site) {
     return;
   }
   let module_id = lit_i32(lcx.frag.module_id.0 as i32);
   let cps_id = lit_i32(call_site.0 as i32);
-  let i = push_call(lcx.frag, lcx.rt.trace_push(), vec![module_id, cps_id], None);
+  let i = push_call(lcx.frag, lcx.rt.trace_mark(), vec![module_id, cps_id], None);
   ctx.instrs.push(i);
 }
 

@@ -28,7 +28,7 @@ test 'multi module import', fn:
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_28) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_114) (local.get $:args)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 31))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 31))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $shrub_0))
       )
       (func $./test.fnk::v_81 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -157,12 +157,13 @@ test 'multi module import', fn:
         (local.set $:ret_30 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $ham_3 (call $rt/apply.wat:args_head (local.get $:params)))
+        (call $rt/trace.wat:trace_push (i32.const 1) (i32.const 100))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $foo_95 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $ham_3) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_30) (local.get $:args)))
-        (call $rt/trace.wat:trace_push (i32.const 1) (i32.const 35))
+        (call $rt/trace.wat:trace_mark (i32.const 1) (i32.const 35))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $foo_95))
       )
       (func $./test_link/simple.fnk::v_146 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -320,6 +321,7 @@ test 'multi module import', fn:
         (local.set $:ret_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $ni_1 (call $rt/apply.wat:args_head (local.get $:params)))
+        (call $rt/trace.wat:trace_push (i32.const 2) (i32.const 31))
         (local.set $:lit_6 (struct.new $std/int.wat:I64 (i64.const 2)))
         (return_call $std/operators.fnk:op_mul (local.get $:ctx_param) (local.get $ni_1) (local.get $:lit_6) (local.get $:ret_4))
       )
@@ -372,7 +374,7 @@ test 'multi module import', fn:
       (data $d_7 "./test_link/foobar/spam.fnk")
       (data $d_8 "foo")
     )
-    ;; sm:tAHmCwCWAQC6AQDGAQECBVgBXgKMAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEAzggAlgEAugEAxgEAxgEAuAEA3AEBXymSAQEAKcIGALoBAMYBAG4AzggAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEBACnABABYALAJAJQBALoBAMYBALgBAN4BAHoA3gEAegDeAQBuALwBAL4BAL4BAPwIAJ4BAKYBAJgBALQBAN4BAJYBAIIBAJoCAIgGAHoA8gEAjgEAogcAmgEAmgEAlgEAugEAwgEAbgC-AQDCAQCCAQCQCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlgEAlgEAzgEA3AEAbgDSAQCgBwCWAQCaAQCWAQC6AQDIAQBuAL4BAO4IAJYBALoBAMgBAMgBALoBAPYBAQEikgEBACLgBgC6AQDIAQBuAOwIAJwBAJoBAJwBAJoBAJQBAOQBAPYBALgBAPYBAQAi2AQAWADICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCGCgCeAQCmAQCYAQCcAQCUAQC0AQD2AQCWAQCCAQCkAgDQBgB6AIoCAI4BAIIGAJgBAJoBAJQBASgBiAEBCQaUCwCeAQCmAQCYAQCYAQCWAQB6APwBAMwBANgBAJYBAJYBAMoBAN4BAG4AzgEAsAYAegCUAgCOAQA
+    ;; sm:tgHmCwCWAQC6AQDGAQECBVgBXgKMAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEAzggAlgEAugEAxgEAxgEAuAEA3AEBXymSAQEAKcIGALoBAMYBAG4AzggAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEBACnABABYALAJAJQBALoBAMYBALgBAN4BAHoA3gEAegDeAQBuALwBAL4BAL4BAPwIAJ4BAKYBAJgBALQBAN4BAJYBAIIBAJoCAIgGAHoA8gEAjgEAogcAmgEAmgEAlgEAhAEAugEAwgEAbgC-AQDCAQCCAQCQCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlgEAlgEAzgEA3AEAbgDSAQCgBwCWAQCaAQCWAQC6AQDIAQBuAL4BAO4IAJYBALoBAMgBAMgBALoBAPYBAQEikgEBACLgBgC6AQDIAQBuAOwIAJwBAJoBAJwBAJoBAJQBAOQBAPYBALgBAPYBAQAi2AQAWADICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCGCgCeAQCmAQCYAQCcAQCUAQC0AQD2AQCWAQCCAQCkAgDQBgB6AIoCAI4BAIIGAJgBAJoBAJQBAIIBASgBiAEBCQaUCwCeAQCmAQCYAQCYAQCWAQB6APwBAMwBANgBAJYBAJYBAMoBAN4BAG4AzgEAsAYAegCUAgCOAQA
 
 
 ---
