@@ -65,12 +65,143 @@
   (import "std/list.wat"  "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
+  ;; Args machinery + int unboxing for the fink-callable get_module_url
+  ;; Fn3 wrapper.
+  (import "rt/apply.wat" "args_head"
+    (func $args_head (param (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "args_tail"
+    (func $args_tail (param (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "args_empty"
+    (func $args_empty (result (ref any))))
+  (import "rt/apply.wat" "args_prepend"
+    (func $args_prepend (param (ref null any)) (param (ref any)) (result (ref any))))
+  (import "std/num.wat" "Num" (type $Num (sub any)))
+  (import "std/int.wat" "Int" (type $Int (sub $Num (struct))))
+  (import "std/int.wat" "_int_ival"
+    (func $int_ival (param (ref $Int)) (result i64)))
+
 
   ;; -- Registry -------------------------------------------------------
 
   ;; The URL→rec map. Lazy-initialised on first `init` call.
   ;; Stored as $Rec so we can call rec_get/put_field directly.
   (global $registry (mut (ref null $Rec)) (ref.null $Rec))
+
+
+  ;; -- Module-id → url array ------------------------------------------
+  ;;
+  ;; The trace buffer records call sites as (module_id, cps_id) i32 pairs
+  ;; (rt/trace.wat). Resolving a frame back to a source location needs
+  ;; module_id → url. ModuleId is a compile-time concept that does not
+  ;; otherwise exist in the runtime, so each module self-registers its
+  ;; own (id, url) from its fink_module via `register_module`.
+  ;;
+  ;; A GC array indexed directly by module_id (not a wasm table). Module
+  ;; ids are small dense ints assigned in BFS order by compile_package.
+  ;; It grows by 100 slots at a time (array.copy into a bigger array, the
+  ;; same idiom dict.wat/set.wat use) when an id exceeds capacity.
+  (type $ModuleUrls (array (mut (ref null any))))
+  (global $module_urls (mut (ref null $ModuleUrls)) (ref.null $ModuleUrls))
+
+  ;; Record module_id → url. Idempotent: re-registering the same id with
+  ;; the same url is a harmless overwrite (fink_module may run more than
+  ;; once). Lazy-allocates and grows the table as needed.
+  (func $register_module (@pub)
+    (param $id i32)
+    (param $url (ref null any))
+    (local $old (ref null $ModuleUrls))
+    (local $new_len i32)
+    (local $new (ref $ModuleUrls))
+
+    (local.set $old (global.get $module_urls))
+
+    ;; Grow (or allocate) if id is out of the current bounds.
+    (if (i32.ge_u
+          (local.get $id)
+          (if (result i32) (ref.is_null (local.get $old))
+            (then (i32.const 0))
+            (else (array.len (ref.as_non_null (local.get $old))))))
+      (then
+        ;; new_len = max(old_len + 100, id + 1) so a single large id
+        ;; can't outpace the growth step.
+        (local.set $new_len
+          (i32.add
+            (if (result i32) (ref.is_null (local.get $old))
+              (then (i32.const 0))
+              (else (array.len (ref.as_non_null (local.get $old)))))
+            (i32.const 100)))
+        (if (i32.gt_u (i32.add (local.get $id) (i32.const 1)) (local.get $new_len))
+          (then (local.set $new_len (i32.add (local.get $id) (i32.const 1)))))
+
+        (local.set $new (array.new $ModuleUrls (ref.null any) (local.get $new_len)))
+        (if (i32.eqz (ref.is_null (local.get $old)))
+          (then
+            (array.copy $ModuleUrls $ModuleUrls
+              (local.get $new) (i32.const 0)
+              (ref.as_non_null (local.get $old)) (i32.const 0)
+              (array.len (ref.as_non_null (local.get $old))))))
+        (global.set $module_urls (local.get $new))))
+
+    (array.set $ModuleUrls
+      (ref.as_non_null (global.get $module_urls))
+      (local.get $id)
+      (local.get $url)))
+
+  ;; Look up the url registered for module_id, or null if unregistered
+  ;; or out of bounds. Raw i32 worker; the fink-callable entry is the
+  ;; Fn3 wrapper below.
+  (func $_get_module_url
+    (param $id i32)
+    (result (ref null any))
+    (if (ref.is_null (global.get $module_urls))
+      (then (return (ref.null any))))
+    (if (i32.ge_u
+          (local.get $id)
+          (array.len (ref.as_non_null (global.get $module_urls))))
+      (then (return (ref.null any))))
+    (array.get $ModuleUrls
+      (ref.as_non_null (global.get $module_urls))
+      (local.get $id)))
+
+  ;; Fink-callable entry: `get_module_url mod_id`. CPS-lowered args =
+  ;; [k_caller, mod_id]. mod_id arrives as a boxed $Int; unbox, look up,
+  ;; tail-call k_caller with the url (or null).
+  (elem declare func $get_module_url_apply)
+
+  (func $get_module_url_apply (type $Fn3)
+      (param $_caps (ref null any))
+      (param $ctx (ref null any))
+      (param $args (ref null any))
+    (local $k_caller (ref any))
+    (local $id (ref null any))
+    (local $rest (ref null any))
+    (local $url (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $id (call $args_head (local.get $rest)))
+
+    (local.set $url
+      (call $_get_module_url
+        (i32.wrap_i64
+          (call $int_ival (ref.cast (ref $Int) (local.get $id))))))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $url) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $get_module_url_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $get_module_url_apply)
+      (ref.null $Captures)))
+
+  (func $get_module_url (@pub)
+      (result (ref any))
+    (global.get $get_module_url_closure))
 
   ;; -- init -----------------------------------------------------------
   ;;

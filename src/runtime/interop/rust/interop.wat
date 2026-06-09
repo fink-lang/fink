@@ -63,6 +63,7 @@
       (param $callee (ref null any))))
   ;; Keep rt/trace.wat in the link and trace_push alive: user fragments
   ;; call it at every call site, but no runtime module references it.
+  ;; (get_trace is kept alive via std/trace.fnk's fink-level import.)
   (import "rt/trace.wat"    "trace_push"
     (func $trace_push (param i32) (param i32)))
   (import "rt/apply.wat"    "empty_ctx"

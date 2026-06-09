@@ -12,6 +12,9 @@ test 'range exclusive', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 10)))
@@ -28,7 +31,7 @@ test 'range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBBgKKAQEFBcwFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBBgKKAQEFBcwFAHoA5gEAjAEA
 
 
 test 'range inclusive', fn:
@@ -41,6 +44,9 @@ test 'range inclusive', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 10)))
@@ -57,7 +63,7 @@ test 'range inclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBCAKKAQEHBswFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBCAKKAQEHBswFAHoA5gEAjAEA
 
 
 test 'open range exclusive', fn:
@@ -69,6 +75,9 @@ test 'open range exclusive', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (return_call $std/range.fnk:from (local.get $:ctx_param) (local.get $:lit_1) (local.get $:ret_0))
@@ -84,7 +93,7 @@ test 'open range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:B9YEAJgBAQABiAEBAAOkBQB6AOYBAIwBAA
+    ;; sm:CagFAJwBAKYBAJgBAQABiAEBAAOkBQB6AOYBAIwBAA
 
 
 test 'range in', fn:
@@ -110,6 +119,9 @@ test 'range in', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:lit_2 (ref null any))
         (local $:lit_3 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
         (local.set $:v_16 (struct.new $rt/apply.wat:Closure (ref.func $test::v_24) (local.get $:caps_arg)))
@@ -128,4 +140,4 @@ test 'range in', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:D_YFAJQBALoBAMQBAQABiAEBAArCBwCYAQC0AQDQAQEKAYgBAQYCigEBBQXKBQB6AOYBAIwBAA
+    ;; sm:EfYFAJQBALoBAMQBAQABiAEBAAqUCACcAQCmAQCYAQC0AQDQAQEKAYgBAQYCigEBBQXKBQB6AOYBAIwBAA

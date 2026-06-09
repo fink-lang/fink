@@ -50,6 +50,16 @@ fn origin_of(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> Option<ByteRange> {
   Some(ByteRange::new(loc.start.idx, loc.end.idx))
 }
 
+/// True iff this CpsId's source origin is an `Apply` AST node — i.e. a
+/// call the user actually wrote, not a desugar-synthesised apply (pipe
+/// expansion, partial application, etc.) whose origin is the surrounding
+/// `InfixOp`/`Pipe`/lambda node. Used to gate trace instrumentation so
+/// the trace reflects source-level calls.
+fn is_source_apply(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> bool {
+  let Some(Some(ast_id)) = cps.origin.try_get(id) else { return false };
+  matches!(ast.nodes.get(*ast_id).kind, crate::ast::NodeKind::Apply { .. })
+}
+
 /// Lower a lifted CPS result to an unlinked wasm IR `Fragment`.
 ///
 /// `fqn_prefix` is the module's fully-qualified URL prefix (e.g.
@@ -62,7 +72,7 @@ fn origin_of(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> Option<ByteRange> {
 /// Phase-4A: prefix is purely a cosmetic / naming concern. The entry
 /// function's export name still stays `"fink_module"`; rewiring the
 /// body to the `import_module` init-guard shape lands in 4D.
-pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
+pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: ModuleId) -> Fragment {
   let mut usage = runtime_contract::scan(cps);
   // Fn3 / ctx-aware lowering routes user-fn calls through `apply_3`
   // instead of `apply`. Mark the Apply3 runtime symbol so `declare()`
@@ -73,6 +83,9 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // Every user-fn call site emits a trace_push recording the call site
   // into the trace buffer (rt/trace.wat).
   usage.mark(runtime_contract::Sym::TracePush);
+  // Each fink_module self-registers its (module_id, url) so trace frames
+  // resolve to a source url (rt/modules.wat).
+  usage.mark(runtime_contract::Sym::RegisterModule);
   // Per-module wrapper synthesised below uses init_module and the
   // closure/captures/str primitives.
   usage.mark(runtime_contract::Sym::ModulesInitModule);
@@ -80,7 +93,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   usage.mark(runtime_contract::Sym::Captures);
   usage.mark(runtime_contract::Sym::Cell);
   usage.mark(runtime_contract::Sym::StrFromData);
-  let mut frag = Fragment::default();
+  // module_id set here (not after lowering): trace_push / register_module
+  // bake the module id as a constant at emit time, so it must be correct
+  // during lowering. (compile_package used to set frag.module_id after
+  // lower returned, which was too late for those emitted constants.)
+  let mut frag = Fragment { module_id, ..Default::default() };
   let rt = runtime_contract::declare(&mut frag, &usage);
 
   // CPS root shape: App(FinkModule, [Cont::Expr { args: [ƒctx, ƒret], body }]).
@@ -217,6 +234,10 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     // canonical FQN. fink_module stays as a bare internal func; the
     // wrapper holds a no-capture closure over it.
 
+    // Self-register (module_id, url) at the top of fink_module so trace
+    // frames (which carry module_id) can resolve back to a source url.
+    prepend_module_registration(&mut lcx, fink_module);
+
     // Per-module host-facing wrapper. Exported under the module's
     // canonical FQN so the host can call any module by URL string
     // (`instance.get_func(canonical_url)`). The wrapper composes the
@@ -253,6 +274,47 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
 /// synthesises a placeholder ctx (ref.i31 42) and tail-calls the
 /// body's Fn3 entry. Once the substrate lands, host-provided ctx
 /// flows in through the same channel.
+/// Prepend a `register_module(module_id, url)` call to the top of the
+/// module's `fink_module` body. `module_id` is the fragment's own id (a
+/// compile-time constant); `url` is the canonical url materialised as a
+/// `$Str`. This is how the runtime learns module_id → url for resolving
+/// trace frames.
+fn prepend_module_registration(lcx: &mut LowerCtx<'_>, fink_module: FuncSym) {
+  let FuncSym::Local(fi) = fink_module else {
+    panic!("prepend_module_registration: fink_module must be Local");
+  };
+  let fi = fi as usize;
+
+  let canonical_url = lcx.fqn_prefix.trim_end_matches(':').to_string();
+  let mid = lit_i32(lcx.frag.module_id.0 as i32);
+
+  // Allocate a fresh local on fink_module for the url $Str. New locals
+  // index after params + existing locals.
+  let url_idx = LocalIdx(
+    (lcx.frag.funcs[fi].params.len() + lcx.frag.funcs[fi].locals.len()) as u32,
+  );
+  lcx.frag.funcs[fi].locals.push(LocalDecl {
+    ty: val_anyref(true),
+    display: Some(":mod_reg_url".to_string()),
+  });
+
+  // url = from_data(intern(canonical_url)) — same materialisation the
+  // host wrapper uses for the registry key.
+  let sym = intern_data(lcx.frag, canonical_url.as_bytes());
+  let len = canonical_url.len() as u32;
+  let i_url = push_call(lcx.frag, lcx.rt.str_from_data(),
+    vec![Operand::DataRef { sym, len }], Some(url_idx));
+
+  // register_module(mid, url)
+  let i_reg = push_call(lcx.frag, lcx.rt.register_module(),
+    vec![mid, op_local(url_idx)], None);
+
+  // Prepend both, url-const first, before the existing body.
+  let body = &mut lcx.frag.funcs[fi].body;
+  body.insert(0, i_reg);
+  body.insert(0, i_url);
+}
+
 fn synth_host_wrapper(
   lcx: &mut LowerCtx<'_>,
   fink_module: FuncSym,
@@ -1336,7 +1398,15 @@ fn unbox_anyref(
 /// the trace buffer, immediately before the user-fn dispatch. `cps_id`
 /// is the Apply node's id (the call site); `module_id` is the fragment's
 /// own id. Together they identify the site package-wide.
+///
+/// Only userland calls are traced: an Apply is traced iff it has a source
+/// origin. Desugar-synthesised applies (pipe expansion, partial
+/// application, etc.) have no origin and are skipped, so the trace
+/// reflects source-level calls, not the finer post-desugar CPS structure.
 fn push_trace_point(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, call_site: CpsId) {
+  if !is_source_apply(lcx.cps, lcx.ast, call_site) {
+    return;
+  }
   let module_id = lit_i32(lcx.frag.module_id.0 as i32);
   let cps_id = lit_i32(call_site.0 as i32);
   let i = push_call(lcx.frag, lcx.rt.trace_push(), vec![module_id, cps_id], None);

@@ -84,6 +84,9 @@ test 'list with spread at tail', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_xs_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:xs (local.get $:cell_xs_0))
@@ -109,7 +112,7 @@ test 'list with spread at tail', fn:
       (data $d_0 "test")
       (data $d_1 "xs")
     )
-    ;; sm:K8AHAJYBALoBAM4BALoBAMQBAK4BARoEiAwAlAEAugEAzgEAugEAxAEAnAEApgEAlAEAlgEAyAEA4gEA0AEBDAGKAQENCXIBDgHSCQCUAQC6AQDOAQC6AQDEAQDiAQDQAQEZAYgBAQABoggAmAEAlgEAZADgAQDQAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
+    ;; sm:LcAHAJYBALoBAM4BALoBAMQBAK4BARoEiAwAlAEAugEAzgEAugEAxAEAnAEApgEAlAEAlgEAyAEA4gEA0AEBDAGKAQENCXIBDgHSCQCUAQC6AQDOAQC6AQDEAQDiAQDQAQEZAYgBAQAB9AgAnAEApgEAmAEAlgEAZADgAQDQAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
 
 
 test 'list with spread at head', fn:
@@ -185,6 +188,9 @@ test 'list with spread at head', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_xs_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:xs (local.get $:cell_xs_0))
@@ -209,7 +215,7 @@ test 'list with spread at head', fn:
       (data $d_0 "test")
       (data $d_1 "xs")
     )
-    ;; sm:KfgFAJYBALoBAMQBARoBiAEBAAGIDACUAQC6AQDOAQC6AQDEAQCcAQCmAQCUAQCWAQDIAQC2AQDQAQCuAQEBCXIBCATcCQCUAQC6AQDOAQC6AQDEAQDiAQDQAQETAYgBAQABoggAmAEAlgEAZADgAQDQAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
+    ;; sm:K_gFAJYBALoBAMQBARoBiAEBAAGIDACUAQC6AQDOAQC6AQDEAQCcAQCmAQCUAQCWAQDIAQC2AQDQAQCuAQEBCXIBCATcCQCUAQC6AQDOAQC6AQDEAQDiAQDQAQETAYgBAQAB9AgAnAEApgEAmAEAlgEAZADgAQDQAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
 
 
 test 'list with two spreads', fn:
@@ -355,6 +361,9 @@ test 'list with two spreads', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:lit_4 (ref null any))
         (local $:lit_5 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_a_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:a (local.get $:cell_a_0))
@@ -390,4 +399,4 @@ test 'list with two spreads', fn:
       (data $d_1 "b")
       (data $d_2 "a")
     )
-    ;; sm:Tb4HAJYBALoBAM4BALoBAMQBAKwBAS4Dyg0AlgEAugEAzgEAugEAzgEAugEAxAEAngEAogEAlAEAlgEAxgEA4gEA0AEArAEBAQpyAQwDnAsAlgEAugEAzgEAugEAzgEAugEAxgEAkAIA0AEBFwGKAQEAAb4NAJQBALoBANABAL4BANABAL4BAMYBAJ4BAKIBAJQBAJYBAMYBAJQCANIBAQYBigEBBwZyAQgBmAsAlAEAugEA0AEAvgEA0AEAvgEAxgEAlAIA0gEBGwGIAQEAAYoJAJgBAJQBAGAAlAEAYACIAgDSAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
+    ;; sm:T74HAJYBALoBAM4BALoBAMQBAKwBAS4Dyg0AlgEAugEAzgEAugEAzgEAugEAxAEAngEAogEAlAEAlgEAxgEA4gEA0AEArAEBAQpyAQwDnAsAlgEAugEAzgEAugEAzgEAugEAxgEAkAIA0AEBFwGKAQEAAb4NAJQBALoBANABAL4BANABAL4BAMYBAJ4BAKIBAJQBAJYBAMYBAJQCANIBAQYBigEBBwZyAQgBmAsAlAEAugEA0AEAvgEA0AEAvgEAxgEAlAIA0gEBGwGIAQEAAdwJAJwBAKYBAJgBAJQBAGAAlAEAYACIAgDSAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA

@@ -13,6 +13,9 @@ test 'add two literals', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
@@ -29,7 +32,7 @@ test 'add two literals', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBCAGIAQEHBdoFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBCAGIAQEHBdoFAHoA5gEAjAEA
 
 
 
@@ -56,6 +59,9 @@ test 'chained arithmetic', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
         (local.set $:v_16 (struct.new $rt/apply.wat:Closure (ref.func $test::v_24) (local.get $:caps_arg)))
@@ -74,7 +80,7 @@ test 'chained arithmetic', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:D_YFAJQBALoBAMQBARABiAEBDwnGBwCYAQC0AQDQAQEAAYgBAQgBiAEBBwXWBQB6AOYBAIwBAA
+    ;; sm:EfYFAJQBALoBAMQBARABiAEBDwmYCACcAQCmAQCYAQC0AQDQAQEAAYgBAQgBiAEBBwXWBQB6AOYBAIwBAA
 
 
 test 'unary not', fn:
@@ -86,6 +92,9 @@ test 'unary not', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 1)))
         (return_call $std/operators.fnk:op_not (local.get $:ctx_param) (local.get $:lit_1) (local.get $:ret_0))
@@ -101,7 +110,7 @@ test 'unary not', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:B9YEAJgBAQgEYAEHCLAFAHoA5gEAjAEA
+    ;; sm:CagFAJwBAKYBAJgBAQgEYAEHCLAFAHoA5gEAjAEA
 
 
 test 'comparison eq', fn:
@@ -114,6 +123,9 @@ test 'comparison eq', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
@@ -130,7 +142,7 @@ test 'comparison eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBCgGIAQEJBtYFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBCgGIAQEJBtYFAHoA5gEAjAEA
 
 
 test 'comparison lt', fn:
@@ -143,6 +155,9 @@ test 'comparison lt', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
@@ -159,7 +174,7 @@ test 'comparison lt', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBCAGIAQEHBdYFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBCAGIAQEHBdYFAHoA5gEAjAEA
 
 
 test 'logical and', fn:
@@ -172,6 +187,9 @@ test 'logical and', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 1)))
         (local.set $:lit_2 (ref.i31 (i32.const 0)))
@@ -188,7 +206,7 @@ test 'logical and', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQAEYAESBWABEQ7YBQB6AOYBAIwBAA
+    ;; sm:Cu4FAJwBAKYBAJgBAQAEYAESBWABEQ7YBQB6AOYBAIwBAA
 
 
 test 'logical or', fn:
@@ -201,6 +219,9 @@ test 'logical or', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 1)))
         (local.set $:lit_2 (ref.i31 (i32.const 0)))
@@ -217,7 +238,7 @@ test 'logical or', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQAEYAEQBWABDw3WBQB6AOYBAIwBAA
+    ;; sm:Cu4FAJwBAKYBAJgBAQAEYAEQBWABDw3WBQB6AOYBAIwBAA
 
 
 test 'power', fn:
@@ -230,6 +251,9 @@ test 'power', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 2)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 8)))
@@ -246,7 +270,7 @@ test 'power', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBCgGIAQEJBtgFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBCgGIAQEJBtgFAHoA5gEAjAEA
 
 
 test 'power float', fn:
@@ -259,6 +283,9 @@ test 'power float', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/float.wat:F64 (f64.const 2)))
         (local.set $:lit_2 (struct.new $std/float.wat:F64 (f64.const 0.5)))
@@ -275,7 +302,7 @@ test 'power float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQADjAEBDgOQAQENCtgFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQADjAEBDgOQAQENCtgFAHoA5gEAjAEA
 
 
 test 'divmod', fn:
@@ -288,6 +315,9 @@ test 'divmod', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 10)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 3)))
@@ -304,7 +334,7 @@ test 'divmod', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQACigEBDAGIAQELB94FAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQACigEBDAGIAQELB94FAHoA5gEAjAEA
 
 
 test 'rotate left', fn:
@@ -317,6 +347,9 @@ test 'rotate left', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 1)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 4)))
@@ -333,7 +366,7 @@ test 'rotate left', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQABiAEBDAGIAQELB9oFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQABiAEBDAGIAQELB9oFAHoA5gEAjAEA
 
 
 test 'rotate right', fn:
@@ -346,6 +379,9 @@ test 'rotate right', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 16)))
         (local.set $:lit_2 (struct.new $std/int.wat:I64 (i64.const 4)))
@@ -362,4 +398,4 @@ test 'rotate right', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CJwFAJgBAQACigEBDgGIAQENCNoFAHoA5gEAjAEA
+    ;; sm:Cu4FAJwBAKYBAJgBAQACigEBDgGIAQENCNoFAHoA5gEAjAEA

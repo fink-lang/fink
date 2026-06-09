@@ -12,6 +12,9 @@ test 'literal bool', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 1)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -29,7 +32,7 @@ test 'literal bool', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZAFAJgBAQAEYABuAMABAKYFAHoA5gEAjAEA
+    ;; sm:C-IFAJwBAKYBAJgBAQAEYABuAMABAKYFAHoA5gEAjAEA
 
 
 test 'literal bool false', fn:
@@ -42,6 +45,9 @@ test 'literal bool false', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (ref.i31 (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -59,7 +65,7 @@ test 'literal bool false', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZAFAJgBAQAFYABuAMABAKYFAHoA5gEAjAEA
+    ;; sm:C-IFAJwBAKYBAJgBAQAFYABuAMABAKYFAHoA5gEAjAEA
 
 
 test 'literal int', fn:
@@ -72,6 +78,9 @@ test 'literal int', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 42)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -89,7 +98,7 @@ test 'literal int', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZAFAJgBAQACigEAbgDAAQCmBQB6AOYBAIwBAA
+    ;; sm:C-IFAJwBAKYBAJgBAQACigEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 test 'literal neg 0', fn:
@@ -102,6 +111,9 @@ test 'literal neg 0', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/int.wat:I64 (i64.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -119,7 +131,7 @@ test 'literal neg 0', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZAFAJgBAQACiAEAbgDAAQCmBQB6AOYBAIwBAA
+    ;; sm:C-IFAJwBAKYBAJgBAQACiAEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 
@@ -133,6 +145,9 @@ test 'literal float', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/float.wat:F64 (f64.const 123400)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -150,7 +165,7 @@ test 'literal float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZAFAJgBAQAIlgEAbgDAAQCmBQB6AOYBAIwBAA
+    ;; sm:C-IFAJwBAKYBAJgBAQAIlgEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 test 'literal decimal', fn:
@@ -163,6 +178,9 @@ test 'literal decimal', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (struct.new $std/decimal.wat:Decimal (i64.const 10) (i32.const -1)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -180,7 +198,7 @@ test 'literal decimal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZAFAJgBAQAEuAEAbgDAAQCmBQB6AOYBAIwBAA
+    ;; sm:C-IFAJwBAKYBAJgBAQAEuAEAbgDAAQCmBQB6AOYBAIwBAA
 
 
 

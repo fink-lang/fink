@@ -360,7 +360,6 @@ test 'std io import handling', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_10) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_113) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_110) (local.get $:args)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 115))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_57))
       )
       (import "std/io.fnk" "fink_module" (func $std/io.fnk:fink_module (type $rt/apply.wat:Fn3)))
@@ -372,6 +371,9 @@ test 'std io import handling', fn:
         (local $:imp_url (ref null any))
         (local $:imp_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:imp_mod_clos (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_7 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_ham_5 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:ham (local.get $:cell_ham_5))
@@ -405,4 +407,4 @@ test 'std io import handling', fn:
       (data $d_8 "stdout")
       (data $d_9 "std/io.fnk")
     )
-    ;; sm:xQGMCACWAQC6AQDIAQDGAQDKAQBuAL4BAMgBAMQBAIIBAOAMAJYBALoBAMgBAMYBAMoBANABAL4BAaYBGlQAlgIA1AEBVASSAQC0AQDsAQEBDJoLAJYBALoBAMgBAMYBAMoBANABAL4BAMoBAMQCANQBAG4AvgEAyAEAwAEAggEAjA0AlgEAugEAyAEAxgEAygEAygEAoAEAqgEAlAEAlgEAygEA9AIA1AEBMwSSAQCwAQDoAQEBDLYNAJYBAJoBAJYBAJoBAJYBAJoBAJYBAJoBAJYBALoBAMYBAb8BBloBEAZaARAFWAEOBFYBDAVYALoCANQBAWAEkAEAbgDCAQDCAQDAAQCCAQCQCQCWAQCaAQCWAQC6AQDIAQDCAQDCAQDCAQDCAQBuAL4BAMABAMABAMABAMABAOIKAJYBAJoBAJYBALoBAMgBAMIBAMIBAMIBAMgBANgCANQBAZsBOpIBAQA65AoAlgEAmgEAlgEAugEAyAEAwgEAwgEAyAEA3gIA1AEBADqSAQEAOp4KAJYBAJoBAJYBALoBAMgBAMIBAMgBALYCANQBAQA6kgEBADrYCQCWAQCaAQCWAQC6AQDIAQDIAQCOAgDUAQEAOpIBAQA6lAkAlgEAugEAyAEAyAEA6AEA1AEBADqSAQEAOr4GALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBADq6BABYAKoJAJYBALoBAMYBALgBANQBAHoA0gEAegDUAQBuAL4BAMABAMABAIQBAMoKAJgBAJgBAGgAtAEA1AEAlgEAggEAgAIA5gUAegDmAQCMAQA
+    ;; sm:xgGMCACWAQC6AQDIAQDGAQDKAQBuAL4BAMgBAMQBAIIBAOAMAJYBALoBAMgBAMYBAMoBANABAL4BAaYBGlQAlgIA1AEBVASSAQC0AQDsAQEBDJoLAJYBALoBAMgBAMYBAMoBANABAL4BAMoBAMQCANQBAG4AvgEAyAEAwAEAggEAjA0AlgEAugEAyAEAxgEAygEAygEAoAEAqgEAlAEAlgEAygEA9AIA1AEBMwSSAQCwAQDoAQEBDLYNAJYBAJoBAJYBAJoBAJYBAJoBAJYBAJoBAJYBALoBAMYBAb8BBloBEAZaARAFWAEOBFYBDAVYALoCANQBAWAEkAEAbgDCAQDCAQDAAQCCAQCQCQCWAQCaAQCWAQC6AQDIAQDCAQDCAQDCAQDCAQBuAL4BAMABAMABAMABAMABAOIKAJYBAJoBAJYBALoBAMgBAMIBAMIBAMIBAMgBANgCANQBAZsBOpIBAQA65AoAlgEAmgEAlgEAugEAyAEAwgEAwgEAyAEA3gIA1AEBADqSAQEAOp4KAJYBAJoBAJYBALoBAMgBAMIBAMgBALYCANQBAQA6kgEBADrYCQCWAQCaAQCWAQC6AQDIAQDIAQCOAgDUAQEAOpIBAQA6lAkAlgEAugEAyAEAyAEA6AEA1AEBADqSAQEAOr4GALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBADq6BABYAKoJAJYBALoBAMYBALgBANQBAHoA0gEAegDUAQBuAL4BAMABAMABAJwLAJwBAKYBAJgBAJgBAGgAtAEA1AEAlgEAggEAgAIA5gUAegDmAQCMAQA

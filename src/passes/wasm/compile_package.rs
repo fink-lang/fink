@@ -233,8 +233,7 @@ fn compile_one(
     })?;
   let marks = crate::passes::debug_marks::analyse(&lifted, &desugared);
   let fqn_prefix = format!("{canonical_url}:");
-  let mut frag = super::lower::lower(&lifted.result, &desugared.ast, &fqn_prefix);
-  frag.module_id = module_id;
+  let mut frag = super::lower::lower(&lifted.result, &desugared.ast, &fqn_prefix, module_id);
   // module_imports stays as raw-URL → ModuleId. The package compiler
   // resolves URLs at the call site; the lower pass populates this
   // field by walking `cps.module_imports` keys and mapping each raw
@@ -340,6 +339,7 @@ pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/testing.fnk",
   "std/io.fnk",
   "std/iter.fnk",
+  "std/trace.fnk",
 ];
 
 #[cfg(feature = "compile")]
