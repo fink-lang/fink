@@ -60,6 +60,19 @@ fn is_source_apply(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> bool {
   matches!(ast.nodes.get(*ast_id).kind, crate::ast::NodeKind::Apply { .. })
 }
 
+/// True iff this CpsId's source origin is a `Fn` AST node — i.e. a
+/// function the user actually wrote, not a desugar-synthesised
+/// `CpsFunction` (e.g. the `m_0`/`mp_N` match-block wrappers, whose
+/// origin is the surrounding `Match` node). Used to gate trace-frame
+/// pushes so the activation stack reflects only source-level functions;
+/// synth `CpsFunction`s route through the no-push/inherit path like a
+/// `CpsClosure`, keeping push/pop balanced and the trace free of `:0`
+/// synth frames.
+fn is_source_fn(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> bool {
+  let Some(Some(ast_id)) = cps.origin.try_get(id) else { return false };
+  matches!(ast.nodes.get(*ast_id).kind, crate::ast::NodeKind::Fn { .. })
+}
+
 /// Lower a lifted CPS result to an unlinked wasm IR `Fragment`.
 ///
 /// `fqn_prefix` is the module's fully-qualified URL prefix (e.g.
@@ -213,8 +226,9 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
       let display = format!("{}{}", lcx.fqn_prefix, raw_display);
       use crate::passes::cps::ir::CpsFnKind;
       let trace = match fn_kind {
-        CpsFnKind::CpsFunction => TraceFrame::entry(name.id),
-        CpsFnKind::CpsClosure  => TraceFrame::cont(None),  // top-level: no enclosing
+        CpsFnKind::CpsFunction if is_source_fn(lcx.cps, lcx.ast, name.id) =>
+          TraceFrame::entry(name.id),
+        _ => TraceFrame::cont(None),  // synth/closure: no frame, no enclosing
       };
       let fn_sym = lower_fn(
         &mut lcx,
@@ -800,13 +814,16 @@ fn lower_expr(
       // module's FQN prefix so cross-fragment merges stay collision-free.
       let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
       let display = format!("{}{}", lcx.fqn_prefix, raw_display);
-      // A CpsFunction is a real userland fn (push its own frame); a
-      // CpsClosure is a lifted continuation (no push; its ret-cont pops
-      // the enclosing fn, inherited via ctx.trace_fn_id).
+      // A source-level CpsFunction is a real userland fn (push its own
+      // frame); a CpsClosure is a lifted continuation (no push; its
+      // ret-cont pops the enclosing fn, inherited via ctx.trace_fn_id).
+      // Synth CpsFunctions (e.g. the m_0/mp_N match-block wrappers)
+      // inherit too — they are not source-level activations.
       use crate::passes::cps::ir::CpsFnKind;
       let trace = match fn_kind {
-        CpsFnKind::CpsFunction => TraceFrame::entry(name.id),
-        CpsFnKind::CpsClosure  => TraceFrame::cont(ctx.trace_fn_id),
+        CpsFnKind::CpsFunction if is_source_fn(lcx.cps, lcx.ast, name.id) =>
+          TraceFrame::entry(name.id),
+        _ => TraceFrame::cont(ctx.trace_fn_id),
       };
       let fn_sym = lower_fn(
         lcx,

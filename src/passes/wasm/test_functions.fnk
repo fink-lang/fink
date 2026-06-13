@@ -427,7 +427,6 @@ test 'match literal first arm', fn:
         (local.set $:fail_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_2 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 184))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_179 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_179) (local.get $:succ_3)))
@@ -462,7 +461,6 @@ test 'match literal first arm', fn:
         (local.set $:fail_40 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_38 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 170))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_165 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -505,7 +503,6 @@ test 'match literal first arm', fn:
         (local.set $:ret_53 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_52 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 162))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_155 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_156 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -562,7 +559,7 @@ test 'match literal first arm', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:bYgFAJoBARwCjAEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAwgwAmgEAmgEAmgEAmgEAlAEA4AEA1AEBBQGKAQEAAdYKAJoBAJoBAJoBAJoBAJQBAIQBALoBAMIBAN4BANIBAHoA0gEAbgC8AQDCAQC-AQDIBQCaAQEWAowBAG4AwgEAxAcAnAEAmgEAnAEAmgEAlgEAhAEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQCEAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBALINAJwBAKYBAJgBAHoA0gEAsgEA0gEAegDSAQCyAQDSAQDYAQDSAQEfAYgBAG4AwAEAwAEApAUAegDmAQCMAQA
+    ;; sm:aogFAJoBARwCjAEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAwgwAmgEAmgEAmgEAmgEAlAEA4AEA1AEBBQGKAQEAAdYKAJoBAJoBAJoBAJoBAJQBALoBAMIBAN4BANIBAHoA0gEAbgC8AQDCAQC-AQDIBQCaAQEWAowBAG4AwgEAxAcAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBALINAJwBAKYBAJgBAHoA0gEAsgEA0gEAegDSAQCyAQDSAQDYAQDSAQEfAYgBAG4AwAEAwAEApAUAegDmAQCMAQA
 
 
 test 'match with binding', fn:
@@ -655,7 +652,6 @@ test 'match with binding', fn:
         (local.set $:fail_6 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_4 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 197))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_192 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_192) (local.get $:succ_5)))
@@ -695,7 +691,6 @@ test 'match with binding', fn:
         (local.set $:fail_42 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_40 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 181))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_176 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -738,7 +733,6 @@ test 'match with binding', fn:
         (local.set $:ret_57 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_56 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 173))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_166 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_167 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -811,7 +805,7 @@ test 'match with binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:d4gFAJoBASgBigEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAxAwAmgEAmgEAnAEAmgEAlAEA4gEA1AEBBQGKAQEAAdYKAJoBAJoBAJoBAJoBAJQBAIQBALoBAMIBAN4BANIBAHoA0gEAbgC8AQDCAQC-AQCKCACaAQC6AQDQAQC-AQCwAQEcAYoBAQcFiAgAnAEAmgEAnAEAmgEAlgEAhAEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQCEAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAMYQAJwBAKYBAJgBAJQBAGABNQGCAQCYAQCiAQCUAQCWAQDGAQB6ANIBALIBANIBALYBANIBALIBANIBANgBANIBAKgBAG4AygEAwAEApAUAegDmAQCMAQA
+    ;; sm:dIgFAJoBASgBigEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAxAwAmgEAmgEAnAEAmgEAlAEA4gEA1AEBBQGKAQEAAdYKAJoBAJoBAJoBAJoBAJQBALoBAMIBAN4BANIBAHoA0gEAbgC8AQDCAQC-AQCKCACaAQC6AQDQAQC-AQCwAQEcAYoBAQcFiAgAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAMYQAJwBAKYBAJgBAJQBAGABNQGCAQCYAQCiAQCUAQCWAQDGAQB6ANIBALIBANIBALYBANIBALIBANIBANgBANIBAKgBAG4AygEAwAEApAUAegDmAQCMAQA
 
 
 test 'simple recursion', fn:
@@ -906,7 +900,6 @@ test 'simple recursion', fn:
         (local.set $:fail_8 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_6 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 231))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_226 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_226) (local.get $:succ_7)))
@@ -970,7 +963,6 @@ test 'simple recursion', fn:
         (local.set $:fail_44 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_42 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 213))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_208 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1013,7 +1005,6 @@ test 'simple recursion', fn:
         (local.set $:ret_64 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_63 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 205))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_198 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_199 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -1112,7 +1103,7 @@ test 'simple recursion', fn:
       (data $d_0 "test")
       (data $d_1 "recurse")
     )
-    ;; sm:kgGIBQCaAQFEAowBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8AMgMAJwBAJoBAJwBAJoBAJYBAOQBANQBAQUBigEBAAHYCgCaAQCaAQCaAQCaAQCUAQCEAQC6AQDCAQDeAQDSAQB6ANIBAG4AvAEAwgEAvgEAzggAlgEAugEA0AEAvgEAxgEAvAEAbgC-AQDEAQCCAQDOCQCaAQC6AQDQAQC-AQDAAQDkAQDUAQEyAYoBAQcF-AcAnAEAmgEAnAEAmgEAlgEAhAEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQCEAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAPYOAJgBAJoBAJIBAIQBALoBANABAL4BAHoA0gEAsgEA0gEA3AEA0gEAsgEA0gEA2AEA0gEAbgC6AQDAAQCWCwCcAQCmAQCYAQCgAQB4AMIBANABAKYBALoBAJQBAJYBANIBAMABARwBigEAbgDCAQDAAQCCAQC8BQB6AOYBAIwBAA
+    ;; sm:jwGIBQCaAQFEAowBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8AMgMAJwBAJoBAJwBAJoBAJYBAOQBANQBAQUBigEBAAHYCgCaAQCaAQCaAQCaAQCUAQC6AQDCAQDeAQDSAQB6ANIBAG4AvAEAwgEAvgEAzggAlgEAugEA0AEAvgEAxgEAvAEAbgC-AQDEAQCCAQDOCQCaAQC6AQDQAQC-AQDAAQDkAQDUAQEyAYoBAQcF-AcAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAPYOAJgBAJoBAJIBAIQBALoBANABAL4BAHoA0gEAsgEA0gEA3AEA0gEAsgEA0gEA2AEA0gEAbgC6AQDAAQCWCwCcAQCmAQCYAQCgAQB4AMIBANABAKYBALoBAJQBAJYBANIBAMABARwBigEAbgDCAQDAAQCCAQC8BQB6AOYBAIwBAA
 
 
 test 'mutual recursion — ping pong', fn:
@@ -1329,7 +1320,6 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:fail_10 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_8 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 365))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_360 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_360) (local.get $:succ_9)))
@@ -1393,7 +1383,6 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:fail_46 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_44 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 347))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_342 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1436,7 +1425,6 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:ret_66 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_65 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 339))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_332 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_333 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -1568,7 +1556,6 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:fail_97 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_95 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 461))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_456 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_456) (local.get $:succ_96)))
@@ -1632,7 +1619,6 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:fail_133 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_131 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 443))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_438 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1675,7 +1661,6 @@ test 'mutual recursion — is_even / is_odd', fn:
         (local.set $:ret_153 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_152 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 435))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_428 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_429 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -1794,7 +1779,7 @@ test 'mutual recursion — is_even / is_odd', fn:
       (data $d_1 "is_even")
       (data $d_2 "is_odd")
     )
-    ;; sm:lgKIBQCaAQFEBGIAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBQGKAQEAAdoKAJoBAJoBAJwBAJoBAJQBAIQBALoBAMIBAN4BANIBAHoA0gEAbgC8AQDEAQC-AQDMCACWAQC6AQDQAQC-AQDGAQC6AQBuAL4BAMQBAIIBAMwJAJoBALoBANABAL4BAMABAOQBANQBATQBigEBBwX4BwCcAQCaAQCcAQCaAQCWAQCEAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBAIQBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEA9g4AmAEAmgEAkgEAhAEAugEA0AEAvgEAegDSAQCyAQDSAQDcAQDSAQCyAQDSAQDYAQDSAQBuALoBAMABAMwFAJwBAU4FZABuAMQBALoGALoBAMIBAMgBAG4AxgEAtAgAmAEAugEAyAEAyAEAiAEAfADODACeAQCaAQCeAQCaAQCWAQDoAQDUAQEFAYwBAQAB5AoAnAEAmgEAnAEAmgEAlgEAhAEAugEAwgEA4AEA1AEAegDUAQBuAL4BAMQBAMABANIIAJgBALoBANABAL4BAMYBALwBAG4AwAEAxAEAhAEA0gkAnAEAugEA0AEAvgEAwAEA5gEA1AEBOAGMAQEHBYAIAJ4BAJoBAJ4BAJoBAJgBAIQBALoBAMIBAG4AxgEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA-AgAnAEAmgEAmAEAhAEAugEAwgEAwgEAiAIA1AEAbgDAAQDAAQDEAQCCDwCaAQCaAQCSAQCEAQC6AQDQAQC-AQB6ANQBALQBANQBANwBANQBALQBANQBANwBANQBAG4AugEAwgEArg8AnAEApgEAmAEAoAEAeACeAQB0AMABANABAKYBALoBAJQBAJYBANIBAMIBANIBAKYBALYBAJQBAJYBANABAMABARwBjAEAbgDEAQDAAQCEAQC8BQB6AOYBAIwBAA
+    ;; sm:kAKIBQCaAQFEBGIAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBQGKAQEAAdoKAJoBAJoBAJwBAJoBAJQBALoBAMIBAN4BANIBAHoA0gEAbgC8AQDEAQC-AQDMCACWAQC6AQDQAQC-AQDGAQC6AQBuAL4BAMQBAIIBAMwJAJoBALoBANABAL4BAMABAOQBANQBATQBigEBBwX4BwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEA9g4AmAEAmgEAkgEAhAEAugEA0AEAvgEAegDSAQCyAQDSAQDcAQDSAQCyAQDSAQDYAQDSAQBuALoBAMABAMwFAJwBAU4FZABuAMQBALoGALoBAMIBAMgBAG4AxgEAtAgAmAEAugEAyAEAyAEAiAEAfADODACeAQCaAQCeAQCaAQCWAQDoAQDUAQEFAYwBAQAB5AoAnAEAmgEAnAEAmgEAlgEAugEAwgEA4AEA1AEAegDUAQBuAL4BAMQBAMABANIIAJgBALoBANABAL4BAMYBALwBAG4AwAEAxAEAhAEA0gkAnAEAugEA0AEAvgEAwAEA5gEA1AEBOAGMAQEHBYAIAJ4BAJoBAJ4BAJoBAJgBALoBAMIBAG4AxgEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA-AgAnAEAmgEAmAEAugEAwgEAwgEAiAIA1AEAbgDAAQDAAQDEAQCCDwCaAQCaAQCSAQCEAQC6AQDQAQC-AQB6ANQBALQBANQBANwBANQBALQBANQBANwBANQBAG4AugEAwgEArg8AnAEApgEAmAEAoAEAeACeAQB0AMABANABAKYBALoBAJQBAJYBANIBAMIBANIBAKYBALYBAJQBAJYBANABAMABARwBjAEAbgDEAQDAAQCEAQC8BQB6AOYBAIwBAA
 
 
 test 'closure construction and call', fn:
@@ -2020,7 +2005,6 @@ test 'self-recursive fn defined inside another fn', fn:
         (local.set $:fail_12 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_10 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 248))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_243 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_243) (local.get $:succ_11)))
@@ -2084,7 +2068,6 @@ test 'self-recursive fn defined inside another fn', fn:
         (local.set $:fail_48 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_46 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 230))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_225 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -2127,7 +2110,6 @@ test 'self-recursive fn defined inside another fn', fn:
         (local.set $:ret_68 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_67 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 222))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_215 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_216 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -2255,7 +2237,7 @@ test 'self-recursive fn defined inside another fn', fn:
       (data $d_0 "test")
       (data $d_1 "outer")
     )
-    ;; sm:pAHuBQCaAQC6AQDAAQBuAL4BALgGALoBAMIBAMgBAG4AxgEAsggAlgEAugEAyAEAyAEAhgEAfADIDACcAQCaAQCcAQCaAQCWAQDkAQDUAQFiAYoBAQAB3goAnAEAmgEAnAEAmgEAlgEAhAEAugEAwgEA4AEA0gEAegDSAQBuAL4BAMQBAL4BAMoIAJYBALoBANABAL4BAMYBALgBAG4AvgEAxAEAggEAygkAmgEAugEA0AEAvgEAwAEA5AEA1AEBMAGKAQEHBfgHAJwBAJoBAJwBAJoBAJYBAIQBALoBAMIBAG4AxAEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA9AgAmgEAmgEAlgEAhAEAugEAwgEAwgEAhAIA1AEAbgC-AQDAAQDCAQC6DwCYAQCaAQCSAQCEAQC6AQDAAQDQAQC-AQCyAQDSAQCyAQDSAQDcAQDSAQCyAQDSAQDYAQDSAQBuALoBAMABAIQJAJgBAJoBAJIBAIQBAJwBAHYA5gEA0AEAqAEAvgEBHAGKAQBuAMIBAMABAIIBAKALAJwBAKYBAJgBAJwBAHAAegDQAQCiAQCyAQCUAQCWAQDOAQC4AQESAo4BAG4AxAEAwAEAhAEAuAUAegDmAQCMAQA
+    ;; sm:oQHuBQCaAQC6AQDAAQBuAL4BALgGALoBAMIBAMgBAG4AxgEAsggAlgEAugEAyAEAyAEAhgEAfADIDACcAQCaAQCcAQCaAQCWAQDkAQDUAQFiAYoBAQAB3goAnAEAmgEAnAEAmgEAlgEAugEAwgEA4AEA0gEAegDSAQBuAL4BAMQBAL4BAMoIAJYBALoBANABAL4BAMYBALgBAG4AvgEAxAEAggEAygkAmgEAugEA0AEAvgEAwAEA5AEA1AEBMAGKAQEHBfgHAJwBAJoBAJwBAJoBAJYBALoBAMIBAG4AxAEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA9AgAmgEAmgEAlgEAugEAwgEAwgEAhAIA1AEAbgC-AQDAAQDCAQC6DwCYAQCaAQCSAQCEAQC6AQDAAQDQAQC-AQCyAQDSAQCyAQDSAQDcAQDSAQCyAQDSAQDYAQDSAQBuALoBAMABAIQJAJgBAJoBAJIBAIQBAJwBAHYA5gEA0AEAqAEAvgEBHAGKAQBuAMIBAMABAIIBAKALAJwBAKYBAJgBAJwBAHAAegDQAQCiAQCyAQCUAQCWAQDOAQC4AQESAo4BAG4AxAEAwAEAhAEAuAUAegDmAQCMAQA
 
 
 # TODO, duplicate?
@@ -2381,7 +2363,6 @@ test 'recursive list sum', fn:
         (local.set $:fail_11 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_9 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 410))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_405 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_405) (local.get $:succ_10)))
@@ -2540,7 +2521,6 @@ test 'recursive list sum', fn:
         (local.set $:fail_54 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_52 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 392))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_387 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_387) (local.get $:succ_53)))
@@ -2589,7 +2569,6 @@ test 'recursive list sum', fn:
         (local.set $:ret_111 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_110 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 384))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_377 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_378 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -2774,7 +2753,7 @@ test 'recursive list sum', fn:
       (data $d_0 "test")
       (data $d_1 "sum")
     )
-    ;; sm:_wHuBQCaAQC6AQDAAQBuAL4BALgGALoBAMIBAMgBAG4AxgEAsggAlgEAugEAyAEAyAEAhgEAfACyDQCWAQC6AQDIAQDIAQFMAlQA6AEA1AEBAAL8BQC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAC5goAnAEAmgEAnAEAmgEAlAEAhAEAugEAwgEA4AEA0gEAegDSAQBuALwBAMQBAL4BAJAJAJYBALoBANABAL4BAMYBAMYBALQBAG4AvgEAxAEAxAEAggEAhAoAmgEAmgEAkgEAmgEAmAEAugEA0AEAvgEAwAEAjAIA1AEBQgXwCACWAQCaAQCWAQC6AQDCAQDIAQErAVABCgRWAG4AvgEAvgEAxgEAvAcAlgEAmgEAlgEAugEAyAEBCwtUAG4AvgEAvgEAhAgAlgEAugEAyAEAyAEAugEA1AEBAAuUBgC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAL6goAnAEAmgEAnAEAmgEAlgEAhAEAugEAwgEA4AEA1AEAegDSAQBuAL4BAMQBAMABAP4DAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPgIAJwBAJoBAJgBAIQBALoBAMIBAMIBAIgCANQBAG4AwAEAwAEAxAEAwg8AmAEAmgEAmgEAmgEAkgEAhAEAugEA0AEAvgEArgEA0gEAsgEA0gEA3AEA0gEAsgEA1AEA2gEA1AEAbgDCAQDAAQCUCQCYAQC6AQDQAQC-AQDGAQC0AQFgAYwBAG4AxAEAwAEAxAEAhAEAzAkAmAEAugEA0AEAvgEAxgEA5gEA1AEBGQGMAQEAAeYJAJgBALoBANABAL4BAMYBAOYBANQBAQYBjAEBAAHmCQCYAQC6AQDQAQC-AQDGAQDmAQDUAQEGAYwBAQABogwAnAEApgEAmAEAmAEAaAC6AQDQAQCeAQCqAQCUAQCWAQDKAQDiAQDUAQEGAYwBARMMdAEUAdYFAHoA5gEAjAEA
+    ;; sm:_AHuBQCaAQC6AQDAAQBuAL4BALgGALoBAMIBAMgBAG4AxgEAsggAlgEAugEAyAEAyAEAhgEAfACyDQCWAQC6AQDIAQDIAQFMAlQA6AEA1AEBAAL8BQC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAC5goAnAEAmgEAnAEAmgEAlAEAugEAwgEA4AEA0gEAegDSAQBuALwBAMQBAL4BAJAJAJYBALoBANABAL4BAMYBAMYBALQBAG4AvgEAxAEAxAEAggEAhAoAmgEAmgEAkgEAmgEAmAEAugEA0AEAvgEAwAEAjAIA1AEBQgXwCACWAQCaAQCWAQC6AQDCAQDIAQErAVABCgRWAG4AvgEAvgEAxgEAvAcAlgEAmgEAlgEAugEAyAEBCwtUAG4AvgEAvgEAhAgAlgEAugEAyAEAyAEAugEA1AEBAAuUBgC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAL6goAnAEAmgEAnAEAmgEAlgEAugEAwgEA4AEA1AEAegDSAQBuAL4BAMQBAMABAP4DAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPgIAJwBAJoBAJgBALoBAMIBAMIBAIgCANQBAG4AwAEAwAEAxAEAwg8AmAEAmgEAmgEAmgEAkgEAhAEAugEA0AEAvgEArgEA0gEAsgEA0gEA3AEA0gEAsgEA1AEA2gEA1AEAbgDCAQDAAQCUCQCYAQC6AQDQAQC-AQDGAQC0AQFgAYwBAG4AxAEAwAEAxAEAhAEAzAkAmAEAugEA0AEAvgEAxgEA5gEA1AEBGQGMAQEAAeYJAJgBALoBANABAL4BAMYBAOYBANQBAQYBjAEBAAHmCQCYAQC6AQDQAQC-AQDGAQDmAQDUAQEGAYwBAQABogwAnAEApgEAmAEAmAEAaAC6AQDQAQCeAQCqAQCUAQCWAQDKAQDiAQDUAQEGAYwBARMMdAEUAdYFAHoA5gEAjAEA
 
 
 

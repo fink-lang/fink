@@ -637,7 +637,6 @@ test 'match empty string', fn:
         (local.set $:fail_8 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_6 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 203))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_198 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:v_198) (local.get $:succ_7)))
@@ -672,7 +671,6 @@ test 'match empty string', fn:
         (local.set $:fail_44 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_42 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 189))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_184 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -715,7 +713,6 @@ test 'match empty string', fn:
         (local.set $:ret_57 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:v_56 (call $rt/apply.wat:args_head (local.get $:params)))
-        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 181))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:v_174 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:v_175 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -801,7 +798,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:fYgFAJoBAUABigEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJuAQAC2AoAmgEAmgEAmgEAmgEAlAEAhAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBigEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQCEAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBAIQBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEAvAoAnAEApgEAmAEAmgEAbAB6ANABAKABAK4BAJQBAJYBAMwBALQBAG4A0AEApgUAegDmAQCMAQA
+    ;; sm:eogFAJoBAUABigEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJuAQAC2AoAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBigEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEAvAoAnAEApgEAmAEAmgEAbAB6ANABAKABAK4BAJQBAJYBAMwBALQBAG4A0AEApgUAegDmAQCMAQA
 
 
 test 'empty string eq template', fn:
