@@ -53,6 +53,31 @@ use wasm_encoder::{
 use super::ir::*;
 use super::runtime_contract::import_key;
 
+// ── linear-memory map ────────────────────────────────────────────
+//
+// emit is the single owner of linear-memory byte layout. The linker
+// remaps symbol *indices* (which global, which data segment); the
+// *byte offsets* of everything in linear memory are assigned here.
+//
+// Layout of the single memory page (64 KiB):
+//
+//   [0, TRACE_BYTES)            trace activation-stack region (reserved)
+//   [TRACE_BYTES, SCRATCH_BASE) literal data pool (grows up at compile time)
+//   [SCRATCH_BASE, 64 KiB)      host-IO scratch window
+//
+// SCRATCH_BASE is the host-exchange window the JS interop bounces
+// bytes through. It is declared in the runtime WAT today; this constant
+// is the layout authority's copy used to bound the data pool.
+
+/// Trace activation-stack region at the bottom of memory. Must match
+/// rt/trace.wat's window: TRACE_CAP (64) frames x FRAME_BYTES (16, four
+/// i32s `{fn_mid, fn_cid, call_mid, call_cid}`) = 1024 bytes.
+const RING_BYTES: u32 = 64 * 16;
+
+/// Host-IO scratch window base. Must match the runtime WAT's
+/// `SCRATCH_BASE` global (`interop/js/interop.wat`).
+const SCRATCH_BASE: u32 = 0xC000;
+
 /// Output of `emit::emit`. The binary plus a per-InstrId map of absolute
 /// byte offsets in the binary. Only InstrIds that were tagged with a
 /// `cps_id` in lower (and thus need to participate in mark finalisation)
@@ -160,6 +185,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
     let modules: &[(&str, &str)] = &[
       ("interop.wat",      interop_src),
       ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
+      ("rt/trace.wat",     include_str!("../../runtime/rt/trace.wat")),
       ("rt/opaque.wat",    include_str!("../../runtime/rt/opaque.wat")),
       ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
       ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
@@ -713,14 +739,25 @@ pub fn emit_with_offsets(frag: &Fragment, interop: Interop) -> EmitOutput {
   };
 
   // Data: lay out user fragment's `frag.data` blobs sequentially in
-  // memory starting at offset 0. Each `DataSym(i)` resolves to the
-  // running offset, used by `Operand::DataRef` at emit time.
+  // memory starting at `RING_BYTES` (the bottom region is reserved for
+  // the trace ring). Each `DataSym(i)` resolves to its absolute byte
+  // offset, used by `Operand::DataRef` at emit time.
   let mut data_offsets: Vec<u32> = Vec::with_capacity(frag.data.len());
   let mut data_blob: Vec<u8> = Vec::new();
   for d in &frag.data {
-    data_offsets.push(data_blob.len() as u32);
+    data_offsets.push(RING_BYTES + data_blob.len() as u32);
     data_blob.extend_from_slice(&d.bytes);
   }
+
+  // The data pool must not grow into the host-IO scratch window. Data
+  // size is fully known here, so this is a hard compile-time invariant.
+  let data_top = RING_BYTES + data_blob.len() as u32;
+  assert!(
+    data_top <= SCRATCH_BASE,
+    "literal data pool ({} bytes ending at {data_top:#x}) overflows into \
+     the host-IO scratch window at {SCRATCH_BASE:#x}",
+    data_blob.len(),
+  );
 
   // Code: runtime's bodies raw, then user's bodies encoded.
   let mut code_sec = CodeSection::new();
@@ -738,16 +775,16 @@ pub fn emit_with_offsets(frag: &Fragment, interop: Interop) -> EmitOutput {
     user_body_offsets.push((final_idx, body_offsets));
   }
 
-  // Data section: one active segment at offset 0 in memory 0 holding
-  // the concatenated blobs. Skip if there's no data.
+  // Data section: one active segment at `RING_BYTES` in memory 0
+  // holding the concatenated blobs. Skip if there's no data.
   let data_sec = if data_blob.is_empty() {
     None
   } else {
     let mut sec = wasm_encoder::DataSection::new();
     sec.active(
-      0,                                 // memory index
-      &ConstExpr::i32_const(0),          // offset
-      data_blob.iter().copied(),         // bytes
+      0,                                       // memory index
+      &ConstExpr::i32_const(RING_BYTES as i32), // offset
+      data_blob.iter().copied(),               // bytes
     );
     Some(sec)
   };
@@ -1184,6 +1221,54 @@ mod tests {
   fn js_runtime_links() {
     let lr = linked_runtime(Interop::Js);
     assert!(!lr.bytes.is_empty(), "JS runtime should link to non-empty bytes");
+  }
+
+  /// The linear-memory map reserves a RING region at the bottom of
+  /// memory; the literal data pool must start at `RING_BYTES`, not at
+  /// offset 0. Asserted via the emitted data section's active-segment
+  /// offset.
+  #[test]
+  fn data_pool_starts_above_ring_region() {
+    let mut frag = Fragment::default();
+    frag.data.push(DataDecl { bytes: b"hi".to_vec(), display: None });
+
+    let bytes = emit(&frag, Interop::Js);
+
+    let mut seg_offset: Option<u64> = None;
+    let parser = wasmparser::Parser::new(0);
+    for payload in parser.parse_all(&bytes) {
+      if let Ok(wasmparser::Payload::DataSection(reader)) = payload {
+        for data in reader.into_iter().flatten() {
+          if let wasmparser::DataKind::Active { offset_expr, .. } = data.kind {
+            let mut ops = offset_expr.get_operators_reader();
+            if let Ok(wasmparser::Operator::I32Const { value }) = ops.read() {
+              seg_offset = Some(value as u32 as u64);
+            }
+          }
+        }
+      }
+    }
+
+    assert_eq!(
+      seg_offset,
+      Some(RING_BYTES as u64),
+      "data active segment should start at RING_BYTES ({RING_BYTES}), \
+       leaving [0, RING_BYTES) reserved for the trace ring"
+    );
+  }
+
+  /// The data pool growing into the scratch window is a hard compile-
+  /// time error, not silent corruption.
+  #[test]
+  #[should_panic(expected = "overflows into the host-IO scratch window")]
+  fn data_pool_overflowing_scratch_window_panics() {
+    let mut frag = Fragment::default();
+    // One blob large enough that RING_BYTES + len exceeds SCRATCH_BASE.
+    frag.data.push(DataDecl {
+      bytes: vec![0u8; SCRATCH_BASE as usize],
+      display: None,
+    });
+    emit(&frag, Interop::Js);
   }
 
   #[test]

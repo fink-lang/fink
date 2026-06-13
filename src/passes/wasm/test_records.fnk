@@ -29,6 +29,9 @@ test 'rec literal', fn:
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
         (local $:lit_3 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
         (local.set $:v_18 (struct.new $rt/apply.wat:Closure (ref.func $test::v_26) (local.get $:caps_arg)))
@@ -50,7 +53,7 @@ test 'rec literal', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:Eb4HAJQBALoBAMQBAQ4BkAEBBgGIAQEFBKAIAJgBALQBANABAQ0MYAECAZABAQYBiAEBBQTsBQB6AOYBAIwBAA
+    ;; sm:E74HAJQBALoBAMQBAQ4BkAEBBgGIAQEFBPIIAJwBAKYBAJgBALQBANABAQ0MYAECAZABAQYBiAEBBQTsBQB6AOYBAIwBAA
 
 
 test 'rec destructure', fn:
@@ -216,6 +219,9 @@ test 'rec destructure', fn:
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
         (local $:lit_5 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_a_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test::a_0 (local.get $:cell_a_0))
@@ -240,7 +246,7 @@ test 'rec destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:WIwIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfoHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRiSAQEAGJAJAJYBALoBAMgBAMgBAOgBANIBAQAYkgEBABi8BgC6AQDIAQBuAMoIAJwBAJoBAJwBAJoBAJYBAOQBANIBALgBANIBAQAYtgQAWACmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAZABAQYBiAEBBQSICQCYAQCUAQBmALQBANQBAQ0MYAECAZABAQYBiAEBBQTuBQB6AOYBAIwBAA
+    ;; sm:WowIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfoHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRiSAQEAGJAJAJYBALoBAMgBAMgBAOgBANIBAQAYkgEBABi8BgC6AQDIAQBuAMoIAJwBAJoBAJwBAJoBAJYBAOQBANIBALgBANIBAQAYtgQAWACmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAZABAQYBiAEBBQTaCQCcAQCmAQCYAQCUAQBmALQBANQBAQ0MYAECAZABAQYBiAEBBQTuBQB6AOYBAIwBAA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -321,6 +327,9 @@ test 'rec spread', fn:
         (local $:lit_2 (ref null any))
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_r_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:r (local.get $:cell_r_0))
@@ -349,7 +358,7 @@ test 'rec spread', fn:
       (data $d_3 "b")
       (data $d_4 "a")
     )
-    ;; sm:LMQHAJYBALoBAMQBAS4BkgEBBgGKAQEFBKgMAJQBALoBAM4BALoBAMQBAJwBAKIBAJQBAJYBAMYBALYBANABAQsLYgCsAQECA54KAJQBALoBAM4BALoBAMQBAOIBANABAQ0BkAEBBgGIAQEFBIYJAJgBAJQBAGAA3gEA0AEBDQxgAQIBkAEBBgGIAQEFBOwFAHoA5gEAjAEA
+    ;; sm:LsQHAJYBALoBAMQBAS4BkgEBBgGKAQEFBKgMAJQBALoBAM4BALoBAMQBAJwBAKIBAJQBAJYBAMYBALYBANABAQsLYgCsAQECA54KAJQBALoBAM4BALoBAMQBAOIBANABAQ0BkAEBBgGIAQEFBNgJAJwBAKYBAJgBAJQBAGAA3gEA0AEBDQxgAQIBkAEBBgGIAQEFBOwFAHoA5gEAjAEA
 
 test 'rec empty literal', fn:
   expect wat ƒink:
@@ -362,6 +371,9 @@ test 'rec empty literal', fn:
         (local $:ret_0 (ref null any))
         (local $:lit_1 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (call $std/rec.fnk:new))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -379,7 +391,7 @@ test 'rec empty literal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CZIGAJgBAQACYABuAMABAKYFAHoA5gEAjAEA
+    ;; sm:C-QGAJwBAKYBAJgBAQACYABuAMABAKYFAHoA5gEAjAEA
 
 test 'rec single field', fn:
   expect wat ƒink:
@@ -393,6 +405,9 @@ test 'rec single field', fn:
         (local $:lit_1 (ref null any))
         (local $:lit_2 (ref null any))
         (local $:lit_3 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (call $std/rec.fnk:new))
         (local.set $:lit_2 (call $std/str.fnk:from_data (data.ref $d_0 1)))
@@ -411,7 +426,7 @@ test 'rec single field', fn:
       (data $d_0 "a")
       (data $d_1 "test")
     )
-    ;; sm:CeQGAJgBAQAGYAECAZABAQYBiAEBBQTuBQB6AOYBAIwBAA
+    ;; sm:C7YHAJwBAKYBAJgBAQAGYAECAZABAQYBiAEBBQTuBQB6AOYBAIwBAA
 
 test 'rec nested destructure', fn:
   expect wat ƒink:
@@ -646,6 +661,9 @@ test 'rec nested destructure', fn:
         (local $:lit_5 (ref null any))
         (local $:lit_6 (ref null any))
         (local $:lit_7 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_a_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test::a_0 (local.get $:cell_a_0))
@@ -673,7 +691,7 @@ test 'rec nested destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:fcIHAJYBALoBAMYBAKIBAK4BAG4AygEA_AYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQEmB5IBAQAHvgYAugEAyAEAbgDOCACcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQEAB7oEAFgA9gkAlgEAugEAxgEAogEAuAEA0gEAegDSAQB6ANIBAK4BAG4AygEAvgEAvgEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQElEpIBAQASvgYAugEAyAEAbgDOCACcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQEAEroEAFgApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxgAQIBkAEBAAr0CQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdgAQIBkAEBBgKKAQEFBe4FAHoA5gEAjAEA
+    ;; sm:f8IHAJYBALoBAMYBAKIBAK4BAG4AygEA_AYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQEmB5IBAQAHvgYAugEAyAEAbgDOCACcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQEAB7oEAFgA9gkAlgEAugEAxgEAogEAuAEA0gEAegDSAQB6ANIBAK4BAG4AygEAvgEAvgEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQElEpIBAQASvgYAugEAyAEAbgDOCACcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQEAEroEAFgApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxgAQIBkAEBAArGCgCcAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdgAQIBkAEBBgKKAQEFBe4FAHoA5gEAjAEA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:
@@ -776,6 +794,9 @@ test 'rec spread merge two', fn:
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
         (local $:lit_5 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_r1_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:r1 (local.get $:cell_r1_0))
@@ -810,7 +831,7 @@ test 'rec spread merge two', fn:
       (data $d_3 "b")
       (data $d_4 "a")
     )
-    ;; sm:OcIIAJYBALoBAM4BALoBAMQBAK4BAT4Ezg0AlgEAugEAzgEAugEAxAEAzgEAugEAngEApgEAlAEAlgEAyAEA4gEA0AEBDQxiAK4BAQIEhA4AlAEAugEAzgEAugEAzgEAugEAxAEAnAEApgEAlAEAlgEAyAEAjgIA0AEBDwZgAQIBkAEBBgGKAQEFBPoJAJgBAJYBAGQAlgEAZACMAgDQAQEZBmABAgGQAQEGAYgBAQUE7AUAegDmAQCMAQA
+    ;; sm:O8IIAJYBALoBAM4BALoBAMQBAK4BAT4Ezg0AlgEAugEAzgEAugEAxAEAzgEAugEAngEApgEAlAEAlgEAyAEA4gEA0AEBDQxiAK4BAQIEhA4AlAEAugEAzgEAugEAzgEAugEAxAEAnAEApgEAlAEAlgEAyAEAjgIA0AEBDwZgAQIBkAEBBgGKAQEFBMwKAJwBAKYBAJgBAJYBAGQAlgEAZACMAgDQAQEZBmABAgGQAQEGAYgBAQUE7AUAegDmAQCMAQA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -840,6 +861,9 @@ test 'rec format template', fn:
         (local $:lit_2 (ref null any))
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
         (local.set $:v_17 (struct.new $rt/apply.wat:Closure (ref.func $test::v_25) (local.get $:caps_arg)))
@@ -861,7 +885,7 @@ test 'rec format template', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:EeYHAJQBALoBAMQBAQIFkAEA1AEBARDmBwCYAQC0AQDQAQEQBmABAgGQAQEGAYgBAQUE7AUAegDmAQCMAQA
+    ;; sm:E-YHAJQBALoBAMQBAQIFkAEA1AEBARC4CACcAQCmAQCYAQC0AQDQAQEQBmABAgGQAQEGAYgBAQUE7AUAegDmAQCMAQA
 
 test 'rec dot dynamic key', fn:
   expect wat ƒink:
@@ -920,6 +944,9 @@ test 'rec dot dynamic key', fn:
         (local $:lit_3 (ref null any))
         (local $:lit_4 (ref null any))
         (local $:lit_5 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_r_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:r (local.get $:cell_r_0))
@@ -950,5 +977,5 @@ test 'rec dot dynamic key', fn:
       (data $d_2 "a")
       (data $d_3 "k")
     )
-    ;; sm:JMwOAJQBALoBAM4BALoBAM4BALoBAMQBAJwBAKIBAJQBAJYBAMYBARgBjAEAnAEAogEAlAEAlgEAxgEArAEArAEBEAX6CQCYAQCUAQBgAJQBAGAAiAIA0AEBHwdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
-BAK4BAMwBAR8HWgECAYoBAQYChAEBBQXYBQB6AOYBAIwBAA
+    ;; sm:JswOAJQBALoBAM4BALoBAM4BALoBAMQBAJwBAKIBAJQBAJYBAMYBARgBjAEAnAEAogEAlAEAlgEAxgEArAEArAEBEAXMCgCcAQCmAQCYAQCUAQBgAJQBAGAAiAIA0AEBHwdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
+

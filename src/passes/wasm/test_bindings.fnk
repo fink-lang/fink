@@ -19,6 +19,9 @@ test 'single binding export', fn:
         (local $:pub_name (ref null any))
         (local $:unwrap_foo_0 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_foo_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:foo (local.get $:cell_foo_0))
@@ -46,7 +49,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:EbQIAJgBAJgBAGgBAAOGAQCgAQCqAQCUAQCWAQDKAQCwAQBuAM4BAKYFAHoA5gEAjAEA
+    ;; sm:E4YJAJwBAKYBAJgBAJgBAGgBAAOGAQCgAQCqAQCUAQCWAQDKAQCwAQBuAM4BAKYFAHoA5gEAjAEA
 
 
 
@@ -66,6 +69,9 @@ test 'let binding', fn:
         (local $:pub_name (ref null any))
         (local $:unwrap_x_0 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_x_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:x (local.get $:cell_x_0))
@@ -93,7 +99,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:EaQIAJgBAJQBAGABAAGEAQCYAQCiAQCUAQCWAQDGAQCoAQBuAMoBAKYFAHoA5gEAjAEA
+    ;; sm:E_YIAJwBAKYBAJgBAJQBAGABAAGEAQCYAQCiAQCUAQCWAQDGAQCoAQBuAMoBAKYFAHoA5gEAjAEA
 
 
 
@@ -119,6 +125,9 @@ test 'multiple let bindings used', fn:
         (local $:pub_name (ref null any))
         (local $:unwrap_x_0 (ref null any))
         (local $:unwrap_y_1 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_x_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:x (local.get $:cell_x_0))
@@ -155,7 +164,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:GMQLAJgBAJQBAGAAlAEAYAEAAYIBAJgBAKIBAJQBAJYBAMYBAQwBggEAmAEAogEAlAEAlgEAxgEAqAEAqAEBDAXuBQB6AOYBAIwBAA
+    ;; sm:GpYMAJwBAKYBAJgBAJQBAGAAlAEAYAEAAYIBAJgBAKIBAJQBAJYBAMYBAQwBggEAmAEAogEAlAEAlgEAxgEAqAEAqAEBDAXuBQB6AOYBAIwBAA
 
 
 
@@ -176,6 +185,7 @@ test 'binding rhs is a call', fn:
         (local.set $a_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $b_3 (call $rt/apply.wat:args_head (local.get $:params)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 61))
         (return_call $std/operators.fnk:op_plus (local.get $:ctx_param) (local.get $a_2) (local.get $b_3) (local.get $:ret_6))
       )
       (func $test::v_55 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -219,6 +229,9 @@ test 'binding rhs is a call', fn:
         (local $:lit_14 (ref null any))
         (local $:lit_15 (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_add_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:add (local.get $:cell_add_0))
@@ -240,6 +253,7 @@ test 'binding rhs is a call', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_15) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_14) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_45) (local.get $:args)))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 21))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:unwrap_add_0))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -258,7 +272,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:LoIFAJgBAJoBAJIBAJoBAJIBAR4FwgoAlgEAugEAzgEAugEAxAEAngEAogEAlAEAlgEAxgEArAEAbgDMAQCYDQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCUAQCWAQDKAQDeAQDQAQCwAQEcAYoBAQYBigEAbgDCAQDCAQC-AQC0BQB6AOYBAIwBAA
+    ;; sm:MoIFAJgBAJoBAJIBAJoBAJIBAIIBAR4FwgoAlgEAugEAzgEAugEAxAEAngEAogEAlAEAlgEAxgEArAEAbgDMAQDqDQCcAQCmAQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCUAQCWAQDKAQDeAQDQAQCwAQEcAYoBAQYBigEAbgDCAQDCAQC-AQCCAQC0BQB6AOYBAIwBAA
 
 
 
@@ -280,6 +294,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:ret_30 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $a_2 (call $rt/apply.wat:args_head (local.get $:params)))
+        (call $rt/trace.wat:trace_push (i32.const 0) (i32.const 100))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:slot_95_raw (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:slot_95 (ref.cast (ref null $rt/apply.wat:Cell) (local.get $:slot_95_raw)))
@@ -412,6 +427,9 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:lit_4 (ref null any))
         (local $:lit_5 (ref null any))
         (local $:lit_6 (ref null any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_x_0 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test::x_0 (local.get $:cell_x_0))
@@ -440,6 +458,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:VL4IAJoBAJoBAJIBALoBAM4BALoBAKwBATQF3AoAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAlAEAlgEAygEAsAEAbgDOAQD8BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBATMNkgEBAA28BgC6AQDIAQBuAMgIAJwBAJoBAJwBAJoBAJQBAOQBANIBALgBANIBAQANtAQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCwCQCYAQCUAQBmAJgBAGgAtAEA0gEBDAdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
+    ;; sm:V74IAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF3AoAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAlAEAlgEAygEAsAEAbgDOAQD8BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBATMNkgEBAA28BgC6AQDIAQBuAMgIAJwBAJoBAJwBAJoBAJQBAOQBANIBALgBANIBAQANtAQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCCCgCcAQCmAQCYAQCUAQBmAJgBAGgAtAEA0gEBDAdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
 
 

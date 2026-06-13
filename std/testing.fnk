@@ -1,6 +1,7 @@
 
 {write, stderr} = import 'std/io.fnk'
-{suspend, unique, init_ctx} = import 'std/effects.fnk'
+{suspend, init_ctx} = import 'std/effects.fnk'
+{get_trace, get_module_url, get_loc} = import 'std/trace.fnk'
 
 
 test = fn name, body:
@@ -17,7 +18,7 @@ upd_curr_test = fn upd_fn:
 
 
 set_curr_test = fn test_case:
-  upd_tests fn ctx:
+  upd_tests fn _:
     [test_case, {curr: test_case}]
 
 
@@ -48,7 +49,20 @@ run_test = fn test_case:
       true
 
 
-fail = fn failure:
+trace_to_str = fn t, s:
+  match t:
+    []: s
+    [[mid, cid], ..rest]:
+      murl = get_module_url mid
+      trace_to_str rest, '${s}\n  ${murl}:${get_loc mid, cid} (${mid}:${cid})'
+
+
+
+fail = fn msg:
+  trace = get_trace 5
+
+  failure = trace_to_str trace, '${msg}\nTraceback:'
+
   abort = upd_curr_test fn {abort}:
     [abort, {result: {failure}}]
 
@@ -81,7 +95,7 @@ test_all = fn:
 equals = fn actual, expected:
   match actual == expected:
     true: true
-    false: fail '${actual}\n  !=\n  ${expected}'
+    false: fail 'act: ${actual}\n  !=\n  exp: ${expected}'
 
 
 

@@ -267,6 +267,10 @@ export const init_wasm = async (bytes, host = {}) => {
     host_write,
     host_read_sync:    (_fd, _size, _ptr) => 0,
     host_invoke_cont:  (resolver, args, ctx) => resolver(args, ctx),
+    // Trace source-line resolution needs the compiled debug marks, which
+    // the wasm+js artifact does not carry. Return 0 (the import's
+    // "unknown" sentinel) so get_loc yields no line in the JS host.
+    host_resolve_loc:  (_mid, _cid) => 0,
   };
 
   const { instance } = await WebAssembly.instantiate(bytes, { env });

@@ -204,7 +204,7 @@ mod tests {
     // Generic synthetic FQN — every fragment in the IR must have a
     // non-empty fqn_prefix; tests use `test:` so emitted exports
     // (per-module wrapper, etc.) are addressable by a stable name.
-    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:", crate::passes::wasm::ir::ModuleId(0));
     // Single-module programs today: the link step is a passthrough,
     // but routing through it keeps the tracer test surface honest
     // when multi-fragment merge arrives.
@@ -292,7 +292,7 @@ mod tests {
   #[cfg(test)]
   fn emit_for(src: &str) -> Vec<u8> {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:", crate::passes::wasm::ir::ModuleId(0));
     let linked = super::link::link(&[user_frag]);
     super::emit::emit(&linked, super::emit::Interop::Rust)
   }
@@ -306,6 +306,35 @@ mod tests {
   /// helpers (args_empty + args_prepend) to construct. That full
   /// execution handshake is exercised by emit_executes_42 below.
   #[cfg(feature = "run")]
+  /// A user-function call site emits a `trace_push` recording the
+  /// call-site `(module_id, cps_id)` into the trace buffer, before the
+  /// `apply_3` dispatch. Builtin/runtime calls do NOT push.
+  #[test]
+  fn user_call_emits_trace_push() {
+    let out = wat("\
+add = fn a, b:
+  a + b
+add 3, 4
+");
+    assert!(
+      out.contains("rt/trace.wat:trace_push"),
+      "user-fn call should emit a trace_push at the call site; got:\n{out}"
+    );
+  }
+
+  /// Every module's `fink_module` self-registers its `(module_id, url)`
+  /// so `get_module_url` can resolve a trace frame's module id back to a
+  /// source url. The id is a compile-time constant; the url is the
+  /// module's canonical url string.
+  #[test]
+  fn fink_module_registers_its_url() {
+    let out = wat("42");
+    assert!(
+      out.contains("rt/modules.wat:register_module"),
+      "fink_module should call register_module(mod_id, url); got:\n{out}"
+    );
+  }
+
   #[test]
   fn emit_instantiates_in_wasmtime() {
     use wasmtime::{Config, Engine, Module, Store, Linker, Error, ExternType};

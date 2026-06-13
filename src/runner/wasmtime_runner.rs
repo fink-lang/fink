@@ -79,6 +79,14 @@ pub fn run(
   let exit_state: Arc<Mutex<ExitState>> = Arc::new(Mutex::new(ExitState::default()));
   let cli_args = Arc::new(args);
 
+  // (module_id, cps_id) -> source line, built from the debug marks. Lets
+  // the trace's `get_loc` resolve a frame's (mid, cid) to a source line.
+  let loc_map: Arc<std::collections::HashMap<(u32, u32), u32>> = Arc::new(
+    wasm.marks.iter()
+      .map(|m| ((m.module_id.0, m.cps_id.0), m.source.start.line))
+      .collect(),
+  );
+
   let mut linker = Linker::new(&engine);
   for import in module.imports() {
     if import.module() == "env"
@@ -99,6 +107,18 @@ pub fn run(
           let base = std::time::Instant::now();
           linker.func_new("env", &name, ft, move |_caller, _params, results| {
             results[0] = Val::I64(base.elapsed().as_nanos() as i64);
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_resolve_loc" => {
+          // (module_id, cps_id) -> source line (0 if unknown). Backs the
+          // trace's get_loc; resolves a frame to a source location.
+          let lm = loc_map.clone();
+          linker.func_new("env", &name, ft, move |_caller, params, results| {
+            let mid = params[0].unwrap_i32() as u32;
+            let cid = params[1].unwrap_i32() as u32;
+            let line = lm.get(&(mid, cid)).copied().unwrap_or(0);
+            results[0] = Val::I32(line as i32);
             Ok(())
           }).map_err(|e| e.to_string())?;
         }

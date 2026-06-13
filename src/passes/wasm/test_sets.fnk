@@ -33,6 +33,7 @@ test 'set import + construction', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_29) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_28) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_116) (local.get $:args)))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 33))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $set_0))
       )
       (func $test::v_83 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -134,6 +135,9 @@ test 'set import + construction', fn:
         (local $:imp_val_set (ref null any))
         (local $:imp_key_set (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_2)))
         (local.set $:v_75 (struct.new $rt/apply.wat:Closure (ref.func $test::v_129) (local.get $:caps_arg)))
@@ -157,7 +161,7 @@ test 'set import + construction', fn:
       (data $d_0 "set")
       (data $d_1 "test")
     )
-    ;; sm:SY4JAJYBALoBAMYBAQIDVAFAAYoBAQYBigEBBgGKAQBuAMIBAMIBAMIBAMQBAPIGAJYBAJoBAJYBALoBAMYBAG4AvgEAxAgAlgEAugEAxgEAxgEAuAEA0AEBTRySAQEAHLYGALoBAMYBAG4AwggAmgEAmgEAmgEAmgEAlAEA4AEA0gEAtgEA0AEBABy0BABYAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BANwJAJgBALQBANIBAGQAbACcAQCGAgBuAMQBAKQFAHoA5gEAjAEA
+    ;; sm:TI4JAJYBALoBAMYBAQIDVAFAAYoBAQYBigEBBgGKAQBuAMIBAMIBAMIBAMQBAIIBAPIGAJYBAJoBAJYBALoBAMYBAG4AvgEAxAgAlgEAugEAxgEAxgEAuAEA0AEBTRySAQEAHLYGALoBAMYBAG4AwggAmgEAmgEAmgEAmgEAlAEA4AEA0gEAtgEA0AEBABy0BABYAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BAK4KAJwBAKYBAJgBALQBANIBAGQAbACcAQCGAgBuAMQBAKQFAHoA5gEAjAEA
 
 
 test 'set spread', fn:
@@ -181,6 +185,7 @@ test 'set spread', fn:
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_concat (local.get $:v_36) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:ret_107) (local.get $:args)))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 40))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $set_106))
       )
       (func $test::v_123 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -335,6 +340,9 @@ test 'set spread', fn:
         (local $:imp_val_set (ref null any))
         (local $:imp_key_set (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_2)))
         (local.set $:v_103 (struct.new $rt/apply.wat:Closure (ref.func $test::v_187) (local.get $:caps_arg)))
@@ -358,7 +366,7 @@ test 'set spread', fn:
       (data $d_0 "set")
       (data $d_1 "test")
     )
-    ;; sm:XboHAJYBALoBAMQBAMYBAG4AvAEAxAEAwAgAlgEAugEAxAEAxgEA4gEA0gEBSAGKAQEAAeQIAJYBALoBAMQBAMYBAOIBANIBAQYBigEBAAGoCQCWAQC6AQDGAQFLA1QA3gEA0gEBUgGKAQENCXIBDgGiBwCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBAVMckgEBABy8BgC6AQDIAQBuAMQIAJoBAJoBAJoBAJoBAJQBAOABANIBALYBANIBAQActAQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQDeCQCYAQC0AQDUAQBkAGwAnAEAhgIAbgDEAQCmBQB6AOYBAIwBAA
+    ;; sm:YLoHAJYBALoBAMQBAMYBAG4AvAEAxAEAggEAwAgAlgEAugEAxAEAxgEA4gEA0gEBSAGKAQEAAeQIAJYBALoBAMQBAMYBAOIBANIBAQYBigEBAAGoCQCWAQC6AQDGAQFLA1QA3gEA0gEBUgGKAQENCXIBDgGiBwCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBAVMckgEBABy8BgC6AQDIAQBuAMQIAJoBAJoBAJoBAJoBAJQBAOABANIBALYBANIBAQActAQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCwCgCcAQCmAQCYAQC0AQDUAQBkAGwAnAEAhgIAbgDEAQCmBQB6AOYBAIwBAA
 
 
 test 'set destructure empty', fn:
@@ -628,6 +636,7 @@ test 'set destructure empty', fn:
         (local.set $:v_198 (struct.new $rt/apply.wat:Closure (ref.func $test::v_318) (local.get $:caps_arg)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_198) (local.get $:args)))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 118))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $set_0))
       )
       (func $test::v_326 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -730,6 +739,9 @@ test 'set destructure empty', fn:
         (local $:imp_val_set (ref null any))
         (local $:imp_key_set (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_s_1 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:s (local.get $:cell_s_1))
@@ -757,7 +769,7 @@ test 'set destructure empty', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:vwGKBgCaAQFsAYoBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvwFALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBAALoCgCcAQCaAQCcAQCaAQCWAQC6AQDCAQDgAQDSAQB6ANIBAG4AvgEAxAEAvgEAyAUAmgEBFgGKAQBuAMIBAMQHAJwBAJoBAJwBAJoBAJYBALoBAMIBAG4AxAEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA9AgAmgEAmgEAlgEAugEAwgEAwgEAhAIA1AEAbgC-AQDAAQDCAQDyDwCWAQC6AQDGAQCcAQCiAQCUAQCWAQDGAQB6ANIBALIBANIBAHoA0gEAsgEA0gEA2AEA1AEAqAEAbgDKAQDEAQCuCACWAQC6AQDGAQF3A1QAuAEA1AEAbgDAAQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBAQEckgEBABy-BgC6AQDIAQBuAMoIAJoBAJoBAJwBAJoBAJQBAOIBANQBALgBANQBAQAcuAQAWACoCQCUAQC6AQDGAQC4AQDUAQB6ANIBAHoA1AEAbgC8AQDAAQDAAQDICgCYAQCUAQBgALQBANQBAGQAbACcAQCGAgBuAMQBAKYFAHoA5gEAjAEA
+    ;; sm:wgGKBgCaAQFsAYoBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvwFALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBAALoCgCcAQCaAQCcAQCaAQCWAQC6AQDCAQDgAQDSAQB6ANIBAG4AvgEAxAEAvgEAyAUAmgEBFgGKAQBuAMIBAMQHAJwBAJoBAJwBAJoBAJYBALoBAMIBAG4AxAEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA9AgAmgEAmgEAlgEAugEAwgEAwgEAhAIA1AEAbgC-AQDAAQDCAQDyDwCWAQC6AQDGAQCcAQCiAQCUAQCWAQDGAQB6ANIBALIBANIBAHoA0gEAsgEA0gEA2AEA1AEAqAEAbgDKAQDEAQCuCACWAQC6AQDGAQF3A1QAuAEA1AEAbgDAAQCEAQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBAQEckgEBABy-BgC6AQDIAQBuAMoIAJoBAJoBAJwBAJoBAJQBAOIBANQBALgBANQBAQAcuAQAWACoCQCUAQC6AQDGAQC4AQDUAQB6ANIBAHoA1AEAbgC8AQDAAQDAAQCaCwCcAQCmAQCYAQCUAQBgALQBANQBAGQAbACcAQCGAgBuAMQBAKYFAHoA5gEAjAEA
 
 
 test 'set destructure non-empty', fn:
@@ -1036,6 +1048,7 @@ test 'set destructure non-empty', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_30) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_29) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_201) (local.get $:args)))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 121))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $set_0))
       )
       (func $test::v_329 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1138,6 +1151,9 @@ test 'set destructure non-empty', fn:
         (local $:imp_val_set (ref null any))
         (local $:imp_key_set (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_s_1 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:s (local.get $:cell_s_1))
@@ -1165,7 +1181,7 @@ test 'set destructure non-empty', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:xQGKBgCaAQF4AYoBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvwFALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBAALoCgCcAQCaAQCcAQCaAQCWAQC6AQDCAQDgAQDSAQB6ANIBAG4AvgEAxAEAvgEAyAUAmgEBFgGKAQBuAMIBAMQHAJwBAJoBAJwBAJoBAJYBALoBAMIBAG4AxAEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA9AgAmgEAmgEAlgEAugEAwgEAwgEAhAIA1AEAbgC-AQDAAQDCAQDyDwCWAQC6AQDGAQCcAQCiAQCUAQCWAQDGAQB6ANIBALIBANIBAHoA0gEAsgEA0gEA2AEA1AEAqAEAbgDKAQDEAQCGCgCWAQC6AQDGAQGDAQNUALgBANQBAUgBigEBBgGKAQEGAYoBAG4AwgEAwgEAwgEAwAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQFVHJIBAQAcvgYAugEAyAEAbgDKCACaAQCaAQCcAQCaAQCUAQDiAQDUAQC4AQDUAQEAHLgEAFgAqAkAlAEAugEAxgEAuAEA1AEAegDSAQB6ANQBAG4AvAEAwAEAwAEAyAoAmAEAlAEAYAC0AQDUAQBkAGwAnAEAhgIAbgDEAQCmBQB6AOYBAIwBAA
+    ;; sm:yAGKBgCaAQF4AYoBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvwFALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBAALoCgCcAQCaAQCcAQCaAQCWAQC6AQDCAQDgAQDSAQB6ANIBAG4AvgEAxAEAvgEAyAUAmgEBFgGKAQBuAMIBAMQHAJwBAJoBAJwBAJoBAJYBALoBAMIBAG4AxAEAgAQAWACEBwC6AQDCAQDGAQDCAQB6ANQBAG4AwAEAwAEAxAEA9AgAmgEAmgEAlgEAugEAwgEAwgEAhAIA1AEAbgC-AQDAAQDCAQDyDwCWAQC6AQDGAQCcAQCiAQCUAQCWAQDGAQB6ANIBALIBANIBAHoA0gEAsgEA0gEA2AEA1AEAqAEAbgDKAQDEAQCGCgCWAQC6AQDGAQGDAQNUALgBANQBAUgBigEBBgGKAQEGAYoBAG4AwgEAwgEAwgEAwAEAhAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQFVHJIBAQAcvgYAugEAyAEAbgDKCACaAQCaAQCcAQCaAQCUAQDiAQDUAQC4AQDUAQEAHLgEAFgAqAkAlAEAugEAxgEAuAEA1AEAegDSAQB6ANQBAG4AvAEAwAEAwAEAmgsAnAEApgEAmAEAlAEAYAC0AQDUAQBkAGwAnAEAhgIAbgDEAQCmBQB6AOYBAIwBAA
 
 
 test 'set destructure peel one', fn:
@@ -1529,6 +1545,7 @@ test 'set destructure peel one', fn:
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_31) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:lit_30) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:v_252) (local.get $:args)))
+        (call $rt/trace.wat:trace_mark (i32.const 0) (i32.const 153))
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $set_0))
       )
       (func $test::v_422 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1631,6 +1648,9 @@ test 'set destructure peel one', fn:
         (local $:imp_val_set (ref null any))
         (local $:imp_key_set (ref null any))
         (local $:args (ref any))
+        (local $:mod_reg_url (ref null any))
+        (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:cell_s_1 (struct.new $rt/apply.wat:Cell (ref.null any)))
         (global.set $test:s (local.get $:cell_s_1))
@@ -1658,5 +1678,5 @@ test 'set destructure peel one', fn:
       (data $d_1 "s")
       (data $d_2 "set")
     )
-    ;; sm:8QGKBgCaAQF4AYoBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvwFALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBAALoCgCcAQCaAQCcAQCaAQCWAQC6AQDCAQDgAQDSAQB6ANIBAG4AvgEAxAEAvgEA0gUAnAEAmgEAkgEBKgOQAQEHB_AHAJYBALoBAMIBAMgBAQ8BUABuAL4BAMYBAPgGAJYBAJoBAJYBALoBAMgBAG4AvgEAhAgAlgEAugEAyAEAyAEAugEA1AEBAQeUBgC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAH6goAnAEAmgEAnAEAmgEAlgEAugEAwgEA4AEA1AEAegDSAQBuAL4BAMQBAMABAP4DAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPgIAJwBAJoBAJgBALoBAMIBAMIBAIgCANQBAG4AwAEAwAEAxAEA9g8AlgEAugEAxgEAnAEAogEAlAEAlgEAxgEAegDSAQCyAQDSAQB6ANQBALQBANQBANoBANQBAKgBAG4AygEAxAEAhgoAlgEAugEAxgEBfQNUALgBANQBAUgBigEBBgGKAQEGAYoBAG4AwgEAwgEAwgEAwAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQFVHJIBAQAcvgYAugEAyAEAbgDMCACcAQCaAQCcAQCaAQCUAQDkAQDUAQC4AQDUAQEAHLgEAFgAqAkAlAEAugEAxgEAuAEA1AEAegDSAQB6ANQBAG4AvAEAwAEAwAEAyAoAmAEAlAEAYAC0AQDUAQBkAGwAnAEAhgIAbgDEAQCmBQB6AOYBAIwBAA
+    ;; sm:9AGKBgCaAQF4AYoBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvwFALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBAALoCgCcAQCaAQCcAQCaAQCWAQC6AQDCAQDgAQDSAQB6ANIBAG4AvgEAxAEAvgEA0gUAnAEAmgEAkgEBKgOQAQEHB_AHAJYBALoBAMIBAMgBAQ8BUABuAL4BAMYBAPgGAJYBAJoBAJYBALoBAMgBAG4AvgEAhAgAlgEAugEAyAEAyAEAugEA1AEBAQeUBgC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAH6goAnAEAmgEAnAEAmgEAlgEAugEAwgEA4AEA1AEAegDSAQBuAL4BAMQBAMABAP4DAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPgIAJwBAJoBAJgBALoBAMIBAMIBAIgCANQBAG4AwAEAwAEAxAEA9g8AlgEAugEAxgEAnAEAogEAlAEAlgEAxgEAegDSAQCyAQDSAQB6ANQBALQBANQBANoBANQBAKgBAG4AygEAxAEAhgoAlgEAugEAxgEBfQNUALgBANQBAUgBigEBBgGKAQEGAYoBAG4AwgEAwgEAwgEAwAEAhAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQFVHJIBAQAcvgYAugEAyAEAbgDMCACcAQCaAQCcAQCaAQCUAQDkAQDUAQC4AQDUAQEAHLgEAFgAqAkAlAEAugEAxgEAuAEA1AEAegDSAQB6ANQBAG4AvAEAwAEAwAEAmgsAnAEApgEAmAEAlAEAYAC0AQDUAQBkAGwAnAEAhgIAbgDEAQCmBQB6AOYBAIwBAA
 

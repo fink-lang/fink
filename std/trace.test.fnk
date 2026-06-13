@@ -1,0 +1,41 @@
+{test, equals} = import 'std/testing.fnk'
+
+{get_trace, get_module_url, get_loc} = import 'std/trace.fnk'
+
+
+
+trace_to_str = fn t, s:
+  match t:
+    []: s
+    [[mid, cid], ..rest]:
+      murl = get_module_url mid
+      trace_to_str rest, '${s}\n  ${murl}:${get_loc mid, cid}'
+
+
+
+# test 'foooooobar', fn:
+#   equals
+#     41
+#     42
+
+
+test 'get_trace', fn:
+  bar = fn depth:
+    get_trace depth
+
+  [_, ..foo_t] = get_trace 4
+  [_, _, ..bar_t] = bar 5
+
+  equals
+    trace_to_str foo_t, ''
+    trace_to_str bar_t, ''
+
+
+
+
+test 'get_module_url', fn:
+  [[mod_id, _]] = get_trace 1
+
+  equals
+    get_module_url mod_id
+    './trace.test.fnk'
