@@ -1,0 +1,10 @@
+{get_module_url: rt_get_module_url} = import 'rt/modules.wat'
+{get_trace: rt_get_trace, get_loc: rt_get_loc} = import 'rt/trace.wat'
+
+
+get_loc = rt_get_loc
+
+get_trace = rt_get_trace
+
+
+get_module_url = rt_get_module_url
