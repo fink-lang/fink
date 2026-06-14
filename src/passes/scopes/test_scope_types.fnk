@@ -31,9 +31,11 @@ test 'record field names are not references', fn:
       bind 0, 'Foo'
 
 
-# enum members MINT constructors: the constructor name binds, the payload type
-# resolves against the generic param.
-test 'enum members mint constructors', fn:
+# enum member names do NOT leak as lexical bindings (reached via Enum.Some /
+# destructure, a type-system concern). The lexical-scopes pass treats the
+# constructor name like a record field name: not bound, not resolved. Only the
+# generic param binds and the payload type resolves against it.
+test 'enum member names are not lexical binds', fn:
   expect scope ƒink:
     Option = enum T:
       Some T
@@ -43,7 +45,5 @@ test 'enum members mint constructors', fn:
 
       scope 7, 'enum',
         bind 1, 'T'
-        bind 3, 'Some'
         ref 'T', 1
-        bind 6, 'None'
       bind 0, 'Option'
