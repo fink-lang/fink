@@ -388,6 +388,23 @@ pub enum NodeKind<'src> {
   // Try — unwrap Ok or propagate Err from enclosing function
   Try(AstId),
 
+  // --- type declarations ---
+
+  // Type — product type (record/tuple). params (Patterns, generic params; empty
+  // if none) + sep (':' for a block, '_' for the unit form `type _`) + body
+  // (fields: Arm ':' for named/record, bare exprs for positional/tuple; empty
+  // for unit).
+  Type { params: AstId, sep: Token<'src>, body: Exprs<'src> },
+
+  // Enum — closed sum that mints constructors. params (Patterns generic params)
+  // + sep (':') + body (constructor members: bare Ident for nullary, Apply for
+  // payload-carrying).
+  Enum { params: AstId, sep: Token<'src>, body: Exprs<'src> },
+
+  // Union — open union of existing types. params (Patterns generic params) +
+  // sep (':') + body (member type expressions).
+  Union { params: AstId, sep: Token<'src>, body: Exprs<'src> },
+
   // --- custom blocks ---
 
   // Block — name (Ident) + params (Patterns) + sep (:) + body
@@ -477,6 +494,12 @@ pub fn walk<'src, 'a>(
     }
     NodeKind::Arm { lhs, body, .. } => {
       walk(ast, *lhs, f);
+      for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
+    }
+    NodeKind::Type { params, body, .. }
+    | NodeKind::Enum { params, body, .. }
+    | NodeKind::Union { params, body, .. } => {
+      walk(ast, *params, f);
       for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
     }
     NodeKind::Block { name, params, body, .. } => {
@@ -682,6 +705,28 @@ fn print_node(ast: &Ast, id: AstId, out: &mut crate::sourcemap::MappedWriter, de
       out.push_str("Arm '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(ast, *lhs, out, depth + 1);
+      for &stmt_id in body.items.iter() {
+        out.push('\n');
+        print_node(ast, stmt_id, out, depth + 1);
+      }
+    }
+    NodeKind::Type { params, sep, body }
+    | NodeKind::Enum { params, sep, body }
+    | NodeKind::Union { params, sep, body } => {
+      let label = match node.kind {
+        NodeKind::Type { .. } => "Type",
+        NodeKind::Enum { .. } => "Enum",
+        _ => "Union",
+      };
+      out.push_str(label);
+      out.push_str(" '"); out.push_str(sep.src); out.push('\'');
+      // Unit form `type _` has empty params + body and prints as just `Type '_'`.
+      if sep.src == "_" && body.items.is_empty() {
+        return;
+      }
+      out.push(',');
+      out.push('\n');
+      print_node(ast, *params, out, depth + 1);
       for &stmt_id in body.items.iter() {
         out.push('\n');
         print_node(ast, stmt_id, out, depth + 1);

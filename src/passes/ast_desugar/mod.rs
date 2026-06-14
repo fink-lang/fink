@@ -446,6 +446,11 @@ fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
       has_partial(ast, *name) || has_partial(ast, *params)
         || body.items.iter().any(|&id| has_partial(ast, id))
     }
+    NodeKind::Type { params, body, .. }
+    | NodeKind::Enum { params, body, .. }
+    | NodeKind::Union { params, body, .. } => {
+      has_partial(ast, *params) || body.items.iter().any(|&id| has_partial(ast, id))
+    }
     NodeKind::Try(inner) => has_partial(ast, *inner),
   }
 }
@@ -889,6 +894,12 @@ fn has_partial_builder(builder: &AstBuilder<'_>, id: AstId) -> bool {
     }
     NodeKind::Block { name, params, body, .. } => {
       has_partial_builder(builder, *name) || has_partial_builder(builder, *params)
+        || body.items.iter().any(|&id| has_partial_builder(builder, id))
+    }
+    NodeKind::Type { params, body, .. }
+    | NodeKind::Enum { params, body, .. }
+    | NodeKind::Union { params, body, .. } => {
+      has_partial_builder(builder, *params)
         || body.items.iter().any(|&id| has_partial_builder(builder, id))
     }
     NodeKind::Try(inner) => has_partial_builder(builder, *inner),

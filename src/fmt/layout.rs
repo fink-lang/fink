@@ -469,6 +469,9 @@ impl<'a, 'src> Ctx<'a, 'src> {
             NodeKind::Block { name, params, sep, body } => {
                 self.block_node(name, params, sep, &body, at)
             }
+            NodeKind::Type { .. } | NodeKind::Enum { .. } | NodeKind::Union { .. } => {
+                todo!("type-decl layout")
+            }
         }
     }
 

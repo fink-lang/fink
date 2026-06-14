@@ -80,6 +80,9 @@ impl<'src> Parser<'src> {
     let mut block_names = HashMap::new();
     block_names.insert("fn", BlockMode::Ast);
     block_names.insert("match", BlockMode::Ast);
+    block_names.insert("type", BlockMode::Ast);
+    block_names.insert("enum", BlockMode::Ast);
+    block_names.insert("union", BlockMode::Ast);
     let mut p = Parser {
       lexer,
       src,
@@ -417,6 +420,7 @@ impl<'src> Parser<'src> {
 
       if name == "fn" { return self.parse_fn(loc); }
       if name == "match" { return self.parse_match_expr(loc); }
+      if Self::is_type_keyword(name) { return self.parse_type_decl(loc, name); }
       if self.block_names.contains_key(name) { return self.parse_block(loc, name); }
 
       // Tagged template string: ident immediately adjacent to StrStart → raw template
@@ -473,6 +477,7 @@ impl<'src> Parser<'src> {
     if let NodeKind::Ident(name) = self.get(head).kind {
       if name == "fn" { return self.parse_fn(self.loc_of(head)); }
       if name == "match" { return self.parse_match_expr(self.loc_of(head)); }
+      if Self::is_type_keyword(name) { return self.parse_type_decl(self.loc_of(head), name); }
       if self.block_names.contains_key(name) && name != "fn" && name != "match" {
         return self.parse_block(self.loc_of(head), name);
       }
@@ -792,6 +797,10 @@ impl<'src> Parser<'src> {
       if name_tok.src == "match" {
         self.bump();
         return self.parse_match_expr(name_tok.loc);
+      }
+      if Self::is_type_keyword(name_tok.src) {
+        self.bump();
+        return self.parse_type_decl(name_tok.loc, name_tok.src);
       }
       if self.block_names.contains_key(name_tok.src) {
         self.bump();
@@ -1568,6 +1577,90 @@ impl<'src> Parser<'src> {
 
   // --- fn ---
 
+  // type / enum / union — reserved keywords introducing a type declaration.
+  fn is_type_keyword(s: &str) -> bool {
+    matches!(s, "type" | "enum" | "union")
+  }
+
+  // Parse a `type` / `enum` / `union` declaration. The keyword is already
+  // consumed; `kw` is its source ("type"/"enum"/"union").
+  //
+  //   type _                 -> unit: Type with sep '_', empty params + body
+  //   type T:  <block>       -> generic params before the colon
+  //   type: a, b             -> inline positional (tuple) body
+  //   type:  <block>         -> block body (record arms / tuple exprs / members)
+  fn parse_type_decl(&mut self, kw_loc: Loc, kw: &'src str) -> ParseResult {
+    // Unit form `type _`: a bare wildcard with no following colon.
+    if self.at(TokenKind::Ident) && self.peek().src == "_" {
+      let underscore = *self.peek();
+      // Only the unit form when `_` is NOT a generic param (`type _:` would be
+      // a colon-block with a `_` param — not currently meaningful, treat the
+      // bare `type _` as unit).
+      if self.peek_next().kind != TokenKind::Colon {
+        self.bump(); // consume `_`
+        let params = self.node(NodeKind::Patterns(Exprs::empty()), underscore.loc);
+        let loc = Loc { start: kw_loc.start, end: underscore.loc.end };
+        let body = Exprs::empty();
+        return Ok(self.make_type_node(kw, params, underscore, body, loc));
+      }
+    }
+
+    // Generic params: everything between the keyword and the `:`.
+    let (params, _) = self.parse_params()?;
+
+    // Body after the colon: block (arms/exprs/spreads) or inline comma-separated exprs.
+    let sep = self.expect(TokenKind::Colon)?;
+    let body = if self.at(TokenKind::BlockStart) {
+      self.bump();
+      self.parse_block_items(|p| p.parse_type_body_item())?
+    } else {
+      // Inline body: comma-separated expressions (positional tuple form).
+      self.parse_inline_type_items()?
+    };
+
+    let end = body.items.last().map(|&id| self.loc_of(id).end).unwrap_or(self.loc_of(params).end);
+    let loc = Loc { start: kw_loc.start, end };
+    Ok(self.make_type_node(kw, params, sep, body, loc))
+  }
+
+  fn make_type_node(
+    &mut self,
+    kw: &'src str,
+    params: AstId,
+    sep: Token<'src>,
+    body: Exprs<'src>,
+    loc: Loc,
+  ) -> AstId {
+    let kind = match kw {
+      "type" => NodeKind::Type { params, sep, body },
+      "enum" => NodeKind::Enum { params, sep, body },
+      _ => NodeKind::Union { params, sep, body },
+    };
+    self.node(kind, loc)
+  }
+
+  // A single line of a `type`/`enum`/`union` block body: a `..Foo` spread
+  // (type-level extension), a `key: T` arm (record field), or a bare type
+  // expression (tuple positional / enum constructor / union member).
+  fn parse_type_body_item(&mut self) -> ParseResult {
+    if Self::is_spread_op(self.peek()) {
+      return self.parse_spread();
+    }
+    self.parse_expr_or_arm()
+  }
+
+  // Inline (non-block) type body: comma-separated expressions, e.g. `type: u8, i8`.
+  fn parse_inline_type_items(&mut self) -> Result<Exprs<'src>, ParseError> {
+    let mut items: Vec<AstId> = vec![];
+    let mut seps: Vec<Token<'src>> = vec![];
+    items.push(self.parse_expr()?);
+    while self.at(TokenKind::Comma) {
+      seps.push(self.bump());
+      items.push(self.parse_expr()?);
+    }
+    Ok(Exprs { items: items.into_boxed_slice(), seps })
+  }
+
   fn parse_fn(&mut self, fn_loc: Loc) -> ParseResult {
     // "fn" already consumed
     let is_fn_match = self.at(TokenKind::Ident) && self.peek().src == "match";
@@ -2100,4 +2193,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_member_apply.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_errors.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_types.fnk");
 }

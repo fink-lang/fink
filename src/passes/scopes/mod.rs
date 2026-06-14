@@ -810,6 +810,25 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       walk_stmts(ast, &body_items, scope, ctx);
     }
 
+    // Type declarations: generic params bind in a child scope; the body's
+    // type expressions resolve against it. Field/member name resolution
+    // (distinguishing declared names from type references) is not yet
+    // implemented -- this is the parse-only shape.
+    NodeKind::Type { params, body, .. }
+    | NodeKind::Enum { params, body, .. }
+    | NodeKind::Union { params, body, .. } => {
+      let type_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), id);
+      if let NodeKind::Patterns(pat_items) = &ast.nodes.get(params).kind {
+        let param_ids: Vec<AstId> = pat_items.items.to_vec();
+        for param_id in param_ids {
+          register_pattern_binds(ast, param_id, type_scope, ctx);
+        }
+      }
+      let body_items: Vec<AstId> = body.items.to_vec();
+      walk_stmts(ast, &body_items, type_scope, ctx);
+      ctx.pop_scope_binds(type_scope);
+    }
+
     NodeKind::StrTempl { children, .. } | NodeKind::StrRawTempl { children, .. } => {
       for &child_id in children.iter() { walk_node(ast, child_id, scope, ctx); }
     }
