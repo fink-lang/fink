@@ -612,6 +612,54 @@ fn walk_stmts<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ctx: &mut 
   }
 }
 
+/// Walk one member/field line of a `type` / `enum` / `union` body.
+///
+/// `is_enum` selects the constructor-minting semantics: in an `enum`, the
+/// leading name of a member is a *binding* (a minted constructor), and only
+/// the payload is resolved as type references. In `type`/`union`, names that
+/// are field labels are declarations (not resolved); everything else is a
+/// type reference.
+fn walk_type_member<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>, is_enum: bool) {
+  let kind = ast.nodes.get(id).kind.clone();
+  match kind {
+    // `..Foo` -- references the extended type.
+    NodeKind::Spread { inner: Some(inner_id), .. } => walk_node(ast, inner_id, scope, ctx),
+    NodeKind::Spread { inner: None, .. } => {}
+
+    // Record field `name: T` -- `name` is a field label (a declaration, not a
+    // reference); resolve only the type expression(s) in the body.
+    NodeKind::Arm { lhs, body, .. } => {
+      // A computed key (Group/expr) still needs resolution; a plain Ident
+      // field name does not (mirrors LitRec key handling).
+      if !matches!(ast.nodes.get(lhs).kind, NodeKind::Ident(_)) {
+        walk_node(ast, lhs, scope, ctx);
+      }
+      for &stmt_id in body.items.iter() {
+        walk_node(ast, stmt_id, scope, ctx);
+      }
+    }
+
+    // Enum constructor with a payload: `Some T`. The constructor name (func)
+    // is minted (a binding); the payload args are type references.
+    NodeKind::Apply { func, args } if is_enum => {
+      register_pattern_binds(ast, func, scope, ctx);
+      for &arg_id in args.items.iter() {
+        walk_node(ast, arg_id, scope, ctx);
+      }
+    }
+
+    // A bare name member.
+    NodeKind::Ident(_) | NodeKind::SynthIdent(_) if is_enum => {
+      // Nullary enum constructor `None` -- mint it.
+      register_pattern_binds(ast, id, scope, ctx);
+    }
+
+    // type tuple positional / union member / enum payload-less non-ident:
+    // a type reference (or sub-expression to resolve).
+    _ => walk_node(ast, id, scope, ctx),
+  }
+}
+
 fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>) {
   // Clone the kind up front so we can freely call methods on ctx that would
   // otherwise conflict with a borrow of `ast`. NodeKind clone is cheap —
@@ -810,13 +858,19 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       walk_stmts(ast, &body_items, scope, ctx);
     }
 
-    // Type declarations: generic params bind in a child scope; the body's
-    // type expressions resolve against it. Field/member name resolution
-    // (distinguishing declared names from type references) is not yet
-    // implemented -- this is the parse-only shape.
+    // Type declarations. Generic params bind in a child scope so the body's
+    // type expressions resolve against them. Body handling differs by keyword:
+    //
+    //   type:  fields. A record field `name: T` (Arm) declares `name` (not a
+    //          reference) and references its type `T`. A tuple positional `T`
+    //          is a type reference. `..Foo` references `Foo`.
+    //   union: members are references to existing types.
+    //   enum:  members MINT constructors -- the constructor name is a binding,
+    //          its payload types are references.
     NodeKind::Type { params, body, .. }
     | NodeKind::Enum { params, body, .. }
     | NodeKind::Union { params, body, .. } => {
+      let is_enum = matches!(ast.nodes.get(id).kind, NodeKind::Enum { .. });
       let type_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), id);
       if let NodeKind::Patterns(pat_items) = &ast.nodes.get(params).kind {
         let param_ids: Vec<AstId> = pat_items.items.to_vec();
@@ -825,7 +879,9 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
         }
       }
       let body_items: Vec<AstId> = body.items.to_vec();
-      walk_stmts(ast, &body_items, type_scope, ctx);
+      for item_id in body_items {
+        walk_type_member(ast, item_id, type_scope, ctx, is_enum);
+      }
       ctx.pop_scope_binds(type_scope);
     }
 
@@ -959,4 +1015,5 @@ mod tests {
   }
 
   test_macros::include_fink_tests!("src/passes/scopes/test_scope.fnk");
+  test_macros::include_fink_tests!("src/passes/scopes/test_scope_types.fnk");
 }
