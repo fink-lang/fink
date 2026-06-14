@@ -618,10 +618,12 @@ fn walk_stmts<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ctx: &mut 
 /// Walk one member/field line of a `type` / `enum` / `union` body.
 ///
 /// `is_enum` selects the constructor-minting semantics: in an `enum`, the
-/// leading name of a member is a *binding* (a minted constructor), and only
-/// the payload is resolved as type references. In `type`/`union`, names that
-/// are field labels are declarations (not resolved); everything else is a
-/// type reference.
+/// leading name of a member is a *declaration* (a minted constructor) that does
+/// NOT leak as a lexical binding -- it is reached via `Enum.Some` / destructure
+/// (a type-system concern), so the lexical-scopes pass treats it like a record
+/// field name: not bound, not resolved. Only the payload is resolved as type
+/// references. In `type`/`union`, field-label names are likewise declarations
+/// (not resolved); everything else is a type reference.
 fn walk_type_member<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>, is_enum: bool) {
   let kind = ast.nodes.get(id).kind.clone();
   match kind {
@@ -642,23 +644,21 @@ fn walk_type_member<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut 
       }
     }
 
-    // Enum constructor with a payload: `Some T`. The constructor name (func)
-    // is minted (a binding); the payload args are type references.
-    NodeKind::Apply { func, args } if is_enum => {
-      register_pattern_binds(ast, func, scope, ctx);
+    // Enum constructor with a payload: `Some T`. The constructor name (func) is
+    // a declaration that does not leak lexically -- skip it; resolve only the
+    // payload args as type references.
+    NodeKind::Apply { args, .. } if is_enum => {
       for &arg_id in args.items.iter() {
         walk_node(ast, arg_id, scope, ctx);
       }
     }
 
-    // A bare name member.
-    NodeKind::Ident(_) | NodeKind::SynthIdent(_) if is_enum => {
-      // Nullary enum constructor `None` -- mint it.
-      register_pattern_binds(ast, id, scope, ctx);
-    }
+    // Nullary enum constructor `None`: a declaration, neither bound nor
+    // resolved at the lexical-scopes level.
+    NodeKind::Ident(_) | NodeKind::SynthIdent(_) if is_enum => {}
 
-    // type tuple positional / union member / enum payload-less non-ident:
-    // a type reference (or sub-expression to resolve).
+    // type tuple positional / union member: a type reference (or
+    // sub-expression to resolve).
     _ => walk_node(ast, id, scope, ctx),
   }
 }
