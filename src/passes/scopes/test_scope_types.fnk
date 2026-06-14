@@ -11,7 +11,7 @@ test 'union members are references', fn:
   | equals ƒink:
     scope 10, 'module',
 
-      scope 4, 'fn',
+      scope 4, 'union',
         unresolved 'SignedInt'
         unresolved 'UnsignedInt'
       bind 0, 'Int'
@@ -26,7 +26,7 @@ test 'record field names are not references', fn:
   | equals ƒink:
     scope 11, 'module',
 
-      scope 5, 'fn',
+      scope 5, 'type',
         unresolved 'u8'
       bind 0, 'Foo'
 
@@ -41,7 +41,7 @@ test 'enum members mint constructors', fn:
   | equals ƒink:
     scope 13, 'module',
 
-      scope 7, 'fn',
+      scope 7, 'enum',
         bind 1, 'T'
         bind 3, 'Some'
         ref 'T', 1

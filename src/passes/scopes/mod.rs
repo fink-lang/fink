@@ -56,6 +56,9 @@ pub enum ScopeKind {
   Fn,
   /// Match arm — pattern bindings visible in arm body.
   Arm,
+  /// Type-declaration body — generic params bind, body resolves type
+  /// references. The keyword ("type"/"enum"/"union") is carried for display.
+  Type(&'static str),
 }
 
 // ---------------------------------------------------------------------------
@@ -870,8 +873,13 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
     NodeKind::Type { params, body, .. }
     | NodeKind::Enum { params, body, .. }
     | NodeKind::Union { params, body, .. } => {
-      let is_enum = matches!(ast.nodes.get(id).kind, NodeKind::Enum { .. });
-      let type_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), id);
+      let kw = match ast.nodes.get(id).kind {
+        NodeKind::Type { .. } => "type",
+        NodeKind::Enum { .. } => "enum",
+        _ => "union",
+      };
+      let is_enum = kw == "enum";
+      let type_scope = ctx.push_scope(ScopeKind::Type(kw), Some(scope), id);
       if let NodeKind::Patterns(pat_items) = &ast.nodes.get(params).kind {
         let param_ids: Vec<AstId> = pat_items.items.to_vec();
         for param_id in param_ids {
@@ -940,6 +948,7 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
     ScopeKind::Module => "module".to_string(),
     ScopeKind::Fn => "fn".to_string(),
     ScopeKind::Arm => "arm".to_string(),
+    ScopeKind::Type(kw) => kw.to_string(),
   };
 
   write_indent(out, indent);
