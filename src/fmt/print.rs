@@ -336,6 +336,26 @@ impl<'a, 'src> Printer<'a, 'src> {
                 self.node(inner);
             }
 
+            // --- type declarations ---
+            NodeKind::Type { params, sep, body } => {
+                self.keyword(node_loc, "type");
+                self.node(params);
+                self.tok(&sep);
+                self.exprs(&body);
+            }
+            NodeKind::Enum { params, sep, body } => {
+                self.keyword(node_loc, "enum");
+                self.node(params);
+                self.tok(&sep);
+                self.exprs(&body);
+            }
+            NodeKind::Union { params, sep, body } => {
+                self.keyword(node_loc, "union");
+                self.node(params);
+                self.tok(&sep);
+                self.exprs(&body);
+            }
+
             // --- custom blocks ---
             NodeKind::Block { name, params, sep, body } => {
                 self.node(name);

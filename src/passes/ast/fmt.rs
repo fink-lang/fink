@@ -428,6 +428,9 @@ fn fmt_node(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
         out.push('\'');
       }
     }
+    NodeKind::Type { params, sep, body } => fmt_type_decl(ast, "type", params, &sep, &body.items, out, depth),
+    NodeKind::Enum { params, sep, body } => fmt_type_decl(ast, "enum", params, &sep, &body.items, out, depth),
+    NodeKind::Union { params, sep, body } => fmt_type_decl(ast, "union", params, &sep, &body.items, out, depth),
     NodeKind::Block { name, params, sep, body } => {
       fmt_node(ast, name, out, depth);
       out.push(' ');
@@ -570,6 +573,28 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
 
 fn fmt_fn(ast: &Ast<'_>, params: AstId, sep: &Token, body: &[AstId], out: &mut MappedWriter, depth: usize) {
   fmt_fn_with_inline(ast, params, sep, body, out, depth, true);
+}
+
+// Format a `type` / `enum` / `union` declaration: keyword, optional generic
+// params, then `:` body (or the unit `_` form).
+fn fmt_type_decl(ast: &Ast<'_>, kw: &str, params: AstId, sep: &Token, body: &[AstId], out: &mut MappedWriter, depth: usize) {
+  out.push_str(kw);
+  // Unit form `type _`: keyword then the `_` sep, no body.
+  if sep.src == "_" {
+    out.push(' ');
+    out.mark(sep.loc);
+    out.push('_');
+    return;
+  }
+  // Generic params (Patterns), only when non-empty.
+  let has_params = matches!(&ast.nodes.get(params).kind, NodeKind::Patterns(e) if !e.items.is_empty());
+  if has_params {
+    out.push(' ');
+    fmt_node(ast, params, out, depth);
+  }
+  out.mark(sep.loc);
+  out.push(':');
+  fmt_body(ast, body, out, depth, true);
 }
 
 fn fmt_fn_with_inline(ast: &Ast<'_>, params: AstId, sep: &Token, body: &[AstId], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {

@@ -77,6 +77,21 @@ pub trait Transform<'src> {
       NodeKind::Match { subjects, sep, arms } => self.transform_match(builder, src, subjects, sep, arms, loc),
       NodeKind::Arm { lhs, sep, body } => self.transform_arm(builder, src, lhs, sep, body, loc),
       NodeKind::Block { name, params, sep, body } => self.transform_block(builder, src, name, params, sep, body, loc),
+      NodeKind::Type { params, sep, body } => {
+        let params = self.transform(builder, src, params)?;
+        let body = self.transform_exprs(builder, src, &body)?;
+        Ok(builder.append(NodeKind::Type { params, sep, body }, loc))
+      }
+      NodeKind::Enum { params, sep, body } => {
+        let params = self.transform(builder, src, params)?;
+        let body = self.transform_exprs(builder, src, &body)?;
+        Ok(builder.append(NodeKind::Enum { params, sep, body }, loc))
+      }
+      NodeKind::Union { params, sep, body } => {
+        let params = self.transform(builder, src, params)?;
+        let body = self.transform_exprs(builder, src, &body)?;
+        Ok(builder.append(NodeKind::Union { params, sep, body }, loc))
+      }
     }
   }
 

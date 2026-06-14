@@ -357,6 +357,10 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Patterns(_) => panic!("Patterns node lowered via fn/match"),
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
+
+    // ---- type declarations: parsed, but not yet lowered ----
+    NodeKind::Type { .. } | NodeKind::Enum { .. } | NodeKind::Union { .. } =>
+      panic!("type/enum/union declaration lowering not yet implemented"),
   }
 }
 
