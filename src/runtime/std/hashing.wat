@@ -17,7 +17,7 @@
   (import "std/str.wat" "Str" (type $Str (sub any)))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/opaque.wat" "Opaque" (type $Opaque (sub any)))
-  (import "std/dict.wat" "Rec" (type $Rec (sub any)))
+  (import "std/dict.wat" "Dict" (type $Dict (sub any)))
 
   (import "std/num.wat" "hash_i31"
     (func $num_hash_i31 (param (ref $Num)) (result i32)))
@@ -81,7 +81,7 @@
             (local.get $key))))
       (return (call $opaque_hash_i31)))
 
-    ;; Try $Rec -- structural content hash. Stubbed to 0 for now: all
+    ;; Try $Dict -- structural content hash. Stubbed to 0 for now: all
     ;; records share one bucket and deep_eq disambiguates. Correct but
     ;; unoptimized -- records-as-keys degrade to a linear bucket scan.
     ;;
@@ -94,9 +94,9 @@
     ;; per-entry hashes). Only worth doing once records-as-keys are a
     ;; measured hot path. See list.wat / set.wat for the sibling TODOs.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref eq) (ref $Rec)
+          (br_on_cast $is_rec (ref eq) (ref $Dict)
             (local.get $key))))
       (drop)
       (return (i32.const 0)))

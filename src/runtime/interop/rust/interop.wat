@@ -444,7 +444,7 @@
     (result (ref any))
     (return_call $str_wrap_bytes (local.get $bytes)))
 
-  ;; Host-callable: look up a $Rec field by raw byte-array key.
+  ;; Host-callable: look up a $Dict field by raw byte-array key.
   ;; Wraps key_bytes into a $Str, then delegates to dict.wat:get_any.
   ;; Returns null when the key is absent. Used by the Rust runner to
   ;; pull named exports out of the exports rec it receives from the

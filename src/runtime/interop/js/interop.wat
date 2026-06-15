@@ -41,7 +41,7 @@
   (import "std/str.wat"     "Str"       (type $Str       (sub any)))
   (import "std/str.wat"     "ByteArray" (type $ByteArray (sub any)))
   (import "std/list.wat"    "List"      (type $List      (sub any)))
-  (import "std/dict.wat"    "Rec"       (type $Rec       (sub any)))
+  (import "std/dict.wat"    "Dict"       (type $Dict       (sub any)))
 
   (import "std/str.wat" "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
@@ -92,11 +92,11 @@
   (import "rt/apply.wat" "get_ctx"
     (func $get_ctx_inner (result (ref any))))
 
-  ;; std/dict.wat:get takes the public $Rec type; JS only ever holds
+  ;; std/dict.wat:get takes the public $Dict type; JS only ever holds
   ;; opaque (ref any), so we wrap with a JS-friendly shim (rec_get below)
   ;; that does the cast.
   (import "std/dict.wat" "get"
-    (func $rec_get_inner (param $rec (ref $Rec)) (param $key (ref eq))
+    (func $rec_get_inner (param $rec (ref $Dict)) (param $key (ref eq))
       (result (ref null eq))))
 
   ;; Host imports — stubbed by fink.js. Signatures must match
@@ -294,7 +294,7 @@
     (if (ref.test (ref $Str)     (local.get $nn)) (then (return (i32.const 600))))
     (if (ref.test (ref $Num)     (local.get $nn)) (then (return (i32.const 250))))
     (if (ref.test (ref $List)    (local.get $nn)) (then (return (i32.const 400))))
-    (if (ref.test (ref $Rec)     (local.get $nn)) (then (return (i32.const 500))))
+    (if (ref.test (ref $Dict)     (local.get $nn)) (then (return (i32.const 500))))
     (if (ref.test (ref $Closure) (local.get $nn)) (then (return (i32.const 100))))
 
     (i32.const 0)
@@ -402,7 +402,7 @@
   (func $rec_get (@pub) (export "env:rec_get")
     (param $rec (ref any)) (param $key (ref any)) (result (ref null any))
     (return_call $rec_get_inner
-      (ref.cast (ref $Rec) (local.get $rec))
+      (ref.cast (ref $Dict) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))))
 
 

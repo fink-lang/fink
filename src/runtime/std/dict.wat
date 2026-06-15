@@ -12,8 +12,8 @@
 ;;
 ;; Value representation:
 ;;   - Type hierarchy:
-;;       $Rec                        — opaque record type
-;;       └── $RecImpl (sub $Rec)     — wrapper: single $HamtNode field
+;;       $Dict                        — opaque dict type (backs the record protocol)
+;;       └── $DictImpl (sub $Dict)     — wrapper: single $HamtNode field
 ;;       $HamtLeaf                   — key-value pair (internal)
 ;;       $HamtNode                   — bitmap + children array (internal)
 ;;       $HamtCollision              — hash + flat leaf array (internal)
@@ -76,15 +76,15 @@
     (func $str_repr (param $str (ref $Str)) (result (ref $Str))))
 
 
-  ;; -- $Rec public type -----------------------------------------------------
+  ;; -- $Dict public type -----------------------------------------------------
 
-  (type $Rec  (@pub) (sub (struct)))
+  (type $Dict  (@pub) (sub (struct)))
 
 
   ;; -- Type definitions -----------------------------------------------
 
   ;; Internal HAMT types. These are implementation details — user code
-  ;; sees $Rec via the wrapper type below.
+  ;; sees $Dict via the wrapper type below.
   ;; Children array uses structref as the common base for leaves, nodes,
   ;; and collision nodes.
 
@@ -116,11 +116,11 @@
 
     ;; -- Wrapper type (private) ------------------------------------------
     ;; Single-field wrapper around the HAMT node. Private to this module:
-    ;; cross-module APIs take/return the public $Rec and downcast to
-    ;; $RecImpl internally, so the wrapper never appears in another
+    ;; cross-module APIs take/return the public $Dict and downcast to
+    ;; $DictImpl internally, so the wrapper never appears in another
     ;; module's signatures. Casting happens only at the runtime API
     ;; boundary.
-    (type $RecImpl (sub $Rec (struct
+    (type $DictImpl (sub $Dict (struct
       (field $hamt (ref $HamtNode))
     )))
   )
@@ -1351,30 +1351,30 @@
   ;; -- Record: direct-style API ------------------------------------------
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  ;; Returns the public $Rec type; the concrete $RecImpl wrapper stays
+  ;; Returns the public $Dict type; the concrete $DictImpl wrapper stays
   ;; private to this module.
-  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $Rec))
-    (struct.new $RecImpl (global.get $empty_node))
+  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $Dict))
+    (struct.new $DictImpl (global.get $empty_node))
   )
 
-  ;; Takes the public $Rec and downcasts to the wrapper internally, so
-  ;; cross-module callers never name $RecImpl.
+  ;; Takes the public $Dict and downcasts to the wrapper internally, so
+  ;; cross-module callers never name $DictImpl.
   (func $get (@pub)
-    (param $rec (ref $Rec)) (param $key (ref eq))
+    (param $rec (ref $Dict)) (param $key (ref eq))
     (result (ref null eq))
     (call $hamt_get
-      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec)))
+      (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $rec)))
       (local.get $key))
   )
 
-  ;; Host-friendly $Rec field accessor. Takes anyref-typed args so
-  ;; callers (interop, host) don't need to know about $RecImpl.
+  ;; Host-friendly $Dict field accessor. Takes anyref-typed args so
+  ;; callers (interop, host) don't need to know about $DictImpl.
   ;; Returns null when the key is absent.
   (func $get_any (@pub)
     (param $rec (ref null any)) (param $key (ref null any))
     (result (ref null any))
     (call $get
-      (ref.cast (ref $Rec) (local.get $rec))
+      (ref.cast (ref $Dict) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))))
 
   ;; -- Structural equality --------------------------------------------
@@ -1383,17 +1383,17 @@
   ;; `a` is present in `b` with a deep-equal value. Walks a's entries and
   ;; probes b via hamt_get; the size check rules out b having extra keys.
   ;; Values are compared through deep_eq (imported from protocols.wat), so
-  ;; nesting is recursive. Direct-style — used by the == operator's $Rec
+  ;; nesting is recursive. Direct-style — used by the == operator's $Dict
   ;; arm and by deep_eq for structural rec keys.
   (func $rec_deep_eq (@pub)
-    (param $a (ref $Rec)) (param $b (ref $Rec)) (result i32)
+    (param $a (ref $Dict)) (param $b (ref $Dict)) (result i32)
     (local $a_node (ref $HamtNode))
     (local $b_node (ref $HamtNode))
 
     (local.set $a_node
-      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $a))))
+      (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $a))))
     (local.set $b_node
-      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $b))))
+      (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $b))))
 
     ;; Differing sizes can't be equal.
     (if (i32.ne
@@ -1503,70 +1503,70 @@
 
     (i32.const 1))
 
-  (func $op_in (@impl "std/operators.fnk:op_in" _ $Rec)
-    (param $rec (ref $Rec)) (param $key (ref eq))
+  (func $op_in (@impl "std/operators.fnk:op_in" _ $Dict)
+    (param $rec (ref $Dict)) (param $key (ref eq))
     (result i32)
     (ref.is_null
       (call $hamt_get
-        (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec)))
+        (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $rec)))
         (local.get $key)))
     (i32.const 1)
     (i32.xor)
   )
 
-  (func $op_not_in (@impl "std/operators.fnk:op_notin" _ $Rec)
-    (param $rec (ref $Rec)) (param $key (ref eq))
+  (func $op_not_in (@impl "std/operators.fnk:op_notin" _ $Dict)
+    (param $rec (ref $Dict)) (param $key (ref eq))
     (result i32)
     (i32.eqz (call $op_in (local.get $rec) (local.get $key)))
   )
 
   (func $_rec_set
-    (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))
-    (result (ref $RecImpl))
-    (struct.new $RecImpl
-      (call $hamt_set (struct.get $RecImpl $hamt (local.get $rec))
+    (param $rec (ref $DictImpl)) (param $key (ref eq)) (param $val (ref eq))
+    (result (ref $DictImpl))
+    (struct.new $DictImpl
+      (call $hamt_set (struct.get $DictImpl $hamt (local.get $rec))
         (local.get $key) (local.get $val)))
   )
 
   (func $delete (@pub)
-    (param $rec (ref $RecImpl)) (param $key (ref eq))
-    (result (ref $RecImpl))
-    (struct.new $RecImpl
-      (call $hamt_delete (struct.get $RecImpl $hamt (local.get $rec))
+    (param $rec (ref $DictImpl)) (param $key (ref eq))
+    (result (ref $DictImpl))
+    (struct.new $DictImpl
+      (call $hamt_delete (struct.get $DictImpl $hamt (local.get $rec))
         (local.get $key)))
   )
 
   (func $_rec_pop
-    (param $rec (ref $RecImpl)) (param $key (ref eq))
-    (result (ref null eq) (ref $RecImpl))
+    (param $rec (ref $DictImpl)) (param $key (ref eq))
+    (result (ref null eq) (ref $DictImpl))
     (local $val (ref null eq))
     (local $rest (ref $HamtNode))
-    (call $hamt_pop (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+    (call $hamt_pop (struct.get $DictImpl $hamt (local.get $rec)) (local.get $key))
     (local.set $rest)
     (local.set $val)
     (local.get $val)
-    (struct.new $RecImpl (local.get $rest))
+    (struct.new $DictImpl (local.get $rest))
   )
 
   (func $_rec_merge
-    (param $dest (ref $RecImpl)) (param $src (ref $RecImpl))
-    (result (ref $RecImpl))
-    (struct.new $RecImpl
+    (param $dest (ref $DictImpl)) (param $src (ref $DictImpl))
+    (result (ref $DictImpl))
+    (struct.new $DictImpl
       (call $hamt_merge
-        (struct.get $RecImpl $hamt (local.get $dest))
-        (struct.get $RecImpl $hamt (local.get $src))))
+        (struct.get $DictImpl $hamt (local.get $dest))
+        (struct.get $DictImpl $hamt (local.get $src))))
   )
 
   (func $size (@pub)
-    (param $rec (ref $Rec)) (result i32)
+    (param $rec (ref $Dict)) (result i32)
     (call $hamt_size
-      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec))))
+      (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $rec))))
   )
 
   ;; Predicate: is this record empty?
-  (func $op_empty (@impl "std/operators.fnk:op_empty" $Rec)
+  (func $op_empty (@impl "std/operators.fnk:op_empty" $Dict)
     (param $val (ref null any)) (result i32)
-    (i32.eqz (call $size (ref.cast (ref $RecImpl) (local.get $val))))
+    (i32.eqz (call $size (ref.cast (ref $DictImpl) (local.get $val))))
   )
 
   ;; CPS wrappers — compiler-facing interface
@@ -1578,7 +1578,7 @@
   ;;                                          else: _apply([val, rest], succ)
   ;;
   ;; ctx convention: $ctx is the first param and is forwarded to the cont
-  ;; (via apply_N). Rec primitives operate on the monomorphic $RecImpl
+  ;; (via apply_N). Rec primitives operate on the monomorphic $DictImpl
   ;; kernel with no user-callbacks, so ctx is not consulted for dispatch.
 
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
@@ -1588,7 +1588,7 @@
     (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any))
     (result (ref null any))
     (call $_rec_set
-      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref $DictImpl) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))
       (ref.cast (ref eq) (local.get $val))))
 
@@ -1599,7 +1599,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (call $_rec_set
-        (ref.cast (ref $RecImpl) (local.get $rec))
+        (ref.cast (ref $DictImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key))
         (ref.cast (ref eq) (local.get $val)))
       (local.get $cont)))
@@ -1611,8 +1611,8 @@
     (return_call $apply_1
       (local.get $ctx)
       (call $_rec_merge
-        (ref.cast (ref $RecImpl) (local.get $dest))
-        (ref.cast (ref $RecImpl) (local.get $src)))
+        (ref.cast (ref $DictImpl) (local.get $dest))
+        (ref.cast (ref $DictImpl) (local.get $src)))
       (local.get $cont)))
 
   (func $rec_pop (@pub) (@impl "std/rec.fnk:pop")
@@ -1620,9 +1620,9 @@
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))
-    (local $rest (ref $RecImpl))
+    (local $rest (ref $DictImpl))
     (call $_rec_pop
-      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref $DictImpl) (local.get $rec))
       (ref.cast (ref eq) (local.get $key)))
     (local.set $rest)
     (local.set $val)
@@ -1637,13 +1637,13 @@
       (local.get $rest)
       (local.get $succ)))
 
-  (func $op_dot (@impl "std/operators.fnk:op_dot" $Rec _)
+  (func $op_dot (@impl "std/operators.fnk:op_dot" $Dict _)
     (param $ctx (ref null any))
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
       (call $get
-        (ref.cast (ref $RecImpl) (local.get $rec))
+        (ref.cast (ref $DictImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))
       (local.get $cont)))
 
@@ -2052,10 +2052,10 @@
     (local.get $pos)
   )
 
-  ;; fmt : (ref $Rec) -> (ref $Str)
+  ;; fmt : (ref $Dict) -> (ref $Str)
   ;; Format a record as "{key: val, key2: val2}". Empty record formats as "{}".
   ;; Two-pass: first compute total byte length, then copy into a single buffer.
-  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Rec) (param $rec (ref $Rec)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Dict) (param $rec (ref $Dict)) (result (ref $Str))
     (local $node (ref $HamtNode))
     (local $total i32)
     (local $entry_count i32)
@@ -2063,11 +2063,11 @@
     (local $pos i32)
 
     (local.set $node
-      (struct.get $RecImpl $hamt
-        (ref.cast (ref $RecImpl) (local.get $rec))))
+      (struct.get $DictImpl $hamt
+        (ref.cast (ref $DictImpl) (local.get $rec))))
 
     (local.set $entry_count
-      (call $size (ref.cast (ref $Rec) (local.get $rec))))
+      (call $size (ref.cast (ref $Dict) (local.get $rec))))
 
     (if (i32.eqz (local.get $entry_count))
       (then
@@ -2102,8 +2102,8 @@
   )
 
   ;; repr — same as fmt for records (their fmt already calls repr on values).
-  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Rec)
-    (param $rec (ref $Rec)) (result (ref $Str))
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Dict)
+    (param $rec (ref $Dict)) (result (ref $Str))
     (return_call $fmt (local.get $rec)))
 
 )

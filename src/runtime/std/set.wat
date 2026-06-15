@@ -1475,7 +1475,7 @@
   ;; add a COMMUTATIVE content hash (order-independent, e.g. XOR of element
   ;; hashes) consistent with this equality -- same shape records will use,
   ;; the opposite of list's order-sensitive hash. Prefer lazy-memoized over
-  ;; eager-on-write. See hashing.wat (the $Rec stub) for the shared design
+  ;; eager-on-write. See hashing.wat (the $Dict stub) for the shared design
   ;; note.
   (func $op_eq (@impl "std/operators.fnk:op_eq" $Set $Set)
     (param $a (ref $Set)) (param $b (ref $Set))

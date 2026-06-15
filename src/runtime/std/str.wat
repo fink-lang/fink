@@ -31,7 +31,7 @@
   (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
   (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
-  (import "std/dict.wat"   "Rec"       (type $Rec       (sub any)))
+  (import "std/dict.wat"   "Dict"       (type $Dict       (sub any)))
   (import "std/set.wat"    "Set"       (type $Set       (sub any)))
   (import "std/list.wat"   "List"      (type $List      (sub any)))
   (import "rt/apply.wat"   "VarArgs"   (type $VarArgs   (sub any)))
@@ -52,7 +52,7 @@
     (func $set_fmt (param (ref $Set)) (result (ref $Str))))
 
   (import "std/dict.wat" "fmt"
-    (func $rec_fmt (param (ref $Rec)) (result (ref $Str))))
+    (func $rec_fmt (param (ref $Dict)) (result (ref $Str))))
 
   (import "std/list.wat" "size"
     (func $list_size (param $list (ref $List)) (result i32)))
@@ -1620,11 +1620,11 @@
             (local.get $val))))
       (return_call $range_fmt))
 
-    ;; Try $Rec — delegate to dict.wat:fmt.
+    ;; Try $Dict — delegate to dict.wat:fmt.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref any) (ref $Rec)
+          (br_on_cast $is_rec (ref any) (ref $Dict)
             (local.get $val))))
       (return_call $rec_fmt))
 

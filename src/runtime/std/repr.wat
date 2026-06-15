@@ -27,7 +27,7 @@
   (import "std/num.wat"   "Num"   (type $Num   (sub any)))
   (import "std/range.wat" "Range" (type $Range (sub any)))
   (import "std/list.wat"  "List"  (type $List  (sub any)))
-  (import "std/dict.wat"  "Rec"   (type $Rec   (sub any)))
+  (import "std/dict.wat"  "Dict"   (type $Dict   (sub any)))
   (import "std/set.wat"   "Set"   (type $Set   (sub any)))
 
 
@@ -40,7 +40,7 @@
   (import "std/num.wat"   "repr" (func $num_repr   (param (ref $Num))   (result (ref $Str))))
   (import "std/range.wat" "repr" (func $range_repr (param (ref $Range)) (result (ref $Str))))
   (import "std/list.wat"  "repr" (func $list_repr  (param (ref $List))  (result (ref $Str))))
-  (import "std/dict.wat"  "repr" (func $rec_repr   (param (ref $Rec))   (result (ref $Str))))
+  (import "std/dict.wat"  "repr" (func $rec_repr   (param (ref $Dict))   (result (ref $Str))))
   (import "std/set.wat"   "repr" (func $set_repr   (param (ref $Set))   (result (ref $Str))))
 
 
@@ -103,11 +103,11 @@
             (local.get $val))))
       (return_call $range_repr))
 
-    ;; Try $Rec.
+    ;; Try $Dict.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref any) (ref $Rec)
+          (br_on_cast $is_rec (ref any) (ref $Dict)
             (local.get $val))))
       (return_call $rec_repr))
 

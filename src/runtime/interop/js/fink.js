@@ -136,7 +136,7 @@ const make_to_fink = (exports, {str_from_js}) => (v) => {
   if (typeof v === 'number')  return exports.num_from_js(v);
   if (typeof v === 'boolean') return exports.i31_from_js(v ? 1 : 0);
   if (typeof v === 'string')  return str_from_js(v);
-  // TODO: array → $List, plain object → $Rec.
+  // TODO: array → $List, plain object → $Dict.
   throw new Error(`to_fink: cannot marshal ${typeof v}: ${v}`);
 };
 
