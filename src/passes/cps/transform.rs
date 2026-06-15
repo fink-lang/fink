@@ -358,9 +358,23 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
 
-    // ---- type declarations: parsed, but not yet lowered ----
-    NodeKind::Type { .. } | NodeKind::Enum { .. } | NodeKind::Union { .. } =>
-      panic!("type/enum/union declaration lowering not yet implemented"),
+    // ---- type declaration ----
+    NodeKind::Type { params, body, .. } => {
+      let fields: Vec<AstId> = body.items.to_vec();
+      lower_type_decl(g, params, &fields, o)
+    }
+
+    // ---- union declaration ----
+    NodeKind::Union { params, body, .. } => {
+      let members: Vec<AstId> = body.items.to_vec();
+      lower_union_decl(g, params, &members, o)
+    }
+
+    // ---- enum declaration ----
+    NodeKind::Enum { params, body, .. } => {
+      let members: Vec<AstId> = body.items.to_vec();
+      lower_enum_decl(g, params, &members, o)
+    }
   }
 }
 
@@ -1031,6 +1045,274 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
     }
   }
   (acc, pending)
+}
+
+// ---------------------------------------------------------------------------
+// Type declaration: `Foo = type _`, `Spam = type T: ...`
+// ---------------------------------------------------------------------------
+
+// A type declaration with no params lowers to the bare type-body accretion.
+// With params (`type T: ...`) it is `fn` lifted one level — the type is a
+// function over its type-params, so `Spam u8` is ordinary application. The
+// body accretion becomes the fn body, returned to the fn's continuation.
+fn lower_type_decl(
+  g: &mut Gen,
+  params: AstId,
+  fields: &[AstId],
+  origin: Option<AstId>,
+) -> Lower {
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_type_body(g, fields, origin))
+}
+
+// A type/enum/union declaration with params (`type T:`, `enum T:`) is `fn`
+// lifted one level — the declaration is a function over its type-params, so
+// `Spam u8` / `Option u8` is ordinary application. With no params the body
+// lowers directly. `build_body` produces the declaration's value; with params
+// it becomes the fn body, returned to the fn's continuation.
+fn wrap_decl_in_params_fn(
+  g: &mut Gen,
+  params: AstId,
+  origin: Option<AstId>,
+  build_body: impl FnOnce(&mut Gen) -> Lower,
+) -> Lower {
+  let has_params = match &g.node(params).kind {
+    NodeKind::Patterns(ps) => !ps.items.is_empty(),
+    _ => true,
+  };
+  if !has_params {
+    return build_body(g);
+  }
+
+  let fn_name = g.fresh_fn(origin);
+  let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
+  let (mut param_names, deferred) = extract_params_with_gen(g, params);
+  let (cont, prev_cont) = g.push_cont(origin);
+  let cont_id = cont.id;
+  let fn_body = {
+    let (val, pending) = build_body(g);
+    let ret = tail_app(g, cont_id, val, origin);
+    let body = wrap(g, pending, Cont::Expr { args: vec![], body: Box::new(ret) });
+    prepend_pat_binds(g, deferred, body)
+  };
+  g.pop_cont(prev_cont);
+  param_names.insert(0, Param::Name(cont));
+  let pending = vec![Pending::Fn {
+    name: fn_name,
+    params: param_names,
+    fn_kind: CpsFnKind::CpsFunction,
+    fn_body,
+    origin,
+  }];
+  (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
+}
+
+// Mint a fresh type value via `·new_type`, then accrete each field onto it
+// with `·type_set_field` — the structural mirror of `lower_lit_rec` (a `{}`
+// seed threaded through `·rec_put` calls). The unit form (`type _`) has an
+// empty body, so it stops at the bare `·new_type`.
+//
+// A field is an `Arm { lhs: Ident(name), body: [type-expr] }`: the name is a
+// declaration (a string-literal key, like `rec_put`'s key); the type-expr
+// lowers as an ordinary value (it resolves in scope, like `rec_put`'s value).
+fn lower_type_body(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewType),
+    args: args_val(vec![]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  for &field in fields {
+    let field_origin = Some(field);
+    match g.node(field).kind.clone() {
+      // `..Base` — splice the base's fields and record it as the base
+      // (mirrors the rec-literal `..src` spread, plus the subtyping link).
+      NodeKind::Spread { inner: Some(base_id), .. } => {
+        let (bv, bp) = lower(g, base_id);
+        pending.extend(bp);
+        let result = g.fresh_result(field_origin);
+        let (rk, ri) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::TypeInherit),
+          args: args_val(vec![acc, bv]),
+          result,
+          origin: field_origin,
+        });
+        acc = ref_val(g, rk, ri, field_origin);
+      }
+      // `name: TypeExpr` — a named (record) field.
+      NodeKind::Arm { lhs, body, .. } => {
+        let NodeKind::Ident(name) = g.node(lhs).kind.clone() else {
+          panic!("type field name is not an Ident");
+        };
+        let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(lhs));
+        let type_id = body.items[0];
+        let (tv, tp) = lower(g, type_id);
+        pending.extend(tp);
+        let result = g.fresh_result(field_origin);
+        let (rk, ri) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::TypeSetField),
+          args: args_val(vec![acc, key_lit, tv]),
+          result,
+          origin: field_origin,
+        });
+        acc = ref_val(g, rk, ri, field_origin);
+      }
+      // A bare type expression — a positional (tuple) field; appended in order.
+      _ => {
+        let (tv, tp) = lower(g, field);
+        pending.extend(tp);
+        let result = g.fresh_result(field_origin);
+        let (rk, ri) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::TypePush),
+          args: args_val(vec![acc, tv]),
+          result,
+          origin: field_origin,
+        });
+        acc = ref_val(g, rk, ri, field_origin);
+      }
+    }
+  }
+
+  (acc, pending)
+}
+
+// ---------------------------------------------------------------------------
+// Union declaration: `Num = union: Int; Float`
+// ---------------------------------------------------------------------------
+
+// With params (`union T:`) the union is a function over its type-params (like a
+// generic `type`/`enum`); with none it lowers to the bare member accretion.
+fn lower_union_decl(
+  g: &mut Gen,
+  params: AstId,
+  members: &[AstId],
+  origin: Option<AstId>,
+) -> Lower {
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_union_body(g, members, origin))
+}
+
+// A union is an open union over existing types — represented at runtime as a
+// set of type refs ("union is just a set"). Built by accretion (mirrors
+// `lower_type_body`): a `·new_union` seed threaded through one `·union_add`
+// per member. Each member lowers to an ordinary value (it references an
+// existing type, which resolves in scope).
+fn lower_union_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewUnion),
+    args: args_val(vec![]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  for &member in members {
+    let member_origin = Some(member);
+    let (mv, mp) = lower(g, member);
+    pending.extend(mp);
+    let result = g.fresh_result(member_origin);
+    let (rk, ri) = (result.kind, result.id);
+    pending.push(Pending::App {
+      func: Callable::BuiltIn(BuiltIn::UnionAdd),
+      args: args_val(vec![acc, mv]),
+      result,
+      origin: member_origin,
+    });
+    acc = ref_val(g, rk, ri, member_origin);
+  }
+
+  (acc, pending)
+}
+
+// ---------------------------------------------------------------------------
+// Enum declaration: `Light = enum: Red; Green; Blue`
+// ---------------------------------------------------------------------------
+
+// With params (`enum T:`) the enum is a function over its type-params (like a
+// generic `type`); with none it lowers to the bare member accretion.
+fn lower_enum_decl(
+  g: &mut Gen,
+  params: AstId,
+  members: &[AstId],
+  origin: Option<AstId>,
+) -> Lower {
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_enum_body(g, members, origin))
+}
+
+// A closed sum: each member mints a member-type (a `type:` with a tag) added to
+// the enum namespace under its name. Built by accretion (mirrors the family):
+// a `·new_enum` seed threaded through one `·enum_add enum, 'Name', member_type`
+// per member. A nullary member (`Red`) mints a bare member-type; payload-carrying
+// members reuse `lower_type_body` for the payload.
+fn lower_enum_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewEnum),
+    args: args_val(vec![]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  for &member in members {
+    let member_origin = Some(member);
+    // A member is its name + a payload that is a type body:
+    //   `None`        nullary   -> empty body (bare `·new_type`)
+    //   `Some T`      positional -> body is the Apply args
+    //   `Bar {a: T}`  named      -> body is the rec-literal's fields
+    let (name_id, member_fields) = enum_member_parts(g, member);
+    let NodeKind::Ident(name) = g.node(name_id).kind.clone() else {
+      panic!("enum member name is not an Ident");
+    };
+    // Mint the member-type (a `type:` with a tag) from its payload body.
+    let (mtype_val, mtype_pending) = lower_type_body(g, &member_fields, member_origin);
+    pending.extend(mtype_pending);
+    // Add it to the enum under its name.
+    let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(name_id));
+    let result = g.fresh_result(member_origin);
+    let (rk, ri) = (result.kind, result.id);
+    pending.push(Pending::App {
+      func: Callable::BuiltIn(BuiltIn::EnumAdd),
+      args: args_val(vec![acc, key_lit, mtype_val]),
+      result,
+      origin: member_origin,
+    });
+    acc = ref_val(g, rk, ri, member_origin);
+  }
+
+  (acc, pending)
+}
+
+// Decompose an enum member into (name-node, payload-as-type-body-fields).
+//   `None`       -> (None, [])           nullary
+//   `Some T`     -> (Some, [T])          positional payload
+//   `Ni T, T`    -> (Ni, [T, T])         multiple positional
+//   `Bar {a: T}` -> (Bar, [Arm{a:T}...]) named payload (the rec's fields)
+fn enum_member_parts(g: &mut Gen, member: AstId) -> (AstId, Vec<AstId>) {
+  match g.node(member).kind.clone() {
+    NodeKind::Ident(_) => (member, vec![]),
+    NodeKind::Apply { func, args } => {
+      let arg_items: Vec<AstId> = args.items.to_vec();
+      // A single record-literal payload contributes its fields (named member);
+      // otherwise the args are positional payload fields.
+      if arg_items.len() == 1
+        && let NodeKind::LitRec { items, .. } = g.node(arg_items[0]).kind.clone()
+      {
+        (func, items.items.to_vec())
+      } else {
+        (func, arg_items)
+      }
+    }
+    _ => panic!("unexpected enum member shape"),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -3562,4 +3844,5 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_types.fnk");
 }

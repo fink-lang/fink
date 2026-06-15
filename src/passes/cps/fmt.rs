@@ -421,6 +421,15 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::SeqConcat  => "·seq_concat".into(),
     BuiltIn::RecPut    => "·rec_put".into(),
     BuiltIn::RecMerge  => "·rec_merge".into(),
+    // Type construction
+    BuiltIn::NewType      => "·new_type".into(),
+    BuiltIn::TypeSetField => "·type_set_field".into(),
+    BuiltIn::TypeInherit  => "·type_inherit".into(),
+    BuiltIn::TypePush     => "·type_push".into(),
+    BuiltIn::NewUnion     => "·new_union".into(),
+    BuiltIn::UnionAdd     => "·union_add".into(),
+    BuiltIn::NewEnum      => "·new_enum".into(),
+    BuiltIn::EnumAdd      => "·enum_add".into(),
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction

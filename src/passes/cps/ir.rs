@@ -272,6 +272,20 @@ pub enum BuiltIn {
   Get,
   // Data construction
   SeqPrepend, SeqConcat, RecPut, RecMerge,
+  // Type construction — mints a fresh type value (`type _` and friends),
+  // then accretes fields onto it (mirrors RecPut onto a {} seed).
+  // TypeInherit splices a base type's fields AND records it as the base
+  // (the `..Foo` spread; mirrors RecMerge, plus the subtyping link).
+  // TypePush appends a positional field (the tuple body `type: u8, i8`).
+  NewType, TypeSetField, TypeInherit, TypePush,
+  // Union — an open union over existing types (`union: T1; T2`). Accreted one
+  // member at a time (mirrors NewType/TypeSetField); the runtime representation
+  // is a set of type refs.
+  NewUnion, UnionAdd,
+  // Enum — a closed sum that mints a member-type per case (`enum: Some T; None`).
+  // Accreted one member at a time: each member is a minted type added under its
+  // name (the tag). The enum is a namespace (name -> member-type).
+  NewEnum, EnumAdd,
   // String interpolation
   StrFmt,
   // Closure construction — partially applies a lifted fn with its captures.
