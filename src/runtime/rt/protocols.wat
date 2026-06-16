@@ -38,6 +38,21 @@
   ;; math.wat's `(@impl "std/math.fnk:...")` entries.
   (import "std/math.wat"     "abs_f64"
     (func $_link_math_anchor (param (ref $F64)) (result (ref $F64))))
+  ;; Same anchor pattern for rt/types.wat: codegen calls `new_type`
+  ;; directly (resolved via the runtime func-name table), so the module
+  ;; must be in the link DAG even though no runtime module dispatches to it.
+  (import "rt/types.wat"     "new_type"
+    (func $_link_types_anchor
+      (param (ref null any)) (param i32) (param i32) (param (ref null any))))
+  (import "rt/types.wat"     "Type"         (type $Type         (sub any)))
+  (import "rt/types.wat"     "Union"        (type $Union        (sub $Type)))
+  (import "rt/types.wat"     "union_eq"
+    (func $union_eq (param (ref $Union)) (param (ref $Union)) (result i32)))
+  (import "rt/types.wat"     "Inst"         (type $Inst         (sub any)))
+  (import "rt/types.wat"     "Rec"          (type $Rec_inst     (sub $Inst)))
+  (import "rt/types.wat"     "Tuple"        (type $Tuple_inst   (sub $Inst)))
+  (import "rt/types.wat"     "inst_eq"
+    (func $inst_eq (param (ref $Inst)) (param (ref $Inst)) (result i32)))
   (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
@@ -525,6 +540,62 @@
         (ref.i31 (call $_range_eq (local.get $a) (local.get $b)))
         (local.get $cont)))
 
+    ;; Try $Inst (typed instances $Rec/$Tuple) — nominal + structural eq,
+    ;; delegated to types.wat's inst_eq.
+    (block $not_inst
+      (drop
+        (block $is_inst (result (ref $Inst))
+          (br $not_inst
+            (br_on_cast $is_inst (ref null any) (ref $Inst)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Inst) (local.get $b))
+            (then (call $inst_eq
+              (ref.cast (ref $Inst) (local.get $a))
+              (ref.cast (ref $Inst) (local.get $b))))
+            (else (i32.const 0))))
+        (local.get $cont)))
+
+    ;; Try $Union — STRUCTURAL set equality (a union references types, it has
+    ;; no identity; same member set = equal). MUST precede the $Type arm since
+    ;; $Union <: $Type. Mixed-type b → false.
+    (block $not_union
+      (drop
+        (block $is_union (result (ref $Union))
+          (br $not_union
+            (br_on_cast $is_union (ref null any) (ref $Union)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Union) (local.get $b))
+            (then (call $union_eq
+              (ref.cast (ref $Union) (local.get $a))
+              (ref.cast (ref $Union) (local.get $b))))
+            (else (i32.const 0))))
+        (local.get $cont)))
+
+    ;; Try $Type (and its non-union subtypes $Enum/$RecType/...) — IDENTITY
+    ;; equality. type/enum OWN their identity (each declaration is distinct);
+    ;; two refs to the same type are equal, distinct types differ. Mixed → false.
+    (block $not_type
+      (drop
+        (block $is_type (result (ref $Type))
+          (br $not_type
+            (br_on_cast $is_type (ref null any) (ref $Type)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Type) (local.get $b))
+            (then (ref.eq
+              (ref.cast (ref eq) (local.get $a))
+              (ref.cast (ref eq) (local.get $b))))
+            (else (i32.const 0))))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; Record equality kernel shared by op_eq / op_neq.
@@ -709,6 +780,60 @@
       (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (i32.eqz (call $_range_eq (local.get $a) (local.get $b))))
+        (local.get $cont)))
+
+    ;; Try $Inst — negation of nominal+structural instance eq.
+    (block $not_inst
+      (drop
+        (block $is_inst (result (ref $Inst))
+          (br $not_inst
+            (br_on_cast $is_inst (ref null any) (ref $Inst)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (i32.eqz
+            (if (result i32) (ref.test (ref $Inst) (local.get $b))
+              (then (call $inst_eq
+                (ref.cast (ref $Inst) (local.get $a))
+                (ref.cast (ref $Inst) (local.get $b))))
+              (else (i32.const 0)))))
+        (local.get $cont)))
+
+    ;; Try $Union — negation of structural set equality. MUST precede $Type.
+    (block $not_union
+      (drop
+        (block $is_union (result (ref $Union))
+          (br $not_union
+            (br_on_cast $is_union (ref null any) (ref $Union)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (i32.eqz
+            (if (result i32) (ref.test (ref $Union) (local.get $b))
+              (then (call $union_eq
+                (ref.cast (ref $Union) (local.get $a))
+                (ref.cast (ref $Union) (local.get $b))))
+              (else (i32.const 0)))))
+        (local.get $cont)))
+
+    ;; Try $Type — negation of identity equality (see op_eq's $Type arm).
+    (block $not_type
+      (drop
+        (block $is_type (result (ref $Type))
+          (br $not_type
+            (br_on_cast $is_type (ref null any) (ref $Type)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (i32.eqz
+            (if (result i32) (ref.test (ref $Type) (local.get $b))
+              (then (ref.eq
+                (ref.cast (ref eq) (local.get $a))
+                (ref.cast (ref eq) (local.get $b))))
+              (else (i32.const 0)))))
         (local.get $cont)))
 
     (unreachable))

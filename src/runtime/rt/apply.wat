@@ -33,6 +33,13 @@
     (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
   (import "std/list.wat" "concat"
     (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
+  ;; Type construction: when an apply callee is a $Type, building an instance
+  ;; is delegated wholesale to types.wat. apply.wat stays dumb -- it only
+  ;; recognises "callee is a type" and hands off. (Circular with types.wat,
+  ;; which imports apply_1/args_head; the linker resolves it.)
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
+  (import "rt/types.wat" "type_apply"
+    (func $type_apply (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
 
   ;; $Cell — mutable storage cell for a LetRec slot.
@@ -136,6 +143,18 @@
     (param $callee (ref null any))
 
     (local $clos (ref $Closure))
+
+    ;; A $Type callee = construction. Delegate the whole flavour decision to
+    ;; types.wat (apply stays dumb). Dispatches on the base $Type, so all
+    ;; subtypes route here. Same (args, ctx, callee) handoff as the closure
+    ;; path: cont is the head of $args, real args follow -- types.wat peels.
+    (if (ref.test (ref $Type) (local.get $callee))
+      (then
+        (return_call $type_apply
+          (local.get $args)
+          (local.get $ctx)
+          (local.get $callee))))
+
     (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
 
     (return_call_ref $Fn3

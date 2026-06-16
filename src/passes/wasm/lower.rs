@@ -962,6 +962,56 @@ fn lower_expr(
       emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
+    // NewType: `(ctx, cont)` — no value args. The type-seed constructors take
+    // the introspection key (module_id, cps_id) as two i32 constants, supplied
+    // here at emit time (like trace_push), NOT as CPS value args. Signature
+    // `(ctx, mid i32, cid i32, cont) -> ()`; tail-applies cont with the value.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewType), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_type(), args, expr.id);
+    }
+
+    // TypeSetField: `(ctx, type, key, val, cont)` — same 4-arg cont shape as
+    // RecPut. Adds a named field to a type under construction.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeSetField), args } => {
+      let target = lcx.rt.type_set_field();
+      emit_quaternary(lcx, ctx, target, args, expr.id);
+    }
+
+    // TypePush: `(ctx, type, val, cont)` — append a positional (tuple) field.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypePush), args } => {
+      let target = lcx.rt.type_push();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // TypeInherit: `(ctx, type, base, cont)` — record a `..Base` supertype link.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeInherit), args } => {
+      let target = lcx.rt.type_inherit();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // NewUnion: `(ctx, cont)` — mints a `$Union`. Same i32-key seed as NewType.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewUnion), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_union(), args, expr.id);
+    }
+
+    // UnionAdd: `(ctx, union, member, cont)` — add a member type-ref.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::UnionAdd), args } => {
+      let target = lcx.rt.union_add();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // NewEnum: `(ctx, cont)` — mints a `$Enum`. Same i32-key seed as NewType.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewEnum), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_enum(), args, expr.id);
+    }
+
+    // EnumAdd: `(ctx, enum, name, member, cont)` — add a case (4-arg, like
+    // TypeSetField).
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::EnumAdd), args } => {
+      let target = lcx.rt.enum_add();
+      emit_quaternary(lcx, ctx, target, args, expr.id);
+    }
+
     // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
     // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {
@@ -1794,7 +1844,48 @@ fn emit_quaternary(
   if args.len() != 5 {
     panic!("lower: 4-arg primitive expects 5 args (ctx + 4 user args), got {}", args.len());
   }
-  let _ = ctx;  // ctx_local unused; use threaded ctx from args[0]
+  emit_direct_op_call(lcx, ctx, target, args, app_id);
+}
+
+/// Emit a type-seed constructor (`new_type`/`new_union`/`new_enum`). The CPS
+/// shape is `(ctx, cont)` with no value args; the introspection key
+/// (module_id, cps_id) is injected here as two `i32.const`s at emit time (like
+/// trace_push), so the runtime sig is `(ctx, mid i32, cid i32, cont)`.
+fn emit_type_seed(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  target: FuncSym,
+  args: &[Arg],
+  app_id: CpsId,
+) {
+  let ctx_a = args.first().expect("type seed: missing ctx");
+  let cont = args.get(1).expect("type seed: missing cont");
+  let ctx_op = emit_arg_as_operand(lcx, ctx, ctx_a);
+  let cont_op = match cont {
+    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
+    Arg::Val(v) => val_as_operand(lcx, ctx, v),
+    _ => panic!("lower: type-seed cont is neither Cont::Ref nor Val"),
+  };
+  let mid = lit_i32(lcx.frag.module_id.0 as i32);
+  let cid = lit_i32(app_id.0 as i32);
+  let i = push_return_call(lcx.frag, target, vec![ctx_op, mid, cid, cont_op]);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
+  ctx.instrs.push(i);
+}
+
+/// Emit a tail-call to a runtime func resolved by a dedicated getter (not the
+/// protocol `op()` table). Every `Arg` maps to an operand in order, so this is
+/// arity-agnostic — the CPS shape `[ctx, ...user_args, cont]` flows straight to
+/// the runtime func's params. Used by the type-construction accretion ops and
+/// `emit_quaternary`.
+fn emit_direct_op_call(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  target: FuncSym,
+  args: &[Arg],
+  app_id: CpsId,
+) {
   let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }

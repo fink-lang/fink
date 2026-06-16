@@ -1477,7 +1477,7 @@
   ;; the opposite of list's order-sensitive hash. Prefer lazy-memoized over
   ;; eager-on-write. See hashing.wat (the $Dict stub) for the shared design
   ;; note.
-  (func $op_eq (@impl "std/operators.fnk:op_eq" $Set $Set)
+  (func $op_eq (@pub) (@impl "std/operators.fnk:op_eq" $Set $Set)
     (param $a (ref $Set)) (param $b (ref $Set))
     (result i32)
     (call $eq

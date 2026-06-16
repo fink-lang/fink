@@ -200,6 +200,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
       ("std/range.wat",    include_str!("../../runtime/std/range.wat")),
       ("std/set.wat",      include_str!("../../runtime/std/set.wat")),
       ("std/dict.wat",     include_str!("../../runtime/std/dict.wat")),
+      ("rt/types.wat",     include_str!("../../runtime/rt/types.wat")),
       ("std/repr.wat",     include_str!("../../runtime/std/repr.wat")),
       ("std/hashing.wat",  include_str!("../../runtime/std/hashing.wat")),
     ];
@@ -1289,3 +1290,7 @@ mod tests {
     assert!(found_i31_from, "i31_from_js export missing");
   }
 }
+
+
+
+

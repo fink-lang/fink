@@ -1353,7 +1353,7 @@
 
   ;; Returns the public $Dict type; the concrete $DictImpl wrapper stays
   ;; private to this module.
-  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $Dict))
+  (func $_rec_new (@pub) (@impl "std/rec.fnk:new") (result (ref $Dict))
     (struct.new $DictImpl (global.get $empty_node))
   )
 
@@ -1584,7 +1584,7 @@
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
   ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
   ;; Avoids CPS overhead for compile-time-known field sets.
-  (func $_set_field (@impl "std/rec.fnk:_set_field")
+  (func $_set_field (@pub) (@impl "std/rec.fnk:_set_field")
     (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any))
     (result (ref null any))
     (call $_rec_set

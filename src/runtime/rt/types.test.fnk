@@ -1,0 +1,118 @@
+{test, equals, not_equals, skip} = import 'std/testing.fnk'
+
+{u8} = import 'std/int.fnk'
+
+
+
+test 'type alias equality', fn:
+  Foo = type _
+  Bar = Foo
+
+  equals
+    Foo
+    Bar
+
+
+test 'type equality', fn:
+  Foo = type _
+  Bar = type _
+
+  not_equals
+    Foo
+    Bar
+
+
+test 'union alias', fn:
+  Foo = type _
+  Bar = type _
+
+  FooBar = union:
+    Foo
+    Bar
+
+  Spam = FooBar
+
+  equals
+    FooBar
+    Spam
+
+
+test 'union equality', fn:
+  Foo = type _
+  Bar = type _
+
+  FooBar = union:
+    Foo
+    Bar
+
+  Spam = union:
+    Bar
+    Foo
+
+  equals
+    FooBar
+    Spam
+
+
+test 'enum aliasing', fn:
+  Foo = enum:
+    Bar {a: u8}
+    Spam u8
+
+  Ham = Foo
+
+  equals
+    Foo
+    Ham
+
+
+test 'enum equality', fn:
+  Foo = enum:
+    Bar {a: u8}
+    Spam u8
+
+  Ham = enum:
+    Bar {a: u8}
+    Spam u8
+
+  not_equals
+    Foo
+    Ham
+
+
+
+test 'typed rec equality', fn:
+  Foo = type:
+    bar: u8
+    spam: u8
+
+  equals
+    Foo {bar: 1, spam: 2}
+    Foo {bar: 1, spam: 2}
+
+  not_equals
+    Foo {bar: 1, spam: 2}
+    {bar: 1, spam: 2}
+
+
+
+test 'typed tuple equality', fn:
+  Foo = type: u8, u8
+
+  equals
+    Foo 1, 2
+    Foo 1, 2
+
+  not_equals
+    Foo 1, 2
+    [1, 2]
+
+
+
+skip test 'TODO support typed fn', fn:
+  Foo = type:
+    # fn u8, i16: i8
+    u8
+
+
+

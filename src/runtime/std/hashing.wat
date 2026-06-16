@@ -27,6 +27,9 @@
     (func $clos_hash_i31 (param (ref $Closure)) (result i32)))
   (import "rt/opaque.wat" "hash_i31"
     (func $opaque_hash_i31 (param (ref $Opaque)) (result i32)))
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
+  (import "rt/types.wat" "hash_i31"
+    (func $type_hash_i31 (param (ref $Type)) (result i32)))
 
 
   ;; -- Hash dispatch ------------------------------------------------------
@@ -100,6 +103,16 @@
             (local.get $key))))
       (drop)
       (return (i32.const 0)))
+
+    ;; Try $Type (and subtypes) -- delegate to types.wat (identity hash,
+    ;; constant 0 for now; ref.eq disambiguates within the bucket). Needed so
+    ;; type-values can be $Set members (union members).
+    (block $not_type
+      (block $is_type (result (ref $Type))
+        (br $not_type
+          (br_on_cast $is_type (ref eq) (ref $Type)
+            (local.get $key))))
+      (return (call $type_hash_i31)))
 
     ;; Unknown type — unreachable for valid keys
     (unreachable)

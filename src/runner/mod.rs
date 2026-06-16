@@ -925,4 +925,36 @@ mod cli_runner_tests {
     );
   }
 
+  /// Runs the runtime-adjacent fink test suite (`src/runtime/rt/all.test.fnk`)
+  /// through the real file-based runner. Same gating as the std suite: behaviour
+  /// tests for the runtime substrate (rt/types.test.fnk etc.) live next to the
+  /// runtime and aggregate here, not in std/all.test.fnk.
+  #[test]
+  fn runtime_native_test_suite_runs() {
+    use super::IoReadStream;
+
+    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stdout: IoStream = stdout_buf.clone();
+    let stderr: IoStream = stderr_buf.clone();
+
+    let exit = super::run_file(
+      RunOptions::default(),
+      "src/runtime/rt/all.test.fnk",
+      vec![],
+      stdin,
+      stdout,
+      stderr,
+    ).expect("run src/runtime/rt/all.test.fnk");
+
+    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
+    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
+    assert_eq!(
+      exit, 0,
+      "runtime-native test suite reported failures (exit {exit})\n\
+       --- stdout ---\n{out}\n--- stderr ---\n{err}",
+    );
+  }
+
 }
