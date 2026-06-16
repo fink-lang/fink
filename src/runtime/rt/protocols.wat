@@ -53,6 +53,8 @@
   (import "rt/types.wat"     "Tuple"        (type $Tuple_inst   (sub $Inst)))
   (import "rt/types.wat"     "inst_eq"
     (func $inst_eq (param (ref $Inst)) (param (ref $Inst)) (result i32)))
+  (import "rt/types.wat"     "inst_payload"
+    (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
@@ -1129,6 +1131,12 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
 
+    ;; A $Tuple instance IS seq-like -- unwrap to its bare $List payload and
+    ;; succeed with THAT (destructured value is bare; reads strip the type).
+    (if (ref.test (ref $Tuple_inst) (local.get $val))
+      (then (return_call $apply_1
+        (local.get $ctx) (call $inst_payload (local.get $val)) (local.get $succ))))
+
     ;; $List
     (block $not_list
       (block $is_list (result (ref $List))
@@ -1152,10 +1160,16 @@
     (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
 
-  ;; is_rec_like(val, succ, fail): succ(val) if $Dict, else fail()
+  ;; is_rec_like(val, succ, fail): succ(payload) if $Dict or a $Rec instance,
+  ;; else fail(). A $Rec instance IS rec-like -- unwrap to its bare $Dict
+  ;; payload and succeed with THAT (the destructured value is bare; reads strip
+  ;; the type). Plain $Dict succeeds with itself.
   (func $is_rec_like (@pub) (@impl "std/operators.fnk:is_rec_like")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
+    (if (ref.test (ref $Rec_inst) (local.get $val))
+      (then (return_call $apply_1
+        (local.get $ctx) (call $inst_payload (local.get $val)) (local.get $succ))))
     (block $not_rec
       (block $is_rec (result (ref $Dict))
         (br $not_rec
@@ -1408,6 +1422,16 @@
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
       (param $ctx (ref null any))
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Inst (typed instance) — unwrap to the bare payload and re-dispatch.
+    ;; Reads strip the type; the bare-collection arm below does the work.
+    (if (ref.test (ref $Inst) (local.get $container))
+      (then
+        (return_call $op_dot
+          (local.get $ctx)
+          (call $inst_payload (local.get $container))
+          (local.get $key)
+          (local.get $cont))))
 
     ;; Try $Str
     (block $not_str

@@ -347,6 +347,20 @@
       (local.get $cont)))
 
 
+  ;; -- inst_payload ----------------------------------------------------
+  ;;
+  ;; Unwrap an instance to its bare structural payload ($Dict for $Rec, $List
+  ;; for $Tuple). Reads (field access, destructure, spread) delegate through
+  ;; this -- they are nominal-blind and strip the type. Identity is conferred
+  ;; ONLY by a constructor, never recovered from a read.
+  (func $inst_payload (@pub)
+    (param $inst (ref null any)) (result (ref null any))
+    (if (ref.test (ref $Rec) (local.get $inst))
+      (then (return
+        (struct.get $Rec $rec_payload (ref.cast (ref $Rec) (local.get $inst))))))
+    (struct.get $Tuple $tup_payload (ref.cast (ref $Tuple) (local.get $inst))))
+
+
   ;; -- inst_eq ---------------------------------------------------------
   ;;
   ;; Instance equality: NOMINAL (same $type, ref.eq) AND STRUCTURAL (payload

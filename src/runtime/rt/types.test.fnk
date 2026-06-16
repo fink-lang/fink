@@ -96,6 +96,37 @@ test 'typed rec equality', fn:
 
 
 
+test 'typed rec destructure', fn:
+  Foo = type:
+    bar: u8
+
+  {bar} = Foo {bar: 1}
+
+  equals bar, 1
+
+
+test 'typed rec dot op', fn:
+  Foo = type:
+    bar: u8
+
+  foo = Foo {bar: 1}
+
+  equals foo.bar, 1
+
+
+test 'typed rec destructure spread', fn:
+  Foo = type:
+    bar: u8
+    spam: u8
+
+  {..foo} = Foo {bar: 1, spam: 2}
+
+  equals
+    foo
+    {bar: 1, spam: 2}
+
+
+
 test 'typed tuple equality', fn:
   Foo = type: u8, u8
 
@@ -105,6 +136,33 @@ test 'typed tuple equality', fn:
 
   not_equals
     Foo 1, 2
+    [1, 2]
+
+
+
+test 'typed tuple destructure', fn:
+  Foo = type: u8
+
+  [bar] = Foo 1
+
+  equals bar, 1
+
+
+test 'typed tuple dot op', fn:
+  Foo = type: u8
+
+  foo = Foo 1
+
+  equals foo.(0), 1
+
+
+test 'typed tuple destructure spread', fn:
+  Foo = type: u8, u8
+
+  [..foo] = Foo 1, 2
+
+  equals
+    foo
     [1, 2]
 
 
