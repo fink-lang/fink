@@ -27,7 +27,6 @@
     (func $dict_new (result (ref $Dict))))
   (import "std/dict.wat" "_set_field"
     (func $dict_set_field (param (ref null any)) (param (ref null any)) (param (ref null any)) (result (ref null any))))
-  (import "std/dict.wat" "size" (func $dict_size (param (ref $Dict)) (result i32)))
   (import "std/dict.wat" "rec_deep_eq"
     (func $dict_deep_eq (param (ref $Dict)) (param (ref $Dict)) (result i32)))
   (import "std/list.wat" "List" (type $List (sub any)))
@@ -47,20 +46,37 @@
     (func $set_eq (param (ref $Set)) (param (ref $Set)) (result i32)))
 
 
-  ;; -- $Type -----------------------------------------------------------
+  ;; -- $Type and flavour subtypes -------------------------------------
   ;;
-  ;; The reified type-value. $mod_id/$cps_id are the introspection key (see
-  ;; header). $fields is the name -> field-type map (a $Dict), accreted by
-  ;; type_set_field; mutable because a type is built incrementally then frozen
-  ;; (not shared mid-construction). Tuple/base fields land in later slices.
+  ;; A type is a `$base`-chain of nodes. `$Type` is the shared CORE every flavour
+  ;; carries: the (mod_id, cps_id) introspection key and the `$base` link
+  ;; (`..Super`, or the previous node in a multi-level decl; null at the chain
+  ;; root). Flavour is a SUBTYPE, discriminated by `br_on_cast` -- not a $kind tag
+  ;; and not inferred from collection emptiness:
+  ;;   $RecType   -- named fields. `$fields` is the FULL name->field-type $Dict
+  ;;                 (base's fields + own, built by copying base.fields then
+  ;;                 set'ing own; HAMT structural sharing keeps the copy cheap).
+  ;;   $TupleType -- positional. `$positionals` is the field-type $List.
+  ;; A bare `type _` / chain root is a plain `$Type` (unit); it is a marker/base,
+  ;; never applied to construct an instance (no current caller).
   (type $Type (@pub) (sub (struct
     (field $mod_id i32)
     (field $cps_id i32)
-    (field $fields (mut (ref null $Dict)))
-    ;; Positional (tuple) field-types, in REVERSE declaration order (cons-list
-    ;; prepend); readers reverse. $base is the `..Super` link (null if none).
-    (field $positionals (mut (ref null $List)))
     (field $base (mut (ref null $Type)))
+  )))
+  (type $RecType (@pub) (sub $Type (struct
+    (field $mod_id i32)
+    (field $cps_id i32)
+    (field $base (mut (ref null $Type)))
+    (field $fields (mut (ref null $Dict)))
+  )))
+  (type $TupleType (@pub) (sub $Type (struct
+    (field $mod_id i32)
+    (field $cps_id i32)
+    (field $base (mut (ref null $Type)))
+    ;; Positional field-types, in REVERSE declaration order (cons-prepend);
+    ;; readers reverse.
+    (field $positionals (mut (ref null $List)))
   )))
 
 
@@ -96,82 +112,135 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Type
-        (local.get $mid) (local.get $cid)
-        (call $dict_new) (call $list_empty) (ref.null none))
+        (local.get $mid) (local.get $cid) (ref.null none))
       (local.get $cont)))
 
 
   ;; -- type_set_field --------------------------------------------------
   ;;
-  ;; Add a named field (key -> field-type) to a type under construction.
-  ;; Cont-taking accretion op (mirrors rec_put): mutates the type's fields dict
-  ;; and tail-applies cont with the same type. (key, val) are the field name
-  ;; and its type value.
+  ;; Add a named field to the type under construction. CONSTRUCT-OR-ACCRETE:
+  ;;   - current is a $RecType -> set the field on its (own) $fields dict.
+  ;;   - else -> construct a NEW $RecType based on the current node, seeded with
+  ;;     the FULL field set (current's fields if it is a $RecType, else empty),
+  ;;     then set this field. HAMT structural sharing keeps the seed copy cheap.
+  ;; Cont-taking; tail-applies cont with the (possibly new) node. (key, val) are
+  ;; the field name and its type value.
   (func $type_set_field (@pub) (@impl "rt/types.wat:type_set_field")
     (param $ctx (ref null any))
     (param $type (ref null any)) (param $key (ref null any)) (param $val (ref null any))
     (param $cont (ref null any))
     (local $t (ref $Type))
+    (local $rt (ref $RecType))
+    (local $base_fields (ref null $Dict))
     (local.set $t (ref.cast (ref $Type) (local.get $type)))
-    (struct.set $Type $fields (local.get $t)
-      (ref.cast (ref $Dict)
-        (call $dict_set_field
-          (struct.get $Type $fields (local.get $t))
-          (local.get $key)
-          (local.get $val))))
+    ;; Already a $RecType: set the field in place.
+    (if (ref.test (ref $RecType) (local.get $t))
+      (then
+        (local.set $rt (ref.cast (ref $RecType) (local.get $t)))
+        (struct.set $RecType $fields (local.get $rt)
+          (ref.cast (ref $Dict)
+            (call $dict_set_field
+              (struct.get $RecType $fields (local.get $rt))
+              (local.get $key) (local.get $val))))
+        (return_call $apply_1 (local.get $ctx) (local.get $rt) (local.get $cont))))
+    ;; Otherwise wrap: new $RecType based on current. Seed fields from current if
+    ;; it is a $RecType (it is not, here), else empty.
     (return_call $apply_1
       (local.get $ctx)
-      (local.get $t)
+      (struct.new $RecType
+        (struct.get $Type $mod_id (local.get $t))
+        (struct.get $Type $cps_id (local.get $t))
+        (local.get $t)
+        (ref.cast (ref $Dict)
+          (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val))))
       (local.get $cont)))
 
 
   ;; -- type_push -------------------------------------------------------
   ;;
-  ;; Append a positional (tuple) field-type. Cont-taking accretion (mirrors
-  ;; seq_prepend). Stored via cons-prepend, so $positionals ends up in reverse
-  ;; declaration order; readers reverse. (ctx, type, val, cont).
+  ;; Append a positional (tuple) field-type. CONSTRUCT-OR-ACCRETE:
+  ;;   - current is a $TupleType -> cons-prepend onto its $positionals.
+  ;;   - else -> construct a new $TupleType based on the current node, seeded with
+  ;;     [val]. (Tuple inheritance/splice handled in type_inherit; here the wrap
+  ;;     starts a fresh positional run on the current node as base.)
+  ;; $positionals is reverse-stored (cons-prepend); readers reverse.
+  ;; Cont-taking; tail-applies cont with the (possibly new) node. (ctx, type, val, cont).
   (func $type_push (@pub) (@impl "rt/types.wat:type_push")
     (param $ctx (ref null any))
     (param $type (ref null any)) (param $val (ref null any))
     (param $cont (ref null any))
     (local $t (ref $Type))
+    (local $tt (ref $TupleType))
     (local.set $t (ref.cast (ref $Type) (local.get $type)))
-    (struct.set $Type $positionals (local.get $t)
-      (call $list_prepend
-        (ref.cast (ref any) (local.get $val))
-        (ref.cast (ref $List) (struct.get $Type $positionals (local.get $t)))))
+    (if (ref.test (ref $TupleType) (local.get $t))
+      (then
+        (local.set $tt (ref.cast (ref $TupleType) (local.get $t)))
+        (struct.set $TupleType $positionals (local.get $tt)
+          (call $list_prepend
+            (ref.cast (ref any) (local.get $val))
+            (ref.cast (ref $List) (struct.get $TupleType $positionals (local.get $tt)))))
+        (return_call $apply_1 (local.get $ctx) (local.get $tt) (local.get $cont))))
     (return_call $apply_1
       (local.get $ctx)
-      (local.get $t)
+      (struct.new $TupleType
+        (struct.get $Type $mod_id (local.get $t))
+        (struct.get $Type $cps_id (local.get $t))
+        (local.get $t)
+        (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty)))
       (local.get $cont)))
 
 
   ;; -- type_inherit ----------------------------------------------------
   ;;
-  ;; `..Base` spread. For a fixed tuple, this SPLICES the base's positionals
-  ;; into this type's positionals at the accretion point -- so `u8, ..Foo` and
-  ;; `..Foo, u8` differ by WHERE the splice lands (the accretion order encodes
-  ;; the layout). Also records $base (for record-flavour name inheritance /
-  ;; future supertype queries). $positionals is reverse-stored (cons-prepend),
-  ;; so concat(base, current) places base's items deeper = earlier-declared.
-  ;; (ctx, type, base, cont).
+  ;; `..Base` spread. Construct a NEW node based on `base`, with `base`'s flavour
+  ;; (RUNTIME br_cast of base) and members copied in (full-set):
+  ;;   - base is $TupleType -> new $TupleType base:base, positionals = base's
+  ;;     (cons-list; structural share).
+  ;;   - base is $RecType   -> new $RecType   base:base, fields = base's $Dict
+  ;;     (HAMT structural share -- the new type carries the full inherited set).
+  ;;   - base is a unit $Type -> remain unit-based (new $Type base:base); a later
+  ;;     field/positional will wrap it via type_set_field/type_push.
+  ;; The prior `type` node (a fresh unit seed at chain start) is replaced by this
+  ;; base-derived node. Cont-taking. (ctx, type, base, cont).
   (func $type_inherit (@pub) (@impl "rt/types.wat:type_inherit")
     (param $ctx (ref null any))
     (param $type (ref null any)) (param $base (ref null any))
     (param $cont (ref null any))
-    (local $t (ref $Type))
     (local $b (ref $Type))
-    (local.set $t (ref.cast (ref $Type) (local.get $type)))
+    (local $bt (ref $TupleType))
+    (local $br (ref $RecType))
     (local.set $b (ref.cast (ref $Type) (local.get $base)))
-    (struct.set $Type $base (local.get $t) (local.get $b))
-    ;; Splice the base's positionals in at this point (fixed-tuple layout).
-    (struct.set $Type $positionals (local.get $t)
-      (call $list_concat
-        (ref.cast (ref $List) (struct.get $Type $positionals (local.get $b)))
-        (ref.cast (ref $List) (struct.get $Type $positionals (local.get $t)))))
+    ;; Tuple base.
+    (if (ref.test (ref $TupleType) (local.get $b))
+      (then
+        (local.set $bt (ref.cast (ref $TupleType) (local.get $b)))
+        (return_call $apply_1
+          (local.get $ctx)
+          (struct.new $TupleType
+            (struct.get $Type $mod_id (local.get $b))
+            (struct.get $Type $cps_id (local.get $b))
+            (local.get $b)
+            (struct.get $TupleType $positionals (local.get $bt)))
+          (local.get $cont))))
+    ;; Rec base.
+    (if (ref.test (ref $RecType) (local.get $b))
+      (then
+        (local.set $br (ref.cast (ref $RecType) (local.get $b)))
+        (return_call $apply_1
+          (local.get $ctx)
+          (struct.new $RecType
+            (struct.get $Type $mod_id (local.get $b))
+            (struct.get $Type $cps_id (local.get $b))
+            (local.get $b)
+            (struct.get $RecType $fields (local.get $br)))
+          (local.get $cont))))
+    ;; Unit base: new unit node based on it.
     (return_call $apply_1
       (local.get $ctx)
-      (local.get $t)
+      (struct.new $Type
+        (struct.get $Type $mod_id (local.get $b))
+        (struct.get $Type $cps_id (local.get $b))
+        (local.get $b))
       (local.get $cont)))
 
 
@@ -185,8 +254,6 @@
   (type $Union (@pub) (sub $Type (struct
     (field $mod_id i32)
     (field $cps_id i32)
-    (field $fields (mut (ref null $Dict)))
-    (field $positionals (mut (ref null $List)))
     (field $base (mut (ref null $Type)))
     (field $members (mut (ref null $Set)))
   )))
@@ -203,8 +270,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Union
-        (local.get $mid) (local.get $cid)
-        (call $dict_new) (call $list_empty) (ref.null none)
+        (local.get $mid) (local.get $cid) (ref.null none)
         (call $set_empty))
       (local.get $cont)))
 
@@ -258,8 +324,6 @@
   (type $Enum (@pub) (sub $Type (struct
     (field $mod_id i32)
     (field $cps_id i32)
-    (field $fields (mut (ref null $Dict)))
-    (field $positionals (mut (ref null $List)))
     (field $base (mut (ref null $Type)))
     (field $cases (mut (ref null $Dict)))
   )))
@@ -276,8 +340,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Enum
-        (local.get $mid) (local.get $cid)
-        (call $dict_new) (call $list_empty) (ref.null none)
+        (local.get $mid) (local.get $cid) (ref.null none)
         (call $dict_new))
       (local.get $cont)))
 
@@ -310,9 +373,9 @@
   ;; dispatches here when the callee is a $Type (it stays dumb -- delegates
   ;; the whole flavour decision to us). Same Fn3 args convention as the closure
   ;; path: cont is the HEAD of $args, the real args follow in the tail.
-  ;; Discriminate by the TYPE's structure:
-  ;;   fields non-empty -> $Rec (payload = the single $Dict real-arg)
-  ;;   else             -> $Tuple (payload = the real-args list)
+  ;; Discriminate by the TYPE's FLAVOUR (br_on_cast the leaf node):
+  ;;   $RecType   -> $Rec (payload = the single $Dict real-arg)
+  ;;   $TupleType -> $Tuple (payload = the real-args list)
   ;; Iteration 1: field values stored as-is (no per-field constructor).
   ;; (args, ctx, type).
   (func $type_apply (@pub)
@@ -326,12 +389,9 @@
     ;; Fn3 args: cont = head, real args = tail.
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $real_args (call $args_tail (local.get $args)))
-    (if (i32.gt_u
-          (call $dict_size
-            (ref.cast (ref $Dict) (struct.get $Type $fields (local.get $t))))
-          (i32.const 0))
+    ;; Record instance: the single real-arg is the $Dict payload.
+    (if (ref.test (ref $RecType) (local.get $t))
       (then
-        ;; Record instance: the single real-arg is the $Dict payload.
         (return_call $apply_1
           (local.get $ctx)
           (struct.new $Rec
