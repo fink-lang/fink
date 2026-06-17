@@ -347,6 +347,30 @@
       (local.get $cont)))
 
 
+  ;; -- is_instance -----------------------------------------------------
+  ;;
+  ;; Direct-style predicate: is `val` an instance of `type`? True when `val` is
+  ;; a typed instance ($Inst) whose nominal $type is `type`. Walks the $base
+  ;; chain so a subtype (`FooBar` with `..Foo`) satisfies a `Foo` guard.
+  ;; Reuses the nominal half of inst_eq's identity model. (val, type) -> i32.
+  (func $is_instance (@pub)
+    (param $val (ref null any)) (param $type (ref null any)) (result i32)
+    (local $t (ref null $Type))
+    ;; Non-instances are never an instance of any type.
+    (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
+      (then (return (i32.const 0))))
+    ;; Walk the instance's type and its $base chain; ref.eq against `type`.
+    (local.set $t (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+    (block $done
+      (loop $walk
+        (br_if $done (ref.is_null (local.get $t)))
+        (if (ref.eq (local.get $t) (ref.cast (ref eq) (local.get $type)))
+          (then (return (i32.const 1))))
+        (local.set $t (struct.get $Type $base (local.get $t)))
+        (br $walk)))
+    (i32.const 0))
+
+
   ;; -- inst_payload ----------------------------------------------------
   ;;
   ;; Unwrap an instance to its bare structural payload ($Dict for $Rec, $List

@@ -1844,14 +1844,18 @@ fn wrap_with_fail(
         )
       },
       Pending::MatchGuard { func, args, origin } => {
-        // Guard check: call func(args...) → if result then cont else fail.
-        // Inlined as plain App + If (no dedicated guard builtin).
-        // Build: fail()  (panic builtin for irrefutable binds, cont call for arms)
+        // Guard check via the runtime `guard_apply` builtin: the head flows as a
+        // VALUE argument (not the callee) so it can be a type (`Foo {bar}`), a
+        // registered protocol, or a predicate fn (`is_even y`). The runtime fn
+        // decides success/failure and branches to the succ/fail conts.
+        //
+        // Emits: guard_apply(head, args..., succ, fail)
+        //   succ = the continuation body (the destructure/bind that follows)
+        //   fail = panic (irrefutable bind) or the arm's fail cont
         let fail_call = make_fail_call(g, origin);
 
-        // Build: <cont body> — inline the continuation as the then-branch.
-        // The fold may attach a fresh_result param that MatchGuard doesn't use;
-        // just inline the body directly (the unused bind is harmless).
+        // succ cont body — the fold may attach a fresh_result param that the
+        // guard doesn't bind; inline the cont body directly.
         let succ_body = match cont {
           Cont::Ref(cont_id) => {
             let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
@@ -1863,20 +1867,24 @@ fn wrap_with_fail(
           Cont::Expr { body, .. } => *body,
         };
 
-        // Build: if result then succ_body else fail()
-        let result_bind = g.fresh_result(origin);
-        let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), origin);
-        let if_expr = g.expr(ExprKind::If {
-          cond: Box::new(result_ref),
-          then: Box::new(succ_body),
-          else_: Box::new(fail_call),
-        }, origin);
+        // The head is the guard value (a type / protocol / predicate). For an
+        // existing `Callable::Val` head it becomes the leading val arg; a
+        // `Callable::BuiltIn` head would need a value form, which guards never
+        // produce, so this path only sees `Callable::Val`.
+        let head_val = match func {
+          Callable::Val(v) => v,
+          Callable::BuiltIn(_) => {
+            unreachable!("guard head is always a value (type/protocol/predicate)")
+          }
+        };
 
-        // Build: func(fn result: if_expr, args...) — cont first
-        let mut call_args: Vec<Arg> = vec![Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) })];
+        // Build: guard_apply(head, args..., succ, fail)
+        let mut call_args: Vec<Arg> = vec![Arg::Val(head_val)];
         call_args.extend(args.into_iter().map(Arg::Val));
+        call_args.push(Arg::Cont(Cont::Expr { args: vec![], body: Box::new(succ_body) }));
+        call_args.push(Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }));
         g.expr(
-          ExprKind::App { func, args: call_args },
+          ExprKind::App { func: Callable::BuiltIn(BuiltIn::GuardApply), args: call_args },
           origin,
         )
       },
@@ -2844,15 +2852,18 @@ fn emit_seq_pattern(
     checked_param.clone(), origin,
   );
 
-  // Step 4: wrap with IsSeqLike type guard.
+  // Step 4: guard on the built-in TupleProtocol — a bare `[...]` pattern guards
+  // on "supports tuple syntax", exactly as `Foo [...]` would guard on `Foo`.
   let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let proto = g.val(ValKind::BuiltIn(BuiltIn::TupleProtocol), origin);
   let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
   let fail_call = g.expr(ExprKind::App {
     func: Callable::Val(fail_ref), args: vec![],
   }, origin);
   let final_body = g.expr(ExprKind::App {
-    func: Callable::BuiltIn(BuiltIn::IsSeqLike),
+    func: Callable::BuiltIn(BuiltIn::GuardApply),
     args: vec![
+      Arg::Val(proto),
       Arg::Val(subj_ref),
       Arg::Cont(Cont::Expr { args: vec![checked_param], body: Box::new(inner_body) }),
       Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }),
@@ -3258,15 +3269,18 @@ fn emit_rec_pattern<'src>(
     g, &regular, &field_temps, terminal, fail_param.id, checked_param.clone(), origin,
   );
 
-  // Step 3: wrap with IsRecLike type guard.
+  // Step 3: guard on the built-in RecProtocol — a bare `{...}` pattern guards on
+  // "supports rec syntax", exactly as `Foo {...}` would guard on `Foo`.
   let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let proto = g.val(ValKind::BuiltIn(BuiltIn::RecProtocol), origin);
   let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
   let fail_call = g.expr(ExprKind::App {
     func: Callable::Val(fail_ref), args: vec![],
   }, origin);
   let final_body = g.expr(ExprKind::App {
-    func: Callable::BuiltIn(BuiltIn::IsRecLike),
+    func: Callable::BuiltIn(BuiltIn::GuardApply),
     args: vec![
+      Arg::Val(proto),
       Arg::Val(subj_ref),
       Arg::Cont(Cont::Expr { args: vec![checked_param], body: Box::new(inner_body) }),
       Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }),
@@ -3689,33 +3703,64 @@ fn lower_pat_lhs(
       r
     }
 
-    // Predicate guard: `is_even y`, `Ok b`, `foo 2, a, 3`
-    // In pattern position, Apply args are either:
-    //   - Ident/Wildcard — sub-pattern: binds to or discards `val` (the seq element)
-    //   - Anything else  — expression: lowered normally and passed as-is to the guard
-    // Exactly one arg should be an Ident/Wildcard (the "binding slot"); others are
-    // literal/value args. All are assembled in order as arguments to MatchGuard.
+    // Head-applied guard: `is_even y`, `Ok b`, `foo 2, a, 3`, `is_foo {bar}`.
+    // The head (`func`) becomes the guard run against the subject `val`; if it
+    // holds, the args destructure/bind `val` in the success path. In pattern
+    // position an arg is one of:
+    //   - Ident/Wildcard — binding slot: bound to `val`, flows as a guard value
+    //     arg (`is_even y` passes `y`/`val` to the predicate).
+    //   - structural sub-pattern (`{bar}`, `[x]`, ...) — NOT an argument to the
+    //     head: a destructure of `val` that runs in succ AFTER the guard holds.
+    //     Lowered as a normal pattern against `val`; its pendings chain after the
+    //     MatchGuard so `wrap_with_fail` nests them inside the guard's success
+    //     cont (same destructure it would emit standalone).
+    //   - anything else — expression: lowered as a value, passed to the guard.
     NodeKind::Apply { func, args } => {
       let arg_ids: Vec<AstId> = args.items.to_vec();
       let mut arg_vals: Vec<Val> = vec![];
+      // Sub-pattern args are deferred: they must lower into the guard's success
+      // path, so collect them and push their pendings AFTER the MatchGuard.
+      let mut sub_pats: Vec<AstId> = vec![];
       for arg in arg_ids {
         let arg_kind = g.node(arg).kind.clone();
-        let arg_val = match arg_kind {
+        match arg_kind {
           NodeKind::Ident(_) | NodeKind::Wildcard => {
             let (bound_kind, bound_id) = lower_pat_lhs(g, arg, val.clone(), Some(arg), pending);
-            ref_val(g, bound_kind, bound_id, Some(arg))
+            arg_vals.push(ref_val(g, bound_kind, bound_id, Some(arg)));
+          }
+          NodeKind::LitRec { .. } | NodeKind::LitSeq { .. } => {
+            // Structural sub-pattern: destructure `val` in succ, not a guard arg.
+            sub_pats.push(arg);
           }
           _ => {
             let (v, ap) = lower(g, arg);
             pending.extend(ap);
-            v
+            arg_vals.push(v);
           }
-        };
-        arg_vals.push(arg_val);
+        }
+      }
+      // When the args are structural sub-patterns (`is_foo {bar}`), there is no
+      // binding-slot arg, so the subject `val` itself is what the head guards.
+      if arg_vals.is_empty() && !sub_pats.is_empty() {
+        arg_vals.push(val.clone());
       }
       let (func_val, func_pending) = lower(g, func);
       pending.extend(func_pending);
-      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals,  origin });
+      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals, origin });
+      // Sub-pattern destructures run in the guard's success path: their pendings
+      // chain after the MatchGuard, so the fold nests them inside its succ cont.
+      //
+      // TODO(guard-double-check): the sub-pattern lowers as a full structural
+      // matcher, so its own `guard_apply rec_protocol`/`tuple_protocol` fires
+      // inside the success path -- redundant, since the outer guard already
+      // proved the value's shape (`is_foo {bar}` re-tests rec_protocol before
+      // `rec_pop`). Sound but wasteful. Eliding needs the head to provably imply
+      // the protocol (a TYPE head does; a PREDICATE head does not -- eliding
+      // there would turn a clean match-fail into a `rec_pop` trap), so revisit
+      // once type heads + resolution land. See [[project_type_lowering]].
+      for sub_pat in sub_pats {
+        lower_pat_lhs(g, sub_pat, val.clone(), Some(sub_pat), pending);
+      }
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
 

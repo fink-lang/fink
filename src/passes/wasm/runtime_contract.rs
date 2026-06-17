@@ -140,6 +140,12 @@ pub enum Sym {
   // continuations rather than values, but the WASM signature is the
   // same. RecPop has a different 4-arg shape; not yet wired.
   IsSeqLike, IsRecLike,
+  // Unified pattern guard — `(ctx, head, val, succ, fail) -> ()`. The head is a
+  // value (predicate fn or type); the runtime br-casts it and either calls it as
+  // a predicate or runs an instance-of test, then branches to succ/fail.
+  // Structural protocol heads (rec/tuple) are lowered to is_rec_like/is_seq_like
+  // instead, so this fn only sees predicate/type heads.
+  GuardApply,
   SeqPop, SeqPopBack,
   // String construction. `StrFromData` wraps a data-section pointer:
   //   `from_data(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
@@ -323,6 +329,10 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Panic(_) => &[Sym::Panic],
     // Type construction — `type _` mints a `$Type` via `new_type`.
     BuiltIn::NewType => &[Sym::NewType],
+    // GuardApply needs the runtime guard_apply (value/type heads) AND the
+    // structural guards (is_rec_like/is_seq_like), since a RecProtocol/
+    // TupleProtocol head lowers to those instead of guard_apply.
+    BuiltIn::GuardApply => &[Sym::GuardApply, Sym::IsRecLike, Sym::IsSeqLike],
     BuiltIn::TypeSetField => &[Sym::TypeSetField],
     BuiltIn::TypePush     => &[Sym::TypePush],
     BuiltIn::TypeInherit  => &[Sym::TypeInherit],
@@ -412,6 +422,7 @@ pub struct Runtime {
   rec_pop:      Option<FuncSym>,
   rec_empty:    Option<FuncSym>,
   rec_set_field: Option<FuncSym>,
+  guard_apply:  Option<FuncSym>,
   new_type:     Option<FuncSym>,
   type_set_field: Option<FuncSym>,
   type_push:    Option<FuncSym>,
@@ -466,6 +477,7 @@ impl Runtime {
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn rec_set_field(&self) -> FuncSym { self.rec_set_field.expect("rt: rec_set_field not declared") }
+  pub fn guard_apply(&self)  -> FuncSym { self.guard_apply.expect("rt: guard_apply not declared") }
   pub fn new_type(&self)     -> FuncSym { self.new_type.expect("rt: new_type not declared") }
   pub fn type_set_field(&self) -> FuncSym { self.type_set_field.expect("rt: type_set_field not declared") }
   pub fn type_push(&self)    -> FuncSym { self.type_push.expect("rt: type_push not declared") }
@@ -632,6 +644,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::RecEmpty        => "std/rec.fnk:new",
     Sym::RecSetField     => "std/rec.fnk:_set_field",
 
+    Sym::GuardApply      => "std/operators.fnk:guard_apply",
     Sym::NewType         => "rt/types.wat:new_type",
     Sym::TypeSetField    => "rt/types.wat:type_set_field",
     Sym::TypePush        => "rt/types.wat:type_push",
@@ -784,6 +797,7 @@ if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecP
   }
 
   if needed.contains(&Sym::RecSetField) { rt.rec_set_field  = Some(FuncSym::Runtime(Sym::RecSetField)); }
+  if needed.contains(&Sym::GuardApply)  { rt.guard_apply    = Some(FuncSym::Runtime(Sym::GuardApply)); }
   if needed.contains(&Sym::NewType)     { rt.new_type       = Some(FuncSym::Runtime(Sym::NewType)); }
   if needed.contains(&Sym::TypeSetField) { rt.type_set_field = Some(FuncSym::Runtime(Sym::TypeSetField)); }
   if needed.contains(&Sym::TypePush)    { rt.type_push      = Some(FuncSym::Runtime(Sym::TypePush)); }

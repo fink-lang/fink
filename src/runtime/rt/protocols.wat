@@ -55,6 +55,8 @@
     (func $inst_eq (param (ref $Inst)) (param (ref $Inst)) (result i32)))
   (import "rt/types.wat"     "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
+  (import "rt/types.wat"     "is_instance"
+    (func $is_instance (param (ref null any)) (param (ref null any)) (result i32)))
   (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
@@ -62,6 +64,9 @@
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "rt/apply.wat" "make_guard_branch"
+    (func $make_guard_branch (param (ref null any)) (param (ref any)) (param (ref any)) (param (ref null any)) (result (ref $Closure))))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/apply.wat" "op_eq"  (func $clos_op_eq  (param (ref $Closure)) (param (ref $Closure)) (result i32)))
   (import "rt/apply.wat" "op_neq" (func $clos_op_neq (param (ref $Closure)) (param (ref $Closure)) (result i32)))
@@ -1180,6 +1185,35 @@
       (local.get $ctx) (local.get $val) (local.get $succ)))
     (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
+
+  ;; guard_apply(ctx, guard, val, succ, fail): unified pattern guard.
+  ;; The `guard` is a runtime value in pattern-guard position:
+  ;;   - a $Type    -> instance test: succ(val) if val is-instance-of guard,
+  ;;                   else fail(). (Bare structural `{...}`/`[...]` patterns
+  ;;                   are lowered to is_rec_like/is_seq_like, not here.)
+  ;;   - a $Closure -> a fink predicate fn: call guard(val) with a branch cont;
+  ;;                   the predicate reports its verdict by calling the cont
+  ;;                   with a bool, which then resumes succ(val) or fail().
+  (func $guard_apply (@pub) (@impl "std/operators.fnk:guard_apply")
+    (param $ctx (ref null any))
+    (param $guard (ref null any)) (param $val (ref null any))
+    (param $succ (ref null any)) (param $fail (ref null any))
+    ;; Type guard: instance-of test, branch directly.
+    (if (ref.test (ref $Type) (local.get $guard))
+      (then
+        (if (call $is_instance (local.get $val) (local.get $guard))
+          (then (return_call $apply_1
+            (local.get $ctx) (local.get $val) (local.get $succ))))
+        (return_call $apply_0 (local.get $ctx) (local.get $fail))))
+    ;; Predicate guard: apply guard(val) with a branch cont (conts-first).
+    (return_call $apply_2_vals
+      (local.get $ctx)
+      (call $make_guard_branch
+        (local.get $ctx)
+        (ref.as_non_null (local.get $succ)) (ref.as_non_null (local.get $fail))
+        (local.get $val))
+      (local.get $val)
+      (local.get $guard)))
 
   ;; =========================================================================
   ;; Collection predicates (polymorphic — dispatch on type tag)

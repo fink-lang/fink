@@ -1039,6 +1039,31 @@ fn lower_expr(
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::IsRecLike), args } => {
       emit_ternary_guard(lcx, ctx, Sym::IsRecLike, args, expr.id);
     }
+    // GuardApply: `(ctx, head, val, succ, fail)` — unified pattern guard.
+    // The head selects the runtime path:
+    //   - RecProtocol/TupleProtocol — built-in structural protocol: drop the
+    //     head arg and route to the existing $is_rec_like/$is_seq_like guard
+    //     (same codegen as a bare `{...}`/`[...]` pattern).
+    //   - any other head (a predicate fn or a type value) — route through the
+    //     runtime $guard_apply, which br-casts the head and dispatches.
+    // TODO(guard-protocol-values): RecProtocol/TupleProtocol special-case here
+    // is the runtime-first shortcut. Once they are real registered values, the
+    // head flows uniformly and this dispatch collapses into the value-head arm.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::GuardApply), args } => {
+      let head = &args[1];
+      match head {
+        Arg::Val(v) if matches!(v.kind, ValKind::BuiltIn(BuiltIn::RecProtocol)) => {
+          emit_ternary_guard(lcx, ctx, Sym::IsRecLike, &drop_head_arg(args), expr.id);
+        }
+        Arg::Val(v) if matches!(v.kind, ValKind::BuiltIn(BuiltIn::TupleProtocol)) => {
+          emit_ternary_guard(lcx, ctx, Sym::IsSeqLike, &drop_head_arg(args), expr.id);
+        }
+        _ => {
+          let target = lcx.rt.guard_apply();
+          emit_direct_op_call(lcx, ctx, target, args, expr.id);
+        }
+      }
+    }
     // SeqPop: `(seq, fail, succ)` — destructure. Both fail and succ
     // are continuations.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPop), args } => {
@@ -1898,6 +1923,16 @@ fn emit_direct_op_call(
 /// `[ctx, val, succ, fail]`; ctx is passed to the runtime as the
 /// 0th wasm arg, the rest are the value being tested and two
 /// continuations resolved as values at this layer.
+/// Drop the head arg (index 1) from a `GuardApply` arg list, turning
+/// `[ctx, head, val, succ, fail]` into the `[ctx, val, succ, fail]` shape the
+/// ternary structural guards (`is_rec_like`/`is_seq_like`) expect.
+fn drop_head_arg(args: &[Arg]) -> Vec<Arg> {
+  let mut out = Vec::with_capacity(args.len() - 1);
+  out.push(args[0].clone());
+  out.extend_from_slice(&args[2..]);
+  out
+}
+
 fn emit_ternary_guard(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,

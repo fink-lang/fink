@@ -299,6 +299,18 @@ pub enum BuiltIn {
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
   IsSeqLike, IsRecLike, SeqPop, SeqPopBack, RecPop, Empty,
+  // GuardApply(head, value, succ(value), fail()) — pattern guard dispatch.
+  // The head is a runtime value (a type, a registered protocol, or a predicate
+  // closure); the runtime fn decides success/failure and branches to succ/fail.
+  // Replaces inline `head(value) + If` for Apply-pattern guards so the head can
+  // be a type (`Foo {bar}`) as well as a predicate fn (`is_even y`).
+  GuardApply,
+  // The two built-in structural protocols, used as `GuardApply` heads for bare
+  // `{...}` / `[...]` patterns: RecProtocol = "supports rec syntax" (rec/dict),
+  // TupleProtocol = "supports tuple syntax" (tuple/list). They are guard-head
+  // VALUES, not wrapping ops — every structural pattern guards on one of them,
+  // exactly as a `Foo {bar}` pattern guards on the type `Foo`.
+  RecProtocol, TupleProtocol,
   // StrMatch(subj, prefix, suffix, fail(), succ(capture)) — string template pattern matching.
   // Checks subj starts with prefix, ends with suffix (non-overlapping), binds the middle slice.
   StrMatch,

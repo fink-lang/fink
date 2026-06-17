@@ -437,6 +437,9 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Type guards
     BuiltIn::IsSeqLike    => "·is_seq_like".into(),
     BuiltIn::IsRecLike    => "·is_rec_like".into(),
+    BuiltIn::GuardApply   => "·guard_apply".into(),
+    BuiltIn::RecProtocol  => "·rec_protocol".into(),
+    BuiltIn::TupleProtocol => "·tuple_protocol".into(),
     // Collection primitives
     BuiltIn::SeqPop       => "·seq_pop".into(),
     BuiltIn::SeqPopBack   => "·seq_pop_back".into(),
