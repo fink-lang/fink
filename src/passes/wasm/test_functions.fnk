@@ -2336,6 +2336,7 @@ test 'recursive list sum', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_229 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_14 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_15 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -2345,7 +2346,8 @@ test 'recursive list sum', fn:
         (local.set $:v_227 (struct.new $rt/apply.wat:Closure (ref.func $test::v_288) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_15)))
         (local.set $:v_229 (struct.new $rt/apply.wat:Closure (ref.func $test::v_278) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $:v_13) (local.get $:v_227) (local.get $:v_229))
+        (local.set $:protocol (ref.i31 (i32.const 1)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_13) (local.get $:v_227) (local.get $:v_229))
       )
       (func $test::v_412 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:succ_10 (ref null any))
@@ -2494,6 +2496,7 @@ test 'recursive list sum', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_241 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_58 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_59 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -2503,7 +2506,8 @@ test 'recursive list sum', fn:
         (local.set $:v_239 (struct.new $rt/apply.wat:Closure (ref.func $test::v_342) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_59)))
         (local.set $:v_241 (struct.new $rt/apply.wat:Closure (ref.func $test::v_332) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_seq_like (local.get $:ctx_param) (local.get $:v_57) (local.get $:v_239) (local.get $:v_241))
+        (local.set $:protocol (ref.i31 (i32.const 1)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_57) (local.get $:v_239) (local.get $:v_241))
       )
       (func $test::v_394 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (local $:succ_54 (ref null any))
@@ -2753,7 +2757,7 @@ test 'recursive list sum', fn:
       (data $d_0 "test")
       (data $d_1 "sum")
     )
-    ;; sm:_AHuBQCaAQC6AQDAAQBuAL4BALgGALoBAMIBAMgBAG4AxgEAsggAlgEAugEAyAEAyAEAhgEAfACyDQCWAQC6AQDIAQDIAQFMAlQA6AEA1AEBAAL8BQC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAC5goAnAEAmgEAnAEAmgEAlAEAugEAwgEA4AEA0gEAegDSAQBuALwBAMQBAL4BAJAJAJYBALoBANABAL4BAMYBAMYBALQBAG4AvgEAxAEAxAEAggEAhAoAmgEAmgEAkgEAmgEAmAEAugEA0AEAvgEAwAEAjAIA1AEBQgXwCACWAQCaAQCWAQC6AQDCAQDIAQErAVABCgRWAG4AvgEAvgEAxgEAvAcAlgEAmgEAlgEAugEAyAEBCwtUAG4AvgEAvgEAhAgAlgEAugEAyAEAyAEAugEA1AEBAAuUBgC6AQDIAQBuAM4IAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAQAL6goAnAEAmgEAnAEAmgEAlgEAugEAwgEA4AEA1AEAegDSAQBuAL4BAMQBAMABAP4DAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPgIAJwBAJoBAJgBALoBAMIBAMIBAIgCANQBAG4AwAEAwAEAxAEAwg8AmAEAmgEAmgEAmgEAkgEAhAEAugEA0AEAvgEArgEA0gEAsgEA0gEA3AEA0gEAsgEA1AEA2gEA1AEAbgDCAQDAAQCUCQCYAQC6AQDQAQC-AQDGAQC0AQFgAYwBAG4AxAEAwAEAxAEAhAEAzAkAmAEAugEA0AEAvgEAxgEA5gEA1AEBGQGMAQEAAeYJAJgBALoBANABAL4BAMYBAOYBANQBAQYBjAEBAAHmCQCYAQC6AQDQAQC-AQDGAQDmAQDUAQEGAYwBAQABogwAnAEApgEAmAEAmAEAaAC6AQDQAQCeAQCqAQCUAQCWAQDKAQDiAQDUAQEGAYwBARMMdAEUAdYFAHoA5gEAjAEA
+    ;; sm:_gHuBQCaAQC6AQDAAQBuAL4BALgGALoBAMIBAMgBAG4AxgEAsggAlgEAugEAyAEAyAEAhgEAfACyDQCWAQC6AQDIAQDIAQFMAlQA6AEA1AEBAAL8BQC6AQDIAQBuAJoJAJwBAJoBAJwBAJoBAJYBAOQBANQBALgBANQBAGYBAAKUCwCcAQCaAQCcAQCaAQCUAQC6AQDCAQDgAQDSAQB6ANIBAG4AvAEAxAEAvgEAkAkAlgEAugEA0AEAvgEAxgEAxgEAtAEAbgC-AQDEAQDEAQCCAQCECgCaAQCaAQCSAQCaAQCYAQC6AQDQAQC-AQDAAQCMAgDUAQFCBfAIAJYBAJoBAJYBALoBAMIBAMgBASsBUAEKBFYAbgC-AQC-AQDGAQC8BwCWAQCaAQCWAQC6AQDIAQELC1QAbgC-AQC-AQCECACWAQC6AQDIAQDIAQC6AQDUAQEAC5QGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAC5gLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANQBAHoA0gEAbgC-AQDEAQDAAQD-AwBYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD4CACcAQCaAQCYAQC6AQDCAQDCAQCIAgDUAQBuAMABAMABAMQBAMIPAJgBAJoBAJoBAJoBAJIBAIQBALoBANABAL4BAK4BANIBALIBANIBANwBANIBALIBANQBANoBANQBAG4AwgEAwAEAlAkAmAEAugEA0AEAvgEAxgEAtAEBYAGMAQBuAMQBAMABAMQBAIQBAMwJAJgBALoBANABAL4BAMYBAOYBANQBARkBjAEBAAHmCQCYAQC6AQDQAQC-AQDGAQDmAQDUAQEGAYwBAQAB5gkAmAEAugEA0AEAvgEAxgEA5gEA1AEBBgGMAQEAAaIMAJwBAKYBAJgBAJgBAGgAugEA0AEAngEAqgEAlAEAlgEAygEA4gEA1AEBBgGMAQETDHQBFAHWBQB6AOYBAIwBAA
 
 
 

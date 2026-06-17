@@ -321,6 +321,7 @@ test 'std io import handling', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_190 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_13 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_14 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -330,7 +331,8 @@ test 'std io import handling', fn:
         (local.set $:v_188 (struct.new $rt/apply.wat:Closure (ref.func $test::v_336) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_14)))
         (local.set $:v_190 (struct.new $rt/apply.wat:Closure (ref.func $test::v_326) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $:v_12) (local.get $:v_188) (local.get $:v_190))
+        (local.set $:protocol (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_12) (local.get $:v_188) (local.get $:v_190))
       )
       (func $test::v_342 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (call $interop.wat:panic (i32.const 0))
@@ -407,4 +409,4 @@ test 'std io import handling', fn:
       (data $d_8 "stdout")
       (data $d_9 "std/io.fnk")
     )
-    ;; sm:xgGMCACWAQC6AQDIAQDGAQDKAQBuAL4BAMgBAMQBAIIBAOAMAJYBALoBAMgBAMYBAMoBANABAL4BAaYBGlQAlgIA1AEBVASSAQC0AQDsAQEBDJoLAJYBALoBAMgBAMYBAMoBANABAL4BAMoBAMQCANQBAG4AvgEAyAEAwAEAggEAjA0AlgEAugEAyAEAxgEAygEAygEAoAEAqgEAlAEAlgEAygEA9AIA1AEBMwSSAQCwAQDoAQEBDLYNAJYBAJoBAJYBAJoBAJYBAJoBAJYBAJoBAJYBALoBAMYBAb8BBloBEAZaARAFWAEOBFYBDAVYALoCANQBAWAEkAEAbgDCAQDCAQDAAQCCAQCQCQCWAQCaAQCWAQC6AQDIAQDCAQDCAQDCAQDCAQBuAL4BAMABAMABAMABAMABAOIKAJYBAJoBAJYBALoBAMgBAMIBAMIBAMIBAMgBANgCANQBAZsBOpIBAQA65AoAlgEAmgEAlgEAugEAyAEAwgEAwgEAyAEA3gIA1AEBADqSAQEAOp4KAJYBAJoBAJYBALoBAMgBAMIBAMgBALYCANQBAQA6kgEBADrYCQCWAQCaAQCWAQC6AQDIAQDIAQCOAgDUAQEAOpIBAQA6lAkAlgEAugEAyAEAyAEA6AEA1AEBADqSAQEAOr4GALoBAMgBAG4AzggAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEBADq6BABYAKoJAJYBALoBAMYBALgBANQBAHoA0gEAegDUAQBuAL4BAMABAMABAJwLAJwBAKYBAJgBAJgBAGgAtAEA1AEAlgEAggEAgAIA5gUAegDmAQCMAQA
+    ;; sm:xwGMCACWAQC6AQDIAQDGAQDKAQBuAL4BAMgBAMQBAIIBAOAMAJYBALoBAMgBAMYBAMoBANABAL4BAaYBGlQAlgIA1AEBVASSAQC0AQDsAQEBDJoLAJYBALoBAMgBAMYBAMoBANABAL4BAMoBAMQCANQBAG4AvgEAyAEAwAEAggEAjA0AlgEAugEAyAEAxgEAygEAygEAoAEAqgEAlAEAlgEAygEA9AIA1AEBMwSSAQCwAQDoAQEBDLYNAJYBAJoBAJYBAJoBAJYBAJoBAJYBAJoBAJYBALoBAMYBAb8BBloBEAZaARAFWAEOBFYBDAVYALoCANQBAWAEkAEAbgDCAQDCAQDAAQCCAQCQCQCWAQCaAQCWAQC6AQDIAQDCAQDCAQDCAQDCAQBuAL4BAMABAMABAMABAMABAOIKAJYBAJoBAJYBALoBAMgBAMIBAMIBAMIBAMgBANgCANQBAZsBOpIBAQA65AoAlgEAmgEAlgEAugEAyAEAwgEAwgEAyAEA3gIA1AEBADqSAQEAOp4KAJYBAJoBAJYBALoBAMgBAMIBAMgBALYCANQBAQA6kgEBADrYCQCWAQCaAQCWAQC6AQDIAQDIAQCOAgDUAQEAOpIBAQA6lAkAlgEAugEAyAEAyAEA6AEA1AEBADqSAQEAOr4GALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAOugEAFgAqgkAlgEAugEAxgEAuAEA1AEAegDSAQB6ANQBAG4AvgEAwAEAwAEAnAsAnAEApgEAmAEAmAEAaAC0AQDUAQCWAQCCAQCAAgDmBQB6AOYBAIwBAA

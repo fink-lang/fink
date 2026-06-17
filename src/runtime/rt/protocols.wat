@@ -1186,19 +1186,29 @@
     (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
 
-  ;; guard_apply(ctx, guard, val, succ, fail): unified pattern guard.
-  ;; The `guard` is a runtime value in pattern-guard position:
-  ;;   - a $Type    -> instance test: succ(val) if val is-instance-of guard,
-  ;;                   else fail(). (Bare structural `{...}`/`[...]` patterns
-  ;;                   are lowered to is_rec_like/is_seq_like, not here.)
-  ;;   - a $Closure -> a fink predicate fn: call guard(val) with a branch cont;
-  ;;                   the predicate reports its verdict by calling the cont
-  ;;                   with a bool, which then resumes succ(val) or fail().
+  ;; guard_apply(ctx, guard, val, succ, fail): unified pattern guard. Br-casts
+  ;; the guard to decide membership, then branches to succ(val) or fail():
+  ;;   - rec/tuple PROTOCOL singletons -> structural test via is_rec_like /
+  ;;     is_seq_like. The singletons are interim magic i31 sentinels (0 = rec,
+  ;;     1 = tuple) emitted by lowering for bare `{...}`/`[...]` patterns.
+  ;;     TODO(guard-protocol-values): replace the i31 sentinels with real
+  ;;     protocol type values once intrinsics/FQN-globals are unified.
+  ;;   - a $Type    -> nominal instance test (is_instance, $base-chain walk).
+  ;;   - a $Closure -> fink predicate fn: apply guard(val) with a branch cont;
+  ;;     the predicate calls the cont with a bool that resumes succ/fail.
   (func $guard_apply (@pub) (@impl "std/operators.fnk:guard_apply")
     (param $ctx (ref null any))
     (param $guard (ref null any)) (param $val (ref null any))
     (param $succ (ref null any)) (param $fail (ref null any))
-    ;; Type guard: instance-of test, branch directly.
+    ;; Protocol singletons: i31 sentinel (0 = rec-like, 1 = tuple-like).
+    (if (ref.test (ref i31) (local.get $guard))
+      (then
+        (if (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $guard))))
+          (then (return_call $is_rec_like
+            (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
+        (return_call $is_seq_like
+          (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
+    ;; Nominal type guard: is_instance ($base-walk), branch succ(val)/fail().
     (if (ref.test (ref $Type) (local.get $guard))
       (then
         (if (call $is_instance (local.get $val) (local.get $guard))

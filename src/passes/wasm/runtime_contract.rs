@@ -329,10 +329,12 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Panic(_) => &[Sym::Panic],
     // Type construction — `type _` mints a `$Type` via `new_type`.
     BuiltIn::NewType => &[Sym::NewType],
-    // GuardApply needs the runtime guard_apply (value/type heads) AND the
-    // structural guards (is_rec_like/is_seq_like), since a RecProtocol/
-    // TupleProtocol head lowers to those instead of guard_apply.
+    // guard_apply needs is_rec_like/is_seq_like too: it routes the rec/tuple
+    // protocol-sentinel guards to them.
     BuiltIn::GuardApply => &[Sym::GuardApply, Sym::IsRecLike, Sym::IsSeqLike],
+    // RecProtocol/TupleProtocol head values lower to inline i31 sentinels (no
+    // runtime symbol).
+    BuiltIn::RecProtocol | BuiltIn::TupleProtocol => &[],
     BuiltIn::TypeSetField => &[Sym::TypeSetField],
     BuiltIn::TypePush     => &[Sym::TypePush],
     BuiltIn::TypeInherit  => &[Sym::TypeInherit],

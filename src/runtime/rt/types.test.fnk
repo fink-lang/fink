@@ -105,7 +105,7 @@ test 'typed rec destructure', fn:
   equals bar, 1
 
 
-test 'typed rec guard destructure', fn:
+test 'typed rec guard', fn:
   Foo = type:
     bar: u8
 
@@ -114,6 +114,15 @@ test 'typed rec guard destructure', fn:
   equals
     foo
     Foo {bar: 1}
+
+
+test 'typed rec guard destructure', fn:
+  Foo = type:
+    bar: u8
+
+  Foo {bar} = Foo {bar: 42}
+
+  equals bar, 42
 
 
 skip test 'typed rec guard destructured with projection to base type', fn:

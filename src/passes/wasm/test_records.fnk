@@ -153,6 +153,7 @@ test 'rec destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_95 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_13 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_14 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -162,7 +163,8 @@ test 'rec destructure', fn:
         (local.set $:v_93 (struct.new $rt/apply.wat:Closure (ref.func $test::v_140) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_14)))
         (local.set $:v_95 (struct.new $rt/apply.wat:Closure (ref.func $test::v_130) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $:v_12) (local.get $:v_93) (local.get $:v_95))
+        (local.set $:protocol (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_12) (local.get $:v_93) (local.get $:v_95))
       )
       (func $test::v_146 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (call $interop.wat:panic (i32.const 0))
@@ -246,7 +248,7 @@ test 'rec destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:WowIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfoHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRiSAQEAGJAJAJYBALoBAMgBAMgBAOgBANIBAQAYkgEBABi8BgC6AQDIAQBuAMoIAJwBAJoBAJwBAJoBAJYBAOQBANIBALgBANIBAQAYtgQAWACmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAZABAQYBiAEBBQTaCQCcAQCmAQCYAQCUAQBmALQBANQBAQ0MYAECAZABAQYBiAEBBQTuBQB6AOYBAIwBAA
+    ;; sm:W4wIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfoHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRiSAQEAGJAJAJYBALoBAMgBAMgBAOgBANIBAQAYkgEBABi8BgC6AQDIAQBuAJYJAJwBAJoBAJwBAJoBAJYBAOQBANIBALgBANIBAGYBABjkBABYAKYJAJYBALoBAMYBALgBANIBAHoA0gEAegDSAQBuAL4BAL4BAL4BALYIAJQBALoBAMYBALgBANIBASYBkAEBBgGIAQEFBNoJAJwBAKYBAJgBAJQBAGYAtAEA1AEBDQxgAQIBkAEBBgGIAQEFBO4FAHoA5gEAjAEA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -501,6 +503,7 @@ test 'rec nested destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_124 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_35 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_36 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -510,7 +513,8 @@ test 'rec nested destructure', fn:
         (local.set $:v_122 (struct.new $rt/apply.wat:Closure (ref.func $test::v_166) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_36)))
         (local.set $:v_124 (struct.new $rt/apply.wat:Closure (ref.func $test::v_156) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $:v_34) (local.get $:v_122) (local.get $:v_124))
+        (local.set $:protocol (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_34) (local.get $:v_122) (local.get $:v_124))
       )
       (func $test::v_172 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (call $interop.wat:panic (i32.const 0))
@@ -594,6 +598,7 @@ test 'rec nested destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_133 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_13 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_14 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -603,7 +608,8 @@ test 'rec nested destructure', fn:
         (local.set $:v_131 (struct.new $rt/apply.wat:Closure (ref.func $test::v_212) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_14)))
         (local.set $:v_133 (struct.new $rt/apply.wat:Closure (ref.func $test::v_202) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $:v_12) (local.get $:v_131) (local.get $:v_133))
+        (local.set $:protocol (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_12) (local.get $:v_131) (local.get $:v_133))
       )
       (func $test::v_218 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (call $interop.wat:panic (i32.const 0))
@@ -691,7 +697,7 @@ test 'rec nested destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:f8IHAJYBALoBAMYBAKIBAK4BAG4AygEA_AYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQEmB5IBAQAHvgYAugEAyAEAbgDOCACcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQEAB7oEAFgA9gkAlgEAugEAxgEAogEAuAEA0gEAegDSAQB6ANIBAK4BAG4AygEAvgEAvgEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQElEpIBAQASvgYAugEAyAEAbgDOCACcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQEAEroEAFgApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxgAQIBkAEBAArGCgCcAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdgAQIBkAEBBgKKAQEFBe4FAHoA5gEAjAEA
+    ;; sm:gQHCBwCWAQC6AQDGAQCiAQCuAQBuAMoBAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBJgeSAQEAB74GALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAB-gEAFgA9gkAlgEAugEAxgEAogEAuAEA0gEAegDSAQB6ANIBAK4BAG4AygEAvgEAvgEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQElEpIBAQASvgYAugEAyAEAbgCaCQCcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQBmAQAS6AQAWACmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC4CACUAQC6AQDGAQC4AQDUAQEMDGABAgGQAQEACsYKAJwBAKYBAJgBAJQBAGYAlAEAZgC0AQDUAQEGB2ABAgGQAQEGAooBAQUF7gUAegDmAQCMAQA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:

@@ -377,6 +377,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:v_89 (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
+        (local $:protocol (ref null any))
         (local.set $:succ_10 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $:fail_11 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -386,7 +387,8 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:v_87 (struct.new $rt/apply.wat:Closure (ref.func $test::v_127) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:fail_11)))
         (local.set $:v_89 (struct.new $rt/apply.wat:Closure (ref.func $test::v_117) (local.get $:caps_arg)))
-        (return_call $std/operators.fnk:is_rec_like (local.get $:ctx_param) (local.get $:v_9) (local.get $:v_87) (local.get $:v_89))
+        (local.set $:protocol (ref.i31 (i32.const 0)))
+        (return_call $std/operators.fnk:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_9) (local.get $:v_87) (local.get $:v_89))
       )
       (func $test::v_133 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
         (call $interop.wat:panic (i32.const 0))
@@ -458,6 +460,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:V74IAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF3AoAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAlAEAlgEAygEAsAEAbgDOAQD8BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBATMNkgEBAA28BgC6AQDIAQBuAMgIAJwBAJoBAJwBAJoBAJQBAOQBANIBALgBANIBAQANtAQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCCCgCcAQCmAQCYAQCUAQBmAJgBAGgAtAEA0gEBDAdgAQIBkAEBBgKKAQEFBewFAHoA5gEAjAEA
+    ;; sm:WL4IAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF3AoAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAlAEAlgEAygEAsAEAbgDOAQD8BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBATMNkgEBAA28BgC6AQDIAQBuAJQJAJwBAJoBAJwBAJoBAJQBAOQBANIBALgBANIBAGYBAA3iBABYAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BAIIKAJwBAKYBAJgBAJQBAGYAmAEAaAC0AQDSAQEMB2ABAgGQAQEGAooBAQUF7AUAegDmAQCMAQA
 
 

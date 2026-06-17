@@ -1040,29 +1040,14 @@ fn lower_expr(
       emit_ternary_guard(lcx, ctx, Sym::IsRecLike, args, expr.id);
     }
     // GuardApply: `(ctx, head, val, succ, fail)` — unified pattern guard.
-    // The head selects the runtime path:
-    //   - RecProtocol/TupleProtocol — built-in structural protocol: drop the
-    //     head arg and route to the existing $is_rec_like/$is_seq_like guard
-    //     (same codegen as a bare `{...}`/`[...]` pattern).
-    //   - any other head (a predicate fn or a type value) — route through the
-    //     runtime $guard_apply, which br-casts the head and dispatches.
-    // TODO(guard-protocol-values): RecProtocol/TupleProtocol special-case here
-    // is the runtime-first shortcut. Once they are real registered values, the
-    // head flows uniformly and this dispatch collapses into the value-head arm.
+    // The head is a guard VALUE (a type, a structural protocol type, or a
+    // predicate fn). All heads flow uniformly through the runtime $guard_apply,
+    // which dispatches on the head. The rec/tuple protocols are materialised as
+    // ordinary type values (RecProtocol/TupleProtocol -> their getter funcs in
+    // val_as_operand), so there is no structural special-case here.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::GuardApply), args } => {
-      let head = &args[1];
-      match head {
-        Arg::Val(v) if matches!(v.kind, ValKind::BuiltIn(BuiltIn::RecProtocol)) => {
-          emit_ternary_guard(lcx, ctx, Sym::IsRecLike, &drop_head_arg(args), expr.id);
-        }
-        Arg::Val(v) if matches!(v.kind, ValKind::BuiltIn(BuiltIn::TupleProtocol)) => {
-          emit_ternary_guard(lcx, ctx, Sym::IsSeqLike, &drop_head_arg(args), expr.id);
-        }
-        _ => {
-          let target = lcx.rt.guard_apply();
-          emit_direct_op_call(lcx, ctx, target, args, expr.id);
-        }
-      }
+      let target = lcx.rt.guard_apply();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
     }
     // SeqPop: `(seq, fail, succ)` — destructure. Both fail and succ
     // are continuations.
@@ -1923,16 +1908,6 @@ fn emit_direct_op_call(
 /// `[ctx, val, succ, fail]`; ctx is passed to the runtime as the
 /// 0th wasm arg, the rest are the value being tested and two
 /// continuations resolved as values at this layer.
-/// Drop the head arg (index 1) from a `GuardApply` arg list, turning
-/// `[ctx, head, val, succ, fail]` into the `[ctx, val, succ, fail]` shape the
-/// ternary structural guards (`is_rec_like`/`is_seq_like`) expect.
-fn drop_head_arg(args: &[Arg]) -> Vec<Arg> {
-  let mut out = Vec::with_capacity(args.len() - 1);
-  out.push(args[0].clone());
-  out.extend_from_slice(&args[2..]);
-  out
-}
-
 fn emit_ternary_guard(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
@@ -2000,6 +1975,8 @@ fn emit_arg_as_operand(
         ValKind::Ref(r) => resolve_id_as_operand(lcx, ctx, ref_cps_id(*r)),
         ValKind::ContRef(id) => resolve_id_as_operand(lcx, ctx, *id),
         ValKind::BuiltIn(BuiltIn::Panic(_)) => panic_closure_operand(lcx, ctx),
+        ValKind::BuiltIn(BuiltIn::RecProtocol) => protocol_operand(lcx, ctx, 0),
+        ValKind::BuiltIn(BuiltIn::TupleProtocol) => protocol_operand(lcx, ctx, 1),
         ValKind::BuiltIn(b) => panic!("lower: BuiltIn {:?} as arg not supported", b),
       }
     }
@@ -2026,6 +2003,17 @@ fn panic_closure_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx) -> Operand {
     vec![Operand::RefFunc(lcx.rt.panic_apply()), op_local(caps_local)],
     local);
   ctx.instrs.push(i_clo);
+  op_local(local)
+}
+
+/// Materialise a built-in protocol guard sentinel for `guard_apply`. Interim
+/// representation: a magic i31 (0 = rec-like, 1 = tuple-like) that the runtime
+/// guard_apply recognises and routes to is_rec_like / is_seq_like. Replace with
+/// real protocol type values once intrinsics/FQN-globals are unified.
+fn protocol_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, sentinel: i32) -> Operand {
+  let local = ctx.alloc_local(":protocol");
+  let i = push_ref_i31(lcx.frag, lit_i32(sentinel), local);
+  ctx.instrs.push(i);
   op_local(local)
 }
 
