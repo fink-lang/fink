@@ -57,6 +57,8 @@
     (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"     "is_instance"
     (func $is_instance (param (ref null any)) (param (ref null any)) (result i32)))
+  (import "rt/types.wat"     "is_union_member"
+    (func $is_union_member (param (ref null any)) (param (ref null any)) (result i32)))
   (import "rt/types.wat"     "project_inst"
     (func $project_inst (param (ref null any)) (param (ref null any)) (result (ref null any))))
   (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
@@ -1210,6 +1212,17 @@
             (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
         (return_call $is_seq_like
           (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
+    ;; Union guard: membership test against the member set. A union classifies
+    ;; -- it has no fields of its own to project to -- so on match succ with
+    ;; `val` UNCHANGED (the value keeps its concrete member type, so a further
+    ;; match can discriminate). MUST precede the $Type arm: $Union <: $Type, and
+    ;; the $Type arm's is_instance/project would misread a union.
+    (if (ref.test (ref $Union) (local.get $guard))
+      (then
+        (if (call $is_union_member (local.get $val) (local.get $guard))
+          (then (return_call $apply_1
+            (local.get $ctx) (local.get $val) (local.get $succ))))
+        (return_call $apply_0 (local.get $ctx) (local.get $fail))))
     ;; Nominal type guard: is_instance ($base-walk). On match, DOWNCAST val to
     ;; the guard type (project to its fields) and succ with the projection;
     ;; else fail().

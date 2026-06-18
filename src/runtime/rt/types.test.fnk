@@ -54,6 +54,125 @@ test 'union equality', fn:
     Spam
 
 
+test 'union member guard binds instance', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  FooOrSpam x = Foo {bar: 1}
+
+  equals
+    x
+    Foo {bar: 1}
+
+
+test 'union member guard accepts any member', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  classify = fn val:
+    match val:
+      FooOrSpam _: 'member'
+      _: 'other'
+
+  Ham = type:
+    x: u8
+
+  equals
+    [classify Foo {bar: 1}; classify Spam {ham: 2}; classify Ham {x: 3}]
+    ['member'; 'member'; 'other']
+
+
+test 'union member guard preserves concrete type', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  --- a value matched by the union keeps its concrete member type, so a
+      further match on the member type still succeeds ---
+  narrow = fn val:
+    match val:
+      FooOrSpam m:
+        match m:
+          Foo _: 'foo'
+          Spam _: 'spam'
+          _: 'unknown'
+      _: 'other'
+
+  equals
+    [narrow Foo {bar: 1}; narrow Spam {ham: 2}]
+    ['foo'; 'spam']
+
+
+test 'union member matches derived instance via base', fn:
+  --- union lists a BASE type; a derived instance IS-A base, so it is a
+      member (membership walks the instance's $base chain) ---
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  Other = type:
+    ham: u8
+
+  BaseOrOther = union:
+    Base
+    Other
+
+  classify = fn val:
+    match val:
+      BaseOrOther _: 'member'
+      _: 'other'
+
+  equals
+    [classify Derived {bar: 1, spam: 2}; classify Base {bar: 3}; classify Other {ham: 4}]
+    ['member'; 'member'; 'member']
+
+
+test 'union member does not match base of a derived member', fn:
+  --- union lists a DERIVED type; a plain base instance is NOT a Derived,
+      so it is not a member (subtyping is one-directional) ---
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  DerivedOnly = union:
+    Derived
+
+  classify = fn val:
+    match val:
+      DerivedOnly _: 'member'
+      _: 'other'
+
+  equals
+    [classify Derived {bar: 1, spam: 2}; classify Base {bar: 3}]
+    ['member'; 'other']
+
+
 test 'enum aliasing', fn:
   Foo = enum:
     Bar {a: u8}

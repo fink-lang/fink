@@ -46,6 +46,8 @@
     (func $set_add (param (ref $Set)) (param (ref eq)) (result (ref $Set))))
   (import "std/set.wat" "op_eq"
     (func $set_eq (param (ref $Set)) (param (ref $Set)) (result i32)))
+  (import "std/set.wat" "op_in"
+    (func $set_in (param (ref $Set)) (param (ref eq)) (result i32)))
 
 
   ;; -- $Type and flavour subtypes -------------------------------------
@@ -306,6 +308,35 @@
     (call $set_eq
       (ref.cast (ref $Set) (struct.get $Union $members (local.get $a)))
       (ref.cast (ref $Set) (struct.get $Union $members (local.get $b)))))
+
+
+  ;; -- is_union_member -------------------------------------------------
+  ;;
+  ;; Membership test for a union guard: is `val` an instance of any member
+  ;; type? An instance belongs to the union iff its type -- or any type in
+  ;; its `$base` chain -- is a member. Reuses the set's synchronous key
+  ;; lookup (`op_in`, a HAMT `has`) instead of iterating members: walk the
+  ;; instance's type chain and probe each link against the member set.
+  ;; Non-instances are never members.
+  (func $is_union_member (@pub) (@impl "rt/types.wat:is_union_member")
+    (param $val (ref null any)) (param $union (ref null any)) (result i32)
+    (local $members (ref $Set))
+    (local $t (ref null $Type))
+    (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
+      (then (return (i32.const 0))))
+    (local.set $members
+      (ref.cast (ref $Set)
+        (struct.get $Union $members (ref.cast (ref $Union) (local.get $union)))))
+    (local.set $t
+      (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+    (block $done
+      (loop $walk
+        (br_if $done (ref.is_null (local.get $t)))
+        (if (call $set_in (local.get $members) (ref.cast (ref eq) (local.get $t)))
+          (then (return (i32.const 1))))
+        (local.set $t (struct.get $Type $base (local.get $t)))
+        (br $walk)))
+    (i32.const 0))
 
 
   ;; -- hash_i31 --------------------------------------------------------
