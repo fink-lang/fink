@@ -29,6 +29,8 @@
     (func $dict_set_field (param (ref null any)) (param (ref null any)) (param (ref null any)) (result (ref null any))))
   (import "std/dict.wat" "rec_deep_eq"
     (func $dict_deep_eq (param (ref $Dict)) (param (ref $Dict)) (result i32)))
+  (import "std/dict.wat" "copy_by_keys"
+    (func $dict_copy_by_keys (param (ref null any)) (param (ref null any)) (result (ref $Dict))))
   (import "std/list.wat" "List" (type $List (sub any)))
   (import "std/list.wat" "empty" (func $list_empty (result (ref $List))))
   (import "std/list.wat" "prepend"
@@ -443,6 +445,28 @@
       (then (return
         (struct.get $Rec $rec_payload (ref.cast (ref $Rec) (local.get $inst))))))
     (struct.get $Tuple $tup_payload (ref.cast (ref $Tuple) (local.get $inst))))
+
+
+  ;; -- project_inst ----------------------------------------------------
+  ;;
+  ;; Cast (downcast) `val` to `target` for a type-guard match: build a fresh
+  ;; instance of `target` carrying exactly target's fields, copied from val's
+  ;; payload. So `Foo foo = FooBar {bar,spam}` binds a real `Foo {bar}` (the
+  ;; extra `spam` dropped), indistinguishable from a directly-constructed Foo.
+  ;;   $RecType target -> $Rec{target, copy_by_keys(target.$fields, val_payload)}.
+  ;;   else (tuple/unit -- positional projection deferred) -> val unchanged.
+  ;; (val, target) -> projected instance.
+  (func $project_inst (@pub)
+    (param $val (ref null any)) (param $target (ref null any))
+    (result (ref null any))
+    (if (ref.test (ref $RecType) (local.get $target))
+      (then (return
+        (struct.new $Rec
+          (ref.cast (ref $Type) (local.get $target))
+          (call $dict_copy_by_keys
+            (struct.get $RecType $fields (ref.cast (ref $RecType) (local.get $target)))
+            (call $inst_payload (local.get $val)))))))
+    (local.get $val))
 
 
   ;; -- inst_eq ---------------------------------------------------------

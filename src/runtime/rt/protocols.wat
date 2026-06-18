@@ -57,6 +57,8 @@
     (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"     "is_instance"
     (func $is_instance (param (ref null any)) (param (ref null any)) (result i32)))
+  (import "rt/types.wat"     "project_inst"
+    (func $project_inst (param (ref null any)) (param (ref null any)) (result (ref null any))))
   (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
@@ -1208,12 +1210,16 @@
             (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
         (return_call $is_seq_like
           (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
-    ;; Nominal type guard: is_instance ($base-walk), branch succ(val)/fail().
+    ;; Nominal type guard: is_instance ($base-walk). On match, DOWNCAST val to
+    ;; the guard type (project to its fields) and succ with the projection;
+    ;; else fail().
     (if (ref.test (ref $Type) (local.get $guard))
       (then
         (if (call $is_instance (local.get $val) (local.get $guard))
           (then (return_call $apply_1
-            (local.get $ctx) (local.get $val) (local.get $succ))))
+            (local.get $ctx)
+            (call $project_inst (local.get $val) (local.get $guard))
+            (local.get $succ))))
         (return_call $apply_0 (local.get $ctx) (local.get $fail))))
     ;; Predicate guard: apply guard(val) with a branch cont (conts-first).
     (return_call $apply_2_vals

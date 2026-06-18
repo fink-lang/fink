@@ -1280,6 +1280,102 @@
   )
 
 
+  ;; Build a new HAMT containing only the keys present in `keys`, taking each
+  ;; key's VALUE from `src`. (keys' own values are ignored.) Keys absent from src
+  ;; are skipped. Walks the keys tree, hamt_get from src, hamt_set into a fresh
+  ;; node -- structural sharing keeps it cheap. Used for type downcast/projection
+  ;; (keys = target type's field set, src = instance payload).
+  (func $hamt_copy_by_keys
+    (param $keys (ref $HamtNode))
+    (param $src (ref $HamtNode))
+    (result (ref $HamtNode))
+    (call $_hamt_copy_by_keys_node (call $hamt_empty) (local.get $keys) (local.get $src))
+  )
+
+  (func $_hamt_copy_by_keys_node
+    (param $dest (ref $HamtNode))
+    (param $keys (ref $HamtNode))
+    (param $src (ref $HamtNode))
+    (result (ref $HamtNode))
+    (local $children (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $child (ref null struct))
+    (local.set $children (struct.get $HamtNode $children (local.get $keys)))
+    (local.set $len (array.len (local.get $children)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $walk
+        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $child
+          (array.get $HamtChildren (local.get $children) (local.get $i)))
+        ;; leaf — copy the key's value from src (if present).
+        (if (ref.test (ref $HamtLeaf) (local.get $child))
+          (then
+            (local.set $dest
+              (call $_copy_one_key (local.get $dest)
+                (struct.get $HamtLeaf $key (ref.cast (ref $HamtLeaf) (local.get $child)))
+                (local.get $src)))))
+        ;; sub-node — recurse.
+        (if (ref.test (ref $HamtNode) (local.get $child))
+          (then
+            (local.set $dest
+              (call $_hamt_copy_by_keys_node (local.get $dest)
+                (ref.cast (ref $HamtNode) (local.get $child)) (local.get $src)))))
+        ;; collision — copy each colliding key.
+        (if (ref.test (ref $HamtCollision) (local.get $child))
+          (then
+            (local.set $dest
+              (call $_copy_by_keys_collision (local.get $dest)
+                (struct.get $HamtCollision $col_leaves (ref.cast (ref $HamtCollision) (local.get $child)))
+                (local.get $src)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+    (local.get $dest)
+  )
+
+  ;; Copy one key's value from src into dest; no-op if src lacks the key.
+  (func $_copy_one_key
+    (param $dest (ref $HamtNode)) (param $key (ref eq)) (param $src (ref $HamtNode))
+    (result (ref $HamtNode))
+    (local $val (ref null eq))
+    (local.set $val (call $hamt_get (local.get $src) (local.get $key)))
+    (if (ref.is_null (local.get $val))
+      (then (return (local.get $dest))))
+    (call $hamt_set (local.get $dest) (local.get $key) (ref.as_non_null (local.get $val)))
+  )
+
+  (func $_copy_by_keys_collision
+    (param $dest (ref $HamtNode)) (param $leaves (ref $HamtChildren)) (param $src (ref $HamtNode))
+    (result (ref $HamtNode))
+    (local $len i32) (local $i i32)
+    (local.set $len (array.len (local.get $leaves)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $walk
+        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $dest
+          (call $_copy_one_key (local.get $dest)
+            (struct.get $HamtLeaf $key
+              (ref.cast (ref $HamtLeaf) (array.get $HamtChildren (local.get $leaves) (local.get $i))))
+            (local.get $src)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+    (local.get $dest)
+  )
+
+  ;; Public $Dict-level wrapper: build a $Dict with `keys`' keys, values from
+  ;; `src`. Anyref-friendly (callers don't touch $DictImpl). (rt/types.wat
+  ;; projection uses this.)
+  (func $copy_by_keys (@pub)
+    (param $keys (ref null any)) (param $src (ref null any))
+    (result (ref $Dict))
+    (struct.new $DictImpl
+      (call $hamt_copy_by_keys
+        (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $keys)))
+        (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $src))))))
+
+
   ;; -- Size -----------------------------------------------------------
 
   ;; Count the number of key-value entries in the HAMT.

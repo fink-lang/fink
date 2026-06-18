@@ -1704,9 +1704,14 @@ enum Pending {
   App { func: Callable, args: Vec<Arg>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits plain LetVal (fail is always ·panic for irrefutable binds).
   MatchBind { name: BindNode, val: Val, origin: Option<AstId> },
-  /// Pattern-lowered guard check — emits func(args) + If with ·panic as fail cont.
-  /// Used by Apply patterns (predicate guards like `is_even y`, `Ok b`).
-  MatchGuard { func: Callable, args: Vec<Val>, origin: Option<AstId> },
+  /// Pattern-lowered guard check — lowers to a runtime `guard_apply` call.
+  /// Used by Apply patterns (predicate guards `is_even y`, type guards `Foo foo`).
+  /// `result`: the value `guard_apply` passes to succ -- the projected/refined
+  /// value (for a type guard, the downcast instance; for a predicate, the subject
+  /// unchanged). Downstream binds and sub-patterns reference this `result`, so
+  /// they see the post-guard value. Bound as the succ cont's single param, so the
+  /// guard's success path threads the refined value forward.
+  MatchGuard { func: Callable, args: Vec<Val>, result: BindNode, origin: Option<AstId> },
   /// Pattern match — matcher function applied to subject.
   ///
   /// ```text
@@ -1843,28 +1848,32 @@ fn wrap_with_fail(
           origin,
         )
       },
-      Pending::MatchGuard { func, args, origin } => {
+      Pending::MatchGuard { func, args, result, origin } => {
         // Guard check via the runtime `guard_apply` builtin: the head flows as a
         // VALUE argument (not the callee) so it can be a type (`Foo {bar}`), a
         // registered protocol, or a predicate fn (`is_even y`). The runtime fn
         // decides success/failure and branches to the succ/fail conts.
         //
         // Emits: guard_apply(head, args..., succ, fail)
-        //   succ = the continuation body (the destructure/bind that follows)
+        //   succ = the continuation body, bound to `result` (the projected/refined
+        //          value guard_apply passes through); downstream binds and
+        //          sub-patterns already reference `result`.
         //   fail = panic (irrefutable bind) or the arm's fail cont
         let fail_call = make_fail_call(g, origin);
 
-        // succ cont body — the fold may attach a fresh_result param that the
-        // guard doesn't bind; inline the cont body directly.
-        let succ_body = match cont {
+        // succ cont — bind `result` (the refined value) as its single param. The
+        // fold attached a fresh param to a `Cont::Expr`; replace it with `result`
+        // so the success-path destructure/bind sees the post-guard value.
+        let succ_cont = match cont {
           Cont::Ref(cont_id) => {
             let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
-            g.expr(ExprKind::App {
+            let body = g.expr(ExprKind::App {
               func: Callable::Val(cont_ref),
               args: vec![],
-            }, origin)
+            }, origin);
+            Cont::Expr { args: vec![result], body: Box::new(body) }
           }
-          Cont::Expr { body, .. } => *body,
+          Cont::Expr { body, .. } => Cont::Expr { args: vec![result], body },
         };
 
         // The head is the guard value (a type / protocol / predicate). For an
@@ -1878,10 +1887,10 @@ fn wrap_with_fail(
           }
         };
 
-        // Build: guard_apply(head, args..., succ, fail)
+        // Build: guard_apply(head, args..., succ, fail).
         let mut call_args: Vec<Arg> = vec![Arg::Val(head_val)];
         call_args.extend(args.into_iter().map(Arg::Val));
-        call_args.push(Arg::Cont(Cont::Expr { args: vec![], body: Box::new(succ_body) }));
+        call_args.push(Arg::Cont(succ_cont));
         call_args.push(Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }));
         g.expr(
           ExprKind::App { func: Callable::BuiltIn(BuiltIn::GuardApply), args: call_args },
@@ -3718,18 +3727,34 @@ fn lower_pat_lhs(
     NodeKind::Apply { func, args } => {
       let arg_ids: Vec<AstId> = args.items.to_vec();
       let mut arg_vals: Vec<Val> = vec![];
+      // The guard returns a refined value `v1` (the projected instance for a type
+      // guard; the unchanged subject for a predicate). The binding slot and any
+      // sub-patterns operate on `v1` (the post-guard value), NOT the raw subject
+      // `val`. `v1` is the MatchGuard's succ param; downstream pendings reference
+      // `v1_val` and chain after the guard so the fold nests them into succ.
+      let v1 = g.fresh_result(origin);
+      let v1_val = ref_val(g, v1.kind, v1.id, origin);
+      // The Ident binding slot (`foo` in `Foo foo`, `v` in `is_even v`) becomes a
+      // MatchBind of `v1` chained after the guard -- so it is collected for the
+      // arm body (mb_params) AND nests into succ (binds only on success).
+      let mut ident_bind: Option<BindNode> = None;
       // Sub-pattern args are deferred: they must lower into the guard's success
       // path, so collect them and push their pendings AFTER the MatchGuard.
       let mut sub_pats: Vec<AstId> = vec![];
       for arg in arg_ids {
         let arg_kind = g.node(arg).kind.clone();
         match arg_kind {
-          NodeKind::Ident(_) | NodeKind::Wildcard => {
-            let (bound_kind, bound_id) = lower_pat_lhs(g, arg, val.clone(), Some(arg), pending);
-            arg_vals.push(ref_val(g, bound_kind, bound_id, Some(arg)));
+          NodeKind::Ident(_) => {
+            // Binding slot: bind `v1` (post-guard value); guard arg = subject.
+            ident_bind = Some(g.bind_name(arg));
+            arg_vals.push(val.clone());
+          }
+          NodeKind::Wildcard => {
+            // Discard slot: guard the subject, no binding.
+            arg_vals.push(val.clone());
           }
           NodeKind::LitRec { .. } | NodeKind::LitSeq { .. } => {
-            // Structural sub-pattern: destructure `val` in succ, not a guard arg.
+            // Structural sub-pattern: destructure `v1` in succ, not a guard arg.
             sub_pats.push(arg);
           }
           _ => {
@@ -3739,16 +3764,23 @@ fn lower_pat_lhs(
           }
         }
       }
-      // When the args are structural sub-patterns (`is_foo {bar}`), there is no
-      // binding-slot arg, so the subject `val` itself is what the head guards.
+      // When the args are only structural sub-patterns (`is_foo {bar}`), there is
+      // no binding-slot arg, so the subject `val` is what the head guards.
       if arg_vals.is_empty() && !sub_pats.is_empty() {
         arg_vals.push(val.clone());
       }
       let (func_val, func_pending) = lower(g, func);
       pending.extend(func_pending);
-      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals, origin });
-      // Sub-pattern destructures run in the guard's success path: their pendings
-      // chain after the MatchGuard, so the fold nests them inside its succ cont.
+      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals, result: v1, origin });
+      // The ident bind sees the refined value `v1`. Chained after the guard so
+      // the fold nests it inside succ (binds only on success), and it is a
+      // MatchBind so the arm body's mb_params collect it.
+      if let Some(name) = ident_bind {
+        pending.push(Pending::MatchBind { name, val: v1_val.clone(), origin });
+      }
+      // Sub-pattern destructures run in the guard's success path against `v1`:
+      // their pendings chain after the MatchGuard, so the fold nests them inside
+      // its succ cont.
       //
       // TODO(guard-double-check): the sub-pattern lowers as a full structural
       // matcher, so its own `guard_apply rec_protocol`/`tuple_protocol` fires
@@ -3759,7 +3791,7 @@ fn lower_pat_lhs(
       // there would turn a clean match-fail into a `rec_pop` trap), so revisit
       // once type heads + resolution land. See [[project_type_lowering]].
       for sub_pat in sub_pats {
-        lower_pat_lhs(g, sub_pat, val.clone(), Some(sub_pat), pending);
+        lower_pat_lhs(g, sub_pat, v1_val.clone(), Some(sub_pat), pending);
       }
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
