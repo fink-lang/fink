@@ -2,17 +2,18 @@
 ;;
 ;; A $Symbol is the runtime identity of a source NAME: a record field, and
 ;; (later) type / module / function names. The compiler interns each distinct
-;; name to one canonical $Symbol per package (dedup-by-name at link time), so
-;; `bar` in module A and `bar` in module B are the SAME $Symbol -- identity by
-;; ref.eq. This makes structural field access work cross-type (`{foo} = Foo
-;; {bar, foo}` maps the anonymous rec's `foo` to Foo's `foo`) without runtime
-;; string compares.
+;; name to a package-wide $id (dedup-by-name at link time), so `bar` in module A
+;; and `bar` in module B carry the SAME id. Identity is the $id -- equality is
+;; i32.eq on it, NOT ref.eq -- so two `struct.new $Symbol (i32.const N)` for the
+;; same N are equal regardless of allocation. This makes structural field access
+;; work cross-type (`{foo} = Foo {bar, foo}` maps the anonymous rec's `foo` to
+;; Foo's `foo`) without runtime string compares, and the compiler can emit a
+;; symbol inline at each use site -- no global instance table, no interning at
+;; runtime (the interning is purely compile-time name->id assignment).
 ;;
-;; The $id is the package-wide interned id (assigned by the linker after merging
-;; per-module field tables). It IS the hash -- ids are dense and distinct, so
-;; they distribute across hamt buckets with no string hashing. The source name
-;; is debug/repr metadata, resolved host-side and strippable; the runtime holds
-;; only the id.
+;; The $id also IS the hash -- ids are dense and distinct, so they distribute
+;; across hamt buckets with no string hashing. The source name is debug/repr
+;; metadata, resolved host-side and strippable; the runtime holds only the id.
 ;;
 ;; First consumer: record field keys (std/dict keyed by $Symbol instead of
 ;; $Str for static field names). Dynamic/computed keys keep the generic
@@ -36,11 +37,15 @@
 
   (func $op_eq (@pub)
     (param $a (ref $Symbol)) (param $b (ref $Symbol)) (result i32)
-    (ref.eq (local.get $a) (local.get $b)))
+    (i32.eq
+      (struct.get $Symbol $id (local.get $a))
+      (struct.get $Symbol $id (local.get $b))))
 
   (func $op_neq (@pub)
     (param $a (ref $Symbol)) (param $b (ref $Symbol)) (result i32)
-    (i32.eqz (ref.eq (local.get $a) (local.get $b))))
+    (i32.ne
+      (struct.get $Symbol $id (local.get $a))
+      (struct.get $Symbol $id (local.get $b))))
 
   (func $hash_i31 (@pub)
     (param $s (ref $Symbol)) (result i32)
