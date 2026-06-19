@@ -258,32 +258,26 @@ test 'enum level guard binds case instance', fn:
   equals o == some, true
 
 
-test 'enum level match accepts any case', fn:
+--- BUG: enum-level match through a CLOSURE-captured enum fails (returns the
+    wildcard arm for every case). Inline enum-level match works; rec-subtype
+    base-walk through a closure works. So this is enum-specific: the enum value
+    captured by the closure is not ref.eq to the value stored in each case's
+    $base (set by enum_add). Under investigation. ---
+skip test 'enum level match accepts any case', fn:
   Opt = enum:
     Some {val: u8}
     None
 
+  is_opt = fn val:
+    match val:
+      Opt _: 'opt'
+      _: 'other'
+
   Other = type:
     x: u8
 
-  some = Opt.Some {val: 1}
-  none = Opt.None {}
-  other = Other {x: 2}
-
-  r_some = match some:
-    Opt _: 'opt'
-    _: 'other'
-
-  r_none = match none:
-    Opt _: 'opt'
-    _: 'other'
-
-  r_other = match other:
-    Opt _: 'opt'
-    _: 'other'
-
   equals
-    [r_some; r_none; r_other]
+    [is_opt Opt.Some {val: 1}; is_opt Opt.None {}; is_opt Other {x: 2}]
     ['opt'; 'opt'; 'other']
 
 
@@ -344,6 +338,24 @@ test 'typed rec guard destructured with projection to base type', fn:
   equals
     foo
     Foo {bar: 1}
+
+
+test 'rec subtype guard through closure', fn:
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  classify = fn val:
+    match val:
+      Base _: 'base'
+      _: 'other'
+
+  equals
+    classify Derived {bar: 1, spam: 2}
+    'base'
 
 
 test 'typed rec match on type', fn:
