@@ -46,6 +46,9 @@
       (param (ref null any)) (param i32) (param i32) (param (ref null any))))
   (import "rt/types.wat"     "Type"         (type $Type         (sub any)))
   (import "rt/types.wat"     "Union"        (type $Union        (sub $Type)))
+  (import "rt/types.wat"     "Enum"         (type $Enum         (sub $Type)))
+  (import "rt/types.wat"     "enum_cases"
+    (func $enum_cases (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"     "union_eq"
     (func $union_eq (param (ref $Union)) (param (ref $Union)) (result i32)))
   (import "rt/types.wat"     "Inst"         (type $Inst         (sub any)))
@@ -1179,6 +1182,12 @@
     (if (ref.test (ref $Rec_inst) (local.get $val))
       (then (return_call $apply_1
         (local.get $ctx) (call $inst_payload (local.get $val)) (local.get $succ))))
+    ;; An $Enum is rec-like over its cases: `{Some, None} = Opt` destructures the
+    ;; case namespace. Unwrap to the $cases dict (name -> case-type) and succeed
+    ;; with THAT, so rec_pop reads case types by name.
+    (if (ref.test (ref $Enum) (local.get $val))
+      (then (return_call $apply_1
+        (local.get $ctx) (call $enum_cases (local.get $val)) (local.get $succ))))
     (block $not_rec
       (block $is_rec (result (ref $Dict))
         (br $not_rec
@@ -1485,6 +1494,17 @@
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
       (param $ctx (ref null any))
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Enum — member access is case lookup: `Opt.Some` reads the `Some`
+    ;; case type out of the enum's $cases dict. Delegate to dict op_dot on the
+    ;; cases dict (the case type then constructs/guards like any $Type).
+    (if (ref.test (ref $Enum) (local.get $container))
+      (then
+        (return_call $dict_op_dot
+          (local.get $ctx)
+          (call $enum_cases (local.get $container))
+          (local.get $key)
+          (local.get $cont))))
 
     ;; Try $Inst (typed instance) — unwrap to the bare payload and re-dispatch.
     ;; Reads strip the type; the bare-collection arm below does the work.

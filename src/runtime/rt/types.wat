@@ -388,6 +388,13 @@
     (param $cont (ref null any))
     (local $e (ref $Enum))
     (local.set $e (ref.cast (ref $Enum) (local.get $enum)))
+    ;; Link the case type's $base to the enum, so a case instance IS-A its enum:
+    ;; is_instance walks the instance's type chain (Some -> Opt), letting the
+    ;; enum itself guard any of its cases (`Opt o = Opt.Some {...}`) via the
+    ;; existing $Type guard arm -- the enum analogue of union membership.
+    (struct.set $Type $base
+      (ref.cast (ref $Type) (local.get $member))
+      (local.get $e))
     (struct.set $Enum $cases (local.get $e)
       (ref.cast (ref $Dict)
         (call $dict_set_field
@@ -398,6 +405,16 @@
       (local.get $ctx)
       (local.get $e)
       (local.get $cont)))
+
+
+  ;; -- enum_cases ------------------------------------------------------
+  ;;
+  ;; The enum's case dict (name -> case-type). `Enum.Case` member access reads
+  ;; a case type out of here (op_dot delegates to dict lookup on this). Keeps
+  ;; the `$cases` field internal to types.wat; callers get the $Dict.
+  (func $enum_cases (@pub) (@impl "rt/types.wat:enum_cases")
+    (param $enum (ref null any)) (result (ref null any))
+    (struct.get $Enum $cases (ref.cast (ref $Enum) (local.get $enum))))
 
 
   ;; -- type_apply ------------------------------------------------------

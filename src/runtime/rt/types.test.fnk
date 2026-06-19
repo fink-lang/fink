@@ -199,6 +199,93 @@ test 'enum equality', fn:
     Ham
 
 
+--- NOTE: enum-case instances compare with `==` (`equals a == b, true`)
+    rather than `equals a, b`. The latter fmt's the instance in its failure
+    message and typed instances have no fmt arm yet (traps). See follow-up. ---
+test 'enum case construct named payload', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  equals
+    (Opt.Some {val: 12}) == (Opt.Some {val: 12})
+    true
+
+
+test 'enum case construct distinct payloads not equal', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  equals
+    (Opt.Some {val: 1}) == (Opt.Some {val: 2})
+    false
+
+
+test 'enum case guard named payload', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  Opt.Some s = Opt.Some {val: 12}
+
+  equals s.val, 12
+
+
+test 'enum destructure cases', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  {Some, None} = Opt
+
+  --- the destructured case types construct and compare like the qualified
+      Opt.Some / Opt.None forms ---
+  equals
+    (Some {val: 12}) == (Opt.Some {val: 12})
+    true
+
+
+test 'enum level guard binds case instance', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  --- a case instance IS-A its enum, so the enum itself guards it ---
+  some = Opt.Some {val: 12}
+  Opt o = some
+
+  equals o == some, true
+
+
+test 'enum level match accepts any case', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  Other = type:
+    x: u8
+
+  some = Opt.Some {val: 1}
+  none = Opt.None {}
+  other = Other {x: 2}
+
+  r_some = match some:
+    Opt _: 'opt'
+    _: 'other'
+
+  r_none = match none:
+    Opt _: 'opt'
+    _: 'other'
+
+  r_other = match other:
+    Opt _: 'opt'
+    _: 'other'
+
+  equals
+    [r_some; r_none; r_other]
+    ['opt'; 'opt'; 'other']
+
 
 test 'typed rec equality', fn:
   Foo = type:
