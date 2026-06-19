@@ -258,12 +258,7 @@ test 'enum level guard binds case instance', fn:
   equals o == some, true
 
 
---- BUG: enum-level match through a CLOSURE-captured enum fails (returns the
-    wildcard arm for every case). Inline enum-level match works; rec-subtype
-    base-walk through a closure works. So this is enum-specific: the enum value
-    captured by the closure is not ref.eq to the value stored in each case's
-    $base (set by enum_add). Under investigation. ---
-skip test 'enum level match accepts any case', fn:
+test 'enum level match accepts any case', fn:
   Opt = enum:
     Some {val: u8}
     None
@@ -486,3 +481,18 @@ skip test 'TODO support typed fn', fn:
 
 
 
+
+
+test 'enum case match with destructure', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  describe = fn o:
+    match o:
+      Opt.Some s: s.val
+      _: 0
+
+  equals
+    [describe Opt.Some {val: 7}; describe Opt.None {}]
+    [7; 0]
