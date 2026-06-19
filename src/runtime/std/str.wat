@@ -38,6 +38,9 @@
   (import "rt/apply.wat"   "Closure"   (type $Closure   (sub any)))
   (import "rt/apply.wat"   "Captures"  (type $Captures  (sub any)))
   (import "rt/opaque.wat"  "Opaque"    (type $Opaque (sub (struct (field $inner (ref eq))))))
+  (import "rt/types.wat"   "Inst"      (type $Inst (sub any)))
+  (import "rt/types.wat"   "inst_payload"
+    (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/apply.wat"   "Fn3"       (type $Fn3       (sub any)))
   (import "rt/apply.wat"   "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
@@ -1660,6 +1663,16 @@
           (br_on_cast $is_opq (ref any) (ref $Opaque)
             (local.get $val))))
       (return_call $opaque_fmt))
+
+    ;; Try $Inst (typed instance) — fmt the bare structural payload. Reads
+    ;; strip the type, so `Foo {bar: 1}` formats as `{bar: 1}`.
+    ;; TODO(type-name): show the nominal type name (`Foo {bar: 1}`). The
+    ;; instance's $type carries (mod_id, cps_id); resolving that to "Foo" is
+    ;; host-side reflection (the same channel backtraces use). Bare payload for
+    ;; now.
+    (if (ref.test (ref $Inst) (local.get $val))
+      (then (return_call $fmt_val
+        (ref.as_non_null (call $inst_payload (local.get $val))))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)

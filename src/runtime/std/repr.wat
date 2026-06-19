@@ -57,6 +57,9 @@
     (type $Captures (sub any (array (mut (ref null any))))))
   (import "rt/apply.wat" "Fn3"
     (type $Fn3 (sub any (func (param (ref null any) (ref null any) (ref null any))))))
+  (import "rt/types.wat" "Inst" (type $Inst (sub any)))
+  (import "rt/types.wat" "inst_payload"
+    (func $inst_payload (param (ref null any)) (result (ref null any))))
 
   ;; i31 (bool) renderer — repr same as fmt; share str.wat's helper.
   (import "std/str.wat" "_str_fmt_i31"
@@ -134,6 +137,15 @@
           (br_on_cast $is_clos (ref any) (ref $Closure)
             (local.get $val))))
       (return_call $closure_repr))
+
+    ;; Try $Inst (typed instance) — repr the bare structural payload.
+    ;; TODO(type-name): repr should source-quote the nominal name
+    ;; (`Foo {bar: 1}`), since repr is for round-trippable rendering. The type's
+    ;; (mod_id, cps_id) resolves to "Foo" via host reflection (the backtrace
+    ;; channel). Bare payload for now.
+    (if (ref.test (ref $Inst) (local.get $val))
+      (then (return_call $repr_val
+        (ref.as_non_null (call $inst_payload (local.get $val))))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)

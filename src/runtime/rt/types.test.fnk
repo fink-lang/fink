@@ -199,17 +199,14 @@ test 'enum equality', fn:
     Ham
 
 
---- NOTE: enum-case instances compare with `==` (`equals a == b, true`)
-    rather than `equals a, b`. The latter fmt's the instance in its failure
-    message and typed instances have no fmt arm yet (traps). See follow-up. ---
 test 'enum case construct named payload', fn:
   Opt = enum:
     Some {val: u8}
     None
 
   equals
-    (Opt.Some {val: 12}) == (Opt.Some {val: 12})
-    true
+    Opt.Some {val: 12}
+    Opt.Some {val: 12}
 
 
 test 'enum case construct distinct payloads not equal', fn:
@@ -217,9 +214,9 @@ test 'enum case construct distinct payloads not equal', fn:
     Some {val: u8}
     None
 
-  equals
-    (Opt.Some {val: 1}) == (Opt.Some {val: 2})
-    false
+  not_equals
+    Opt.Some {val: 1}
+    Opt.Some {val: 2}
 
 
 test 'enum case guard named payload', fn:
@@ -242,8 +239,8 @@ test 'enum destructure cases', fn:
   --- the destructured case types construct and compare like the qualified
       Opt.Some / Opt.None forms ---
   equals
-    (Some {val: 12}) == (Opt.Some {val: 12})
-    true
+    Some {val: 12}
+    Opt.Some {val: 12}
 
 
 test 'enum level guard binds case instance', fn:
@@ -255,7 +252,7 @@ test 'enum level guard binds case instance', fn:
   some = Opt.Some {val: 12}
   Opt o = some
 
-  equals o == some, true
+  equals o, some
 
 
 test 'enum level match accepts any case', fn:
@@ -496,3 +493,23 @@ test 'enum case match with destructure', fn:
   equals
     [describe Opt.Some {val: 7}; describe Opt.None {}]
     [7; 0]
+
+
+test 'fmt typed rec instance', fn:
+  Foo = type:
+    bar: u8
+  foo = Foo {bar: 1}
+  equals
+    '${foo}'
+    '{bar: 1}'
+
+
+test 'repr typed rec instance in list', fn:
+  Foo = type:
+    bar: u8
+  --- collections repr their elements, so a typed instance in a list
+      exercises the repr $Inst arm (bare payload for now) ---
+  lst = [Foo {bar: 1}]
+  equals
+    '${lst}'
+    '[{bar: 1}]'
