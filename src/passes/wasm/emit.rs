@@ -187,6 +187,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
       ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
       ("rt/trace.wat",     include_str!("../../runtime/rt/trace.wat")),
       ("rt/opaque.wat",    include_str!("../../runtime/rt/opaque.wat")),
+      ("rt/symbols.wat",   include_str!("../../runtime/rt/symbols.wat")),
       ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
       ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
       ("std/num.wat",      include_str!("../../runtime/std/num.wat")),
