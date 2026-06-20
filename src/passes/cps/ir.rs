@@ -272,6 +272,20 @@ pub enum BuiltIn {
   Get,
   // Data construction
   SeqPrepend, SeqConcat, RecPut, RecMerge,
+  // Type construction — mints a fresh type value (`type _` and friends),
+  // then accretes fields onto it (mirrors RecPut onto a {} seed).
+  // TypeInherit splices a base type's fields AND records it as the base
+  // (the `..Foo` spread; mirrors RecMerge, plus the subtyping link).
+  // TypePush appends a positional field (the tuple body `type: u8, i8`).
+  NewType, TypeSetField, TypeInherit, TypePush,
+  // Union — an open union over existing types (`union: T1; T2`). Accreted one
+  // member at a time (mirrors NewType/TypeSetField); the runtime representation
+  // is a set of type refs.
+  NewUnion, UnionAdd,
+  // Enum — a closed sum that mints a member-type per case (`enum: Some T; None`).
+  // Accreted one member at a time: each member is a minted type added under its
+  // name (the tag). The enum is a namespace (name -> member-type).
+  NewEnum, EnumAdd,
   // String interpolation
   StrFmt,
   // Closure construction — partially applies a lifted fn with its captures.
@@ -285,6 +299,18 @@ pub enum BuiltIn {
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
   IsSeqLike, IsRecLike, SeqPop, SeqPopBack, RecPop, Empty,
+  // GuardApply(head, value, succ(value), fail()) — pattern guard dispatch.
+  // The head is a runtime value (a type, a registered protocol, or a predicate
+  // closure); the runtime fn decides success/failure and branches to succ/fail.
+  // Replaces inline `head(value) + If` for Apply-pattern guards so the head can
+  // be a type (`Foo {bar}`) as well as a predicate fn (`is_even y`).
+  GuardApply,
+  // The two built-in structural protocols, used as `GuardApply` heads for bare
+  // `{...}` / `[...]` patterns: RecProtocol = "supports rec syntax" (rec/dict),
+  // TupleProtocol = "supports tuple syntax" (tuple/list). They are guard-head
+  // VALUES, not wrapping ops — every structural pattern guards on one of them,
+  // exactly as a `Foo {bar}` pattern guards on the type `Foo`.
+  RecProtocol, TupleProtocol,
   // StrMatch(subj, prefix, suffix, fail(), succ(capture)) — string template pattern matching.
   // Checks subj starts with prefix, ends with suffix (non-overlapping), binds the middle slice.
   StrMatch,
@@ -466,6 +492,11 @@ pub enum Lit {
   /// is a valid 1-byte string literal. Using `Vec<u8>` avoids Rust's UTF-8
   /// validation at the CPS boundary.
   Str(Vec<u8>),
+  /// Interned field name. A record key derived from an identifier (`{foo}`,
+  /// `r.foo`) — distinct from `Str`, which is a runtime string value. The byte
+  /// payload is the source name; the canonical integer id is assigned at link
+  /// time. Renders as `ƒ'name'` to distinguish symbol keys from string values.
+  Symbol(Vec<u8>),
   Seq,                // empty sequence literal []
   Rec,                // empty record literal {}
 }

@@ -31,13 +31,16 @@
   (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
   (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
-  (import "std/dict.wat"   "Rec"       (type $Rec       (sub any)))
+  (import "std/dict.wat"   "Dict"       (type $Dict       (sub any)))
   (import "std/set.wat"    "Set"       (type $Set       (sub any)))
   (import "std/list.wat"   "List"      (type $List      (sub any)))
   (import "rt/apply.wat"   "VarArgs"   (type $VarArgs   (sub any)))
   (import "rt/apply.wat"   "Closure"   (type $Closure   (sub any)))
   (import "rt/apply.wat"   "Captures"  (type $Captures  (sub any)))
   (import "rt/opaque.wat"  "Opaque"    (type $Opaque (sub (struct (field $inner (ref eq))))))
+  (import "rt/types.wat"   "Inst"      (type $Inst (sub any)))
+  (import "rt/types.wat"   "inst_payload"
+    (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/apply.wat"   "Fn3"       (type $Fn3       (sub any)))
   (import "rt/apply.wat"   "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
@@ -52,7 +55,7 @@
     (func $set_fmt (param (ref $Set)) (result (ref $Str))))
 
   (import "std/dict.wat" "fmt"
-    (func $rec_fmt (param (ref $Rec)) (result (ref $Str))))
+    (func $rec_fmt (param (ref $Dict)) (result (ref $Str))))
 
   (import "std/list.wat" "size"
     (func $list_size (param $list (ref $List)) (result i32)))
@@ -104,7 +107,7 @@
 
   ;; TODO: this is empty contructor protocol!
   ;; (func $str_new (@pub) (@impl "std/types.fnk:new" $Str) (result (ref $Str)))
-  (func $str_empty (@impl "std/str.fnk:str_empty") (result (ref $Str))
+  (func $str_empty (@pub) (@impl "std/str.fnk:str_empty") (result (ref $Str))
     (global.get $_str_empty))
 
   ;; ---- Construction (compiler-emitted) ----
@@ -1620,11 +1623,11 @@
             (local.get $val))))
       (return_call $range_fmt))
 
-    ;; Try $Rec — delegate to dict.wat:fmt.
+    ;; Try $Dict — delegate to dict.wat:fmt.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref any) (ref $Rec)
+          (br_on_cast $is_rec (ref any) (ref $Dict)
             (local.get $val))))
       (return_call $rec_fmt))
 
@@ -1660,6 +1663,16 @@
           (br_on_cast $is_opq (ref any) (ref $Opaque)
             (local.get $val))))
       (return_call $opaque_fmt))
+
+    ;; Try $Inst (typed instance) — fmt the bare structural payload. Reads
+    ;; strip the type, so `Foo {bar: 1}` formats as `{bar: 1}`.
+    ;; TODO(type-name): show the nominal type name (`Foo {bar: 1}`). The
+    ;; instance's $type carries (mod_id, cps_id); resolving that to "Foo" is
+    ;; host-side reflection (the same channel backtraces use). Bare payload for
+    ;; now.
+    (if (ref.test (ref $Inst) (local.get $val))
+      (then (return_call $fmt_val
+        (ref.as_non_null (call $inst_payload (local.get $val))))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)

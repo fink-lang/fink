@@ -27,7 +27,7 @@
   (import "std/num.wat"   "Num"   (type $Num   (sub any)))
   (import "std/range.wat" "Range" (type $Range (sub any)))
   (import "std/list.wat"  "List"  (type $List  (sub any)))
-  (import "std/dict.wat"  "Rec"   (type $Rec   (sub any)))
+  (import "std/dict.wat"  "Dict"   (type $Dict   (sub any)))
   (import "std/set.wat"   "Set"   (type $Set   (sub any)))
 
 
@@ -40,7 +40,7 @@
   (import "std/num.wat"   "repr" (func $num_repr   (param (ref $Num))   (result (ref $Str))))
   (import "std/range.wat" "repr" (func $range_repr (param (ref $Range)) (result (ref $Str))))
   (import "std/list.wat"  "repr" (func $list_repr  (param (ref $List))  (result (ref $Str))))
-  (import "std/dict.wat"  "repr" (func $rec_repr   (param (ref $Rec))   (result (ref $Str))))
+  (import "std/dict.wat"  "repr" (func $rec_repr   (param (ref $Dict))   (result (ref $Str))))
   (import "std/set.wat"   "repr" (func $set_repr   (param (ref $Set))   (result (ref $Str))))
 
 
@@ -57,6 +57,11 @@
     (type $Captures (sub any (array (mut (ref null any))))))
   (import "rt/apply.wat" "Fn3"
     (type $Fn3 (sub any (func (param (ref null any) (ref null any) (ref null any))))))
+  (import "rt/types.wat" "Inst" (type $Inst (sub any)))
+  (import "rt/types.wat" "inst_payload"
+    (func $inst_payload (param (ref null any)) (result (ref null any))))
+  (import "rt/symbols.wat" "is_symbol" (func $is_symbol (param (ref null any)) (result i32)))
+  (import "rt/symbols.wat" "repr" (func $symbol_repr (param (ref i31)) (result (ref $Str))))
 
   ;; i31 (bool) renderer — repr same as fmt; share str.wat's helper.
   (import "std/str.wat" "_str_fmt_i31"
@@ -87,6 +92,13 @@
             (local.get $val))))
       (return_call $num_repr))
 
+    ;; Try symbol (tagged i31) — repr as its source name (bare ident or
+    ;; quoted). Must precede the bool i31 arm: a symbol IS an i31, so peel it
+    ;; off first or it would render as a bool.
+    (if (call $is_symbol (local.get $val))
+      (then (return_call $symbol_repr
+        (ref.cast (ref i31) (local.get $val)))))
+
     ;; Try i31ref (bool) — repr same as fmt.
     (block $not_i31
       (block $is_i31 (result (ref i31))
@@ -103,11 +115,11 @@
             (local.get $val))))
       (return_call $range_repr))
 
-    ;; Try $Rec.
+    ;; Try $Dict.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref any) (ref $Rec)
+          (br_on_cast $is_rec (ref any) (ref $Dict)
             (local.get $val))))
       (return_call $rec_repr))
 
@@ -134,6 +146,15 @@
           (br_on_cast $is_clos (ref any) (ref $Closure)
             (local.get $val))))
       (return_call $closure_repr))
+
+    ;; Try $Inst (typed instance) — repr the bare structural payload.
+    ;; TODO(type-name): repr should source-quote the nominal name
+    ;; (`Foo {bar: 1}`), since repr is for round-trippable rendering. The type's
+    ;; (mod_id, cps_id) resolves to "Foo" via host reflection (the backtrace
+    ;; channel). Bare payload for now.
+    (if (ref.test (ref $Inst) (local.get $val))
+      (then (return_call $repr_val
+        (ref.as_non_null (call $inst_payload (local.get $val))))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)

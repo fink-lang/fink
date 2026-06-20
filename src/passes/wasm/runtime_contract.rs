@@ -84,6 +84,11 @@ pub enum Sym {
   Captures,
   Cell,
   VarArgs,
+  // register_symbol(name_str, word): populate the runtime str->symbol table.
+  // Lowering prepends one call per interned field name to the module body.
+  // Static field keys are compile-time-constant tagged i31 words (folded at
+  // link); there is no runtime symbol type to declare.
+  RegisterSymbol,
 
   // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
@@ -140,6 +145,12 @@ pub enum Sym {
   // continuations rather than values, but the WASM signature is the
   // same. RecPop has a different 4-arg shape; not yet wired.
   IsSeqLike, IsRecLike,
+  // Unified pattern guard — `(ctx, head, val, succ, fail) -> ()`. The head is a
+  // value (predicate fn or type); the runtime br-casts it and either calls it as
+  // a predicate or runs an instance-of test, then branches to succ/fail.
+  // Structural protocol heads (rec/tuple) are lowered to is_rec_like/is_seq_like
+  // instead, so this fn only sees predicate/type heads.
+  GuardApply,
   SeqPop, SeqPopBack,
   // String construction. `StrFromData` wraps a data-section pointer:
   //   `from_data(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
@@ -158,6 +169,23 @@ pub enum Sym {
   RecPut, RecPop,
   // Empty rec singleton — `() -> anyref`. Used for `{}`.
   RecEmpty,
+  // Type construction — `(ctx, mid i32, cid i32, cont) -> ()`. Mints a `$Type`
+  // for a `type _` declaration. Unlike the anyref-arg ops, the two i32s are
+  // the introspection key (module_id, cps_id), supplied as `i32.const` by the
+  // emitter (like Panic's reason / trace_push's mid+cid), NOT anyref values.
+  NewType,
+  // Type field accretion — `(ctx, type, key, val, cont) -> ()`. Same 4-arg
+  // cont-taking shape as RecPut; adds a named field to a type under construction.
+  TypeSetField,
+  // Type positional accretion — `(ctx, type, val, cont) -> ()`. Appends a tuple
+  // field-type. TypeInherit — `(ctx, type, base, cont) -> ()`. Records `..Base`.
+  TypePush, TypeInherit,
+  // Union — NewUnion `(ctx, mid i32, cid i32, cont)` mints a `$Union` (seed, like
+  // NewType). UnionAdd `(ctx, union, member, cont)` adds a member type-ref.
+  NewUnion, UnionAdd,
+  // Enum — NewEnum `(ctx, mid i32, cid i32, cont)` mints a `$Enum` (seed). EnumAdd
+  // `(ctx, enum, name, member, cont)` adds a case (4-arg, like TypeSetField).
+  NewEnum, EnumAdd,
   // Direct-style rec field setter — `(any, any, any) -> any`. Used by
   // the BuiltIn::Import handler to build the import rec at module-load
   // time without going through the CPS-style rec_set chain.
@@ -304,6 +332,21 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     // wrapper instead -- see scan path for BuiltIn::Panic in value
     // position which marks Sym::PanicApply / Closure / Captures.
     BuiltIn::Panic(_) => &[Sym::Panic],
+    // Type construction — `type _` mints a `$Type` via `new_type`.
+    BuiltIn::NewType => &[Sym::NewType],
+    // guard_apply needs is_rec_like/is_seq_like too: it routes the rec/tuple
+    // protocol-sentinel guards to them.
+    BuiltIn::GuardApply => &[Sym::GuardApply, Sym::IsRecLike, Sym::IsSeqLike],
+    // RecProtocol/TupleProtocol head values lower to inline i31 sentinels (no
+    // runtime symbol).
+    BuiltIn::RecProtocol | BuiltIn::TupleProtocol => &[],
+    BuiltIn::TypeSetField => &[Sym::TypeSetField],
+    BuiltIn::TypePush     => &[Sym::TypePush],
+    BuiltIn::TypeInherit  => &[Sym::TypeInherit],
+    BuiltIn::NewUnion     => &[Sym::NewUnion],
+    BuiltIn::UnionAdd     => &[Sym::UnionAdd],
+    BuiltIn::NewEnum      => &[Sym::NewEnum],
+    BuiltIn::EnumAdd      => &[Sym::EnumAdd],
     // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
@@ -349,6 +392,7 @@ pub struct Runtime {
   trace_mark:   Option<FuncSym>,
   trace_pop:    Option<FuncSym>,
   register_module: Option<FuncSym>,
+  register_symbol: Option<FuncSym>,
   // polymorphic protocol operators
   op_plus:    Option<FuncSym>,
   op_minus:   Option<FuncSym>,
@@ -386,6 +430,15 @@ pub struct Runtime {
   rec_pop:      Option<FuncSym>,
   rec_empty:    Option<FuncSym>,
   rec_set_field: Option<FuncSym>,
+  guard_apply:  Option<FuncSym>,
+  new_type:     Option<FuncSym>,
+  type_set_field: Option<FuncSym>,
+  type_push:    Option<FuncSym>,
+  type_inherit: Option<FuncSym>,
+  new_union:    Option<FuncSym>,
+  union_add:    Option<FuncSym>,
+  new_enum:     Option<FuncSym>,
+  enum_add:     Option<FuncSym>,
   panic:        Option<FuncSym>,
   panic_apply:  Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
@@ -432,6 +485,15 @@ impl Runtime {
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn rec_set_field(&self) -> FuncSym { self.rec_set_field.expect("rt: rec_set_field not declared") }
+  pub fn guard_apply(&self)  -> FuncSym { self.guard_apply.expect("rt: guard_apply not declared") }
+  pub fn new_type(&self)     -> FuncSym { self.new_type.expect("rt: new_type not declared") }
+  pub fn type_set_field(&self) -> FuncSym { self.type_set_field.expect("rt: type_set_field not declared") }
+  pub fn type_push(&self)    -> FuncSym { self.type_push.expect("rt: type_push not declared") }
+  pub fn type_inherit(&self) -> FuncSym { self.type_inherit.expect("rt: type_inherit not declared") }
+  pub fn new_union(&self)    -> FuncSym { self.new_union.expect("rt: new_union not declared") }
+  pub fn union_add(&self)    -> FuncSym { self.union_add.expect("rt: union_add not declared") }
+  pub fn new_enum(&self)     -> FuncSym { self.new_enum.expect("rt: new_enum not declared") }
+  pub fn enum_add(&self)     -> FuncSym { self.enum_add.expect("rt: enum_add not declared") }
   /// `() -> anyref` signature type. Shared by `args_empty`, `rec_new`,
   /// and the BuiltIn::Import virtual-stdlib accessors.
   pub fn fn_nil_to_list_sig(&self) -> TypeSym {
@@ -447,6 +509,7 @@ impl Runtime {
   pub fn trace_mark(&self)   -> FuncSym { self.trace_mark.expect("rt: trace_mark not declared") }
   pub fn trace_pop(&self)    -> FuncSym { self.trace_pop.expect("rt: trace_pop not declared") }
   pub fn register_module(&self) -> FuncSym { self.register_module.expect("rt: register_module not declared") }
+  pub fn register_symbol(&self) -> FuncSym { self.register_symbol.expect("rt: register_symbol not declared") }
   pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -529,6 +592,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::Cell            => "rt/apply.wat:Cell",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
+    Sym::RegisterSymbol  => "rt/symbols.wat:register_symbol",
     Sym::Apply           => "rt/apply.wat:apply",
     Sym::Apply3          => "rt/apply.wat:apply_3",
     Sym::TracePush       => "rt/trace.wat:trace_push",
@@ -589,6 +653,16 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::RecPop          => "std/rec.fnk:pop",
     Sym::RecEmpty        => "std/rec.fnk:new",
     Sym::RecSetField     => "std/rec.fnk:_set_field",
+
+    Sym::GuardApply      => "std/operators.fnk:guard_apply",
+    Sym::NewType         => "rt/types.wat:new_type",
+    Sym::TypeSetField    => "rt/types.wat:type_set_field",
+    Sym::TypePush        => "rt/types.wat:type_push",
+    Sym::TypeInherit     => "rt/types.wat:type_inherit",
+    Sym::NewUnion        => "rt/types.wat:new_union",
+    Sym::UnionAdd        => "rt/types.wat:union_add",
+    Sym::NewEnum         => "rt/types.wat:new_enum",
+    Sym::EnumAdd         => "rt/types.wat:enum_add",
 
     Sym::OpRngex         => "std/range.fnk:excl",
     Sym::OpRngin         => "std/range.fnk:incl",
@@ -655,6 +729,10 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::VarArgs) {
     rt.varargs = Some(TypeSym::Runtime(Sym::VarArgs));
   }
+  // Always available: static record field keys lower to compile-time-constant
+  // tagged i31 words (folded at link), and the module body prepends
+  // register_symbol calls to populate the str->symbol table.
+  rt.register_symbol = Some(FuncSym::Runtime(Sym::RegisterSymbol));
 
   // Function-signature types and function imports.
   //
@@ -733,6 +811,15 @@ if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecP
   }
 
   if needed.contains(&Sym::RecSetField) { rt.rec_set_field  = Some(FuncSym::Runtime(Sym::RecSetField)); }
+  if needed.contains(&Sym::GuardApply)  { rt.guard_apply    = Some(FuncSym::Runtime(Sym::GuardApply)); }
+  if needed.contains(&Sym::NewType)     { rt.new_type       = Some(FuncSym::Runtime(Sym::NewType)); }
+  if needed.contains(&Sym::TypeSetField) { rt.type_set_field = Some(FuncSym::Runtime(Sym::TypeSetField)); }
+  if needed.contains(&Sym::TypePush)    { rt.type_push      = Some(FuncSym::Runtime(Sym::TypePush)); }
+  if needed.contains(&Sym::TypeInherit) { rt.type_inherit   = Some(FuncSym::Runtime(Sym::TypeInherit)); }
+  if needed.contains(&Sym::NewUnion)    { rt.new_union      = Some(FuncSym::Runtime(Sym::NewUnion)); }
+  if needed.contains(&Sym::UnionAdd)    { rt.union_add      = Some(FuncSym::Runtime(Sym::UnionAdd)); }
+  if needed.contains(&Sym::NewEnum)     { rt.new_enum       = Some(FuncSym::Runtime(Sym::NewEnum)); }
+  if needed.contains(&Sym::EnumAdd)     { rt.enum_add       = Some(FuncSym::Runtime(Sym::EnumAdd)); }
   if needed.contains(&Sym::ModulesPub)  { rt.modules_pub    = Some(FuncSym::Runtime(Sym::ModulesPub)); }
   if needed.contains(&Sym::ModulesInitModule) { rt.modules_init_module = Some(FuncSym::Runtime(Sym::ModulesInitModule)); }
   if needed.contains(&Sym::ModulesImport) {
@@ -1110,6 +1197,10 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
     }
     ValKind::Lit(Lit::Rec) => {
       usage.mark(Sym::RecEmpty);
+    }
+    ValKind::Lit(Lit::Symbol(_)) => {
+      // Symbol keys are emitted via the `box_symbol` path in lower.rs, which
+      // marks the symbol runtime itself; nothing to mark from the literal.
     }
     ValKind::BuiltIn(b) => {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }

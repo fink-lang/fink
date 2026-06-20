@@ -1,0 +1,62 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+--- Symbol representation characterization. Field-name keys are interned
+    symbols; these pin the behaviours most sensitive to the symbol value
+    representation (identity, dict keying, repr, and the bool cond/repr path
+    that shares the i31 space). They must stay green across a representation
+    swap. ---
+
+
+test 'symbol field access', fn:
+  foo = {bar: 1}
+  equals foo.bar, 1
+
+
+test 'symbol field repr', fn:
+  --- a field-name key reprs as its bare source name ---
+  equals
+    '${{bar: 1}}'
+    '{bar: 1}'
+
+
+test 'distinct symbol keys coexist', fn:
+  foo = {bar: 1, spam: 2}
+  equals
+    [foo.bar; foo.spam]
+    [1; 2]
+
+
+test 'symbol key and string key are distinct', fn:
+  --- a field-name key (symbol) and a quoted string key are different keys
+      in the same collection, so both values coexist ---
+  d = {bar: 1, 'bar': 2}
+  equals
+    [d.bar; d.'bar']
+    [1; 2]
+
+
+test 'symbol identity across constructions', fn:
+  --- the same field name interns to the same symbol regardless of where it
+      is constructed, so the records compare equal ---
+  equals
+    {bar: 1}
+    {bar: 1}
+
+
+test 'bool branches', fn:
+  --- bool shares the i31 value space with symbols; conditionals must still
+      unbox and branch correctly ---
+  pick = fn c:
+    match c:
+      true: 'yes'
+      _: 'no'
+  equals
+    [pick true; pick false]
+    ['yes'; 'no']
+
+
+test 'bool repr', fn:
+  equals
+    ['${true}'; '${false}']
+    ['true'; 'false']

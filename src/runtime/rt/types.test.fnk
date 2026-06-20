@@ -1,0 +1,515 @@
+{test, equals, not_equals, skip} = import 'std/testing.fnk'
+
+{u8} = import 'std/int.fnk'
+
+
+
+test 'type alias equality', fn:
+  Foo = type _
+  Bar = Foo
+
+  equals
+    Foo
+    Bar
+
+
+test 'type equality', fn:
+  Foo = type _
+  Bar = type _
+
+  not_equals
+    Foo
+    Bar
+
+
+test 'union alias', fn:
+  Foo = type _
+  Bar = type _
+
+  FooBar = union:
+    Foo
+    Bar
+
+  Spam = FooBar
+
+  equals
+    FooBar
+    Spam
+
+
+test 'union equality', fn:
+  Foo = type _
+  Bar = type _
+
+  FooBar = union:
+    Foo
+    Bar
+
+  Spam = union:
+    Bar
+    Foo
+
+  equals
+    FooBar
+    Spam
+
+
+test 'union member guard binds instance', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  FooOrSpam x = Foo {bar: 1}
+
+  equals
+    x
+    Foo {bar: 1}
+
+
+test 'union member guard accepts any member', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  classify = fn val:
+    match val:
+      FooOrSpam _: 'member'
+      _: 'other'
+
+  Ham = type:
+    x: u8
+
+  equals
+    [classify Foo {bar: 1}; classify Spam {ham: 2}; classify Ham {x: 3}]
+    ['member'; 'member'; 'other']
+
+
+test 'union member guard preserves concrete type', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  --- a value matched by the union keeps its concrete member type, so a
+      further match on the member type still succeeds ---
+  narrow = fn val:
+    match val:
+      FooOrSpam m:
+        match m:
+          Foo _: 'foo'
+          Spam _: 'spam'
+          _: 'unknown'
+      _: 'other'
+
+  equals
+    [narrow Foo {bar: 1}; narrow Spam {ham: 2}]
+    ['foo'; 'spam']
+
+
+test 'union member matches derived instance via base', fn:
+  --- union lists a BASE type; a derived instance IS-A base, so it is a
+      member (membership walks the instance's $base chain) ---
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  Other = type:
+    ham: u8
+
+  BaseOrOther = union:
+    Base
+    Other
+
+  classify = fn val:
+    match val:
+      BaseOrOther _: 'member'
+      _: 'other'
+
+  equals
+    [classify Derived {bar: 1, spam: 2}; classify Base {bar: 3}; classify Other {ham: 4}]
+    ['member'; 'member'; 'member']
+
+
+test 'union member does not match base of a derived member', fn:
+  --- union lists a DERIVED type; a plain base instance is NOT a Derived,
+      so it is not a member (subtyping is one-directional) ---
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  DerivedOnly = union:
+    Derived
+
+  classify = fn val:
+    match val:
+      DerivedOnly _: 'member'
+      _: 'other'
+
+  equals
+    [classify Derived {bar: 1, spam: 2}; classify Base {bar: 3}]
+    ['member'; 'other']
+
+
+test 'enum aliasing', fn:
+  Foo = enum:
+    Bar {a: u8}
+    Spam u8
+
+  Ham = Foo
+
+  equals
+    Foo
+    Ham
+
+
+test 'enum equality', fn:
+  Foo = enum:
+    Bar {a: u8}
+    Spam u8
+
+  Ham = enum:
+    Bar {a: u8}
+    Spam u8
+
+  not_equals
+    Foo
+    Ham
+
+
+test 'enum case construct named payload', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  equals
+    Opt.Some {val: 12}
+    Opt.Some {val: 12}
+
+
+test 'enum case construct distinct payloads not equal', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  not_equals
+    Opt.Some {val: 1}
+    Opt.Some {val: 2}
+
+
+test 'enum case guard named payload', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  Opt.Some s = Opt.Some {val: 12}
+
+  equals s.val, 12
+
+
+test 'enum destructure cases', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  {Some, None} = Opt
+
+  --- the destructured case types construct and compare like the qualified
+      Opt.Some / Opt.None forms ---
+  equals
+    Some {val: 12}
+    Opt.Some {val: 12}
+
+
+test 'enum level guard binds case instance', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  --- a case instance IS-A its enum, so the enum itself guards it ---
+  some = Opt.Some {val: 12}
+  Opt o = some
+
+  equals o, some
+
+
+test 'enum level match accepts any case', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  is_opt = fn val:
+    match val:
+      Opt _: 'opt'
+      _: 'other'
+
+  Other = type:
+    x: u8
+
+  equals
+    [is_opt Opt.Some {val: 1}; is_opt Opt.None {}; is_opt Other {x: 2}]
+    ['opt'; 'opt'; 'other']
+
+
+test 'typed rec equality', fn:
+  Foo = type:
+    bar: u8
+    spam: u8
+
+  equals
+    Foo {bar: 1, spam: 2}
+    Foo {bar: 1, spam: 2}
+
+  not_equals
+    Foo {bar: 1, spam: 2}
+    {bar: 1, spam: 2}
+
+
+
+test 'typed rec destructure', fn:
+  Foo = type:
+    bar: u8
+
+  {bar} = Foo {bar: 1}
+
+  equals bar, 1
+
+
+test 'typed rec guard', fn:
+  Foo = type:
+    bar: u8
+
+  Foo foo = Foo {bar: 1}
+
+  equals
+    foo
+    Foo {bar: 1}
+
+
+test 'typed rec guard destructure', fn:
+  Foo = type:
+    bar: u8
+
+  Foo {bar} = Foo {bar: 42}
+
+  equals bar, 42
+
+
+test 'typed rec guard destructured with projection to base type', fn:
+  Foo = type:
+    bar: u8
+
+  FooBar = type:
+    ..Foo
+    spam: u8
+
+  Foo foo = FooBar {bar: 1, spam: 2}
+
+  equals
+    foo
+    Foo {bar: 1}
+
+
+test 'rec subtype guard through closure', fn:
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  classify = fn val:
+    match val:
+      Base _: 'base'
+      _: 'other'
+
+  equals
+    classify Derived {bar: 1, spam: 2}
+    'base'
+
+
+test 'typed rec match on type', fn:
+  Foo = type:
+    bar: u8
+
+  result = match Foo {bar: 1}:
+    Foo foo: foo
+    _: false
+
+  equals
+    result
+    Foo {bar: 1}
+
+
+test 'typed rec match on type with destructure', fn:
+  Foo = type:
+    bar: u8
+
+  result = match Foo {bar: 42}:
+    Foo {bar}: bar
+    _: 0
+
+  equals result, 42
+
+
+test 'typed rec match selects by type', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  classify = fn val:
+    match val:
+      Foo _: 'foo'
+      Spam _: 'spam'
+      _: 'other'
+
+  equals
+    [classify Foo {bar: 1}; classify Spam {ham: 2}; classify {x: 3}]
+    ['foo'; 'spam'; 'other']
+
+
+test 'typed rec match projects to base type', fn:
+  Foo = type:
+    bar: u8
+
+  FooBar = type:
+    ..Foo
+    spam: u8
+
+  result = match FooBar {bar: 1, spam: 2}:
+    Foo foo: foo
+    _: false
+
+  equals
+    result
+    Foo {bar: 1}
+
+
+test 'typed rec dot op', fn:
+  Foo = type:
+    bar: u8
+
+  foo = Foo {bar: 1}
+
+  equals foo.bar, 1
+
+
+test 'typed rec destructure spread', fn:
+  Foo = type:
+    bar: u8
+    spam: u8
+
+  {..foo} = Foo {bar: 1, spam: 2}
+
+  equals
+    foo
+    {bar: 1, spam: 2}
+
+
+
+test 'typed tuple equality', fn:
+  Foo = type: u8, u8
+
+  equals
+    Foo 1, 2
+    Foo 1, 2
+
+  not_equals
+    Foo 1, 2
+    [1, 2]
+
+
+
+test 'typed tuple destructure', fn:
+  Foo = type: u8
+
+  [bar] = Foo 1
+
+  equals bar, 1
+
+
+test 'typed tuple dot op', fn:
+  Foo = type: u8
+
+  foo = Foo 1
+
+  equals foo.(0), 1
+
+
+test 'typed tuple destructure spread', fn:
+  Foo = type: u8, u8
+
+  [..foo] = Foo 1, 2
+
+  equals
+    foo
+    [1, 2]
+
+
+
+skip test 'TODO support typed fn', fn:
+  Foo = type:
+    # fn u8, i16: i8
+    u8
+
+
+
+
+
+test 'enum case match with destructure', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  describe = fn o:
+    match o:
+      Opt.Some s: s.val
+      _: 0
+
+  equals
+    [describe Opt.Some {val: 7}; describe Opt.None {}]
+    [7; 0]
+
+
+test 'fmt typed rec instance', fn:
+  Foo = type:
+    bar: u8
+  foo = Foo {bar: 1}
+  equals
+    '${foo}'
+    '{bar: 1}'
+
+
+test 'repr typed rec instance in list', fn:
+  Foo = type:
+    bar: u8
+  --- collections repr their elements, so a typed instance in a list
+      exercises the repr $Inst arm (bare payload for now) ---
+  lst = [Foo {bar: 1}]
+  equals
+    '${lst}'
+    '[{bar: 1}]'

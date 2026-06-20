@@ -358,9 +358,23 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
 
-    // ---- type declarations: parsed, but not yet lowered ----
-    NodeKind::Type { .. } | NodeKind::Enum { .. } | NodeKind::Union { .. } =>
-      panic!("type/enum/union declaration lowering not yet implemented"),
+    // ---- type declaration ----
+    NodeKind::Type { params, body, .. } => {
+      let fields: Vec<AstId> = body.items.to_vec();
+      lower_type_decl(g, params, &fields, o)
+    }
+
+    // ---- union declaration ----
+    NodeKind::Union { params, body, .. } => {
+      let members: Vec<AstId> = body.items.to_vec();
+      lower_union_decl(g, params, &members, o)
+    }
+
+    // ---- enum declaration ----
+    NodeKind::Enum { params, body, .. } => {
+      let members: Vec<AstId> = body.items.to_vec();
+      lower_enum_decl(g, params, &members, o)
+    }
   }
 }
 
@@ -881,7 +895,9 @@ fn lower_member(
   let (lv, mut pending) = lower(g, lhs);
   let rhs_kind = g.node(rhs).kind.clone();
   let rv = match rhs_kind {
-    NodeKind::Ident(key) => lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(rhs)),
+    // Ident key `.foo` is a field-name symbol. Quoted (`.'foo'`) and computed
+    // (`.(x)`) keys fall through to the value path -- dict string/value keys.
+    NodeKind::Ident(key) => lit_val(g, Lit::Symbol(key.as_bytes().to_vec()), Some(rhs)),
     _ => {
       let (v, rp) = lower(g, rhs);
       pending.extend(rp);
@@ -968,7 +984,7 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
       NodeKind::Bind { lhs, rhs, .. } => {
         let lhs_kind = g.node(lhs).kind.clone();
         if let NodeKind::Ident(key) = lhs_kind {
-          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(lhs));
+          let key_lit = lit_val(g, Lit::Symbol(key.as_bytes().to_vec()), Some(lhs));
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
           let result = g.fresh_result(field_origin);
@@ -993,7 +1009,7 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
         let val_id = *body.items.last().expect("arm body empty");
         let key_kind = g.node(key_id).kind.clone();
         if let NodeKind::Ident(key) = key_kind {
-          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(key_id));
+          let key_lit = lit_val(g, Lit::Symbol(key.as_bytes().to_vec()), Some(key_id));
           let (fv, fp) = lower(g, val_id);
           pending.extend(fp);
           let result = g.fresh_result(field_origin);
@@ -1013,7 +1029,7 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
       }
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
-        let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(field));
+        let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(field));
         let id_val = scope_ref_val(g, field);
         let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);
@@ -1031,6 +1047,274 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
     }
   }
   (acc, pending)
+}
+
+// ---------------------------------------------------------------------------
+// Type declaration: `Foo = type _`, `Spam = type T: ...`
+// ---------------------------------------------------------------------------
+
+// A type declaration with no params lowers to the bare type-body accretion.
+// With params (`type T: ...`) it is `fn` lifted one level — the type is a
+// function over its type-params, so `Spam u8` is ordinary application. The
+// body accretion becomes the fn body, returned to the fn's continuation.
+fn lower_type_decl(
+  g: &mut Gen,
+  params: AstId,
+  fields: &[AstId],
+  origin: Option<AstId>,
+) -> Lower {
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_type_body(g, fields, origin))
+}
+
+// A type/enum/union declaration with params (`type T:`, `enum T:`) is `fn`
+// lifted one level — the declaration is a function over its type-params, so
+// `Spam u8` / `Option u8` is ordinary application. With no params the body
+// lowers directly. `build_body` produces the declaration's value; with params
+// it becomes the fn body, returned to the fn's continuation.
+fn wrap_decl_in_params_fn(
+  g: &mut Gen,
+  params: AstId,
+  origin: Option<AstId>,
+  build_body: impl FnOnce(&mut Gen) -> Lower,
+) -> Lower {
+  let has_params = match &g.node(params).kind {
+    NodeKind::Patterns(ps) => !ps.items.is_empty(),
+    _ => true,
+  };
+  if !has_params {
+    return build_body(g);
+  }
+
+  let fn_name = g.fresh_fn(origin);
+  let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
+  let (mut param_names, deferred) = extract_params_with_gen(g, params);
+  let (cont, prev_cont) = g.push_cont(origin);
+  let cont_id = cont.id;
+  let fn_body = {
+    let (val, pending) = build_body(g);
+    let ret = tail_app(g, cont_id, val, origin);
+    let body = wrap(g, pending, Cont::Expr { args: vec![], body: Box::new(ret) });
+    prepend_pat_binds(g, deferred, body)
+  };
+  g.pop_cont(prev_cont);
+  param_names.insert(0, Param::Name(cont));
+  let pending = vec![Pending::Fn {
+    name: fn_name,
+    params: param_names,
+    fn_kind: CpsFnKind::CpsFunction,
+    fn_body,
+    origin,
+  }];
+  (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
+}
+
+// Mint a fresh type value via `·new_type`, then accrete each field onto it
+// with `·type_set_field` — the structural mirror of `lower_lit_rec` (a `{}`
+// seed threaded through `·rec_put` calls). The unit form (`type _`) has an
+// empty body, so it stops at the bare `·new_type`.
+//
+// A field is an `Arm { lhs: Ident(name), body: [type-expr] }`: the name is a
+// declaration (a string-literal key, like `rec_put`'s key); the type-expr
+// lowers as an ordinary value (it resolves in scope, like `rec_put`'s value).
+fn lower_type_body(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewType),
+    args: args_val(vec![]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  for &field in fields {
+    let field_origin = Some(field);
+    match g.node(field).kind.clone() {
+      // `..Base` — splice the base's fields and record it as the base
+      // (mirrors the rec-literal `..src` spread, plus the subtyping link).
+      NodeKind::Spread { inner: Some(base_id), .. } => {
+        let (bv, bp) = lower(g, base_id);
+        pending.extend(bp);
+        let result = g.fresh_result(field_origin);
+        let (rk, ri) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::TypeInherit),
+          args: args_val(vec![acc, bv]),
+          result,
+          origin: field_origin,
+        });
+        acc = ref_val(g, rk, ri, field_origin);
+      }
+      // `name: TypeExpr` — a named (record) field.
+      NodeKind::Arm { lhs, body, .. } => {
+        let NodeKind::Ident(name) = g.node(lhs).kind.clone() else {
+          panic!("type field name is not an Ident");
+        };
+        let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(lhs));
+        let type_id = body.items[0];
+        let (tv, tp) = lower(g, type_id);
+        pending.extend(tp);
+        let result = g.fresh_result(field_origin);
+        let (rk, ri) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::TypeSetField),
+          args: args_val(vec![acc, key_lit, tv]),
+          result,
+          origin: field_origin,
+        });
+        acc = ref_val(g, rk, ri, field_origin);
+      }
+      // A bare type expression — a positional (tuple) field; appended in order.
+      _ => {
+        let (tv, tp) = lower(g, field);
+        pending.extend(tp);
+        let result = g.fresh_result(field_origin);
+        let (rk, ri) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::TypePush),
+          args: args_val(vec![acc, tv]),
+          result,
+          origin: field_origin,
+        });
+        acc = ref_val(g, rk, ri, field_origin);
+      }
+    }
+  }
+
+  (acc, pending)
+}
+
+// ---------------------------------------------------------------------------
+// Union declaration: `Num = union: Int; Float`
+// ---------------------------------------------------------------------------
+
+// With params (`union T:`) the union is a function over its type-params (like a
+// generic `type`/`enum`); with none it lowers to the bare member accretion.
+fn lower_union_decl(
+  g: &mut Gen,
+  params: AstId,
+  members: &[AstId],
+  origin: Option<AstId>,
+) -> Lower {
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_union_body(g, members, origin))
+}
+
+// A union is an open union over existing types — represented at runtime as a
+// set of type refs ("union is just a set"). Built by accretion (mirrors
+// `lower_type_body`): a `·new_union` seed threaded through one `·union_add`
+// per member. Each member lowers to an ordinary value (it references an
+// existing type, which resolves in scope).
+fn lower_union_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewUnion),
+    args: args_val(vec![]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  for &member in members {
+    let member_origin = Some(member);
+    let (mv, mp) = lower(g, member);
+    pending.extend(mp);
+    let result = g.fresh_result(member_origin);
+    let (rk, ri) = (result.kind, result.id);
+    pending.push(Pending::App {
+      func: Callable::BuiltIn(BuiltIn::UnionAdd),
+      args: args_val(vec![acc, mv]),
+      result,
+      origin: member_origin,
+    });
+    acc = ref_val(g, rk, ri, member_origin);
+  }
+
+  (acc, pending)
+}
+
+// ---------------------------------------------------------------------------
+// Enum declaration: `Light = enum: Red; Green; Blue`
+// ---------------------------------------------------------------------------
+
+// With params (`enum T:`) the enum is a function over its type-params (like a
+// generic `type`); with none it lowers to the bare member accretion.
+fn lower_enum_decl(
+  g: &mut Gen,
+  params: AstId,
+  members: &[AstId],
+  origin: Option<AstId>,
+) -> Lower {
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_enum_body(g, members, origin))
+}
+
+// A closed sum: each member mints a member-type (a `type:` with a tag) added to
+// the enum namespace under its name. Built by accretion (mirrors the family):
+// a `·new_enum` seed threaded through one `·enum_add enum, 'Name', member_type`
+// per member. A nullary member (`Red`) mints a bare member-type; payload-carrying
+// members reuse `lower_type_body` for the payload.
+fn lower_enum_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewEnum),
+    args: args_val(vec![]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  for &member in members {
+    let member_origin = Some(member);
+    // A member is its name + a payload that is a type body:
+    //   `None`        nullary   -> empty body (bare `·new_type`)
+    //   `Some T`      positional -> body is the Apply args
+    //   `Bar {a: T}`  named      -> body is the rec-literal's fields
+    let (name_id, member_fields) = enum_member_parts(g, member);
+    let NodeKind::Ident(name) = g.node(name_id).kind.clone() else {
+      panic!("enum member name is not an Ident");
+    };
+    // Mint the member-type (a `type:` with a tag) from its payload body.
+    let (mtype_val, mtype_pending) = lower_type_body(g, &member_fields, member_origin);
+    pending.extend(mtype_pending);
+    // Add it to the enum under its name.
+    let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(name_id));
+    let result = g.fresh_result(member_origin);
+    let (rk, ri) = (result.kind, result.id);
+    pending.push(Pending::App {
+      func: Callable::BuiltIn(BuiltIn::EnumAdd),
+      args: args_val(vec![acc, key_lit, mtype_val]),
+      result,
+      origin: member_origin,
+    });
+    acc = ref_val(g, rk, ri, member_origin);
+  }
+
+  (acc, pending)
+}
+
+// Decompose an enum member into (name-node, payload-as-type-body-fields).
+//   `None`       -> (None, [])           nullary
+//   `Some T`     -> (Some, [T])          positional payload
+//   `Ni T, T`    -> (Ni, [T, T])         multiple positional
+//   `Bar {a: T}` -> (Bar, [Arm{a:T}...]) named payload (the rec's fields)
+fn enum_member_parts(g: &mut Gen, member: AstId) -> (AstId, Vec<AstId>) {
+  match g.node(member).kind.clone() {
+    NodeKind::Ident(_) => (member, vec![]),
+    NodeKind::Apply { func, args } => {
+      let arg_items: Vec<AstId> = args.items.to_vec();
+      // A single record-literal payload contributes its fields (named member);
+      // otherwise the args are positional payload fields.
+      if arg_items.len() == 1
+        && let NodeKind::LitRec { items, .. } = g.node(arg_items[0]).kind.clone()
+      {
+        (func, items.items.to_vec())
+      } else {
+        (func, arg_items)
+      }
+    }
+    _ => panic!("unexpected enum member shape"),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1422,9 +1706,14 @@ enum Pending {
   App { func: Callable, args: Vec<Arg>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits plain LetVal (fail is always ·panic for irrefutable binds).
   MatchBind { name: BindNode, val: Val, origin: Option<AstId> },
-  /// Pattern-lowered guard check — emits func(args) + If with ·panic as fail cont.
-  /// Used by Apply patterns (predicate guards like `is_even y`, `Ok b`).
-  MatchGuard { func: Callable, args: Vec<Val>, origin: Option<AstId> },
+  /// Pattern-lowered guard check — lowers to a runtime `guard_apply` call.
+  /// Used by Apply patterns (predicate guards `is_even y`, type guards `Foo foo`).
+  /// `result`: the value `guard_apply` passes to succ -- the projected/refined
+  /// value (for a type guard, the downcast instance; for a predicate, the subject
+  /// unchanged). Downstream binds and sub-patterns reference this `result`, so
+  /// they see the post-guard value. Bound as the succ cont's single param, so the
+  /// guard's success path threads the refined value forward.
+  MatchGuard { func: Callable, args: Vec<Val>, result: BindNode, origin: Option<AstId> },
   /// Pattern match — matcher function applied to subject.
   ///
   /// ```text
@@ -1561,40 +1850,52 @@ fn wrap_with_fail(
           origin,
         )
       },
-      Pending::MatchGuard { func, args, origin } => {
-        // Guard check: call func(args...) → if result then cont else fail.
-        // Inlined as plain App + If (no dedicated guard builtin).
-        // Build: fail()  (panic builtin for irrefutable binds, cont call for arms)
+      Pending::MatchGuard { func, args, result, origin } => {
+        // Guard check via the runtime `guard_apply` builtin: the head flows as a
+        // VALUE argument (not the callee) so it can be a type (`Foo {bar}`), a
+        // registered protocol, or a predicate fn (`is_even y`). The runtime fn
+        // decides success/failure and branches to the succ/fail conts.
+        //
+        // Emits: guard_apply(head, args..., succ, fail)
+        //   succ = the continuation body, bound to `result` (the projected/refined
+        //          value guard_apply passes through); downstream binds and
+        //          sub-patterns already reference `result`.
+        //   fail = panic (irrefutable bind) or the arm's fail cont
         let fail_call = make_fail_call(g, origin);
 
-        // Build: <cont body> — inline the continuation as the then-branch.
-        // The fold may attach a fresh_result param that MatchGuard doesn't use;
-        // just inline the body directly (the unused bind is harmless).
-        let succ_body = match cont {
+        // succ cont — bind `result` (the refined value) as its single param. The
+        // fold attached a fresh param to a `Cont::Expr`; replace it with `result`
+        // so the success-path destructure/bind sees the post-guard value.
+        let succ_cont = match cont {
           Cont::Ref(cont_id) => {
             let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
-            g.expr(ExprKind::App {
+            let body = g.expr(ExprKind::App {
               func: Callable::Val(cont_ref),
               args: vec![],
-            }, origin)
+            }, origin);
+            Cont::Expr { args: vec![result], body: Box::new(body) }
           }
-          Cont::Expr { body, .. } => *body,
+          Cont::Expr { body, .. } => Cont::Expr { args: vec![result], body },
         };
 
-        // Build: if result then succ_body else fail()
-        let result_bind = g.fresh_result(origin);
-        let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), origin);
-        let if_expr = g.expr(ExprKind::If {
-          cond: Box::new(result_ref),
-          then: Box::new(succ_body),
-          else_: Box::new(fail_call),
-        }, origin);
+        // The head is the guard value (a type / protocol / predicate). For an
+        // existing `Callable::Val` head it becomes the leading val arg; a
+        // `Callable::BuiltIn` head would need a value form, which guards never
+        // produce, so this path only sees `Callable::Val`.
+        let head_val = match func {
+          Callable::Val(v) => v,
+          Callable::BuiltIn(_) => {
+            unreachable!("guard head is always a value (type/protocol/predicate)")
+          }
+        };
 
-        // Build: func(fn result: if_expr, args...) — cont first
-        let mut call_args: Vec<Arg> = vec![Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) })];
+        // Build: guard_apply(head, args..., succ, fail).
+        let mut call_args: Vec<Arg> = vec![Arg::Val(head_val)];
         call_args.extend(args.into_iter().map(Arg::Val));
+        call_args.push(Arg::Cont(succ_cont));
+        call_args.push(Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }));
         g.expr(
-          ExprKind::App { func, args: call_args },
+          ExprKind::App { func: Callable::BuiltIn(BuiltIn::GuardApply), args: call_args },
           origin,
         )
       },
@@ -2562,15 +2863,18 @@ fn emit_seq_pattern(
     checked_param.clone(), origin,
   );
 
-  // Step 4: wrap with IsSeqLike type guard.
+  // Step 4: guard on the built-in TupleProtocol — a bare `[...]` pattern guards
+  // on "supports tuple syntax", exactly as `Foo [...]` would guard on `Foo`.
   let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let proto = g.val(ValKind::BuiltIn(BuiltIn::TupleProtocol), origin);
   let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
   let fail_call = g.expr(ExprKind::App {
     func: Callable::Val(fail_ref), args: vec![],
   }, origin);
   let final_body = g.expr(ExprKind::App {
-    func: Callable::BuiltIn(BuiltIn::IsSeqLike),
+    func: Callable::BuiltIn(BuiltIn::GuardApply),
     args: vec![
+      Arg::Val(proto),
       Arg::Val(subj_ref),
       Arg::Cont(Cont::Expr { args: vec![checked_param], body: Box::new(inner_body) }),
       Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }),
@@ -2849,9 +3153,13 @@ enum SpreadKind {
   SubPattern(AstId),                 // `{..{bar, spam}}` — the sub-pattern
 }
 
-/// Record pattern key: identifier name or computed expression.
+/// Record pattern key, classified by syntax:
+/// - `Symbol` -- ident key `{foo}` / `{foo: pat}`: an interned field-name symbol.
+/// - `Str` -- quoted key `{'foo bar': pat}`: a string value key (dict).
+/// - `Expr` -- computed key `{(x): pat}`: a runtime value key (dict).
 enum RecKey<'src> {
-  Ident(&'src str),
+  Symbol(&'src str),
+  Str(String),
   Expr(AstId),
 }
 
@@ -2907,18 +3215,17 @@ fn emit_rec_pattern<'src>(
         });
       }
       NodeKind::Ident(name) => {
-        regular.push(RecField { key: RecKey::Ident(name), pat: field_id, origin: Some(field_id) });
+        regular.push(RecField { key: RecKey::Symbol(name), pat: field_id, origin: Some(field_id) });
       }
       NodeKind::Bind { lhs, rhs: pat_id, .. } => {
         let lhs_kind = g.node(lhs).kind.clone();
         match lhs_kind {
           NodeKind::Ident(key) => {
-            regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(lhs) });
+            regular.push(RecField { key: RecKey::Symbol(key), pat: pat_id, origin: Some(lhs) });
           }
           NodeKind::LitStr { content, .. } => {
-            // Leak the String to make it 'src — small one-off cost during compile.
-            let key: &'src str = Box::leak(content.into_boxed_str());
-            regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(lhs) });
+            // Quoted key is a string value key (dict), not a field symbol.
+            regular.push(RecField { key: RecKey::Str(content), pat: pat_id, origin: Some(lhs) });
           }
           _ => {}
         }
@@ -2928,11 +3235,11 @@ fn emit_rec_pattern<'src>(
           let arm_lhs_kind = g.node(arm_lhs).kind.clone();
           match arm_lhs_kind {
             NodeKind::Ident(key) => {
-              regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(arm_lhs) });
+              regular.push(RecField { key: RecKey::Symbol(key), pat: pat_id, origin: Some(arm_lhs) });
             }
             NodeKind::LitStr { content, .. } => {
-              let key: &'src str = Box::leak(content.into_boxed_str());
-              regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(arm_lhs) });
+              // Quoted key is a string value key (dict), not a field symbol.
+              regular.push(RecField { key: RecKey::Str(content), pat: pat_id, origin: Some(arm_lhs) });
             }
             NodeKind::Group { inner, .. } => {
               regular.push(RecField { key: RecKey::Expr(inner), pat: pat_id, origin: Some(arm_lhs) });
@@ -2976,15 +3283,18 @@ fn emit_rec_pattern<'src>(
     g, &regular, &field_temps, terminal, fail_param.id, checked_param.clone(), origin,
   );
 
-  // Step 3: wrap with IsRecLike type guard.
+  // Step 3: guard on the built-in RecProtocol — a bare `{...}` pattern guards on
+  // "supports rec syntax", exactly as `Foo {...}` would guard on `Foo`.
   let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let proto = g.val(ValKind::BuiltIn(BuiltIn::RecProtocol), origin);
   let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
   let fail_call = g.expr(ExprKind::App {
     func: Callable::Val(fail_ref), args: vec![],
   }, origin);
   let final_body = g.expr(ExprKind::App {
-    func: Callable::BuiltIn(BuiltIn::IsRecLike),
+    func: Callable::BuiltIn(BuiltIn::GuardApply),
     args: vec![
+      Arg::Val(proto),
       Arg::Val(subj_ref),
       Arg::Cont(Cont::Expr { args: vec![checked_param], body: Box::new(inner_body) }),
       Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }),
@@ -3180,7 +3490,8 @@ fn fold_rec_pops<'src>(
     let cursor_bind = if i == 0 { first_cursor.clone() } else { g.fresh_result(origin) };
     let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
     let (field_key_val, key_pending) = match &fields[i].key {
-      RecKey::Ident(name) => (g.val(ValKind::Lit(Lit::Str(name.as_bytes().to_vec())), origin), vec![]),
+      RecKey::Symbol(name) => (g.val(ValKind::Lit(Lit::Symbol(name.as_bytes().to_vec())), origin), vec![]),
+      RecKey::Str(s) => (g.val(ValKind::Lit(Lit::Str(s.as_bytes().to_vec())), origin), vec![]),
       RecKey::Expr(id) => lower(g, *id),
     };
     let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
@@ -3407,33 +3718,87 @@ fn lower_pat_lhs(
       r
     }
 
-    // Predicate guard: `is_even y`, `Ok b`, `foo 2, a, 3`
-    // In pattern position, Apply args are either:
-    //   - Ident/Wildcard — sub-pattern: binds to or discards `val` (the seq element)
-    //   - Anything else  — expression: lowered normally and passed as-is to the guard
-    // Exactly one arg should be an Ident/Wildcard (the "binding slot"); others are
-    // literal/value args. All are assembled in order as arguments to MatchGuard.
+    // Head-applied guard: `is_even y`, `Ok b`, `foo 2, a, 3`, `is_foo {bar}`.
+    // The head (`func`) becomes the guard run against the subject `val`; if it
+    // holds, the args destructure/bind `val` in the success path. In pattern
+    // position an arg is one of:
+    //   - Ident/Wildcard — binding slot: bound to `val`, flows as a guard value
+    //     arg (`is_even y` passes `y`/`val` to the predicate).
+    //   - structural sub-pattern (`{bar}`, `[x]`, ...) — NOT an argument to the
+    //     head: a destructure of `val` that runs in succ AFTER the guard holds.
+    //     Lowered as a normal pattern against `val`; its pendings chain after the
+    //     MatchGuard so `wrap_with_fail` nests them inside the guard's success
+    //     cont (same destructure it would emit standalone).
+    //   - anything else — expression: lowered as a value, passed to the guard.
     NodeKind::Apply { func, args } => {
       let arg_ids: Vec<AstId> = args.items.to_vec();
       let mut arg_vals: Vec<Val> = vec![];
+      // The guard returns a refined value `v1` (the projected instance for a type
+      // guard; the unchanged subject for a predicate). The binding slot and any
+      // sub-patterns operate on `v1` (the post-guard value), NOT the raw subject
+      // `val`. `v1` is the MatchGuard's succ param; downstream pendings reference
+      // `v1_val` and chain after the guard so the fold nests them into succ.
+      let v1 = g.fresh_result(origin);
+      let v1_val = ref_val(g, v1.kind, v1.id, origin);
+      // The Ident binding slot (`foo` in `Foo foo`, `v` in `is_even v`) becomes a
+      // MatchBind of `v1` chained after the guard -- so it is collected for the
+      // arm body (mb_params) AND nests into succ (binds only on success).
+      let mut ident_bind: Option<BindNode> = None;
+      // Sub-pattern args are deferred: they must lower into the guard's success
+      // path, so collect them and push their pendings AFTER the MatchGuard.
+      let mut sub_pats: Vec<AstId> = vec![];
       for arg in arg_ids {
         let arg_kind = g.node(arg).kind.clone();
-        let arg_val = match arg_kind {
-          NodeKind::Ident(_) | NodeKind::Wildcard => {
-            let (bound_kind, bound_id) = lower_pat_lhs(g, arg, val.clone(), Some(arg), pending);
-            ref_val(g, bound_kind, bound_id, Some(arg))
+        match arg_kind {
+          NodeKind::Ident(_) => {
+            // Binding slot: bind `v1` (post-guard value); guard arg = subject.
+            ident_bind = Some(g.bind_name(arg));
+            arg_vals.push(val.clone());
+          }
+          NodeKind::Wildcard => {
+            // Discard slot: guard the subject, no binding.
+            arg_vals.push(val.clone());
+          }
+          NodeKind::LitRec { .. } | NodeKind::LitSeq { .. } => {
+            // Structural sub-pattern: destructure `v1` in succ, not a guard arg.
+            sub_pats.push(arg);
           }
           _ => {
             let (v, ap) = lower(g, arg);
             pending.extend(ap);
-            v
+            arg_vals.push(v);
           }
-        };
-        arg_vals.push(arg_val);
+        }
+      }
+      // When the args are only structural sub-patterns (`is_foo {bar}`), there is
+      // no binding-slot arg, so the subject `val` is what the head guards.
+      if arg_vals.is_empty() && !sub_pats.is_empty() {
+        arg_vals.push(val.clone());
       }
       let (func_val, func_pending) = lower(g, func);
       pending.extend(func_pending);
-      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals,  origin });
+      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals, result: v1, origin });
+      // The ident bind sees the refined value `v1`. Chained after the guard so
+      // the fold nests it inside succ (binds only on success), and it is a
+      // MatchBind so the arm body's mb_params collect it.
+      if let Some(name) = ident_bind {
+        pending.push(Pending::MatchBind { name, val: v1_val.clone(), origin });
+      }
+      // Sub-pattern destructures run in the guard's success path against `v1`:
+      // their pendings chain after the MatchGuard, so the fold nests them inside
+      // its succ cont.
+      //
+      // TODO(guard-double-check): the sub-pattern lowers as a full structural
+      // matcher, so its own `guard_apply rec_protocol`/`tuple_protocol` fires
+      // inside the success path -- redundant, since the outer guard already
+      // proved the value's shape (`is_foo {bar}` re-tests rec_protocol before
+      // `rec_pop`). Sound but wasteful. Eliding needs the head to provably imply
+      // the protocol (a TYPE head does; a PREDICATE head does not -- eliding
+      // there would turn a clean match-fail into a `rec_pop` trap), so revisit
+      // once type heads + resolution land. See [[project_type_lowering]].
+      for sub_pat in sub_pats {
+        lower_pat_lhs(g, sub_pat, v1_val.clone(), Some(sub_pat), pending);
+      }
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
 
@@ -3559,7 +3924,9 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_dict.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_types.fnk");
 }

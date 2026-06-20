@@ -262,6 +262,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
     // frames (which carry module_id) can resolve back to a source url.
     prepend_module_registration(&mut lcx, fink_module);
 
+    // Populate the str->symbol table at module-body startup: one
+    // register_symbol(name, id) per interned static field name, so a $Str
+    // key (import-rec, dynamic lookup) coerces to its $Symbol.
+    prepend_symbol_table(&mut lcx, fink_module);
+
     // Per-module host-facing wrapper. Exported under the module's
     // canonical FQN so the host can call any module by URL string
     // (`instance.get_func(canonical_url)`). The wrapper composes the
@@ -337,6 +342,58 @@ fn prepend_module_registration(lcx: &mut LowerCtx<'_>, fink_module: FuncSym) {
   let body = &mut lcx.frag.funcs[fi].body;
   body.insert(0, i_reg);
   body.insert(0, i_url);
+}
+
+/// Prepend `register_symbol(name, id)` calls to the module body — one per
+/// interned static field name — so the runtime str->symbol table is populated
+/// at startup. A $Str key (module-export rec, `r.('foo')`) then coerces to its
+/// $Symbol before lookup.
+fn prepend_symbol_table(lcx: &mut LowerCtx<'_>, fink_module: FuncSym) {
+  let FuncSym::Local(fi) = fink_module else {
+    panic!("prepend_symbol_table: fink_module must be Local");
+  };
+  let fi = fi as usize;
+
+  // Snapshot names — `intern_data` below mutates the fragment. The id is
+  // carried by `Operand::SymbolId(name)` and resolved at link.
+  let entries: Vec<Vec<u8>> = lcx.frag.symbols.keys().cloned().collect();
+  if entries.is_empty() { return; }
+
+  // Build instrs in source order, then prepend the whole block before the
+  // body (insert(0, ...) in reverse keeps registration order).
+  let base = (lcx.frag.funcs[fi].params.len() + lcx.frag.funcs[fi].locals.len()) as u32;
+  let key_idx = LocalIdx(base);
+  lcx.frag.funcs[fi].locals.push(LocalDecl {
+    ty: val_anyref(true),
+    display: Some(":sym_reg_name".to_string()),
+  });
+  // The symbol word (a compile-time const folded at link); box it as `ref.i31`
+  // to pass to register_symbol, which stores it directly.
+  let word_idx = LocalIdx(base + 1);
+  lcx.frag.funcs[fi].locals.push(LocalDecl {
+    ty: val_ref_abs(AbsHeap::I31, /*nullable*/ false),
+    display: Some(":sym_reg_word".to_string()),
+  });
+
+  let mut block: Vec<InstrId> = Vec::with_capacity(entries.len() * 3);
+  for name in &entries {
+    let sym = intern_data(lcx.frag, name);
+    let len = name.len() as u32;
+    let i_name = push_call(lcx.frag, lcx.rt.str_from_data(),
+      vec![Operand::DataRef { sym, len }], Some(key_idx));
+    // word carried by name; resolved to the folded i31 const at link, same as
+    // box_symbol. Box it as ref.i31 for register_symbol's (ref i31) param.
+    let i_word = push_ref_i31(lcx.frag, Operand::SymbolId(name.clone()), word_idx);
+    let i_reg = push_call(lcx.frag, lcx.rt.register_symbol(),
+      vec![op_local(key_idx), op_local(word_idx)], None);
+    block.push(i_name);
+    block.push(i_word);
+    block.push(i_reg);
+  }
+  let body = &mut lcx.frag.funcs[fi].body;
+  for instr in block.into_iter().rev() {
+    body.insert(0, instr);
+  }
 }
 
 fn synth_host_wrapper(
@@ -876,7 +933,12 @@ fn lower_expr(
       ctx.instrs.push(i_get);
       let url_bytes: Vec<u8> = lcx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
       let url_local = emit_str_const(lcx, ctx, &url_bytes, ":pub_url");
-      let name_local = emit_str_const(lcx, ctx, src_name.as_bytes(), ":pub_name");
+      // The export name is a field key, so register it as a $Symbol -- the
+      // exports rec is symbol-keyed, matching the consumer's `{x} = import`
+      // RecPop and the host's name->symbol-resolved lookup.
+      let name_local = ctx.alloc_local(&format!(":pub_name_{}", cps_ident(lcx.cps, lcx.ast, id)));
+      let i_name = box_symbol(lcx.frag, lcx.rt, src_name.as_bytes(), name_local);
+      ctx.instrs.push(i_name);
       let i_pub = push_call(lcx.frag, lcx.rt.modules_pub(),
         vec![op_local(url_local), op_local(name_local), op_local(val_local)],
         None);
@@ -888,6 +950,16 @@ fn lower_expr(
         panic!("lower: Pub cont arg is not a Cont");
       };
       lower_cont(lcx, ctx, cont);
+    }
+
+    // `op_dot` (Get) is a binary op whose RHS is a record key: a `Lit::Symbol`
+    // field key boxes to $Symbol, other keys lower as values. Handle before the
+    // generic binary path, which would lower the key via the value path.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Get), args } => {
+      let (ctx_a, a, key, cont) = split_binary_args(args);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let key_op = emit_key_as_operand(lcx, ctx, key);
+      emit_op_tail_call(lcx, ctx, Sym::OpDot, ctx_a, vec![a_op, key_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(b), args } if binary_op_sym(*b).is_some() => {
@@ -962,6 +1034,57 @@ fn lower_expr(
       emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, ctx_a, vec![a_op, b_op], cont, expr.id);
     }
 
+    // NewType: `(ctx, cont)` — no value args. The type-seed constructors take
+    // the introspection key (module_id, cps_id) as two i32 constants, supplied
+    // here at emit time (like trace_push), NOT as CPS value args. Signature
+    // `(ctx, mid i32, cid i32, cont) -> ()`; tail-applies cont with the value.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewType), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_type(), args, expr.id);
+    }
+
+    // TypeSetField: `(ctx, type, key, val, cont)` — same shape as RecPut, with
+    // the field-name key at index 2; route via emit_rec_key_op so a $Symbol key
+    // boxes correctly.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeSetField), args } => {
+      let target = lcx.rt.type_set_field();
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
+    }
+
+    // TypePush: `(ctx, type, val, cont)` — append a positional (tuple) field.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypePush), args } => {
+      let target = lcx.rt.type_push();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // TypeInherit: `(ctx, type, base, cont)` — record a `..Base` supertype link.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeInherit), args } => {
+      let target = lcx.rt.type_inherit();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // NewUnion: `(ctx, cont)` — mints a `$Union`. Same i32-key seed as NewType.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewUnion), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_union(), args, expr.id);
+    }
+
+    // UnionAdd: `(ctx, union, member, cont)` — add a member type-ref.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::UnionAdd), args } => {
+      let target = lcx.rt.union_add();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // NewEnum: `(ctx, cont)` — mints a `$Enum`. Same i32-key seed as NewType.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewEnum), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_enum(), args, expr.id);
+    }
+
+    // EnumAdd: `(ctx, enum, name, member, cont)` — the case name at index 2 is
+    // a $Symbol; route via emit_rec_key_op like TypeSetField.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::EnumAdd), args } => {
+      let target = lcx.rt.enum_add();
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
+    }
+
     // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
     // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {
@@ -989,6 +1112,16 @@ fn lower_expr(
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::IsRecLike), args } => {
       emit_ternary_guard(lcx, ctx, Sym::IsRecLike, args, expr.id);
     }
+    // GuardApply: `(ctx, head, val, succ, fail)` — unified pattern guard.
+    // The head is a guard VALUE (a type, a structural protocol type, or a
+    // predicate fn). All heads flow uniformly through the runtime $guard_apply,
+    // which dispatches on the head. The rec/tuple protocols are materialised as
+    // ordinary type values (RecProtocol/TupleProtocol -> their getter funcs in
+    // val_as_operand), so there is no structural special-case here.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::GuardApply), args } => {
+      let target = lcx.rt.guard_apply();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
     // SeqPop: `(seq, fail, succ)` — destructure. Both fail and succ
     // are continuations.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPop), args } => {
@@ -1004,11 +1137,11 @@ fn lower_expr(
     // Both 4-arg, lowered as `return_call $sym arg0 arg1 arg2 arg3`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecPut), args } => {
       let target = lcx.rt.rec_put();
-      emit_quaternary(lcx, ctx, target, args, expr.id);
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecPop), args } => {
       let target = lcx.rt.rec_pop();
-      emit_quaternary(lcx, ctx, target, args, expr.id);
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
 
     // Panic: tail-position sentinel emitted by lower_match's fail
@@ -1655,13 +1788,11 @@ fn lower_import_virtual_stdlib(
     let i_call = push_call(lcx.frag, target, vec![], Some(l_val));
     ctx.instrs.push(i_call);
 
-    // 1c. Build the $Str key for the field name.
+    // 1c. Build the $Symbol key for the field name. This rec is destructured
+    // by fink (`{io} = import ...`) via RecPop, which keys by $Symbol; the
+    // names are static module exports, so they intern like any static key.
     let l_key = ctx.alloc_local(&format!(":imp_key_{name}"));
-    let key_bytes = name.as_bytes();
-    let key_sym = intern_data(lcx.frag, key_bytes);
-    let i_key = push_call(lcx.frag, lcx.rt.str_from_data(),
-      vec![Operand::DataRef { sym: key_sym, len: key_bytes.len() as u32 }],
-      Some(l_key));
+    let i_key = box_symbol(lcx.frag, lcx.rt, name.as_bytes(), l_key);
     ctx.instrs.push(i_key);
 
     // 1d. Set the field on the rec.
@@ -1784,18 +1915,71 @@ fn is_virtual_stdlib_path(url: &str) -> bool {
 /// After thread_ctx the CPS shape is `[ctx, ...4 user args]`; ctx is
 /// passed to the runtime as the 0th wasm arg. Used by RecPut and
 /// RecPop.
-fn emit_quaternary(
+/// Emit a type-seed constructor (`new_type`/`new_union`/`new_enum`). The CPS
+/// shape is `(ctx, cont)` with no value args; the introspection key
+/// (module_id, cps_id) is injected here as two `i32.const`s at emit time (like
+/// trace_push), so the runtime sig is `(ctx, mid i32, cid i32, cont)`.
+fn emit_type_seed(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
   target: FuncSym,
   args: &[Arg],
   app_id: CpsId,
 ) {
-  if args.len() != 5 {
-    panic!("lower: 4-arg primitive expects 5 args (ctx + 4 user args), got {}", args.len());
-  }
-  let _ = ctx;  // ctx_local unused; use threaded ctx from args[0]
+  let ctx_a = args.first().expect("type seed: missing ctx");
+  let cont = args.get(1).expect("type seed: missing cont");
+  let ctx_op = emit_arg_as_operand(lcx, ctx, ctx_a);
+  let cont_op = match cont {
+    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
+    Arg::Val(v) => val_as_operand(lcx, ctx, v),
+    _ => panic!("lower: type-seed cont is neither Cont::Ref nor Val"),
+  };
+  let mid = lit_i32(lcx.frag.module_id.0 as i32);
+  let cid = lit_i32(app_id.0 as i32);
+  let i = push_return_call(lcx.frag, target, vec![ctx_op, mid, cid, cont_op]);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
+  ctx.instrs.push(i);
+}
+
+/// Emit a tail-call to a runtime func resolved by a dedicated getter (not the
+/// protocol `op()` table). Every `Arg` maps to an operand in order, so this is
+/// arity-agnostic — the CPS shape `[ctx, ...user_args, cont]` flows straight to
+/// the runtime func's params. Used by the type-construction accretion ops and
+/// `emit_quaternary`.
+fn emit_direct_op_call(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  target: FuncSym,
+  args: &[Arg],
+  app_id: CpsId,
+) {
   let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
+  let i = push_return_call(lcx.frag, target, ops);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
+  ctx.instrs.push(i);
+}
+
+/// Like `emit_direct_op_call`, but the arg at the record-KEY position (index
+/// 2 after thread_ctx: `[ctx, rec, key, ...]`) is lowered via
+/// `emit_key_as_operand`, so a `Lit::Symbol` field key becomes a `$Symbol`
+/// (string / computed keys lower as ordinary values). Used by RecPut / RecPop.
+fn emit_rec_key_op(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  target: FuncSym,
+  args: &[Arg],
+  app_id: CpsId,
+) {
+  const KEY: usize = 2;
+  let ops: Vec<Operand> = args.iter().enumerate()
+    .map(|(i, a)| if i == KEY {
+      emit_key_as_operand(lcx, ctx, a)
+    } else {
+      emit_arg_as_operand(lcx, ctx, a)
+    })
+    .collect();
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
@@ -1874,6 +2058,8 @@ fn emit_arg_as_operand(
         ValKind::Ref(r) => resolve_id_as_operand(lcx, ctx, ref_cps_id(*r)),
         ValKind::ContRef(id) => resolve_id_as_operand(lcx, ctx, *id),
         ValKind::BuiltIn(BuiltIn::Panic(_)) => panic_closure_operand(lcx, ctx),
+        ValKind::BuiltIn(BuiltIn::RecProtocol) => protocol_operand(lcx, ctx, 0),
+        ValKind::BuiltIn(BuiltIn::TupleProtocol) => protocol_operand(lcx, ctx, 1),
         ValKind::BuiltIn(b) => panic!("lower: BuiltIn {:?} as arg not supported", b),
       }
     }
@@ -1900,6 +2086,17 @@ fn panic_closure_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx) -> Operand {
     vec![Operand::RefFunc(lcx.rt.panic_apply()), op_local(caps_local)],
     local);
   ctx.instrs.push(i_clo);
+  op_local(local)
+}
+
+/// Materialise a built-in protocol guard sentinel for `guard_apply`. Interim
+/// representation: a magic i31 (0 = rec-like, 1 = tuple-like) that the runtime
+/// guard_apply recognises and routes to is_rec_like / is_seq_like. Replace with
+/// real protocol type values once intrinsics/FQN-globals are unified.
+fn protocol_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, sentinel: i32) -> Operand {
+  let local = ctx.alloc_local(":protocol");
+  let i = push_ref_i31(lcx.frag, lit_i32(sentinel), local);
+  ctx.instrs.push(i);
   op_local(local)
 }
 
@@ -2022,6 +2219,11 @@ impl LitVal {
       Lit::Seq        => LitVal::EmptySeq,
       Lit::Rec        => LitVal::EmptyRec,
       Lit::Str(s)     => LitVal::Str(s.clone()),
+      // Symbols only appear at record-key positions, lowered via the dedicated
+      // `box_symbol` path (`emit_key_as_operand`). Reaching this generic literal
+      // path means a symbol leaked into value position -- a bug; return None so
+      // the caller panics loudly rather than silently stringifying it.
+      Lit::Symbol(_)  => return None,
     })
   }
 }
@@ -2076,6 +2278,40 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
       }
     }
   }
+}
+
+/// Box a static field name as a symbol: `ref.i31 (i32.const <word>)`, where the
+/// word is carried by NAME (`Operand::SymbolId`) until link. The linker merges
+/// all names package-wide into one canonical id per name and resolves each to
+/// the folded i31 word `(id << 3) | TAG_SYMBOL`. A symbol is a COMPILE-TIME
+/// CONSTANT -- the same name anywhere yields the same word, so identity is
+/// whole-word ref.eq with no instance table and no allocation.
+fn box_symbol(frag: &mut Fragment, _rt: &Runtime, name: &[u8], into: LocalIdx) -> InstrId {
+  // Record the name so prepend_symbol_table registers it in the runtime
+  // str->symbol table. The value (0) is unused -- the set is name-keyed.
+  frag.symbols.insert(name.to_vec(), 0);
+  push_ref_i31(frag, Operand::SymbolId(name.to_vec()), into)
+}
+
+/// Lower a record-KEY arg. A static string-literal key becomes a `$Symbol`
+/// (interned). Any other key (a computed/runtime value) falls back to normal
+/// value lowering -- those stay on the generic key path.
+fn emit_key_as_operand(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  arg: &Arg,
+) -> Operand {
+  if let Arg::Val(v) = arg
+    && let ValKind::Lit(Lit::Symbol(bytes)) = &v.kind
+  {
+    let local = ctx.alloc_local(&format!(":sym_{}", v.id.0));
+    let i = box_symbol(lcx.frag, lcx.rt, bytes, local);
+    if let Some(o) = origin_of(lcx.cps, lcx.ast, v.id) { set_origin(lcx.frag, i, o); }
+    ctx.instrs.push(i);
+    return op_local(local);
+  }
+  // Non-symbol keys (string value keys, computed keys) lower as ordinary values.
+  emit_arg_as_operand(lcx, ctx, arg)
 }
 
 fn binary_op_sym(b: BuiltIn) -> Option<Sym> {

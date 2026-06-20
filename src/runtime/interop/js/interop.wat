@@ -41,7 +41,7 @@
   (import "std/str.wat"     "Str"       (type $Str       (sub any)))
   (import "std/str.wat"     "ByteArray" (type $ByteArray (sub any)))
   (import "std/list.wat"    "List"      (type $List      (sub any)))
-  (import "std/dict.wat"    "Rec"       (type $Rec       (sub any)))
+  (import "std/dict.wat"    "Dict"       (type $Dict       (sub any)))
 
   (import "std/str.wat" "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
@@ -92,12 +92,17 @@
   (import "rt/apply.wat" "get_ctx"
     (func $get_ctx_inner (result (ref any))))
 
-  ;; std/dict.wat:get takes the public $Rec type; JS only ever holds
+  ;; std/dict.wat:get takes the public $Dict type; JS only ever holds
   ;; opaque (ref any), so we wrap with a JS-friendly shim (rec_get below)
   ;; that does the cast.
   (import "std/dict.wat" "get"
-    (func $rec_get_inner (param $rec (ref $Rec)) (param $key (ref eq))
+    (func $rec_get_inner (param $rec (ref $Dict)) (param $key (ref eq))
       (result (ref null eq))))
+  ;; Forward name->symbol resolution: JS navigates recs by name (no interface
+  ;; files), so a $Str field name resolves to its interned $Symbol before the
+  ;; symbol-keyed lookup. Non-interned strings pass through unchanged.
+  (import "rt/symbols.wat" "str_to_symbol"
+    (func $str_to_symbol (param (ref eq)) (result (ref eq))))
 
   ;; Host imports — stubbed by fink.js. Signatures must match
   ;; rust/interop.wat so runtime modules importing this contract see
@@ -279,10 +284,12 @@
 
   ;; -- type_of -----------------------------------------------------------
   ;;
-  ;; Discriminate a runtime value for a JS host. Bools are i31ref today
-  ;; (small ints are still boxed as $Num), so the i31 branch returns
-  ;; Bool, not Int. When small-int unboxing lands, this branch will need
-  ;; to split on the i31 value range.
+  ;; Discriminate a runtime value for a JS host. Bools and symbols are both
+  ;; tagged i31 words today (small ints are still boxed as $Num), so the i31
+  ;; branch returns Bool. A bare symbol value is not expressible in fink (symbols
+  ;; only arise as record keys, navigated by name), so none reaches here. When a
+  ;; symbol value or small-int unboxing lands, this branch must split on the i31
+  ;; tag (rt/symbols.wat:is_symbol).
   (func $type_of (@pub) (export "env:type_of")
     (param $v (ref null any)) (result i32)
     (local $nn (ref any))
@@ -294,7 +301,7 @@
     (if (ref.test (ref $Str)     (local.get $nn)) (then (return (i32.const 600))))
     (if (ref.test (ref $Num)     (local.get $nn)) (then (return (i32.const 250))))
     (if (ref.test (ref $List)    (local.get $nn)) (then (return (i32.const 400))))
-    (if (ref.test (ref $Rec)     (local.get $nn)) (then (return (i32.const 500))))
+    (if (ref.test (ref $Dict)     (local.get $nn)) (then (return (i32.const 500))))
     (if (ref.test (ref $Closure) (local.get $nn)) (then (return (i32.const 100))))
 
     (i32.const 0)
@@ -399,11 +406,29 @@
     (param $list (ref any)) (result i32)
     (return_call $list_size_inner (ref.cast (ref $List) (local.get $list))))
 
+  ;; JS hands back a key that may be any fink value. A $Str key is ambiguous --
+  ;; it could be a string dict key OR a field name (JS `.foo` and `foo['foo']`
+  ;; are indistinguishable). Try it as a $Str key first (honour the literal
+  ;; string), then fall back to its interned $Symbol. Non-$Str keys are used
+  ;; verbatim.
   (func $rec_get (@pub) (export "env:rec_get")
     (param $rec (ref any)) (param $key (ref any)) (result (ref null any))
+    (local $dict (ref $Dict))
+    (local $k (ref eq))
+    (local $hit (ref null eq))
+    (local.set $dict (ref.cast (ref $Dict) (local.get $rec)))
+    (local.set $k (ref.cast (ref eq) (local.get $key)))
+
+    (if (i32.eqz (ref.test (ref $Str) (local.get $k)))
+      (then (return_call $rec_get_inner (local.get $dict) (local.get $k))))
+
+    ;; $Str key: try the string key, then the symbol it resolves to.
+    (local.set $hit (call $rec_get_inner (local.get $dict) (local.get $k)))
+    (if (i32.eqz (ref.is_null (local.get $hit)))
+      (then (return (local.get $hit))))
     (return_call $rec_get_inner
-      (ref.cast (ref $Rec) (local.get $rec))
-      (ref.cast (ref eq) (local.get $key))))
+      (local.get $dict)
+      (call $str_to_symbol (local.get $k))))
 
 
   ;; -- num_to_js / num_from_js -------------------------------------------

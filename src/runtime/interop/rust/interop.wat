@@ -83,6 +83,10 @@
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
   (import "std/dict.wat"    "get_any"
     (func $rec_get_any (param $rec (ref null any)) (param $key (ref null any)) (result (ref null any))))
+  ;; Forward name->symbol resolution for the host export lookup (no interface
+  ;; files yet, so the host indexes a symbol-keyed record by name).
+  (import "rt/symbols.wat"  "str_to_symbol"
+    (func $str_to_symbol (param (ref eq)) (result (ref eq))))
   ;; TODO: rename str.wat's `bytes` export to `str_bytes` (clashes with
   ;; the `$bytes` local in this file).
   (import "std/str.wat"     "bytes"
@@ -444,25 +448,31 @@
     (result (ref any))
     (return_call $str_wrap_bytes (local.get $bytes)))
 
-  ;; Host-callable: look up a $Rec field by raw byte-array key.
-  ;; Wraps key_bytes into a $Str, then delegates to dict.wat:get_any.
-  ;; Returns null when the key is absent. Used by the Rust runner to
-  ;; pull named exports out of the exports rec it receives from the
-  ;; per-module wrapper.
+  ;; Host-callable: look up an export field by raw byte-array name.
+  ;; Exports are keyed by $Symbol, but the host knows only names (no interface
+  ;; files yet): wrap key_bytes into a $Str, resolve it to its interned $Symbol
+  ;; via str_to_symbol, then delegate to dict.wat:get_any. Returns null when the
+  ;; key is absent. Used by the Rust runner to pull named exports out of the
+  ;; exports rec it receives from the per-module wrapper.
   (func (export "env:rec_get_by_bytes")
     (param $rec       (ref null any))
     (param $key_bytes (ref null any))
     (result (ref null any))
     (return_call $rec_get_any
       (local.get $rec)
-      (call $str_wrap_bytes (local.get $key_bytes))))
+      (call $str_to_symbol
+        (ref.cast (ref eq) (call $str_wrap_bytes (local.get $key_bytes))))))
 
 
   ;; -- type_of -----------------------------------------------------------
   ;;
   ;; Discriminate a runtime value for the Rust host. Tags only cover the
   ;; cases the test runner needs today — the bool / numeric leaves for
-  ;; faithful headline rendering. Other types fall through to 0; extend
+  ;; faithful headline rendering. Bools and symbols are both tagged i31 words;
+  ;; the i31 leaf returns Bool. A bare symbol value is not expressible in fink
+  ;; (symbols only arise as record keys), so none reaches here -- if that
+  ;; changes, split the i31 leaf on the tag (rt/symbols.wat:is_symbol).
+  ;; Other types fall through to 0; extend
   ;; as new host needs arise.
   ;;
   ;;   0  unknown / null

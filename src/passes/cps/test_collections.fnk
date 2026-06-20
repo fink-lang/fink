@@ -30,9 +30,9 @@ test 'rec literal', fn:
     {x: 1, y: 2}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_13, ·ƒret_0:
-      ·rec_put ·ƒctx_13, {}, 'x', (i8 1), fn ·ƒctx_16, ·ƒv_4:
-        ·rec_put ·ƒctx_16, ·ƒv_4, 'y', (i8 2), ·ƒret_0
-    # sm:KwABAAwAAQAMJAEADBgBAAwSAAIABgECBAABAAQUABQABAEBDAABAAwCAQAMAgAEAQIBAAEAAQIBAAECAQABAgAGAQYBAAEAAQYBAAEEAAoAGAEFBA4AAgAKAQwEAAEABBQAFAAEAQsEDgAEAQwBAAEAAQIBAAECAQABAgAGAQYBAAEAAQYBAAEEAAQBBQQ
+      ·rec_put ·ƒctx_13, {}, ƒ'x', (i8 1), fn ·ƒctx_16, ·ƒv_4:
+        ·rec_put ·ƒctx_16, ·ƒv_4, ƒ'y', (i8 2), ·ƒret_0
+    # sm:JQABAAwAAQAMJAEADBgBAAwSAAIABgECBAABAAQUABQABAEBDAABAAwCAQAMAgAEAQIBCgAGAQYBAAEAAQYBAAEEAAoAGAEFBA4AAgAKAQwEAAEABBQAFAAEAQsEDgAEAQwBCgAGAQYBAAEAAQYBAAEEAAQBBQQ
 
 
 test 'empty rec literal', fn:
@@ -49,9 +49,9 @@ test 'rec shorthand', fn:
     {x, y}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_13, ·ƒret_0:
-      ·rec_put ·ƒctx_13, {}, 'x', ·∅x, fn ·ƒctx_16, ·ƒv_4:
-        ·rec_put ·ƒctx_16, ·ƒv_4, 'y', ·∅y, ·ƒret_0
-    # sm:JwABAAYAAQAGJAEABhgBAAYSAAIABgECAQABAAEUABQABAEBBgABAAYCAQAGAgAEAQIBAAEAAQIBAAECAQABAgAEAQABDAAKABgBAAEOAAIACgEGAQABAAEUABQABAEFAQ4ABAEGAQABAAECAQABAgEAAQIABAEAAQwABAEAAQ
+      ·rec_put ·ƒctx_13, {}, ƒ'x', ·∅x, fn ·ƒctx_16, ·ƒv_4:
+        ·rec_put ·ƒctx_16, ·ƒv_4, ƒ'y', ·∅y, ·ƒret_0
+    # sm:IQABAAYAAQAGJAEABhgBAAYSAAIABgECAQABAAEUABQABAEBBgABAAYCAQAGAgAEAQIBCgAEAQABDAAKABgBAAEOAAIACgEGAQABAAEUABQABAEFAQ4ABAEGAQoABAEAAQwABAEAAQ
 
 
 
@@ -64,8 +64,8 @@ test 'member static', fn:
     foo.bar
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
-      ·op_dot ·ƒctx_6, ·∅foo, 'bar', ·ƒret_0
-    # sm:EgABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcSABIABAEAAxAABAEIAwABAAMCAQADBgEAAwIABAEHBw
+      ·op_dot ·ƒctx_6, ·∅foo, ƒ'bar', ·ƒret_0
+    # sm:DwABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcSABIABAEAAxAABAEIAw4ABAEHBw
 
 
 test 'member dynamic get', fn:
@@ -120,8 +120,8 @@ test 'rec spread', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_12, ·ƒret_0:
       ·rec_merge ·ƒctx_12, {}, ·∅base, fn ·ƒctx_15, ·ƒv_3:
-        ·rec_put ·ƒctx_15, ·ƒv_3, 'x', (i8 1), ·ƒret_0
-    # sm:JAABAA4AAQAOJAEADhgBAA4SAAIABgECBgABAAYYABQABAEBDgABAA4CAQAOAgAEAQYEEgAKABgBAwYOAAIACgEQBAABAAQUABQABAEPBg4ABAEQAQABAAECAQABAgEAAQIABgEGAQABAAEGAQABBAAEAQUE
+        ·rec_put ·ƒctx_15, ·ƒv_3, ƒ'x', (i8 1), ·ƒret_0
+    # sm:IQABAA4AAQAOJAEADhgBAA4SAAIABgECBgABAAYYABQABAEBDgABAA4CAQAOAgAEAQYEEgAKABgBAwYOAAIACgEQBAABAAQUABQABAEPBg4ABAEQAQoABgEGAQABAAEGAQABBAAEAQUE
 
 
 
@@ -169,9 +169,9 @@ test 'rec literal with spread', fn:
     {foo: a, ..b}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_12, ·ƒret_0:
-      ·rec_put ·ƒctx_12, {}, 'foo', ·∅a, fn ·ƒctx_15, ·ƒv_4:
+      ·rec_put ·ƒctx_12, {}, ƒ'foo', ·∅a, fn ·ƒctx_15, ·ƒv_4:
         ·rec_merge ·ƒctx_15, ·ƒv_4, ·∅b, ·ƒret_0
-    # sm:IgABAA0AAQANJAEADRgBAA0SAAIABgECBgABAAYUABQABAEBDQABAA0CAQANAgAEAQIDAAEAAwIBAAMGAQADAgAEAQoBDAAKABgBCQYOAAIACgEQAwABAAMYABQABAEPBg4ABAEUAQwABAEDAw
+    # sm:HwABAA0AAQANJAEADRgBAA0SAAIABgECBgABAAYUABQABAEBDQABAA0CAQANAgAEAQIDDgAEAQoBDAAKABgBCQYOAAIACgEQAwABAAMYABQABAEPBg4ABAEUAQwABAEDAw
 
 test 'rec literal leading spread', fn:
   expect cps_module ƒink:

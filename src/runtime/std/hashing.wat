@@ -17,7 +17,7 @@
   (import "std/str.wat" "Str" (type $Str (sub any)))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/opaque.wat" "Opaque" (type $Opaque (sub any)))
-  (import "std/dict.wat" "Rec" (type $Rec (sub any)))
+  (import "std/dict.wat" "Dict" (type $Dict (sub any)))
 
   (import "std/num.wat" "hash_i31"
     (func $num_hash_i31 (param (ref $Num)) (result i32)))
@@ -27,6 +27,9 @@
     (func $clos_hash_i31 (param (ref $Closure)) (result i32)))
   (import "rt/opaque.wat" "hash_i31"
     (func $opaque_hash_i31 (param (ref $Opaque)) (result i32)))
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
+  (import "rt/types.wat" "hash_i31"
+    (func $type_hash_i31 (param (ref $Type)) (result i32)))
 
 
   ;; -- Hash dispatch ------------------------------------------------------
@@ -81,7 +84,10 @@
             (local.get $key))))
       (return (call $opaque_hash_i31)))
 
-    ;; Try $Rec -- structural content hash. Stubbed to 0 for now: all
+    ;; Symbols are tagged i31 words -- handled by the i31 arm above (the word
+    ;; is its own hash), no symbol-specific arm needed.
+
+    ;; Try $Dict -- structural content hash. Stubbed to 0 for now: all
     ;; records share one bucket and deep_eq disambiguates. Correct but
     ;; unoptimized -- records-as-keys degrade to a linear bucket scan.
     ;;
@@ -94,12 +100,22 @@
     ;; per-entry hashes). Only worth doing once records-as-keys are a
     ;; measured hot path. See list.wat / set.wat for the sibling TODOs.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref eq) (ref $Rec)
+          (br_on_cast $is_rec (ref eq) (ref $Dict)
             (local.get $key))))
       (drop)
       (return (i32.const 0)))
+
+    ;; Try $Type (and subtypes) -- delegate to types.wat (identity hash,
+    ;; constant 0 for now; ref.eq disambiguates within the bucket). Needed so
+    ;; type-values can be $Set members (union members).
+    (block $not_type
+      (block $is_type (result (ref $Type))
+        (br $not_type
+          (br_on_cast $is_type (ref eq) (ref $Type)
+            (local.get $key))))
+      (return (call $type_hash_i31)))
 
     ;; Unknown type — unreachable for valid keys
     (unreachable)

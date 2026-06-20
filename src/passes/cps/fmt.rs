@@ -269,6 +269,12 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
       },
       loc,
     ),
+    Lit::Symbol(s) => {
+      // Field-name symbol — `ƒ'name'`, the `ƒ` sigil distinguishing an interned
+      // key from a `Lit::Str` runtime string value.
+      let name = crate::strings::control_pics_bytes(s);
+      b_ident(b, &format!("ƒ'{}'", name), loc)
+    }
     Lit::Seq => b.append(
       NodeKind::LitSeq { open: tok_at(loc), close: tok_at(loc), items: Exprs::empty() },
       loc,
@@ -421,6 +427,15 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::SeqConcat  => "·seq_concat".into(),
     BuiltIn::RecPut    => "·rec_put".into(),
     BuiltIn::RecMerge  => "·rec_merge".into(),
+    // Type construction
+    BuiltIn::NewType      => "·new_type".into(),
+    BuiltIn::TypeSetField => "·type_set_field".into(),
+    BuiltIn::TypeInherit  => "·type_inherit".into(),
+    BuiltIn::TypePush     => "·type_push".into(),
+    BuiltIn::NewUnion     => "·new_union".into(),
+    BuiltIn::UnionAdd     => "·union_add".into(),
+    BuiltIn::NewEnum      => "·new_enum".into(),
+    BuiltIn::EnumAdd      => "·enum_add".into(),
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
@@ -428,6 +443,9 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Type guards
     BuiltIn::IsSeqLike    => "·is_seq_like".into(),
     BuiltIn::IsRecLike    => "·is_rec_like".into(),
+    BuiltIn::GuardApply   => "·guard_apply".into(),
+    BuiltIn::RecProtocol  => "·rec_protocol".into(),
+    BuiltIn::TupleProtocol => "·tuple_protocol".into(),
     // Collection primitives
     BuiltIn::SeqPop       => "·seq_pop".into(),
     BuiltIn::SeqPopBack   => "·seq_pop_back".into(),

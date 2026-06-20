@@ -38,13 +38,42 @@
   ;; math.wat's `(@impl "std/math.fnk:...")` entries.
   (import "std/math.wat"     "abs_f64"
     (func $_link_math_anchor (param (ref $F64)) (result (ref $F64))))
-  (import "std/dict.wat"     "Rec"         (type $Rec         (sub any)))
+  ;; Same anchor pattern for rt/types.wat: codegen calls `new_type`
+  ;; directly (resolved via the runtime func-name table), so the module
+  ;; must be in the link DAG even though no runtime module dispatches to it.
+  (import "rt/types.wat"     "new_type"
+    (func $_link_types_anchor
+      (param (ref null any)) (param i32) (param i32) (param (ref null any))))
+  (import "rt/types.wat"     "Type"         (type $Type         (sub any)))
+  (import "rt/types.wat"     "Union"        (type $Union        (sub $Type)))
+  (import "rt/types.wat"     "Enum"         (type $Enum         (sub $Type)))
+  (import "rt/types.wat"     "enum_cases"
+    (func $enum_cases (param (ref null any)) (result (ref null any))))
+  (import "rt/types.wat"     "union_eq"
+    (func $union_eq (param (ref $Union)) (param (ref $Union)) (result i32)))
+  (import "rt/types.wat"     "Inst"         (type $Inst         (sub any)))
+  (import "rt/types.wat"     "Rec"          (type $Rec_inst     (sub $Inst)))
+  (import "rt/types.wat"     "Tuple"        (type $Tuple_inst   (sub $Inst)))
+  (import "rt/types.wat"     "inst_eq"
+    (func $inst_eq (param (ref $Inst)) (param (ref $Inst)) (result i32)))
+  (import "rt/types.wat"     "inst_payload"
+    (func $inst_payload (param (ref null any)) (result (ref null any))))
+  (import "rt/types.wat"     "is_instance"
+    (func $is_instance (param (ref null any)) (param (ref null any)) (result i32)))
+  (import "rt/types.wat"     "is_union_member"
+    (func $is_union_member (param (ref null any)) (param (ref null any)) (result i32)))
+  (import "rt/types.wat"     "project_inst"
+    (func $project_inst (param (ref null any)) (param (ref null any)) (result (ref null any))))
+  (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
 
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "rt/apply.wat" "make_guard_branch"
+    (func $make_guard_branch (param (ref null any)) (param (ref any)) (param (ref any)) (param (ref null any)) (result (ref $Closure))))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/apply.wat" "op_eq"  (func $clos_op_eq  (param (ref $Closure)) (param (ref $Closure)) (result i32)))
   (import "rt/apply.wat" "op_neq" (func $clos_op_neq (param (ref $Closure)) (param (ref $Closure)) (result i32)))
@@ -110,9 +139,9 @@
   (import "std/str.wat" "op_dot" (func $str_op_dot (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — dict ops
-  (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $Rec)) (param (ref eq)) (result i32)))
-  (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Rec)) (param (ref eq)) (result i32)))
-  (import "std/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Rec)) (param (ref $Rec)) (result i32)))
+  (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $Dict)) (param (ref eq)) (result i32)))
+  (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Dict)) (param (ref eq)) (result i32)))
+  (import "std/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Dict)) (param (ref $Dict)) (result i32)))
   (import "std/list.wat" "list_deep_eq" (func $list_deep_eq (param (ref $List)) (param (ref $List)) (result i32)))
   (import "std/range.wat" "range_deep_eq" (func $range_deep_eq (param (ref $Range)) (param (ref $Range)) (result i32)))
   (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
@@ -320,18 +349,22 @@
       (return (call $str_op_eq
         (ref.cast (ref $Str) (local.get $b)))))
 
-    ;; Try $Rec — structural compare. If b is not a $Rec, not equal.
+    ;; Symbols are tagged i31 words: identity is whole-word ref.eq (same id ->
+    ;; same word; a symbol never equals a bool, whose words are 0/1). Handled by
+    ;; the ref.eq fallback below -- no symbol-specific arm.
+
+    ;; Try $Dict — structural compare. If b is not a $Dict, not equal.
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref eq) (ref $Rec)
+          (br_on_cast $is_rec (ref eq) (ref $Dict)
             (local.get $a))))
       (drop)
-      (if (i32.eqz (ref.test (ref $Rec) (local.get $b)))
+      (if (i32.eqz (ref.test (ref $Dict) (local.get $b)))
         (then (return (i32.const 0))))
       (return (call $rec_deep_eq
-        (ref.cast (ref $Rec) (local.get $a))
-        (ref.cast (ref $Rec) (local.get $b)))))
+        (ref.cast (ref $Dict) (local.get $a))
+        (ref.cast (ref $Dict) (local.get $b)))))
 
     ;; Try $List — structural compare. If b is not a $List, not equal.
     (block $not_list
@@ -384,7 +417,7 @@
   ;; TODO: protocols.wat should be a pure dispatcher -- each arm should
   ;; call the type's own op_eq impl, which then decides how to compare
   ;; (it may call deep_eq, or compare fields directly). The $Set arm does
-  ;; this correctly (-> set:op_eq). The $Rec / $List / $Range arms instead
+  ;; this correctly (-> set:op_eq). The $Dict / $List / $Range arms instead
   ;; call protocols-local _rec_eq / _list_eq / _range_eq kernels that hold
   ;; the ref.eq / mixed-type / deep_eq logic here -- that comparison logic
   ;; belongs in dict.wat / list.wat / range.wat as those types' op_eq
@@ -488,20 +521,20 @@
             (else (i32.const 0))))
         (local.get $cont)))
 
-    ;; Try $Rec — structural. ref.eq short-circuits identical recs; a
+    ;; Try $Dict — structural. ref.eq short-circuits identical recs; a
     ;; non-Rec b is never equal (mixed-type == is false, not a trap).
     (block $not_rec
       (drop
-        (block $is_rec (result (ref $Rec))
+        (block $is_rec (result (ref $Dict))
           (br $not_rec
-            (br_on_cast $is_rec (ref null any) (ref $Rec)
+            (br_on_cast $is_rec (ref null any) (ref $Dict)
               (local.get $a)))))
       (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (call $_rec_eq (local.get $a) (local.get $b)))
         (local.get $cont)))
 
-    ;; Try $List — structural, positional. Same kernel shape as $Rec.
+    ;; Try $List — structural, positional. Same kernel shape as $Dict.
     (block $not_list
       (drop
         (block $is_list (result (ref $List))
@@ -513,7 +546,7 @@
         (ref.i31 (call $_list_eq (local.get $a) (local.get $b)))
         (local.get $cont)))
 
-    ;; Try $Range — structural. Same kernel shape as $Rec / $List.
+    ;; Try $Range — structural. Same kernel shape as $Dict / $List.
     (block $not_range
       (drop
         (block $is_range (result (ref $Range))
@@ -523,6 +556,62 @@
       (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (call $_range_eq (local.get $a) (local.get $b)))
+        (local.get $cont)))
+
+    ;; Try $Inst (typed instances $Rec/$Tuple) — nominal + structural eq,
+    ;; delegated to types.wat's inst_eq.
+    (block $not_inst
+      (drop
+        (block $is_inst (result (ref $Inst))
+          (br $not_inst
+            (br_on_cast $is_inst (ref null any) (ref $Inst)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Inst) (local.get $b))
+            (then (call $inst_eq
+              (ref.cast (ref $Inst) (local.get $a))
+              (ref.cast (ref $Inst) (local.get $b))))
+            (else (i32.const 0))))
+        (local.get $cont)))
+
+    ;; Try $Union — STRUCTURAL set equality (a union references types, it has
+    ;; no identity; same member set = equal). MUST precede the $Type arm since
+    ;; $Union <: $Type. Mixed-type b → false.
+    (block $not_union
+      (drop
+        (block $is_union (result (ref $Union))
+          (br $not_union
+            (br_on_cast $is_union (ref null any) (ref $Union)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Union) (local.get $b))
+            (then (call $union_eq
+              (ref.cast (ref $Union) (local.get $a))
+              (ref.cast (ref $Union) (local.get $b))))
+            (else (i32.const 0))))
+        (local.get $cont)))
+
+    ;; Try $Type (and its non-union subtypes $Enum/$RecType/...) — IDENTITY
+    ;; equality. type/enum OWN their identity (each declaration is distinct);
+    ;; two refs to the same type are equal, distinct types differ. Mixed → false.
+    (block $not_type
+      (drop
+        (block $is_type (result (ref $Type))
+          (br $not_type
+            (br_on_cast $is_type (ref null any) (ref $Type)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (if (result i32) (ref.test (ref $Type) (local.get $b))
+            (then (ref.eq
+              (ref.cast (ref eq) (local.get $a))
+              (ref.cast (ref eq) (local.get $b))))
+            (else (i32.const 0))))
         (local.get $cont)))
 
     (unreachable))
@@ -538,11 +627,11 @@
           (ref.cast (ref eq) (local.get $a))
           (ref.cast (ref eq) (local.get $b)))
       (then (return (i32.const 1))))
-    (if (i32.eqz (ref.test (ref $Rec) (local.get $b)))
+    (if (i32.eqz (ref.test (ref $Dict) (local.get $b)))
       (then (return (i32.const 0))))
     (call $rec_deep_eq
-      (ref.cast (ref $Rec) (local.get $a))
-      (ref.cast (ref $Rec) (local.get $b))))
+      (ref.cast (ref $Dict) (local.get $a))
+      (ref.cast (ref $Dict) (local.get $b))))
 
   ;; List equality kernel shared by op_eq / op_neq.
   ;;   ref.eq     → identical allocation, equal
@@ -675,12 +764,12 @@
             (else (i32.const 1))))
         (local.get $cont)))
 
-    ;; Try $Rec — negation of the structural equality kernel.
+    ;; Try $Dict — negation of the structural equality kernel.
     (block $not_rec
       (drop
-        (block $is_rec (result (ref $Rec))
+        (block $is_rec (result (ref $Dict))
           (br $not_rec
-            (br_on_cast $is_rec (ref null any) (ref $Rec)
+            (br_on_cast $is_rec (ref null any) (ref $Dict)
               (local.get $a)))))
       (return_call $apply_1
         (local.get $ctx)
@@ -709,6 +798,60 @@
       (return_call $apply_1
         (local.get $ctx)
         (ref.i31 (i32.eqz (call $_range_eq (local.get $a) (local.get $b))))
+        (local.get $cont)))
+
+    ;; Try $Inst — negation of nominal+structural instance eq.
+    (block $not_inst
+      (drop
+        (block $is_inst (result (ref $Inst))
+          (br $not_inst
+            (br_on_cast $is_inst (ref null any) (ref $Inst)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (i32.eqz
+            (if (result i32) (ref.test (ref $Inst) (local.get $b))
+              (then (call $inst_eq
+                (ref.cast (ref $Inst) (local.get $a))
+                (ref.cast (ref $Inst) (local.get $b))))
+              (else (i32.const 0)))))
+        (local.get $cont)))
+
+    ;; Try $Union — negation of structural set equality. MUST precede $Type.
+    (block $not_union
+      (drop
+        (block $is_union (result (ref $Union))
+          (br $not_union
+            (br_on_cast $is_union (ref null any) (ref $Union)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (i32.eqz
+            (if (result i32) (ref.test (ref $Union) (local.get $b))
+              (then (call $union_eq
+                (ref.cast (ref $Union) (local.get $a))
+                (ref.cast (ref $Union) (local.get $b))))
+              (else (i32.const 0)))))
+        (local.get $cont)))
+
+    ;; Try $Type — negation of identity equality (see op_eq's $Type arm).
+    (block $not_type
+      (drop
+        (block $is_type (result (ref $Type))
+          (br $not_type
+            (br_on_cast $is_type (ref null any) (ref $Type)
+              (local.get $a)))))
+      (return_call $apply_1
+        (local.get $ctx)
+        (ref.i31
+          (i32.eqz
+            (if (result i32) (ref.test (ref $Type) (local.get $b))
+              (then (ref.eq
+                (ref.cast (ref eq) (local.get $a))
+                (ref.cast (ref eq) (local.get $b))))
+              (else (i32.const 0)))))
         (local.get $cont)))
 
     (unreachable))
@@ -1004,6 +1147,12 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
 
+    ;; A $Tuple instance IS seq-like -- unwrap to its bare $List payload and
+    ;; succeed with THAT (destructured value is bare; reads strip the type).
+    (if (ref.test (ref $Tuple_inst) (local.get $val))
+      (then (return_call $apply_1
+        (local.get $ctx) (call $inst_payload (local.get $val)) (local.get $succ))))
+
     ;; $List
     (block $not_list
       (block $is_list (result (ref $List))
@@ -1027,20 +1176,86 @@
     (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
 
-  ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
+  ;; is_rec_like(val, succ, fail): succ(payload) if $Dict or a $Rec instance,
+  ;; else fail(). A $Rec instance IS rec-like -- unwrap to its bare $Dict
+  ;; payload and succeed with THAT (the destructured value is bare; reads strip
+  ;; the type). Plain $Dict succeeds with itself.
   (func $is_rec_like (@pub) (@impl "std/operators.fnk:is_rec_like")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
+    (if (ref.test (ref $Rec_inst) (local.get $val))
+      (then (return_call $apply_1
+        (local.get $ctx) (call $inst_payload (local.get $val)) (local.get $succ))))
+    ;; An $Enum is rec-like over its cases: `{Some, None} = Opt` destructures the
+    ;; case namespace. Unwrap to the $cases dict (name -> case-type) and succeed
+    ;; with THAT, so rec_pop reads case types by name.
+    (if (ref.test (ref $Enum) (local.get $val))
+      (then (return_call $apply_1
+        (local.get $ctx) (call $enum_cases (local.get $val)) (local.get $succ))))
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $Rec)
+          (br_on_cast $is_rec (ref null any) (ref $Dict)
             (local.get $val))))
       (drop)
       (return_call $apply_1
       (local.get $ctx) (local.get $val) (local.get $succ)))
     (return_call $apply_0
       (local.get $ctx) (local.get $fail)))
+
+  ;; guard_apply(ctx, guard, val, succ, fail): unified pattern guard. Br-casts
+  ;; the guard to decide membership, then branches to succ(val) or fail():
+  ;;   - rec/tuple PROTOCOL singletons -> structural test via is_rec_like /
+  ;;     is_seq_like. The singletons are interim magic i31 sentinels (0 = rec,
+  ;;     1 = tuple) emitted by lowering for bare `{...}`/`[...]` patterns.
+  ;;     TODO(guard-protocol-values): replace the i31 sentinels with real
+  ;;     protocol type values once intrinsics/FQN-globals are unified.
+  ;;   - a $Type    -> nominal instance test (is_instance, $base-chain walk).
+  ;;   - a $Closure -> fink predicate fn: apply guard(val) with a branch cont;
+  ;;     the predicate calls the cont with a bool that resumes succ/fail.
+  (func $guard_apply (@pub) (@impl "std/operators.fnk:guard_apply")
+    (param $ctx (ref null any))
+    (param $guard (ref null any)) (param $val (ref null any))
+    (param $succ (ref null any)) (param $fail (ref null any))
+    ;; Protocol singletons: i31 sentinel (0 = rec-like, 1 = tuple-like).
+    (if (ref.test (ref i31) (local.get $guard))
+      (then
+        (if (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $guard))))
+          (then (return_call $is_rec_like
+            (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
+        (return_call $is_seq_like
+          (local.get $ctx) (local.get $val) (local.get $succ) (local.get $fail))))
+    ;; Union guard: membership test against the member set. A union classifies
+    ;; -- it has no fields of its own to project to -- so on match succ with
+    ;; `val` UNCHANGED (the value keeps its concrete member type, so a further
+    ;; match can discriminate). MUST precede the $Type arm: $Union <: $Type, and
+    ;; the $Type arm's is_instance/project would misread a union.
+    (if (ref.test (ref $Union) (local.get $guard))
+      (then
+        (if (call $is_union_member (local.get $val) (local.get $guard))
+          (then (return_call $apply_1
+            (local.get $ctx) (local.get $val) (local.get $succ))))
+        (return_call $apply_0 (local.get $ctx) (local.get $fail))))
+    ;; Nominal type guard: is_instance ($base-walk). On match, DOWNCAST val to
+    ;; the guard type (project to its fields) and succ with the projection;
+    ;; else fail().
+    (if (ref.test (ref $Type) (local.get $guard))
+      (then
+        (if (call $is_instance (local.get $val) (local.get $guard))
+          (then (return_call $apply_1
+            (local.get $ctx)
+            (call $project_inst (local.get $val) (local.get $guard))
+            (local.get $succ))))
+        (return_call $apply_0 (local.get $ctx) (local.get $fail))))
+    ;; Predicate guard: apply guard(val) with a branch cont (conts-first).
+    (return_call $apply_2_vals
+      (local.get $ctx)
+      (call $make_guard_branch
+        (local.get $ctx)
+        (ref.as_non_null (local.get $succ)) (ref.as_non_null (local.get $fail))
+        (local.get $val))
+      (local.get $val)
+      (local.get $guard)))
 
   ;; =========================================================================
   ;; Collection predicates (polymorphic — dispatch on type tag)
@@ -1049,7 +1264,7 @@
   ;; Polymorphic empty: dispatch on value type to module predicates.
   ;;   null     → true (always empty)
   ;;   $List    → list_op_empty
-  ;;   $Rec     → rec_op_empty
+  ;;   $Dict     → rec_op_empty
   (func $op_empty (@pub) (@impl "std/operators.fnk:op_empty")
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $val (ref null any)) (param $cont (ref null any))
@@ -1075,11 +1290,11 @@
         (ref.i31 (call $list_op_empty (local.get $val)))
         (local.get $cont)))
 
-    ;; $Rec → rec_op_empty
+    ;; $Dict → rec_op_empty
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $Rec)
+          (br_on_cast $is_rec (ref null any) (ref $Dict)
             (local.get $val))))
       (drop)
       (return_call $apply_1
@@ -1173,7 +1388,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
-    (local $rec (ref $Rec))
+    (local $rec (ref $Dict))
     (local $set (ref $Set))
 
     ;; Try $Range
@@ -1190,11 +1405,11 @@
           (local.get $range)))
         (local.get $cont)))
 
-    ;; Try $Rec
+    ;; Try $Dict
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $Rec)
+          (br_on_cast $is_rec (ref null any) (ref $Dict)
             (local.get $b))))
       (local.set $rec)
       (return_call $apply_1
@@ -1225,7 +1440,7 @@
       (param $ctx (ref null any))  ;; TODO ctx: not consulted
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
-    (local $rec (ref $Rec))
+    (local $rec (ref $Dict))
     (local $set (ref $Set))
 
     ;; Try $Range
@@ -1242,11 +1457,11 @@
           (local.get $range)))
         (local.get $cont)))
 
-    ;; Try $Rec
+    ;; Try $Dict
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $Rec)
+          (br_on_cast $is_rec (ref null any) (ref $Dict)
             (local.get $b))))
       (local.set $rec)
       (return_call $apply_1
@@ -1278,11 +1493,32 @@
 
   ;; op_dot(container, key, cont) → val
   ;;   $Str  → str_op_dot
-  ;;   $Rec  → rec_op_dot
+  ;;   $Dict  → rec_op_dot
   ;;   $List → list_op_dot
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
       (param $ctx (ref null any))
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Enum — member access is case lookup: `Opt.Some` reads the `Some`
+    ;; case type out of the enum's $cases dict. Delegate to dict op_dot on the
+    ;; cases dict (the case type then constructs/guards like any $Type).
+    (if (ref.test (ref $Enum) (local.get $container))
+      (then
+        (return_call $dict_op_dot
+          (local.get $ctx)
+          (call $enum_cases (local.get $container))
+          (local.get $key)
+          (local.get $cont))))
+
+    ;; Try $Inst (typed instance) — unwrap to the bare payload and re-dispatch.
+    ;; Reads strip the type; the bare-collection arm below does the work.
+    (if (ref.test (ref $Inst) (local.get $container))
+      (then
+        (return_call $op_dot
+          (local.get $ctx)
+          (call $inst_payload (local.get $container))
+          (local.get $key)
+          (local.get $cont))))
 
     ;; Try $Str
     (block $not_str
@@ -1297,11 +1533,11 @@
         (local.get $key)
         (local.get $cont)))
 
-    ;; Try $Rec
+    ;; Try $Dict
     (block $not_rec
-      (block $is_rec (result (ref $Rec))
+      (block $is_rec (result (ref $Dict))
         (br $not_rec
-          (br_on_cast $is_rec (ref null any) (ref $Rec)
+          (br_on_cast $is_rec (ref null any) (ref $Dict)
             (local.get $container))))
       (drop)
       (return_call $dict_op_dot

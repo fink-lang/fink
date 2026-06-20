@@ -4,9 +4,17 @@
 {get_trace, get_module_url, get_loc} = import 'std/trace.fnk'
 
 
+skip = fn tc:
+  upd_tests fn {tests}:
+    [..rest, {name, body}] = tests
+    test_case = {name, body, skip: true}
+    [test_case, {tests: [..rest, test_case]}]
+
+
 test = fn name, body:
-  test_case = {name, body}
+  test_case = {name, body, skip: false}
   add_test test_case
+
 
 upd_tests = init_ctx test, {tests: [], curr: {}}
 
@@ -31,21 +39,26 @@ run_test = fn test_case:
   set_curr_test test_case
 
   run_result = suspend fn resume:
-    {name, body} = upd_curr_test fn {name, body}:
-      [{name, body}, {abort: resume}]
+    {name, body, skip} = upd_curr_test fn {name, body, skip}:
+      [{name, body, skip}, {abort: resume}]
+
 
     write stderr, '${name} ... '
+    match skip:
+      false: body _
+      true: true
 
-    body _
-
-    resume {success: true}
+    resume {success: true, skip}
 
   match run_result:
     {failure}:
       write stderr, 'FAIL\n  ${failure}\n\n'
       false
-    _:
+    {success: true, skip: false}:
       write stderr, 'SUCCESS\n'
+      true
+    {skip: true}:
+      write stderr, 'SKIPPED\n'
       true
 
 
@@ -94,6 +107,13 @@ test_all = fn:
 
 equals = fn actual, expected:
   match actual == expected:
+    true: true
+    false: fail 'act: ${actual}\n  ==\n  exp: ${expected}'
+
+
+
+not_equals = fn actual, expected:
+  match actual != expected:
     true: true
     false: fail 'act: ${actual}\n  !=\n  exp: ${expected}'
 

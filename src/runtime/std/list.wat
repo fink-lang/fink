@@ -106,7 +106,7 @@
   ;; as keys, add an ORDER-SENSITIVE hash (rolling, e.g. h = h*31 + elem)
   ;; consistent with this positional equality -- NOT the commutative
   ;; combine records/sets use. Prefer lazy-memoized over eager-on-write.
-  ;; See hashing.wat (the $Rec stub) for the shared design note.
+  ;; See hashing.wat (the $Dict stub) for the shared design note.
   (func $list_deep_eq (@pub)
     (param $a (ref $List)) (param $b (ref $List)) (result i32)
     (local $ca (ref $Cons))

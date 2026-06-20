@@ -391,4 +391,5 @@ add 3, 4
   test_macros::include_fink_tests!("src/passes/wasm/test_sets.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_effects.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_collections.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_types.fnk", skip-ir);
 }

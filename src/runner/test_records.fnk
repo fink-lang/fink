@@ -129,32 +129,6 @@ test 'rec with string values', fn:
     true
 
 
-test 'rec string key destructure', fn:
-  expect run ƒink:
-    {'foo bar': v} = {'foo bar': 42}
-    v
-  | equals ƒink:
-    42
-
-
-test 'rec expr key destructure', fn:
-  expect run ƒink:
-    {(4): foo} = {(1 + 3): 42}
-    foo
-  | equals ƒink:
-    42
-
-
-test 'rec fn as key destructure', fn:
-  expect run ƒink:
-    foo = fn: 123
-
-    {(foo): bar} = {(foo): 42}
-    bar
-  | equals ƒink:
-    42
-
-
 test 'rec destructure extra fields', fn:
   expect run ƒink:
     {a, b} = {a: 1, b: 2, c: 3}
@@ -218,19 +192,6 @@ test 'rec guard second arm', fn:
   | equals ƒink:
     110
 
-test 'rec key membership', fn:
-  expect run ƒink:
-    r = {a: 1, b: 2}
-    'a' in r
-  | equals ƒink:
-    true
-
-test 'rec key not member', fn:
-  expect run ƒink:
-    r = {a: 1, b: 2}
-    'c' not in r
-  | equals ƒink:
-    true
 
 test 'rec with list value', fn:
   expect run ƒink:
@@ -241,7 +202,7 @@ test 'rec with list value', fn:
     1
 
 
-# --- Record property access ---
+# --- Record field access ---
 
 test 'rec dot access', fn:
   expect run ƒink:
@@ -256,28 +217,6 @@ test 'rec dot access nested', fn:
     r.a.b
   | equals ƒink:
     99
-
-test 'rec dot access string key', fn:
-  expect run ƒink:
-    r = {'foo bar': 42}
-    r.('foo bar')
-  | equals ƒink:
-    42
-
-test 'rec dot access string key short', fn:
-  expect run ƒink:
-    r = {'foo bar': 42}
-    r.'foo bar'
-  | equals ƒink:
-    42
-
-test 'rec dot access dynamic key', fn:
-  expect run ƒink:
-    r = {a: 42}
-    k = 'a'
-    r.(k)
-  | equals ƒink:
-    42
 
 test 'rec destructure rest before field', fn:
   expect run ƒink:
@@ -374,20 +313,6 @@ test 'rec different build order equal', fn:
   | equals ƒink:
     true
 
-test 'rec runtime key equal', fn:
-  expect run ƒink:
-    k = 'a'
-    {(k): 1} == {a: 1}
-  | equals ƒink:
-    true
-
-test 'rec runtime key unequal', fn:
-  expect run ƒink:
-    k = 'a'
-    {(k): 1} == {a: 2}
-  | equals ƒink:
-    false
-
 test 'rec vs num not equal', fn:
   expect run ƒink:
     {a: 1} == 1
@@ -419,12 +344,95 @@ test 'rec neq false when equal', fn:
     false
 
 
-# --- Records as keys ---
+
+# ----------------- TODO move to dict tests -----------------------------
+
+test 'dict string key destructure', fn:
+  expect run ƒink:
+    {'foo bar': v} = {'foo bar': 42}
+    v
+  | equals ƒink:
+    42
+
+
+test 'dict expr key destructure', fn:
+  expect run ƒink:
+    {(4): foo} = {(1 + 3): 42}
+    foo
+  | equals ƒink:
+    42
+
+
+test 'dict fn as key destructure', fn:
+  expect run ƒink:
+    foo = fn: 123
+
+    {(foo): bar} = {(foo): 42}
+    bar
+  | equals ƒink:
+    42
+
+
+test 'dict key membership', fn:
+  expect run ƒink:
+    r = {'a': 1}
+    'a' in r
+  | equals ƒink:
+    true
+
+
+test 'dict key not member', fn:
+  expect run ƒink:
+    r = {'a': 1, 'b': 2}
+    'c' not in r
+  | equals ƒink:
+    true
+
+
+test 'dcit dot access string key', fn:
+  expect run ƒink:
+    r = {'foo bar': 42}
+    r.('foo bar')
+  | equals ƒink:
+    42
+
+test 'dict dot access string key short', fn:
+  expect run ƒink:
+    r = {'foo bar': 42}
+    r.'foo bar'
+  | equals ƒink:
+    42
+
+test 'dict dot access dynamic key', fn:
+  expect run ƒink:
+    r = {'a': 42}
+    k = 'a'
+    r.(k)
+  | equals ƒink:
+    42
+
+
+test 'dict runtime key equal', fn:
+  expect run ƒink:
+    k = 'a'
+    {(k): 1} == {'a': 1}
+  | equals ƒink:
+    true
+
+test 'dict runtime key unequal', fn:
+  expect run ƒink:
+    k = 'a'
+    {(k): 1} == {'a': 2}
+  | equals ƒink:
+    false
+
+
+# --- rec/dicts as keys ---
 #
 # Structural key equality: a value stored under a record key is found by
 # any structurally-equal record, not just the same allocation.
 
-test 'rec key lookup by equal rec', fn:
+test 'dict rec key lookup by equal', fn:
   expect run ƒink:
     k = {id: 1}
     m = {(k): 'found'}
@@ -432,32 +440,31 @@ test 'rec key lookup by equal rec', fn:
   | equals ƒink:
     true
 
-test 'rec key distinct keys coexist', fn:
+test 'dict rec key distinct keys coexist', fn:
   expect run ƒink:
     m = {({id: 1}): 'a', ({id: 2}): 'b'}
     m.({id: 2}) == 'b'
   | equals ƒink:
     true
 
-test 'rec key membership by equal rec', fn:
+test 'dict rec key membership by equal rec', fn:
   expect run ƒink:
     m = {({id: 1}): 'a'}
     {id: 1} in m
   | equals ƒink:
     true
 
-test 'rec key absent by unequal rec', fn:
+test 'dict rec key absent by unequal rec', fn:
   expect run ƒink:
     m = {({id: 1}): 'a'}
     {id: 2} not in m
   | equals ƒink:
     true
 
-test 'rec key update overwrites equal rec', fn:
+test 'dict rec key update overwrites equal rec', fn:
   expect run ƒink:
     m = {({id: 1}): 'a'}
     m2 = {..m, ({id: 1}): 'b'}
     m2.({id: 1}) == 'b'
   | equals ƒink:
     true
-

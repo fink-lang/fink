@@ -496,6 +496,13 @@ impl<'src> Parser<'src> {
       return self.collect_apply_args_no_block(func, true); // no block detection, nested=true to not eat ":"
     }
 
+    // Member-access head followed by args: `Opt.Some {val: 1}` in argument
+    // position is one argument (the case construction), not two. Mirrors the
+    // statement-level Member-application path in parse_apply.
+    if matches!(self.get(head).kind, NodeKind::Member { .. }) && self.is_arg_start() {
+      return self.collect_apply_args_no_block(head, true);
+    }
+
     if self.at(TokenKind::Ident) && self.peek().loc.start.idx == self.loc_of(head).end.idx {
       let tag = self.bump();
       let func = self.node(NodeKind::Ident(tag.src), tag.loc);

@@ -33,6 +33,13 @@
     (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
   (import "std/list.wat" "concat"
     (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
+  ;; Type construction: when an apply callee is a $Type, building an instance
+  ;; is delegated wholesale to types.wat. apply.wat stays dumb -- it only
+  ;; recognises "callee is a type" and hands off. (Circular with types.wat,
+  ;; which imports apply_1/args_head; the linker resolves it.)
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
+  (import "rt/types.wat" "type_apply"
+    (func $type_apply (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
 
   ;; $Cell — mutable storage cell for a LetRec slot.
@@ -136,6 +143,18 @@
     (param $callee (ref null any))
 
     (local $clos (ref $Closure))
+
+    ;; A $Type callee = construction. Delegate the whole flavour decision to
+    ;; types.wat (apply stays dumb). Dispatches on the base $Type, so all
+    ;; subtypes route here. Same (args, ctx, callee) handoff as the closure
+    ;; path: cont is the head of $args, real args follow -- types.wat peels.
+    (if (ref.test (ref $Type) (local.get $callee))
+      (then
+        (return_call $type_apply
+          (local.get $args)
+          (local.get $ctx)
+          (local.get $callee))))
+
     (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
 
     (return_call_ref $Fn3
@@ -302,6 +321,50 @@
   (func $make_unit_thunk (@pub) (param $ctx (ref null any)) (param $cont (ref any)) (result (ref $Closure))
     (call $make_thunk (local.get $ctx) (local.get $cont) (ref.i31 (i32.const 0)))
   )
+
+
+  ;; -- guard branch cont ----------------------------------------------
+  ;;
+  ;; The continuation a predicate-style guard is called with. `guard_apply`
+  ;; (protocols.wat) applies the guard closure with [val] and THIS cont; the
+  ;; guard reports its verdict by calling the cont with a fink bool. On true,
+  ;; resume the match by applying `succ` with the guarded value; on false,
+  ;; apply the zero-arg `fail`. Captures: [succ, fail, val, ctx]. Mirrors the
+  ;; thunk pattern -- the captured ctx is the one active at the guard site.
+  (elem declare func $_guard_branch_fn)
+
+  (func $_guard_branch_fn (type $Fn3)
+      (param $caps (ref null any))
+      (param $_caller_ctx (ref null any))
+      (param $args (ref null any))
+    (local $captures (ref $Captures))
+    (local $succ (ref any))
+    (local $fail (ref any))
+    (local $val (ref null any))
+    (local $ctx (ref null any))
+    (local $result (ref null any))
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $succ (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $fail (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 1))))
+    (local.set $val  (array.get $Captures (local.get $captures) (i32.const 2)))
+    (local.set $ctx  (array.get $Captures (local.get $captures) (i32.const 3)))
+    ;; The predicate's verdict is the single arg; fink bool = i31.
+    (local.set $result (call $args_head (local.get $args)))
+    (if (i31.get_s (ref.cast (ref i31) (local.get $result)))
+      (then (return_call $apply_1
+        (local.get $ctx) (local.get $val) (local.get $succ))))
+    (return_call $apply_0 (local.get $ctx) (local.get $fail)))
+
+  ;; Build the guard branch cont closure (see $_guard_branch_fn).
+  (func $make_guard_branch (@pub)
+      (param $ctx (ref null any))
+      (param $succ (ref any)) (param $fail (ref any)) (param $val (ref null any))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_guard_branch_fn)
+      (array.new_fixed $Captures 4
+        (local.get $succ) (local.get $fail)
+        (ref.as_non_null (local.get $val)) (local.get $ctx))))
 
 
   ;; -- set_ctx --------------------------------------------------------
