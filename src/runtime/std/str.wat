@@ -107,7 +107,7 @@
 
   ;; TODO: this is empty contructor protocol!
   ;; (func $str_new (@pub) (@impl "std/types.fnk:new" $Str) (result (ref $Str)))
-  (func $str_empty (@impl "std/str.fnk:str_empty") (result (ref $Str))
+  (func $str_empty (@pub) (@impl "std/str.fnk:str_empty") (result (ref $Str))
     (global.get $_str_empty))
 
   ;; ---- Construction (compiler-emitted) ----

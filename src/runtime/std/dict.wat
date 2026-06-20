@@ -46,6 +46,7 @@
   ;; Type imports (str.wat — needed for the rec fmt impl).
   (import "std/str.wat" "Str"       (type $Str       (sub any) (struct)))
   (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "rt/symbols.wat" "Symbol" (type $Symbol (sub any)))
 
   ;; Func imports
   (import "std/hashing.wat"  "hash_i31"
@@ -1453,6 +1454,16 @@
     (struct.new $DictImpl (global.get $empty_node))
   )
 
+  ;; Public set on $Dict, keying by the value passed verbatim. Record field
+  ;; keys are $Symbol values and dict keys are arbitrary values; both are stored
+  ;; as-is -- key kind is decided at compile time, never by runtime coercion.
+  (func $_rec_set_any (@pub)
+    (param $rec (ref null any)) (param $key (ref eq)) (param $val (ref eq))
+    (result (ref $Dict))
+    (call $_rec_set
+      (ref.cast (ref $DictImpl) (local.get $rec))
+      (local.get $key) (local.get $val)))
+
   ;; Takes the public $Dict and downcasts to the wrapper internally, so
   ;; cross-module callers never name $DictImpl.
   (func $get (@pub)
@@ -1462,6 +1473,9 @@
       (struct.get $DictImpl $hamt (ref.cast (ref $DictImpl) (local.get $rec)))
       (local.get $key))
   )
+
+  ;; Symbol rendering (`repr`) is owned by rt/symbols.wat; the formatter reprs
+  ;; $Symbol keys via repr_val.
 
   ;; Host-friendly $Dict field accessor. Takes anyref-typed args so
   ;; callers (interop, host) don't need to know about $DictImpl.
@@ -1754,7 +1768,7 @@
   ;; Check if a string is a valid fink identifier (used for bare key rendering).
   ;; Returns 1 if all bytes are identifier chars (a-z, A-Z, 0-9, _, -, $, or >= 0x80).
   ;; Empty string returns 0. First char must not be a digit.
-  (func $_is_key_ident (param $str (ref $Str)) (result i32)
+  (func $_is_key_ident (@pub) (param $str (ref $Str)) (result i32)
     (local $bytes (ref $ByteArray))
     (local $len i32)
     (local $i i32)
@@ -1820,21 +1834,15 @@
 
   ;; _fmt_key_len : (ref eq) -> i32
   ;; Byte length of a formatted record key.
-  ;; String ident: bare len. String non-ident: repr len. Other: fmt len + 2 for parens.
+  ;; $Symbol (field key) / $Str (string key): repr len -- repr renders a symbol
+  ;; bare-or-quoted and a string quoted. Other (computed value key): fmt len + 2
+  ;; for surrounding parens.
   (func $_fmt_key_len (param $key (ref eq)) (result i32)
-    (local $str (ref $Str))
-
-    (block $not_str
-      (block $is_str (result (ref $Str))
-        (br $not_str
-          (br_on_cast $is_str (ref eq) (ref $Str)
-            (local.get $key))))
-      (local.set $str)
-      (return
-        (if (result i32) (call $_is_key_ident (local.get $str))
-          (then (call $_str_len (local.get $str)))
-          (else (call $_str_len (call $str_repr (local.get $str)))))))
-
+    (if (i32.or
+          (ref.test (ref $Symbol) (local.get $key))
+          (ref.test (ref $Str) (local.get $key)))
+      (then (return
+        (call $_str_len (call $repr_val (ref.cast (ref any) (local.get $key)))))))
     (i32.add
       (call $_str_len
         (call $str_fmt_val (ref.cast (ref any) (local.get $key))))
@@ -1949,33 +1957,22 @@
 
   ;; _fmt_copy_key : (key, buf, pos) -> new_pos
   ;; Copy a formatted record key into buf.
-  ;; String ident: bare. String non-ident: repr. Other: (fmt).
+  ;; $Symbol (field key) / $Str (string key): its repr (symbol bare-or-quoted,
+  ;; string quoted). Other (computed value key): (fmt) in parens.
   (func $_fmt_copy_key
     (param $key (ref eq))
     (param $buf (ref $ByteArray))
     (param $pos i32)
     (result i32)
 
-    (local $str (ref $Str))
-
-    (block $not_str
-      (block $is_str (result (ref $Str))
-        (br $not_str
-          (br_on_cast $is_str (ref eq) (ref $Str)
-            (local.get $key))))
-      (local.set $str)
-
-      (if (call $_is_key_ident (local.get $str))
-        (then
-          (local.set $pos
-            (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos))))
-        (else
-          (local.set $pos
-            (call $_str_copy_to
-              (call $str_repr (local.get $str))
-              (local.get $buf)
-              (local.get $pos)))))
-      (return (local.get $pos)))
+    (if (i32.or
+          (ref.test (ref $Symbol) (local.get $key))
+          (ref.test (ref $Str) (local.get $key)))
+      (then (return
+        (call $_str_copy_to
+          (call $repr_val (ref.cast (ref any) (local.get $key)))
+          (local.get $buf)
+          (local.get $pos)))))
 
     (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x28)) ;; '('
     (local.set $pos (i32.add (local.get $pos) (i32.const 1)))

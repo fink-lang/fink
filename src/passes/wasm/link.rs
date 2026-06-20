@@ -60,7 +60,11 @@ pub fn link_with_instr_modules(fragments: &[Fragment]) -> (Fragment, Vec<ModuleI
     [] => panic!("link: empty fragment list"),
     [only] => {
       let mods = vec![only.module_id; only.instrs.len()];
-      (only.clone(), mods)
+      let mut frag = only.clone();
+      // Even a single fragment carries SymbolId operands that must resolve to
+      // canonical i32 ids before emit.
+      resolve_symbols(&mut frag);
+      (frag, mods)
     }
     _ => link_multi_with_modules(fragments),
   }
@@ -111,6 +115,9 @@ fn link_multi_with_modules(fragments: &[Fragment]) -> (Fragment, Vec<ModuleId>) 
     globals: Vec::with_capacity(acc.globals as usize),
     data:    Vec::with_capacity(acc.data as usize),
     instrs:  Vec::with_capacity(acc.instrs as usize),
+    // Field-symbol merge is a later step; for now fragments are emitted
+    // single-module so each carries its own table and no remap runs.
+    symbols: BTreeMap::new(),
   };
 
   // Step 4: walk each fragment, append items with remapping.
@@ -172,7 +179,39 @@ fn link_multi_with_modules(fragments: &[Fragment]) -> (Fragment, Vec<ModuleId>) 
     apply_func_redirect(&mut merged, &func_redirect);
   }
 
+  // Step 6: resolve interned symbol ids. Merge all `SymbolId(name)` operands
+  // package-wide into one canonical id per name, then rewrite each to an
+  // `I32(id)`. This is the single package-wide symbol table: a field name has
+  // the same id regardless of which fragment used it.
+  resolve_symbols(&mut merged);
+
   (merged, instr_to_module)
+}
+
+/// Assign one canonical id per distinct symbol name across the whole merged
+/// fragment, then rewrite every `Operand::SymbolId(name)` to `Operand::I32(id)`.
+fn resolve_symbols(merged: &mut Fragment) {
+  // First pass: distinct names in first-seen order -> canonical id.
+  let mut ids: BTreeMap<Vec<u8>, u32> = BTreeMap::new();
+  for instr in &merged.instrs {
+    walk_operands(&instr.kind, &mut |op| {
+      if let Operand::SymbolId(name) = op
+        && !ids.contains_key(name)
+      {
+        let next = ids.len() as u32;
+        ids.insert(name.clone(), next);
+      }
+    });
+  }
+  // Second pass: rewrite SymbolId(name) -> I32(id).
+  for instr in &mut merged.instrs {
+    walk_operands_mut(&mut instr.kind, &mut |op| {
+      if let Operand::SymbolId(name) = op {
+        let id = *ids.get(name).expect("symbol id resolved");
+        *op = Operand::I32(id as i32);
+      }
+    });
+  }
 }
 
 /// Walk every FuncSym reference in the merged Fragment and apply the
@@ -250,6 +289,64 @@ fn redirect_instr(kind: &mut InstrKind, lookup: &impl Fn(FuncSym) -> FuncSym) {
 fn redirect_operand(op: &mut Operand, lookup: &impl Fn(FuncSym) -> FuncSym) {
   if let Operand::RefFunc(s) = op {
     *s = lookup(*s);
+  }
+}
+
+/// Visit every `Operand` in an `InstrKind` mutably.
+fn walk_operands_mut(kind: &mut InstrKind, f: &mut impl FnMut(&mut Operand)) {
+  match kind {
+    InstrKind::Call { args, .. } | InstrKind::ReturnCall { args, .. } => {
+      for a in args { f(a); }
+    }
+    InstrKind::LocalSet { src, .. }
+    | InstrKind::GlobalSet { src, .. }
+    | InstrKind::RefI31 { src, .. }
+    | InstrKind::I31GetS { src, .. }
+    | InstrKind::Drop { src }
+    | InstrKind::RefCastNonNull { src, .. }
+    | InstrKind::RefCastNullable { src, .. }
+    | InstrKind::RefCastNonNullAbs { src, .. } => f(src),
+    InstrKind::StructNew { fields, .. } => { for x in fields { f(x); } }
+    InstrKind::StructGet { src, .. } => f(src),
+    InstrKind::StructSet { src, val, .. } => { f(src); f(val); }
+    InstrKind::ArrayNewFixed { elems, .. } => { for e in elems { f(e); } }
+    InstrKind::ArrayGet { arr, idx, .. } => { f(arr); f(idx); }
+    InstrKind::ArrayNewDefault { size, .. } => f(size),
+    InstrKind::ArraySet { arr, idx, val, .. } => { f(arr); f(idx); f(val); }
+    InstrKind::If { cond, .. } => f(cond),
+    InstrKind::RefFunc { .. }
+    | InstrKind::RefNull { .. }
+    | InstrKind::RefNullConcrete { .. }
+    | InstrKind::Unreachable => {}
+  }
+}
+
+/// Visit every `Operand` in an `InstrKind` by reference (read-only).
+fn walk_operands(kind: &InstrKind, f: &mut impl FnMut(&Operand)) {
+  match kind {
+    InstrKind::Call { args, .. } | InstrKind::ReturnCall { args, .. } => {
+      for a in args { f(a); }
+    }
+    InstrKind::LocalSet { src, .. }
+    | InstrKind::GlobalSet { src, .. }
+    | InstrKind::RefI31 { src, .. }
+    | InstrKind::I31GetS { src, .. }
+    | InstrKind::Drop { src }
+    | InstrKind::RefCastNonNull { src, .. }
+    | InstrKind::RefCastNullable { src, .. }
+    | InstrKind::RefCastNonNullAbs { src, .. } => f(src),
+    InstrKind::StructNew { fields, .. } => { for x in fields { f(x); } }
+    InstrKind::StructGet { src, .. } => f(src),
+    InstrKind::StructSet { src, val, .. } => { f(src); f(val); }
+    InstrKind::ArrayNewFixed { elems, .. } => { for e in elems { f(e); } }
+    InstrKind::ArrayGet { arr, idx, .. } => { f(arr); f(idx); }
+    InstrKind::ArrayNewDefault { size, .. } => f(size),
+    InstrKind::ArraySet { arr, idx, val, .. } => { f(arr); f(idx); f(val); }
+    InstrKind::If { cond, .. } => f(cond),
+    InstrKind::RefFunc { .. }
+    | InstrKind::RefNull { .. }
+    | InstrKind::RefNullConcrete { .. }
+    | InstrKind::Unreachable => {}
   }
 }
 
@@ -508,5 +605,7 @@ fn remap_operand(op: &Operand, off: &Offsets) -> Operand {
       sym: remap_data_sym(*sym, off),
       len: *len,
     },
+    // Carried by name; resolved to I32 in resolve_symbols after merge.
+    Operand::SymbolId(name) => Operand::SymbolId(name.clone()),
   }
 }

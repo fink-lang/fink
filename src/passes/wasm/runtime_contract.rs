@@ -84,6 +84,12 @@ pub enum Sym {
   Captures,
   Cell,
   VarArgs,
+  // Interned source-name identity (rt/symbols.wat). Static record field
+  // keys lower to `struct.new $Symbol (i32.const id)`; equality is by id.
+  Symbol,
+  // register_symbol(name_str, id): populate the runtime str->symbol table.
+  // Lowering prepends one call per interned field name to the module body.
+  RegisterSymbol,
 
   // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
@@ -368,6 +374,7 @@ pub struct Runtime {
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
   cell: Option<TypeSym>,
+  symbol: Option<TypeSym>,
   varargs: Option<TypeSym>,
   // Locally-declared function signature type used by the
   // virtual-stdlib import codegen path in lower (still allocates
@@ -387,6 +394,7 @@ pub struct Runtime {
   trace_mark:   Option<FuncSym>,
   trace_pop:    Option<FuncSym>,
   register_module: Option<FuncSym>,
+  register_symbol: Option<FuncSym>,
   // polymorphic protocol operators
   op_plus:    Option<FuncSym>,
   op_minus:   Option<FuncSym>,
@@ -464,6 +472,7 @@ impl Runtime {
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn cell(&self)         -> TypeSym { self.cell.expect("rt: Cell not declared") }
+  pub fn symbol(&self)       -> TypeSym { self.symbol.expect("rt: Symbol not declared") }
   pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
   pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
@@ -503,6 +512,7 @@ impl Runtime {
   pub fn trace_mark(&self)   -> FuncSym { self.trace_mark.expect("rt: trace_mark not declared") }
   pub fn trace_pop(&self)    -> FuncSym { self.trace_pop.expect("rt: trace_pop not declared") }
   pub fn register_module(&self) -> FuncSym { self.register_module.expect("rt: register_module not declared") }
+  pub fn register_symbol(&self) -> FuncSym { self.register_symbol.expect("rt: register_symbol not declared") }
   pub fn fn3(&self)          -> TypeSym { self.fn3.expect("rt: Fn3 not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -585,6 +595,8 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::Cell            => "rt/apply.wat:Cell",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
+    Sym::Symbol          => "rt/symbols.wat:Symbol",
+    Sym::RegisterSymbol  => "rt/symbols.wat:register_symbol",
     Sym::Apply           => "rt/apply.wat:apply",
     Sym::Apply3          => "rt/apply.wat:apply_3",
     Sym::TracePush       => "rt/trace.wat:trace_push",
@@ -721,6 +733,10 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::VarArgs) {
     rt.varargs = Some(TypeSym::Runtime(Sym::VarArgs));
   }
+  // Always available: static record field keys lower to `struct.new $Symbol`,
+  // and the module body prepends register_symbol calls for the table.
+  rt.symbol = Some(TypeSym::Runtime(Sym::Symbol));
+  rt.register_symbol = Some(FuncSym::Runtime(Sym::RegisterSymbol));
 
   // Function-signature types and function imports.
   //
@@ -1185,6 +1201,10 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
     }
     ValKind::Lit(Lit::Rec) => {
       usage.mark(Sym::RecEmpty);
+    }
+    ValKind::Lit(Lit::Symbol(_)) => {
+      // Symbol keys are emitted via the `box_symbol` path in lower.rs, which
+      // marks the symbol runtime itself; nothing to mark from the literal.
     }
     ValKind::BuiltIn(b) => {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }

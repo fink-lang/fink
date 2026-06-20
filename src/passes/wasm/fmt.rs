@@ -480,6 +480,10 @@ fn fmt_operand(frag: &Fragment, f: &FuncDecl, op: &Operand) -> String {
       // followed by (i32.const len). Until then — symbolic marker.
       format!("(data.ref {} {})", data_name(&frag.data[sym.0 as usize], *sym), len)
     }
+    Operand::SymbolId(name) => {
+      // Link resolves this to (i32.const <canonical_id>); shown by name here.
+      format!("(symbol {:?})", String::from_utf8_lossy(name))
+    }
   }
 }
 

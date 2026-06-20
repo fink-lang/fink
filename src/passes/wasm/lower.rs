@@ -262,6 +262,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str, module_id: Module
     // frames (which carry module_id) can resolve back to a source url.
     prepend_module_registration(&mut lcx, fink_module);
 
+    // Populate the str->symbol table at module-body startup: one
+    // register_symbol(name, id) per interned static field name, so a $Str
+    // key (import-rec, dynamic lookup) coerces to its $Symbol.
+    prepend_symbol_table(&mut lcx, fink_module);
+
     // Per-module host-facing wrapper. Exported under the module's
     // canonical FQN so the host can call any module by URL string
     // (`instance.get_func(canonical_url)`). The wrapper composes the
@@ -337,6 +342,49 @@ fn prepend_module_registration(lcx: &mut LowerCtx<'_>, fink_module: FuncSym) {
   let body = &mut lcx.frag.funcs[fi].body;
   body.insert(0, i_reg);
   body.insert(0, i_url);
+}
+
+/// Prepend `register_symbol(name, id)` calls to the module body — one per
+/// interned static field name — so the runtime str->symbol table is populated
+/// at startup. A $Str key (module-export rec, `r.('foo')`) then coerces to its
+/// $Symbol before lookup.
+fn prepend_symbol_table(lcx: &mut LowerCtx<'_>, fink_module: FuncSym) {
+  let FuncSym::Local(fi) = fink_module else {
+    panic!("prepend_symbol_table: fink_module must be Local");
+  };
+  let fi = fi as usize;
+
+  // Snapshot names — `intern_data` below mutates the fragment. The id is
+  // carried by `Operand::SymbolId(name)` and resolved at link.
+  let entries: Vec<Vec<u8>> = lcx.frag.symbols.keys().cloned().collect();
+  if entries.is_empty() { return; }
+
+  // Build instrs in source order, then prepend the whole block before the
+  // body (insert(0, ...) in reverse keeps registration order).
+  let key_idx = LocalIdx(
+    (lcx.frag.funcs[fi].params.len() + lcx.frag.funcs[fi].locals.len()) as u32,
+  );
+  lcx.frag.funcs[fi].locals.push(LocalDecl {
+    ty: val_anyref(true),
+    display: Some(":sym_reg_name".to_string()),
+  });
+
+  let mut block: Vec<InstrId> = Vec::with_capacity(entries.len() * 2);
+  for name in &entries {
+    let sym = intern_data(lcx.frag, name);
+    let len = name.len() as u32;
+    let i_name = push_call(lcx.frag, lcx.rt.str_from_data(),
+      vec![Operand::DataRef { sym, len }], Some(key_idx));
+    // id carried by name; resolved to i32.const at link, same as box_symbol.
+    let i_reg = push_call(lcx.frag, lcx.rt.register_symbol(),
+      vec![op_local(key_idx), Operand::SymbolId(name.clone())], None);
+    block.push(i_name);
+    block.push(i_reg);
+  }
+  let body = &mut lcx.frag.funcs[fi].body;
+  for instr in block.into_iter().rev() {
+    body.insert(0, instr);
+  }
 }
 
 fn synth_host_wrapper(
@@ -876,7 +924,12 @@ fn lower_expr(
       ctx.instrs.push(i_get);
       let url_bytes: Vec<u8> = lcx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
       let url_local = emit_str_const(lcx, ctx, &url_bytes, ":pub_url");
-      let name_local = emit_str_const(lcx, ctx, src_name.as_bytes(), ":pub_name");
+      // The export name is a field key, so register it as a $Symbol -- the
+      // exports rec is symbol-keyed, matching the consumer's `{x} = import`
+      // RecPop and the host's name->symbol-resolved lookup.
+      let name_local = ctx.alloc_local(&format!(":pub_name_{}", cps_ident(lcx.cps, lcx.ast, id)));
+      let i_name = box_symbol(lcx.frag, lcx.rt, src_name.as_bytes(), name_local);
+      ctx.instrs.push(i_name);
       let i_pub = push_call(lcx.frag, lcx.rt.modules_pub(),
         vec![op_local(url_local), op_local(name_local), op_local(val_local)],
         None);
@@ -888,6 +941,16 @@ fn lower_expr(
         panic!("lower: Pub cont arg is not a Cont");
       };
       lower_cont(lcx, ctx, cont);
+    }
+
+    // `op_dot` (Get) is a binary op whose RHS is a record key: a `Lit::Symbol`
+    // field key boxes to $Symbol, other keys lower as values. Handle before the
+    // generic binary path, which would lower the key via the value path.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Get), args } => {
+      let (ctx_a, a, key, cont) = split_binary_args(args);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let key_op = emit_key_as_operand(lcx, ctx, key);
+      emit_op_tail_call(lcx, ctx, Sym::OpDot, ctx_a, vec![a_op, key_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(b), args } if binary_op_sym(*b).is_some() => {
@@ -970,11 +1033,12 @@ fn lower_expr(
       emit_type_seed(lcx, ctx, lcx.rt.new_type(), args, expr.id);
     }
 
-    // TypeSetField: `(ctx, type, key, val, cont)` — same 4-arg cont shape as
-    // RecPut. Adds a named field to a type under construction.
+    // TypeSetField: `(ctx, type, key, val, cont)` — same shape as RecPut, with
+    // the field-name key at index 2; route via emit_rec_key_op so a $Symbol key
+    // boxes correctly.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeSetField), args } => {
       let target = lcx.rt.type_set_field();
-      emit_quaternary(lcx, ctx, target, args, expr.id);
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
 
     // TypePush: `(ctx, type, val, cont)` — append a positional (tuple) field.
@@ -1005,11 +1069,11 @@ fn lower_expr(
       emit_type_seed(lcx, ctx, lcx.rt.new_enum(), args, expr.id);
     }
 
-    // EnumAdd: `(ctx, enum, name, member, cont)` — add a case (4-arg, like
-    // TypeSetField).
+    // EnumAdd: `(ctx, enum, name, member, cont)` — the case name at index 2 is
+    // a $Symbol; route via emit_rec_key_op like TypeSetField.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::EnumAdd), args } => {
       let target = lcx.rt.enum_add();
-      emit_quaternary(lcx, ctx, target, args, expr.id);
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
 
     // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
@@ -1064,11 +1128,11 @@ fn lower_expr(
     // Both 4-arg, lowered as `return_call $sym arg0 arg1 arg2 arg3`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecPut), args } => {
       let target = lcx.rt.rec_put();
-      emit_quaternary(lcx, ctx, target, args, expr.id);
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecPop), args } => {
       let target = lcx.rt.rec_pop();
-      emit_quaternary(lcx, ctx, target, args, expr.id);
+      emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
 
     // Panic: tail-position sentinel emitted by lower_match's fail
@@ -1715,13 +1779,11 @@ fn lower_import_virtual_stdlib(
     let i_call = push_call(lcx.frag, target, vec![], Some(l_val));
     ctx.instrs.push(i_call);
 
-    // 1c. Build the $Str key for the field name.
+    // 1c. Build the $Symbol key for the field name. This rec is destructured
+    // by fink (`{io} = import ...`) via RecPop, which keys by $Symbol; the
+    // names are static module exports, so they intern like any static key.
     let l_key = ctx.alloc_local(&format!(":imp_key_{name}"));
-    let key_bytes = name.as_bytes();
-    let key_sym = intern_data(lcx.frag, key_bytes);
-    let i_key = push_call(lcx.frag, lcx.rt.str_from_data(),
-      vec![Operand::DataRef { sym: key_sym, len: key_bytes.len() as u32 }],
-      Some(l_key));
+    let i_key = box_symbol(lcx.frag, lcx.rt, name.as_bytes(), l_key);
     ctx.instrs.push(i_key);
 
     // 1d. Set the field on the rec.
@@ -1844,19 +1906,6 @@ fn is_virtual_stdlib_path(url: &str) -> bool {
 /// After thread_ctx the CPS shape is `[ctx, ...4 user args]`; ctx is
 /// passed to the runtime as the 0th wasm arg. Used by RecPut and
 /// RecPop.
-fn emit_quaternary(
-  lcx: &mut LowerCtx<'_>,
-  ctx: &mut FnCtx,
-  target: FuncSym,
-  args: &[Arg],
-  app_id: CpsId,
-) {
-  if args.len() != 5 {
-    panic!("lower: 4-arg primitive expects 5 args (ctx + 4 user args), got {}", args.len());
-  }
-  emit_direct_op_call(lcx, ctx, target, args, app_id);
-}
-
 /// Emit a type-seed constructor (`new_type`/`new_union`/`new_enum`). The CPS
 /// shape is `(ctx, cont)` with no value args; the introspection key
 /// (module_id, cps_id) is injected here as two `i32.const`s at emit time (like
@@ -1897,6 +1946,31 @@ fn emit_direct_op_call(
   app_id: CpsId,
 ) {
   let ops: Vec<Operand> = args.iter().map(|a| emit_arg_as_operand(lcx, ctx, a)).collect();
+  let i = push_return_call(lcx.frag, target, ops);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
+  ctx.instrs.push(i);
+}
+
+/// Like `emit_direct_op_call`, but the arg at the record-KEY position (index
+/// 2 after thread_ctx: `[ctx, rec, key, ...]`) is lowered via
+/// `emit_key_as_operand`, so a `Lit::Symbol` field key becomes a `$Symbol`
+/// (string / computed keys lower as ordinary values). Used by RecPut / RecPop.
+fn emit_rec_key_op(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  target: FuncSym,
+  args: &[Arg],
+  app_id: CpsId,
+) {
+  const KEY: usize = 2;
+  let ops: Vec<Operand> = args.iter().enumerate()
+    .map(|(i, a)| if i == KEY {
+      emit_key_as_operand(lcx, ctx, a)
+    } else {
+      emit_arg_as_operand(lcx, ctx, a)
+    })
+    .collect();
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
@@ -2136,6 +2210,11 @@ impl LitVal {
       Lit::Seq        => LitVal::EmptySeq,
       Lit::Rec        => LitVal::EmptyRec,
       Lit::Str(s)     => LitVal::Str(s.clone()),
+      // Symbols only appear at record-key positions, lowered via the dedicated
+      // `box_symbol` path (`emit_key_as_operand`). Reaching this generic literal
+      // path means a symbol leaked into value position -- a bug; return None so
+      // the caller panics loudly rather than silently stringifying it.
+      Lit::Symbol(_)  => return None,
     })
   }
 }
@@ -2190,6 +2269,39 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
       }
     }
   }
+}
+
+/// Box a static field name as a `$Symbol`: `struct.new $Symbol (<symbol id>)`,
+/// where the id is carried by NAME (`Operand::SymbolId`) until link. The linker
+/// merges all names package-wide into one canonical id per name and resolves
+/// each to an `i32.const`. Equality is by id, so the same name anywhere yields
+/// an equal symbol -- no global instance table, no per-fragment counter.
+fn box_symbol(frag: &mut Fragment, rt: &Runtime, name: &[u8], into: LocalIdx) -> InstrId {
+  // Record the name so prepend_symbol_table registers it in the runtime
+  // str->symbol table. The value (0) is unused -- the set is name-keyed.
+  frag.symbols.insert(name.to_vec(), 0);
+  push_struct_new(frag, rt.symbol(), vec![Operand::SymbolId(name.to_vec())], into)
+}
+
+/// Lower a record-KEY arg. A static string-literal key becomes a `$Symbol`
+/// (interned). Any other key (a computed/runtime value) falls back to normal
+/// value lowering -- those stay on the generic key path.
+fn emit_key_as_operand(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  arg: &Arg,
+) -> Operand {
+  if let Arg::Val(v) = arg
+    && let ValKind::Lit(Lit::Symbol(bytes)) = &v.kind
+  {
+    let local = ctx.alloc_local(&format!(":sym_{}", v.id.0));
+    let i = box_symbol(lcx.frag, lcx.rt, bytes, local);
+    if let Some(o) = origin_of(lcx.cps, lcx.ast, v.id) { set_origin(lcx.frag, i, o); }
+    ctx.instrs.push(i);
+    return op_local(local);
+  }
+  // Non-symbol keys (string value keys, computed keys) lower as ordinary values.
+  emit_arg_as_operand(lcx, ctx, arg)
 }
 
 fn binary_op_sym(b: BuiltIn) -> Option<Sym> {

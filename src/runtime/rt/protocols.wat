@@ -67,6 +67,9 @@
   (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
+  (import "rt/symbols.wat"   "Symbol"      (type $Symbol      (sub any)))
+  (import "rt/symbols.wat"   "op_eq"
+    (func $symbol_op_eq (param (ref $Symbol)) (param (ref $Symbol)) (result i32)))
 
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
@@ -348,6 +351,19 @@
             (local.get $a))))
       (return (call $str_op_eq
         (ref.cast (ref $Str) (local.get $b)))))
+
+    ;; Try $Symbol — interned field key; compare by id. Mismatched b → 0.
+    (block $not_symbol
+      (block $is_symbol (result (ref $Symbol))
+        (br $not_symbol
+          (br_on_cast $is_symbol (ref eq) (ref $Symbol)
+            (local.get $a))))
+      (drop)
+      (if (i32.eqz (ref.test (ref $Symbol) (local.get $b)))
+        (then (return (i32.const 0))))
+      (return (call $symbol_op_eq
+        (ref.cast (ref $Symbol) (local.get $a))
+        (ref.cast (ref $Symbol) (local.get $b)))))
 
     ;; Try $Dict — structural compare. If b is not a $Dict, not equal.
     (block $not_rec

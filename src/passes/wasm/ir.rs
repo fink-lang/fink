@@ -396,6 +396,11 @@ pub enum Operand {
   /// substitutes the final absolute offset; until then it's
   /// symbolic.
   DataRef { sym: DataSym, len: u32 },
+  /// Interned field-name symbol id, carried by NAME until link. The linker
+  /// merges all symbol names package-wide, assigns one canonical id per name,
+  /// and resolves this to an `I32(canonical_id)`. Emitted as the `struct.new
+  /// $Symbol` id arg and the `register_symbol` id arg; rendered `(symbol "..")`.
+  SymbolId(Vec<u8>),
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -443,6 +448,12 @@ pub struct Fragment {
   pub globals: Vec<GlobalDecl>,
   pub data:    Vec<DataDecl>,
   pub instrs:  Vec<Instr>,   // arena keyed by InstrId(u32)
+  /// Interned static field-name symbols for this fragment: name → local
+  /// id (insertion order). Static record keys lower to `struct.new
+  /// $Symbol (i32.const id)`. Ids are fragment-local; the linker merges
+  /// per-fragment tables into a package-wide canonical id space and
+  /// remaps usages (mirrors type/func index remapping).
+  pub symbols: std::collections::BTreeMap<Vec<u8>, u32>,
   // TODO: memory declarations (1 for now — just a min page count).
   // TODO: element section (for ref.func tables, used by closure dispatch).
   // TODO: `start` function? Fink doesn't use it, but the spec has it.
@@ -877,6 +888,18 @@ pub fn intern_data(frag: &mut Fragment, bytes: &[u8]) -> DataSym {
     display: None,
   });
   sym
+}
+
+/// Intern a static field name into the fragment's symbol table, returning
+/// its fragment-local id. Same name → same id (dedup). Ids are assigned in
+/// first-seen order; the linker remaps to a package-wide canonical id.
+pub fn intern_symbol(frag: &mut Fragment, name: &[u8]) -> u32 {
+  if let Some(&id) = frag.symbols.get(name) {
+    return id;
+  }
+  let id = frag.symbols.len() as u32;
+  frag.symbols.insert(name.to_vec(), id);
+  id
 }
 
 /// Attach / overwrite the origin on an already-pushed instruction.

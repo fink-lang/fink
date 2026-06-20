@@ -338,7 +338,7 @@ test 'block string interpolation nested in block', fn:
 
 
 ---
-sequences
+tuples/list
 ---
 
 test 'empty sequence', fn:
@@ -388,7 +388,7 @@ test 'multiline sequence constructor', fn:
 
 
 ---
-records
+records/dict syntax
 ---
 
 test 'empty record', fn:
@@ -411,18 +411,6 @@ test 'record literal', fn:
           Ident 'bar'
           LitInt '2'
 
-test 'record with computed key', fn:
-  expect ast ƒink:
-    {(a + b): 3}
-  | equals ƒink:
-    Module
-      LitRec '{..}',
-        Arm ':',
-          Group '(..)',
-            InfixOp '+',
-              Ident 'a'
-              Ident 'b'
-          LitInt '3'
 
 test 'multiline record', fn:
   expect ast ƒink:
@@ -458,7 +446,21 @@ test 'record shorthand fields', fn:
 ---
 dicts
 ---
+test 'dict with computed key', fn:
+  expect ast ƒink:
+    {(a + b): 3}
+  | equals ƒink:
+    Module
+      LitRec '{..}',
+        Arm ':',
+          Group '(..)',
+            InfixOp '+',
+              Ident 'a'
+              Ident 'b'
+          LitInt '3'
 
+
+# TODO investigate dict type/contructor
 test 'dict literal', fn:
   expect ast ƒink:
     dict {foo: 1, 'bar': 2, (key): 3}

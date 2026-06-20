@@ -1156,6 +1156,10 @@ fn emit_operand(
       func.instruction(&Instruction::I32Const(offset as i32));
       func.instruction(&Instruction::I32Const(*len as i32));
     }
+    Operand::SymbolId(name) => {
+      panic!("emit: unresolved SymbolId({:?}) -- link's resolve_symbols must \
+        replace it with I32 before emit", String::from_utf8_lossy(name));
+    }
   }
 }
 
