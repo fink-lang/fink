@@ -203,12 +203,18 @@ fn resolve_symbols(merged: &mut Fragment) {
       }
     });
   }
-  // Second pass: rewrite SymbolId(name) -> I32(id).
+  // Second pass: rewrite SymbolId(name) -> I32(word), folding the tagged i31
+  // encoding `(id << 3) | TAG_SYMBOL` (TAG_SYMBOL = 0b010). A symbol is a
+  // compile-time constant: box_symbol / prepend_symbol_table wrap this word in
+  // `ref.i31`. The encoding MUST match the decode side in rt/symbols.wat
+  // (symbol_id / is_symbol).
+  const TAG_SYMBOL: u32 = 0b010;
   for instr in &mut merged.instrs {
     walk_operands_mut(&mut instr.kind, &mut |op| {
       if let Operand::SymbolId(name) = op {
         let id = *ids.get(name).expect("symbol id resolved");
-        *op = Operand::I32(id as i32);
+        let word = (id << 3) | TAG_SYMBOL;
+        *op = Operand::I32(word as i32);
       }
     });
   }

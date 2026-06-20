@@ -284,10 +284,12 @@
 
   ;; -- type_of -----------------------------------------------------------
   ;;
-  ;; Discriminate a runtime value for a JS host. Bools are i31ref today
-  ;; (small ints are still boxed as $Num), so the i31 branch returns
-  ;; Bool, not Int. When small-int unboxing lands, this branch will need
-  ;; to split on the i31 value range.
+  ;; Discriminate a runtime value for a JS host. Bools and symbols are both
+  ;; tagged i31 words today (small ints are still boxed as $Num), so the i31
+  ;; branch returns Bool. A bare symbol value is not expressible in fink (symbols
+  ;; only arise as record keys, navigated by name), so none reaches here. When a
+  ;; symbol value or small-int unboxing lands, this branch must split on the i31
+  ;; tag (rt/symbols.wat:is_symbol).
   (func $type_of (@pub) (export "env:type_of")
     (param $v (ref null any)) (result i32)
     (local $nn (ref any))

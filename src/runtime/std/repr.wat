@@ -60,8 +60,8 @@
   (import "rt/types.wat" "Inst" (type $Inst (sub any)))
   (import "rt/types.wat" "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
-  (import "rt/symbols.wat" "Symbol" (type $Symbol (sub any)))
-  (import "rt/symbols.wat" "repr" (func $symbol_repr (param (ref $Symbol)) (result (ref $Str))))
+  (import "rt/symbols.wat" "is_symbol" (func $is_symbol (param (ref null any)) (result i32)))
+  (import "rt/symbols.wat" "repr" (func $symbol_repr (param (ref i31)) (result (ref $Str))))
 
   ;; i31 (bool) renderer — repr same as fmt; share str.wat's helper.
   (import "std/str.wat" "_str_fmt_i31"
@@ -91,6 +91,13 @@
           (br_on_cast $is_num (ref any) (ref $Num)
             (local.get $val))))
       (return_call $num_repr))
+
+    ;; Try symbol (tagged i31) — repr as its source name (bare ident or
+    ;; quoted). Must precede the bool i31 arm: a symbol IS an i31, so peel it
+    ;; off first or it would render as a bool.
+    (if (call $is_symbol (local.get $val))
+      (then (return_call $symbol_repr
+        (ref.cast (ref i31) (local.get $val)))))
 
     ;; Try i31ref (bool) — repr same as fmt.
     (block $not_i31
@@ -148,11 +155,6 @@
     (if (ref.test (ref $Inst) (local.get $val))
       (then (return_call $repr_val
         (ref.as_non_null (call $inst_payload (local.get $val))))))
-
-    ;; Try $Symbol — repr as its source name (bare ident or quoted).
-    (if (ref.test (ref $Symbol) (local.get $val))
-      (then (return_call $symbol_repr
-        (ref.cast (ref $Symbol) (local.get $val)))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)

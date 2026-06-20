@@ -1,5 +1,6 @@
 {test_all} = import 'std/testing.fnk'
 
+import './symbols.test.fnk'
 import './types.test.fnk'
 
 

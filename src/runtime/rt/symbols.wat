@@ -1,21 +1,26 @@
 ;; Symbols -- interned, package-wide source identities.
 ;;
-;; A $Symbol is the runtime identity of a source NAME: a record field, and
+;; A symbol is the runtime identity of a source NAME: a record field, and
 ;; (later) type / module / function names. The compiler interns each distinct
-;; name to a package-wide $id (dedup-by-name at link time), so `bar` in module A
-;; and `bar` in module B carry the SAME id. Identity is the $id -- equality is
-;; i32.eq on it, NOT ref.eq -- so two `struct.new $Symbol (i32.const N)` for the
-;; same N are equal regardless of allocation. This makes structural field access
+;; name to a package-wide id (dedup-by-name at link time), so `bar` in module A
+;; and `bar` in module B carry the SAME id. This makes structural field access
 ;; work cross-type (`{foo} = Foo {bar, foo}` maps the anonymous rec's `foo` to
 ;; Foo's `foo`) without runtime string compares, and the compiler can emit a
 ;; symbol inline at each use site -- no global instance table, no interning at
 ;; runtime (the interning is purely compile-time name->id assignment).
 ;;
-;; The $id also IS the hash -- ids are dense and distinct, so they distribute
-;; across hamt buckets with no string hashing. The source name is debug/repr
-;; metadata, resolved host-side and strippable; the runtime holds only the id.
+;; Representation: a TAGGED i31ref, not a heap struct. The word is
+;; `(id << 3) | TAG_SYMBOL` (tag 0b010). i31 is the immediate-value space shared
+;; with bool (false = i31(0), true = i31(1)); the 3-bit tag discriminates symbol
+;; from bool. No allocation: a symbol is a non-heap reference, and two symbols
+;; with the same id are the same word -- identity is whole-word ref.eq, hash is
+;; the word itself. Identity ops (deep_eq, hash) treat the word opaquely and do
+;; NOT inspect the tag; only operations that must RENDER a symbol (repr, dict key
+;; formatting) call is_symbol to discriminate. (Encoding is pre-1.0 internal --
+;; nothing persists a symbol word; the linker re-assigns ids each build. Keep it
+;; behind new_symbol/symbol_id/is_symbol so it can change freely.)
 ;;
-;; First consumer: record field keys (std/dict keyed by $Symbol instead of
+;; First consumer: record field keys (std/dict keyed by symbol instead of
 ;; $Str for static field names). Dynamic/computed keys keep the generic
 ;; (ref eq) key path.
 
@@ -37,67 +42,58 @@
   (import "std/dict.wat" "_is_key_ident"
     (func $str_is_key_ident (param (ref $Str)) (result i32)))
 
-  ;; -- $Symbol type ----------------------------------------------------
+  ;; -- tag + decode / discriminate -----------------------------------
   ;;
-  ;; (sub (struct ...)) makes it an eq-type so hamt keying works.
-  ;; $id: package-wide interned id. Identity is the $id (i32.eq), NOT the
-  ;; allocation -- two `struct.new $Symbol (N)` for the same N are equal. The
-  ;; id doubles as the hash. Lowering emits a symbol inline at each key site.
-  (type $Symbol (@pub) (sub (struct (field $id i32))))
-
-
-  ;; -- Identity equality / id hash ------------------------------------
+  ;; Tagged i31: word = (id << 3) | TAG_SYMBOL. TAG_SYMBOL = 0b010 sits past the
+  ;; two bool words (false = 0b000, true = 0b001) in the shared i31 space.
   ;;
-  ;; op_eq / op_neq: identity (ref.eq on the canonical instance). hash_i31:
-  ;; the id itself (dense, distinct -> well distributed, no string hashing).
-  ;; protocols.wat / hashing.wat dispatch their $Symbol arms here.
+  ;; A symbol is a COMPILE-TIME CONSTANT: the linker assigns the id and folds the
+  ;; whole word, so there is no runtime constructor. Lowering emits the word as
+  ;; an `(ref.i31 (i32.const <word>))` inline (box_symbol), and the table
+  ;; population passes the already-encoded word to register_symbol. The ENCODE
+  ;; lives once, at link (resolve_symbols in link.rs). symbols.wat owns only the
+  ;; DECODE / DISCRIMINATE side below -- they must match link's `(id << 3) | 2`.
 
-  (func $op_eq (@pub)
-    (param $a (ref $Symbol)) (param $b (ref $Symbol)) (result i32)
+  ;; symbol_id(sym) -> id. Unsigned shift drops the tag.
+  (func $symbol_id (@pub) (param $sym (ref i31)) (result i32)
+    (i32.shr_u (i31.get_u (local.get $sym)) (i32.const 3)))
+
+  ;; is_symbol(v): true iff v is an i31 carrying TAG_SYMBOL. The ONLY symbol
+  ;; discriminator -- identity ops (deep_eq, hash) never call it (they treat the
+  ;; word opaquely as a plain i31); only renderers (repr, dict key fmt) do.
+  ;; Symbol equality / hashing therefore need no symbol-specific func: deep_eq
+  ;; and hash_i31 handle a symbol word through their generic i31 arm.
+  (func $is_symbol (@pub) (param $v (ref null any)) (result i32)
+    (if (i32.eqz (ref.test (ref i31) (local.get $v)))
+      (then (return (i32.const 0))))
     (i32.eq
-      (struct.get $Symbol $id (local.get $a))
-      (struct.get $Symbol $id (local.get $b))))
-
-  (func $op_neq (@pub)
-    (param $a (ref $Symbol)) (param $b (ref $Symbol)) (result i32)
-    (i32.ne
-      (struct.get $Symbol $id (local.get $a))
-      (struct.get $Symbol $id (local.get $b))))
-
-  (func $hash_i31 (@pub)
-    (param $s (ref $Symbol)) (result i32)
-    (struct.get $Symbol $id (local.get $s)))
-
-  ;; Construct a symbol from its id. Used by register_symbol below; the inline
-  ;; form is emitted directly by lowering at key sites.
-  (func $new_symbol (@pub) (param $id i32) (result (ref $Symbol))
-    (struct.new $Symbol (local.get $id)))
+      (i32.and (i31.get_u (ref.cast (ref i31) (local.get $v))) (i32.const 0x7))
+      (i32.const 0x2)))
 
 
   ;; -- name <-> symbol tables (interop / host boundary) ----------------
   ;;
-  ;; A $Symbol carries only its id; the source name lives here. fink code never
-  ;; needs these -- key kind is fixed at compile time (idents lower to $Symbol,
+  ;; A symbol carries only its id; the source name lives here. fink code never
+  ;; needs these -- key kind is fixed at compile time (idents lower to symbols,
   ;; strings stay $Str), so fink dict ops never coerce. The tables exist for the
   ;; INTEROP boundary, where the host has no interface files and can only work
   ;; with names: it resolves an export name to its symbol (forward) to index a
   ;; symbol-keyed record, and renders symbol keys back to names (reverse).
   ;;
-  ;; Forward: name($Str) -> $Symbol (`str_to_symbol`). Reverse: $Symbol ->
+  ;; Forward: name($Str) -> symbol (`str_to_symbol`). Reverse: symbol ->
   ;; name($Str) (`symbol_to_str`, also used by repr). Lowering prepends
-  ;; `register_symbol(name, id)` calls (one per interned name) to the module
-  ;; body, populating both at startup.
+  ;; `register_symbol(name, word)` calls (one per interned name) to the module
+  ;; body, populating both at startup. `word` is the already-encoded symbol
+  ;; (link folds it), so register_symbol stores it directly.
   (global $symbol_table (mut (ref null $Dict)) (ref.null none))
   (global $symbol_names (mut (ref null $Dict)) (ref.null none))
 
   (func $register_symbol (@pub) (@impl "rt/symbols.wat:register_symbol")
-    (param $name (ref null any)) (param $id i32)
-    (local $sym (ref $Symbol))
+    (param $name (ref null any)) (param $sym (ref i31))
     (if (ref.is_null (global.get $symbol_table))
       (then
         (global.set $symbol_table (call $rec_new))
         (global.set $symbol_names (call $rec_new))))
-    (local.set $sym (call $new_symbol (local.get $id)))
     (global.set $symbol_table
       (call $rec_set
         (global.get $symbol_table)
@@ -137,13 +133,13 @@
 
   ;; -- repr ------------------------------------------------------------
   ;;
-  ;; A $Symbol reprs as its source name: bare if a valid ident (`foo`), else
+  ;; A symbol reprs as its source name: bare if a valid ident (`foo`), else
   ;; quoted (`'foo bar'`) -- the same rule record keys used to special-case in
   ;; the dict formatter, now owned here via the repr protocol. repr.wat's
-  ;; repr_val dispatches its $Symbol arm here; the dict formatter just calls
-  ;; repr_val on keys like it does on values.
+  ;; repr_val dispatches its symbol arm here (gated by is_symbol); the dict
+  ;; formatter just calls repr_val on keys like it does on values.
   (func $repr (@pub) (@impl "std/repr.fnk:repr" $Symbol)
-    (param $sym (ref $Symbol)) (result (ref $Str))
+    (param $sym (ref i31)) (result (ref $Str))
     (local $name (ref null any))
     (local.set $name (call $symbol_to_str (local.get $sym)))
     (if (ref.is_null (local.get $name))

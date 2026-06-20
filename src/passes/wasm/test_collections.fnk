@@ -50,7 +50,7 @@ test 'list with spread at tail', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_58) (local.get $:v_7))
         (local.set $:pub_xs_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:xs)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_xs_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_xs_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_xs_0) (local.get $:pub_xs_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_58) (local.get $:ret_59)))
         (local.set $:v_39 (struct.new $rt/apply.wat:Closure (ref.func $test::v_55) (local.get $:caps_arg)))
@@ -86,8 +86,10 @@ test 'list with spread at tail', fn:
         (local $:lit_4 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 2)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -115,7 +117,7 @@ test 'list with spread at tail', fn:
       (data $d_0 "test")
       (data $d_1 "xs")
     )
-    ;; sm:L8AHAJYBALoBAM4BALoBAMQBAK4BARoEkgwAlAEAugEAzgEAugEAxAEAnAEApgEAlAEApAEA0gEA4gEA0AEBDAGKAQENCXIBDgHSCQCUAQC6AQDOAQC6AQDEAQDiAQDQAQEZAYgBAQAByAkAngEAqAEAnAEApgEAmAEAlgEAZADgAQDQAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
+    ;; sm:MMAHAJYBALoBAM4BALoBAMQBAK4BARoEkgwAlAEAugEAzgEAugEAxAEAnAEApgEAlAEAcADSAQDiAQDQAQEMAYoBAQ0JcgEOAdIJAJQBALoBAM4BALoBAMQBAOIBANABARkBiAEBAAGSCgCeAQBuAMIBAJwBAKYBAJgBAJYBAGQA4AEA0AEBBgGIAQEHBnABCAHMBQB6AOYBAIwBAA
 
 
 test 'list with spread at head', fn:
@@ -157,7 +159,7 @@ test 'list with spread at head', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_56) (local.get $:v_7))
         (local.set $:pub_xs_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:xs)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_xs_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_xs_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_xs_0) (local.get $:pub_xs_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_57)))
         (local.set $:v_39 (struct.new $rt/apply.wat:Closure (ref.func $test::v_53) (local.get $:caps_arg)))
@@ -193,8 +195,10 @@ test 'list with spread at head', fn:
         (local $:lit_4 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 2)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -221,7 +225,7 @@ test 'list with spread at head', fn:
       (data $d_0 "test")
       (data $d_1 "xs")
     )
-    ;; sm:LfgFAJYBALoBAMQBARoBiAEBAAGSDACUAQC6AQDOAQC6AQDEAQCcAQCmAQCUAQCkAQDSAQC2AQDQAQCuAQEBCXIBCATcCQCUAQC6AQDOAQC6AQDEAQDiAQDQAQETAYgBAQAByAkAngEAqAEAnAEApgEAmAEAlgEAZADgAQDQAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
+    ;; sm:LvgFAJYBALoBAMQBARoBiAEBAAGSDACUAQC6AQDOAQC6AQDEAQCcAQCmAQCUAQBwANIBALYBANABAK4BAQEJcgEIBNwJAJQBALoBAM4BALoBAMQBAOIBANABARMBiAEBAAGSCgCeAQBuAMIBAJwBAKYBAJgBAJYBAGQA4AEA0AEBBgGIAQEHBnABCAHMBQB6AOYBAIwBAA
 
 
 test 'list with two spreads', fn:
@@ -272,7 +276,7 @@ test 'list with two spreads', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_86) (local.get $:v_15))
         (local.set $:pub_b_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:b)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_b_1 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_b_1 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_b_1) (local.get $:pub_b_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_87) (local.get $:ret_88)))
         (local.set $:v_61 (struct.new $rt/apply.wat:Closure (ref.func $test::v_83) (local.get $:caps_arg)))
@@ -328,7 +332,7 @@ test 'list with two spreads', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_110) (local.get $:v_8))
         (local.set $:pub_a_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:a)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_a_0 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:pub_name_a_0 (ref.i31 (i32.const 10)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_a_0) (local.get $:pub_a_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_111) (local.get $:slot_110) (local.get $:ret_112)))
         (local.set $:v_67 (struct.new $rt/apply.wat:Closure (ref.func $test::v_107) (local.get $:caps_arg)))
@@ -369,10 +373,13 @@ test 'list with two spreads', fn:
         (local $:lit_5 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -410,4 +417,4 @@ test 'list with two spreads', fn:
       (data $d_1 "a")
       (data $d_2 "b")
     )
-    ;; sm:U74HAJYBALoBAM4BALoBAMQBAKwBAS4D0g0AlgEAugEAzgEAugEAzgEAugEAxAEAngEAogEAlAEAogEAzgEA4gEA0AEArAEBAQpyAQwDnAsAlgEAugEAzgEAugEAzgEAugEAxgEAkAIA0AEBFwGKAQEAAcYNAJQBALoBANABAL4BANABAL4BAMYBAJ4BAKIBAJQBAKIBAM4BAJQCANIBAQYBigEBBwZyAQgBmAsAlAEAugEA0AEAvgEA0AEAvgEAxgEAlAIA0gEBGwGIAQEAAbAKAJ4BAKgBAJ4BAKgBAJwBAKYBAJgBAJQBAGAAlAEAYACIAgDSAQEGAYgBAQcGcAEIAcwFAHoA5gEAjAEA
+    ;; sm:Vb4HAJYBALoBAM4BALoBAMQBAKwBAS4D0g0AlgEAugEAzgEAugEAzgEAugEAxAEAngEAogEAlAEAbgDOAQDiAQDQAQCsAQEBCnIBDAOcCwCWAQC6AQDOAQC6AQDOAQC6AQDGAQCQAgDQAQEXAYoBAQABxg0AlAEAugEA0AEAvgEA0AEAvgEAxgEAngEAogEAlAEAcADOAQCUAgDSAQEGAYoBAQcGcgEIAZgLAJQBALoBANABAL4BANABAL4BAMYBAJQCANIBARsBiAEBAAH6CgCeAQBwAMIBAJ4BAG4AwgEAnAEApgEAmAEAlAEAYACUAQBgAIgCANIBAQYBiAEBBwZwAQgBzAUAegDmAQCMAQA

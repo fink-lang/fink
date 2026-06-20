@@ -84,11 +84,10 @@ pub enum Sym {
   Captures,
   Cell,
   VarArgs,
-  // Interned source-name identity (rt/symbols.wat). Static record field
-  // keys lower to `struct.new $Symbol (i32.const id)`; equality is by id.
-  Symbol,
-  // register_symbol(name_str, id): populate the runtime str->symbol table.
+  // register_symbol(name_str, word): populate the runtime str->symbol table.
   // Lowering prepends one call per interned field name to the module body.
+  // Static field keys are compile-time-constant tagged i31 words (folded at
+  // link); there is no runtime symbol type to declare.
   RegisterSymbol,
 
   // ── calling-convention primitives (std/list.wat today) ────────
@@ -374,7 +373,6 @@ pub struct Runtime {
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
   cell: Option<TypeSym>,
-  symbol: Option<TypeSym>,
   varargs: Option<TypeSym>,
   // Locally-declared function signature type used by the
   // virtual-stdlib import codegen path in lower (still allocates
@@ -472,7 +470,6 @@ impl Runtime {
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn cell(&self)         -> TypeSym { self.cell.expect("rt: Cell not declared") }
-  pub fn symbol(&self)       -> TypeSym { self.symbol.expect("rt: Symbol not declared") }
   pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
   pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
@@ -595,7 +592,6 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::Cell            => "rt/apply.wat:Cell",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
-    Sym::Symbol          => "rt/symbols.wat:Symbol",
     Sym::RegisterSymbol  => "rt/symbols.wat:register_symbol",
     Sym::Apply           => "rt/apply.wat:apply",
     Sym::Apply3          => "rt/apply.wat:apply_3",
@@ -733,9 +729,9 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::VarArgs) {
     rt.varargs = Some(TypeSym::Runtime(Sym::VarArgs));
   }
-  // Always available: static record field keys lower to `struct.new $Symbol`,
-  // and the module body prepends register_symbol calls for the table.
-  rt.symbol = Some(TypeSym::Runtime(Sym::Symbol));
+  // Always available: static record field keys lower to compile-time-constant
+  // tagged i31 words (folded at link), and the module body prepends
+  // register_symbol calls to populate the str->symbol table.
   rt.register_symbol = Some(FuncSym::Runtime(Sym::RegisterSymbol));
 
   // Function-signature types and function imports.

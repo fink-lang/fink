@@ -93,10 +93,13 @@ test 'string literal dedup', fn:
         (local $:args (ref any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_3 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -108,13 +111,13 @@ test 'string literal dedup', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:x) (local.get $x_0))
         (local.set $:pub_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_x_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_x_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_x_0) (local.get $:pub_x_0))
         (local.set $y_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:y) (local.get $y_1))
         (local.set $:pub_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_y_1 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:pub_name_y_1 (ref.i31 (i32.const 10)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_y_1) (local.get $:pub_y_1))
         (local.set $:unwrap_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -137,7 +140,7 @@ test 'string literal dedup', fn:
       (data $d_2 "x")
       (data $d_3 "y")
     )
-    ;; sm:H-QMAJ4BAKgBAJ4BAKgBAJwBAKYBAJgBAJQBAGAAlAEAYAEAAYoBAJgBAKIBAJQBAKIBAM4BARgBigEAmAEAogEAlAEAogEAzgEAqAEAbgDKAQCmBQB6AOYBAIwBAA
+    ;; sm:Ia4NAJ4BAG4AwgEAngEAcADCAQCcAQCmAQCYAQCUAQBgAJQBAGABAAGKAQCYAQCiAQCUAQBuAM4BARgBigEAmAEAogEAlAEAcADOAQCoAQBuAMoBAKYFAHoA5gEAjAEA
 
 
 test 'str templ two exprs', fn:
@@ -166,10 +169,13 @@ test 'str templ two exprs', fn:
         (local $:varargs (ref null $rt/apply.wat:VarArgs))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_3 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -181,13 +187,13 @@ test 'str templ two exprs', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:a) (local.get $a_0))
         (local.set $:pub_a_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:a)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_a_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_a_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_a_0) (local.get $:pub_a_0))
         (local.set $b_1 (struct.new $std/int.wat:I64 (i64.const 2)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:b) (local.get $b_1))
         (local.set $:pub_b_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:b)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_b_1 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:pub_name_b_1 (ref.i31 (i32.const 10)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_b_1) (local.get $:pub_b_1))
         (local.set $:unwrap_a_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:a)))
         (local.set $:lit_6 (call $std/str.fnk:from_data (data.ref $d_1 5)))
@@ -211,7 +217,7 @@ test 'str templ two exprs', fn:
       (data $d_2 "a")
       (data $d_3 "b")
     )
-    ;; sm:IK4OAJ4BAKgBAJ4BAKgBAJwBAKYBAJgBAJQBAGAAlAEAYAEAAYIBAJgBAKIBAJQBAKIBAM4BAQwBggEAmAEAogEAlAEAogEAzgEAqAEBFgWQAQCoAQCUAgEJD7AFAHoA5gEAjAEA
+    ;; sm:IvgOAJ4BAG4AwgEAngEAcADCAQCcAQCmAQCYAQCUAQBgAJQBAGABAAGCAQCYAQCiAQCUAQBuAM4BAQwBggEAmAEAogEAlAEAcADOAQCoAQEWBZABAKgBAJQCAQkPsAUAegDmAQCMAQA
 
 
 test 'str tagged template', fn:
@@ -268,8 +274,10 @@ test 'str tagged template', fn:
         (local $:lit_10 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 3)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -280,7 +288,7 @@ test 'str tagged template', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_3))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_foo_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:foo) (local.get $:ret_2)))
         (local.set $:v_35 (struct.new $rt/apply.wat:Closure (ref.func $test::v_45) (local.get $:caps_arg)))
@@ -303,7 +311,7 @@ test 'str tagged template', fn:
       (data $d_1 "1\\n2")
       (data $d_2 "foo")
     )
-    ;; sm:KoQFAJgBAJoBAFwAggEAgAEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBAOAMAJ4BAKgBAJwBAKYBAJgBAJgBAGgAegDOAQCeAQCqAQCUAQCmAQDWAQDiAQDQAQE4BJIBAQcJcgEACdAFAHoA5gEAjAEA
+    ;; sm:K4QFAJgBAJoBAFwAggEAgAEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBAKoNAJ4BAG4AwgEAnAEApgEAmAEAmAEAaAB6AM4BAJ4BAKoBAJQBAHIA1gEA4gEA0AEBOASSAQEHCXIBAAnQBQB6AOYBAIwBAA
 
 
 test 'str tagged template escape handling', fn:
@@ -408,10 +416,13 @@ test 'str tagged template escape handling', fn:
         (local $:lit_12 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_3 3)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_4 3)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_3 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -424,13 +435,13 @@ test 'str tagged template escape handling', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_4))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_foo_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $bar_1 (struct.new $std/int.wat:I64 (i64.const 1)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:bar) (local.get $bar_1))
         (local.set $:pub_bar_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:bar)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_bar_1 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:pub_name_bar_1 (ref.i31 (i32.const 10)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_bar_1) (local.get $:pub_bar_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:foo) (local.get $:ret_3) (global.get $test:bar)))
         (local.set $:v_63 (struct.new $rt/apply.wat:Closure (ref.func $test::v_95) (local.get $:caps_arg)))
@@ -459,7 +470,7 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "bar")
       (data $d_4 "foo")
     )
-    ;; sm:SIYFAJgBAJoBAFwAhAEAggEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBALwJAJYBALoBAM4BALoBAMQBAOIBANABAUgIkgEBBy6aCwCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQEALqYQAJ4BAKgBAJ4BAKgBAJwBAKYBAJgBAJgBAGgAmAEAaAB6ANABAJ4BAKoBAJQBAKYBANYBAQ8DhgEAoAEAqgEAlAEApgEA1gEAkAIA0AEBNBuUAQEjLnIBAC7QBQB6AOYBAIwBAA
+    ;; sm:SoYFAJgBAJoBAFwAhAEAggEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBALwJAJYBALoBAM4BALoBAMQBAOIBANABAUgIkgEBBy6aCwCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQEALvAQAJ4BAHAAwgEAngEAbgDCAQCcAQCmAQCYAQCYAQBoAJgBAGgAegDQAQCeAQCqAQCUAQByANYBAQ8DhgEAoAEAqgEAlAEAdADWAQCQAgDQAQE0G5QBASMucgEALtAFAHoA5gEAjAEA
 
 
 test 'str implicit formatting handling', fn:
@@ -787,8 +798,10 @@ test 'match empty string', fn:
         (local $:args (ref any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 4)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -799,7 +812,7 @@ test 'match empty string', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:main) (local.get $:v_3))
         (local.set $:pub_main_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:main)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_main_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_main_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_main_0) (local.get $:pub_main_0))
         (local.set $:unwrap_main_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:main)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -819,7 +832,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:fIgFAJoBAUABigEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJuAQAC2AoAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBigEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEAngsAngEAqAEAnAEApgEAmAEAmgEAbAB6ANABAKABAK4BAJQBAKgBANoBALQBAG4A0AEApgUAegDmAQCMAQA
+    ;; sm:fYgFAJoBAUABigEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJuAQAC2AoAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBigEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEA6AsAngEAbgDCAQCcAQCmAQCYAQCaAQBsAHoA0AEAoAEArgEAlAEAdADaAQC0AQBuANABAKYFAHoA5gEAjAEA
 
 
 test 'empty string eq template', fn:

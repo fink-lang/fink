@@ -468,7 +468,11 @@
   ;;
   ;; Discriminate a runtime value for the Rust host. Tags only cover the
   ;; cases the test runner needs today — the bool / numeric leaves for
-  ;; faithful headline rendering. Other types fall through to 0; extend
+  ;; faithful headline rendering. Bools and symbols are both tagged i31 words;
+  ;; the i31 leaf returns Bool. A bare symbol value is not expressible in fink
+  ;; (symbols only arise as record keys), so none reaches here -- if that
+  ;; changes, split the i31 leaf on the tag (rt/symbols.wat:is_symbol).
+  ;; Other types fall through to 0; extend
   ;; as new host needs arise.
   ;;
   ;;   0  unknown / null

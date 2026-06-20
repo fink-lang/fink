@@ -21,8 +21,10 @@ test 'single binding export', fn:
         (local $:args (ref any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -32,7 +34,7 @@ test 'single binding export', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $foo_0))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_foo_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $:unwrap_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -52,7 +54,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:FeYJAJ4BAKgBAJwBAKYBAJgBAJgBAGgBAAOGAQCgAQCqAQCUAQCmAQDWAQCwAQBuAM4BAKYFAHoA5gEAjAEA
+    ;; sm:FrAKAJ4BAG4AwgEAnAEApgEAmAEAmAEAaAEAA4YBAKABAKoBAJQBAHIA1gEAsAEAbgDOAQCmBQB6AOYBAIwBAA
 
 
 
@@ -74,8 +76,10 @@ test 'let binding', fn:
         (local $:args (ref any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_1 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -85,7 +89,7 @@ test 'let binding', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:x) (local.get $x_0))
         (local.set $:pub_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_x_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_x_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_x_0) (local.get $:pub_x_0))
         (local.set $:unwrap_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -105,7 +109,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:FdIJAJ4BAKgBAJwBAKYBAJgBAJQBAGABAAGEAQCYAQCiAQCUAQCiAQDOAQCoAQBuAMoBAKYFAHoA5gEAjAEA
+    ;; sm:FpwKAJ4BAG4AwgEAnAEApgEAmAEAlAEAYAEAAYQBAJgBAKIBAJQBAG4AzgEAqAEAbgDKAQCmBQB6AOYBAIwBAA
 
 
 
@@ -133,10 +137,13 @@ test 'multiple let bindings used', fn:
         (local $:unwrap_y_1 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_2 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -148,13 +155,13 @@ test 'multiple let bindings used', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:x) (local.get $x_0))
         (local.set $:pub_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_x_0 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_x_0 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_x_0) (local.get $:pub_x_0))
         (local.set $y_1 (struct.new $std/int.wat:I64 (i64.const 3)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:y) (local.get $y_1))
         (local.set $:pub_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_y_1 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:pub_name_y_1 (ref.i31 (i32.const 10)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_y_1) (local.get $:pub_y_1))
         (local.set $:unwrap_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:unwrap_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
@@ -175,7 +182,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:HvoMAJ4BAKgBAJ4BAKgBAJwBAKYBAJgBAJQBAGAAlAEAYAEAAYIBAJgBAKIBAJQBAKIBAM4BAQwBggEAmAEAogEAlAEAogEAzgEAqAEAqAEBDAXuBQB6AOYBAIwBAA
+    ;; sm:IMQNAJ4BAG4AwgEAngEAcADCAQCcAQCmAQCYAQCUAQBgAJQBAGABAAGCAQCYAQCiAQCUAQBuAM4BAQwBggEAmAEAogEAlAEAcADOAQCoAQCoAQEMBe4FAHoA5gEAjAEA
 
 
 
@@ -218,7 +225,7 @@ test 'binding rhs is a call', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_48) (local.get $:v_16))
         (local.set $:pub_x_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_x_1 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_x_1 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_x_1) (local.get $:pub_x_1))
         (local.set $:unwrap_x_48 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_48)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -242,10 +249,13 @@ test 'binding rhs is a call', fn:
         (local $:args (ref any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_4 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -258,7 +268,7 @@ test 'binding rhs is a call', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:add) (local.get $:v_5))
         (local.set $:pub_add_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:add)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_add_0 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:pub_name_add_0 (ref.i31 (i32.const 10)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_add_0) (local.get $:pub_add_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:x) (local.get $:ret_4)))
         (local.set $:v_45 (struct.new $rt/apply.wat:Closure (ref.func $test::v_55) (local.get $:caps_arg)))
@@ -288,7 +298,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "add")
       (data $d_2 "x")
     )
-    ;; sm:NoIFAJgBAJoBAJIBAJoBAJIBAIIBAR4FygoAlgEAugEAzgEAugEAxAEAngEAogEAlAEAogEAzgEArAEAbgDMAQDKDgCeAQCoAQCeAQCoAQCcAQCmAQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCUAQCmAQDWAQDeAQDQAQCwAQEcAYoBAQYBigEAbgDCAQDCAQC-AQCCAQC0BQB6AOYBAIwBAA
+    ;; sm:OIIFAJgBAJoBAJIBAJoBAJIBAIIBAR4FygoAlgEAugEAzgEAugEAxAEAngEAogEAlAEAbgDOAQCsAQBuAMwBAJQPAJ4BAHAAwgEAngEAbgDCAQCcAQCmAQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCUAQB0ANYBAN4BANABALABARwBigEBBgGKAQBuAMIBAMIBAL4BAIIBALQFAHoA5gEAjAEA
 
 
 
@@ -337,7 +347,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_30))
         (local.set $:pub_foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_foo_1 (struct.new $rt/symbols.wat:Symbol (i32.const 0)))
+        (local.set $:pub_name_foo_1 (ref.i31 (i32.const 2)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name_foo_1) (local.get $:pub_foo_1))
         (local.set $:unwrap_foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -373,7 +383,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:fail_121 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_120)))
         (local.set $:v_84 (struct.new $rt/apply.wat:Closure (ref.func $test::v_109) (local.get $:caps_arg)))
-        (local.set $:sym_19 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:sym_19 (ref.i31 (i32.const 10)))
         (return_call $std/rec.fnk:pop (local.get $:ctx_param) (local.get $:v_17) (local.get $:sym_19) (local.get $:fail_121) (local.get $:v_84))
       )
       (func $test::v_117 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -447,10 +457,13 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:lit_6 (ref null any))
         (local $:mod_reg_url (ref null any))
         (local $:sym_reg_name (ref null any))
+        (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 0))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
-        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (i32.const 1))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_3 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -461,7 +474,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_3)))
         (local.set $:v_93 (struct.new $rt/apply.wat:Closure (ref.func $test::v_155) (local.get $:caps_arg)))
         (local.set $:lit_4 (call $std/rec.fnk:new))
-        (local.set $:sym_5 (struct.new $rt/symbols.wat:Symbol (i32.const 1)))
+        (local.set $:sym_5 (ref.i31 (i32.const 10)))
         (local.set $:lit_6 (struct.new $std/int.wat:I64 (i64.const 42)))
         (return_call $std/rec.fnk:put (local.get $:ctx_param) (local.get $:lit_4) (local.get $:sym_5) (local.get $:lit_6) (local.get $:v_93))
       )
@@ -481,6 +494,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:XL4IAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF6AoAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAlAEApgEA1gEAsAEAbgDOAQD8BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBATMNlgEBAA28BgC6AQDIAQBuAJQJAJwBAJoBAJwBAJoBAJQBAOQBANIBALgBANIBAGYBAA3iBABYAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BANYKAJ4BAKgBAJ4BAKgBAJwBAKYBAJgBAJQBAGYAmAEAaAC0AQDSAQEMB2ABAgGUAQEGAooBAQUF7AUAegDmAQCMAQA
+    ;; sm:Xr4IAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF6AoAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAlAEAcgDWAQCwAQBuAM4BAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAyggAlgEAugEAyAEAyAEAugEA0gEBMw1kAQANvAYAugEAyAEAbgCUCQCcAQCaAQCcAQCaAQCUAQDkAQDSAQC4AQDSAQBmAQAN4gQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCgCwCeAQBuAMIBAJ4BAHAAwgEAnAEApgEAmAEAlAEAZgCYAQBoALQBANIBAQwHYAECAWIBBgKKAQEFBewFAHoA5gEAjAEA
 
 

@@ -27,9 +27,6 @@
     (func $clos_hash_i31 (param (ref $Closure)) (result i32)))
   (import "rt/opaque.wat" "hash_i31"
     (func $opaque_hash_i31 (param (ref $Opaque)) (result i32)))
-  (import "rt/symbols.wat" "Symbol" (type $Symbol (sub any)))
-  (import "rt/symbols.wat" "hash_i31"
-    (func $symbol_hash_i31 (param (ref $Symbol)) (result i32)))
   (import "rt/types.wat" "Type" (type $Type (sub any)))
   (import "rt/types.wat" "hash_i31"
     (func $type_hash_i31 (param (ref $Type)) (result i32)))
@@ -87,13 +84,8 @@
             (local.get $key))))
       (return (call $opaque_hash_i31)))
 
-    ;; Try $Symbol -- interned field/name id; the id is the hash.
-    (block $not_symbol
-      (block $is_symbol (result (ref $Symbol))
-        (br $not_symbol
-          (br_on_cast $is_symbol (ref eq) (ref $Symbol)
-            (local.get $key))))
-      (return (call $symbol_hash_i31)))
+    ;; Symbols are tagged i31 words -- handled by the i31 arm above (the word
+    ;; is its own hash), no symbol-specific arm needed.
 
     ;; Try $Dict -- structural content hash. Stubbed to 0 for now: all
     ;; records share one bucket and deep_eq disambiguates. Correct but

@@ -361,24 +361,33 @@ fn prepend_symbol_table(lcx: &mut LowerCtx<'_>, fink_module: FuncSym) {
 
   // Build instrs in source order, then prepend the whole block before the
   // body (insert(0, ...) in reverse keeps registration order).
-  let key_idx = LocalIdx(
-    (lcx.frag.funcs[fi].params.len() + lcx.frag.funcs[fi].locals.len()) as u32,
-  );
+  let base = (lcx.frag.funcs[fi].params.len() + lcx.frag.funcs[fi].locals.len()) as u32;
+  let key_idx = LocalIdx(base);
   lcx.frag.funcs[fi].locals.push(LocalDecl {
     ty: val_anyref(true),
     display: Some(":sym_reg_name".to_string()),
   });
+  // The symbol word (a compile-time const folded at link); box it as `ref.i31`
+  // to pass to register_symbol, which stores it directly.
+  let word_idx = LocalIdx(base + 1);
+  lcx.frag.funcs[fi].locals.push(LocalDecl {
+    ty: val_ref_abs(AbsHeap::I31, /*nullable*/ false),
+    display: Some(":sym_reg_word".to_string()),
+  });
 
-  let mut block: Vec<InstrId> = Vec::with_capacity(entries.len() * 2);
+  let mut block: Vec<InstrId> = Vec::with_capacity(entries.len() * 3);
   for name in &entries {
     let sym = intern_data(lcx.frag, name);
     let len = name.len() as u32;
     let i_name = push_call(lcx.frag, lcx.rt.str_from_data(),
       vec![Operand::DataRef { sym, len }], Some(key_idx));
-    // id carried by name; resolved to i32.const at link, same as box_symbol.
+    // word carried by name; resolved to the folded i31 const at link, same as
+    // box_symbol. Box it as ref.i31 for register_symbol's (ref i31) param.
+    let i_word = push_ref_i31(lcx.frag, Operand::SymbolId(name.clone()), word_idx);
     let i_reg = push_call(lcx.frag, lcx.rt.register_symbol(),
-      vec![op_local(key_idx), Operand::SymbolId(name.clone())], None);
+      vec![op_local(key_idx), op_local(word_idx)], None);
     block.push(i_name);
+    block.push(i_word);
     block.push(i_reg);
   }
   let body = &mut lcx.frag.funcs[fi].body;
@@ -2271,16 +2280,17 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
   }
 }
 
-/// Box a static field name as a `$Symbol`: `struct.new $Symbol (<symbol id>)`,
-/// where the id is carried by NAME (`Operand::SymbolId`) until link. The linker
-/// merges all names package-wide into one canonical id per name and resolves
-/// each to an `i32.const`. Equality is by id, so the same name anywhere yields
-/// an equal symbol -- no global instance table, no per-fragment counter.
-fn box_symbol(frag: &mut Fragment, rt: &Runtime, name: &[u8], into: LocalIdx) -> InstrId {
+/// Box a static field name as a symbol: `ref.i31 (i32.const <word>)`, where the
+/// word is carried by NAME (`Operand::SymbolId`) until link. The linker merges
+/// all names package-wide into one canonical id per name and resolves each to
+/// the folded i31 word `(id << 3) | TAG_SYMBOL`. A symbol is a COMPILE-TIME
+/// CONSTANT -- the same name anywhere yields the same word, so identity is
+/// whole-word ref.eq with no instance table and no allocation.
+fn box_symbol(frag: &mut Fragment, _rt: &Runtime, name: &[u8], into: LocalIdx) -> InstrId {
   // Record the name so prepend_symbol_table registers it in the runtime
   // str->symbol table. The value (0) is unused -- the set is name-keyed.
   frag.symbols.insert(name.to_vec(), 0);
-  push_struct_new(frag, rt.symbol(), vec![Operand::SymbolId(name.to_vec())], into)
+  push_ref_i31(frag, Operand::SymbolId(name.to_vec()), into)
 }
 
 /// Lower a record-KEY arg. A static string-literal key becomes a `$Symbol`

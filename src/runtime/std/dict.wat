@@ -46,7 +46,7 @@
   ;; Type imports (str.wat — needed for the rec fmt impl).
   (import "std/str.wat" "Str"       (type $Str       (sub any) (struct)))
   (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
-  (import "rt/symbols.wat" "Symbol" (type $Symbol (sub any)))
+  (import "rt/symbols.wat" "is_symbol" (func $is_symbol (param (ref null any)) (result i32)))
 
   ;; Func imports
   (import "std/hashing.wat"  "hash_i31"
@@ -1834,12 +1834,12 @@
 
   ;; _fmt_key_len : (ref eq) -> i32
   ;; Byte length of a formatted record key.
-  ;; $Symbol (field key) / $Str (string key): repr len -- repr renders a symbol
+  ;; symbol (field key) / $Str (string key): repr len -- repr renders a symbol
   ;; bare-or-quoted and a string quoted. Other (computed value key): fmt len + 2
   ;; for surrounding parens.
   (func $_fmt_key_len (param $key (ref eq)) (result i32)
     (if (i32.or
-          (ref.test (ref $Symbol) (local.get $key))
+          (call $is_symbol (local.get $key))
           (ref.test (ref $Str) (local.get $key)))
       (then (return
         (call $_str_len (call $repr_val (ref.cast (ref any) (local.get $key)))))))
@@ -1957,7 +1957,7 @@
 
   ;; _fmt_copy_key : (key, buf, pos) -> new_pos
   ;; Copy a formatted record key into buf.
-  ;; $Symbol (field key) / $Str (string key): its repr (symbol bare-or-quoted,
+  ;; symbol (field key) / $Str (string key): its repr (symbol bare-or-quoted,
   ;; string quoted). Other (computed value key): (fmt) in parens.
   (func $_fmt_copy_key
     (param $key (ref eq))
@@ -1966,7 +1966,7 @@
     (result i32)
 
     (if (i32.or
-          (ref.test (ref $Symbol) (local.get $key))
+          (call $is_symbol (local.get $key))
           (ref.test (ref $Str) (local.get $key)))
       (then (return
         (call $_str_copy_to
