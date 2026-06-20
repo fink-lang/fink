@@ -98,6 +98,11 @@
   (import "std/dict.wat" "get"
     (func $rec_get_inner (param $rec (ref $Dict)) (param $key (ref eq))
       (result (ref null eq))))
+  ;; Forward name->symbol resolution: JS navigates recs by name (no interface
+  ;; files), so a $Str field name resolves to its interned $Symbol before the
+  ;; symbol-keyed lookup. Non-interned strings pass through unchanged.
+  (import "rt/symbols.wat" "str_to_symbol"
+    (func $str_to_symbol (param (ref eq)) (result (ref eq))))
 
   ;; Host imports — stubbed by fink.js. Signatures must match
   ;; rust/interop.wat so runtime modules importing this contract see
@@ -399,11 +404,29 @@
     (param $list (ref any)) (result i32)
     (return_call $list_size_inner (ref.cast (ref $List) (local.get $list))))
 
+  ;; JS hands back a key that may be any fink value. A $Str key is ambiguous --
+  ;; it could be a string dict key OR a field name (JS `.foo` and `foo['foo']`
+  ;; are indistinguishable). Try it as a $Str key first (honour the literal
+  ;; string), then fall back to its interned $Symbol. Non-$Str keys are used
+  ;; verbatim.
   (func $rec_get (@pub) (export "env:rec_get")
     (param $rec (ref any)) (param $key (ref any)) (result (ref null any))
+    (local $dict (ref $Dict))
+    (local $k (ref eq))
+    (local $hit (ref null eq))
+    (local.set $dict (ref.cast (ref $Dict) (local.get $rec)))
+    (local.set $k (ref.cast (ref eq) (local.get $key)))
+
+    (if (i32.eqz (ref.test (ref $Str) (local.get $k)))
+      (then (return_call $rec_get_inner (local.get $dict) (local.get $k))))
+
+    ;; $Str key: try the string key, then the symbol it resolves to.
+    (local.set $hit (call $rec_get_inner (local.get $dict) (local.get $k)))
+    (if (i32.eqz (ref.is_null (local.get $hit)))
+      (then (return (local.get $hit))))
     (return_call $rec_get_inner
-      (ref.cast (ref $Dict) (local.get $rec))
-      (ref.cast (ref eq) (local.get $key))))
+      (local.get $dict)
+      (call $str_to_symbol (local.get $k))))
 
 
   ;; -- num_to_js / num_from_js -------------------------------------------
