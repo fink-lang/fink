@@ -269,6 +269,12 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
       },
       loc,
     ),
+    Lit::Symbol(s) => {
+      // Field-name symbol — `ƒ'name'`, the `ƒ` sigil distinguishing an interned
+      // key from a `Lit::Str` runtime string value.
+      let name = crate::strings::control_pics_bytes(s);
+      b_ident(b, &format!("ƒ'{}'", name), loc)
+    }
     Lit::Seq => b.append(
       NodeKind::LitSeq { open: tok_at(loc), close: tok_at(loc), items: Exprs::empty() },
       loc,

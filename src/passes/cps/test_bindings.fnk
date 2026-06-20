@@ -208,9 +208,9 @@ test 'chained member access', fn:
     foo.bar.baz
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
-      ·op_dot ·ƒctx_11, ·∅foo, 'bar', fn ·ƒctx_14, ·ƒv_3:
-        ·op_dot ·ƒctx_14, ·ƒv_3, 'baz', ·ƒret_0
-    # sm:IQABAAsAAQALJAEACxgBAAsSAAIABgEABwABAAcSABQABAEAAxAABAEIAwABAAMCAQADBgEAAwIACgAYAQcHDgACAAoBAAsAAQALEgAUAAQBAAcOAAQBEAMAAQADAgEAAwYBAAMCAAQBDws
+      ·op_dot ·ƒctx_11, ·∅foo, ƒ'bar', fn ·ƒctx_14, ·ƒv_3:
+        ·op_dot ·ƒctx_14, ·ƒv_3, ƒ'baz', ·ƒret_0
+    # sm:GwABAAsAAQALJAEACxgBAAsSAAIABgEABwABAAcSABQABAEAAxAABAEIAw4ACgAYAQcHDgACAAoBAAsAAQALEgAUAAQBAAcOAAQBEAMOAAQBDws
 
 
 

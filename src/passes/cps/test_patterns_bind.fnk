@@ -18,7 +18,7 @@ CPS pattern lowering tests
 #
 # Collection primitives (used inside matcher bodies):
 #   ·seq_pop seq, ·fail, fn head, tail: …   — pop head element; fail if empty
-#   ·rec_pop rec, 'name', ·fail, fn val, rest: …  — extract named field; fail if missing
+#   ·rec_pop rec, ƒ'name', ·fail, fn val, rest: …  — extract named field; fail if missing
 #   ·empty   collection, fn bool: …         — predicate; caller branches with If
 #
 # Literal/guard/range patterns use ·op_eq, ·op_gt, etc. inside the matcher.

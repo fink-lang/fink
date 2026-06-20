@@ -492,6 +492,11 @@ pub enum Lit {
   /// is a valid 1-byte string literal. Using `Vec<u8>` avoids Rust's UTF-8
   /// validation at the CPS boundary.
   Str(Vec<u8>),
+  /// Interned field name. A record key derived from an identifier (`{foo}`,
+  /// `r.foo`) — distinct from `Str`, which is a runtime string value. The byte
+  /// payload is the source name; the canonical integer id is assigned at link
+  /// time. Renders as `ƒ'name'` to distinguish symbol keys from string values.
+  Symbol(Vec<u8>),
   Seq,                // empty sequence literal []
   Rec,                // empty record literal {}
 }

@@ -895,7 +895,9 @@ fn lower_member(
   let (lv, mut pending) = lower(g, lhs);
   let rhs_kind = g.node(rhs).kind.clone();
   let rv = match rhs_kind {
-    NodeKind::Ident(key) => lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(rhs)),
+    // Ident key `.foo` is a field-name symbol. Quoted (`.'foo'`) and computed
+    // (`.(x)`) keys fall through to the value path -- dict string/value keys.
+    NodeKind::Ident(key) => lit_val(g, Lit::Symbol(key.as_bytes().to_vec()), Some(rhs)),
     _ => {
       let (v, rp) = lower(g, rhs);
       pending.extend(rp);
@@ -982,7 +984,7 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
       NodeKind::Bind { lhs, rhs, .. } => {
         let lhs_kind = g.node(lhs).kind.clone();
         if let NodeKind::Ident(key) = lhs_kind {
-          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(lhs));
+          let key_lit = lit_val(g, Lit::Symbol(key.as_bytes().to_vec()), Some(lhs));
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
           let result = g.fresh_result(field_origin);
@@ -1007,7 +1009,7 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
         let val_id = *body.items.last().expect("arm body empty");
         let key_kind = g.node(key_id).kind.clone();
         if let NodeKind::Ident(key) = key_kind {
-          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(key_id));
+          let key_lit = lit_val(g, Lit::Symbol(key.as_bytes().to_vec()), Some(key_id));
           let (fv, fp) = lower(g, val_id);
           pending.extend(fp);
           let result = g.fresh_result(field_origin);
@@ -1027,7 +1029,7 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
       }
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
-        let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(field));
+        let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(field));
         let id_val = scope_ref_val(g, field);
         let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);
@@ -1148,7 +1150,7 @@ fn lower_type_body(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lowe
         let NodeKind::Ident(name) = g.node(lhs).kind.clone() else {
           panic!("type field name is not an Ident");
         };
-        let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(lhs));
+        let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(lhs));
         let type_id = body.items[0];
         let (tv, tp) = lower(g, type_id);
         pending.extend(tp);
@@ -1276,7 +1278,7 @@ fn lower_enum_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Low
     let (mtype_val, mtype_pending) = lower_type_body(g, &member_fields, member_origin);
     pending.extend(mtype_pending);
     // Add it to the enum under its name.
-    let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(name_id));
+    let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(name_id));
     let result = g.fresh_result(member_origin);
     let (rk, ri) = (result.kind, result.id);
     pending.push(Pending::App {
@@ -3151,9 +3153,13 @@ enum SpreadKind {
   SubPattern(AstId),                 // `{..{bar, spam}}` — the sub-pattern
 }
 
-/// Record pattern key: identifier name or computed expression.
+/// Record pattern key, classified by syntax:
+/// - `Symbol` -- ident key `{foo}` / `{foo: pat}`: an interned field-name symbol.
+/// - `Str` -- quoted key `{'foo bar': pat}`: a string value key (dict).
+/// - `Expr` -- computed key `{(x): pat}`: a runtime value key (dict).
 enum RecKey<'src> {
-  Ident(&'src str),
+  Symbol(&'src str),
+  Str(String),
   Expr(AstId),
 }
 
@@ -3209,18 +3215,17 @@ fn emit_rec_pattern<'src>(
         });
       }
       NodeKind::Ident(name) => {
-        regular.push(RecField { key: RecKey::Ident(name), pat: field_id, origin: Some(field_id) });
+        regular.push(RecField { key: RecKey::Symbol(name), pat: field_id, origin: Some(field_id) });
       }
       NodeKind::Bind { lhs, rhs: pat_id, .. } => {
         let lhs_kind = g.node(lhs).kind.clone();
         match lhs_kind {
           NodeKind::Ident(key) => {
-            regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(lhs) });
+            regular.push(RecField { key: RecKey::Symbol(key), pat: pat_id, origin: Some(lhs) });
           }
           NodeKind::LitStr { content, .. } => {
-            // Leak the String to make it 'src — small one-off cost during compile.
-            let key: &'src str = Box::leak(content.into_boxed_str());
-            regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(lhs) });
+            // Quoted key is a string value key (dict), not a field symbol.
+            regular.push(RecField { key: RecKey::Str(content), pat: pat_id, origin: Some(lhs) });
           }
           _ => {}
         }
@@ -3230,11 +3235,11 @@ fn emit_rec_pattern<'src>(
           let arm_lhs_kind = g.node(arm_lhs).kind.clone();
           match arm_lhs_kind {
             NodeKind::Ident(key) => {
-              regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(arm_lhs) });
+              regular.push(RecField { key: RecKey::Symbol(key), pat: pat_id, origin: Some(arm_lhs) });
             }
             NodeKind::LitStr { content, .. } => {
-              let key: &'src str = Box::leak(content.into_boxed_str());
-              regular.push(RecField { key: RecKey::Ident(key), pat: pat_id, origin: Some(arm_lhs) });
+              // Quoted key is a string value key (dict), not a field symbol.
+              regular.push(RecField { key: RecKey::Str(content), pat: pat_id, origin: Some(arm_lhs) });
             }
             NodeKind::Group { inner, .. } => {
               regular.push(RecField { key: RecKey::Expr(inner), pat: pat_id, origin: Some(arm_lhs) });
@@ -3485,7 +3490,8 @@ fn fold_rec_pops<'src>(
     let cursor_bind = if i == 0 { first_cursor.clone() } else { g.fresh_result(origin) };
     let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
     let (field_key_val, key_pending) = match &fields[i].key {
-      RecKey::Ident(name) => (g.val(ValKind::Lit(Lit::Str(name.as_bytes().to_vec())), origin), vec![]),
+      RecKey::Symbol(name) => (g.val(ValKind::Lit(Lit::Symbol(name.as_bytes().to_vec())), origin), vec![]),
+      RecKey::Str(s) => (g.val(ValKind::Lit(Lit::Str(s.as_bytes().to_vec())), origin), vec![]),
       RecKey::Expr(id) => lower(g, *id),
     };
     let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
@@ -3918,6 +3924,7 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_dict.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
