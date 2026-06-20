@@ -467,6 +467,14 @@ pub fn run<R: Read, W: Write + Send + 'static>(
   // Set up Wasmtime with debug support.
   let mut config = wasmtime::Config::new();
   config.wasm_gc(true);
+  // Null collector: never reclaims, never runs a collection. The default
+  // deferred-reference-counting collector hits a debug-assert in its async
+  // stack scan (`on-stack gc ref ... not in over-approximated stack roots set`)
+  // when a collection fires mid-run under the async/fiber execution that
+  // `guest_debug` requires -- e.g. allocating while entering a host call.
+  // A debug session runs short programs in a throwaway process, so leaking GC
+  // memory is fine; the non-debug runner keeps the real collector.
+  config.collector(wasmtime::Collector::Null);
   config.wasm_tail_call(true);
   config.wasm_function_references(true);
   config.guest_debug(true);
