@@ -1916,9 +1916,9 @@ fn is_virtual_stdlib_path(url: &str) -> bool {
 /// passed to the runtime as the 0th wasm arg. Used by RecPut and
 /// RecPop.
 /// Emit a type-seed constructor (`new_type`/`new_union`/`new_enum`). The CPS
-/// shape is `(ctx, cont)` with no value args; the introspection key
-/// (module_id, cps_id) is injected here as two `i32.const`s at emit time (like
-/// trace_push), so the runtime sig is `(ctx, mid i32, cid i32, cont)`.
+/// shape is `(ctx, name, cont)`: the type's `$name` is a `Lit::Symbol` value arg
+/// (the declared ident, or the empty symbol for an anonymous `type _`), boxed to
+/// a tagged i31 via the symbol path. Runtime sig is `(ctx, name, cont)`.
 fn emit_type_seed(
   lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
@@ -1927,16 +1927,16 @@ fn emit_type_seed(
   app_id: CpsId,
 ) {
   let ctx_a = args.first().expect("type seed: missing ctx");
-  let cont = args.get(1).expect("type seed: missing cont");
+  let name_a = args.get(1).expect("type seed: missing name");
+  let cont = args.get(2).expect("type seed: missing cont");
   let ctx_op = emit_arg_as_operand(lcx, ctx, ctx_a);
+  let name_op = emit_key_as_operand(lcx, ctx, name_a);
   let cont_op = match cont {
     Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
     Arg::Val(v) => val_as_operand(lcx, ctx, v),
     _ => panic!("lower: type-seed cont is neither Cont::Ref nor Val"),
   };
-  let mid = lit_i32(lcx.frag.module_id.0 as i32);
-  let cid = lit_i32(app_id.0 as i32);
-  let i = push_return_call(lcx.frag, target, vec![ctx_op, mid, cid, cont_op]);
+  let i = push_return_call(lcx.frag, target, vec![ctx_op, name_op, cont_op]);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);

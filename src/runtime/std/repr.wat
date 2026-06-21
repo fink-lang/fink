@@ -60,8 +60,20 @@
   (import "rt/types.wat" "Inst" (type $Inst (sub any)))
   (import "rt/types.wat" "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
+  (import "rt/types.wat" "inst_type_name"
+    (func $inst_type_name (param (ref null any)) (result (ref i31))))
   (import "rt/symbols.wat" "is_symbol" (func $is_symbol (param (ref null any)) (result i32)))
   (import "rt/symbols.wat" "repr" (func $symbol_repr (param (ref i31)) (result (ref $Str))))
+
+  ;; ByteArray-assembly helpers for prepending a nominal type name to an
+  ;; instance's payload repr (`Foo {bar: 1}`). Same idiom dict/list fmt use.
+  (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "std/str.wat" "from_bytes"
+    (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
+  (import "std/str.wat" "_str_len"
+    (func $_str_len (param (ref $Str)) (result i32)))
+  (import "std/str.wat" "_str_copy_to"
+    (func $_str_copy_to (param (ref $Str)) (param (ref $ByteArray)) (param i32) (result i32)))
 
   ;; i31 (bool) renderer — repr same as fmt; share str.wat's helper.
   (import "std/str.wat" "_str_fmt_i31"
@@ -147,18 +159,50 @@
             (local.get $val))))
       (return_call $closure_repr))
 
-    ;; Try $Inst (typed instance) — repr the bare structural payload.
-    ;; TODO(type-name): repr should source-quote the nominal name
-    ;; (`Foo {bar: 1}`), since repr is for round-trippable rendering. The type's
-    ;; (mod_id, cps_id) resolves to "Foo" via host reflection (the backtrace
-    ;; channel). Bare payload for now.
+    ;; Try $Inst (typed instance) — source-quote the nominal name before the
+    ;; structural payload (`Foo {bar: 1}`). Anonymous types (null-name symbol)
+    ;; render as the bare payload.
     (if (ref.test (ref $Inst) (local.get $val))
-      (then (return_call $repr_val
-        (ref.as_non_null (call $inst_payload (local.get $val))))))
+      (then (return_call $inst_repr (local.get $val))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
+
+
+  ;; ---- Typed-instance repr --------------------------------------------
+
+  ;; $inst_repr : (ref any $Inst) -> (ref $Str)
+  ;; Source-quote the nominal type name then the structural payload, joined by a
+  ;; space: `Foo {bar: 1}`. The name is the type's `$name` symbol, repr'd via the
+  ;; symbol repr (bare ident or quoted). An anonymous type carries the null-name
+  ;; symbol, whose repr is empty -- detected by zero length, in which case the
+  ;; bare payload is returned (no leading space).
+  (func $inst_repr (param $val (ref null any)) (result (ref $Str))
+    (local $name (ref $Str))
+    (local $payload (ref $Str))
+    (local $name_len i32)
+    (local $pay_len i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local.set $name (call $symbol_repr (call $inst_type_name (local.get $val))))
+    (local.set $payload
+      (call $repr_val (ref.as_non_null (call $inst_payload (local.get $val)))))
+    (local.set $name_len (call $_str_len (local.get $name)))
+    ;; Anonymous type: empty name -> bare payload, no leading space.
+    (if (i32.eqz (local.get $name_len))
+      (then (return (local.get $payload))))
+    (local.set $pay_len (call $_str_len (local.get $payload)))
+    ;; name + " " + payload.
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $name_len)
+          (i32.add (i32.const 1) (local.get $pay_len)))))
+    (local.set $pos (call $_str_copy_to (local.get $name) (local.get $buf) (i32.const 0)))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20)) ;; space
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (local.set $pos (call $_str_copy_to (local.get $payload) (local.get $buf) (local.get $pos)))
+    (return_call $str_from_bytes (local.get $buf)))
 
 
   ;; ---- Fink-importable wrapper (CPS) ----------------------------------

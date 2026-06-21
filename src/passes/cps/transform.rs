@@ -185,6 +185,15 @@ fn lit_val(g: &mut Gen, lit: Lit, origin: Option<AstId>) -> Val {
   g.val(ValKind::Lit(lit), origin)
 }
 
+/// The `$name` symbol value seeded into a type/union/enum constructor. A bound
+/// declaration (`Foo = type:`) passes its LHS ident; an inline / unbound
+/// declaration passes `None` and carries the null name (empty symbol), which
+/// the renderer reads as anonymous (bare payload, no nominal prefix).
+fn type_name_val(g: &mut Gen, name: Option<&str>, origin: Option<AstId>) -> Val {
+  let bytes = name.map(|n| n.as_bytes().to_vec()).unwrap_or_default();
+  lit_val(g, Lit::Symbol(bytes), origin)
+}
+
 
 
 /// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
@@ -359,21 +368,25 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
 
     // ---- type declaration ----
+    // Reached via the generic dispatch (an inline / unbound `type _`): no
+    // declared name, so the type carries the null name (empty symbol). A bound
+    // declaration (`Foo = type:`) is intercepted by lower_bind, which supplies
+    // the LHS name via the `_named` variants.
     NodeKind::Type { params, body, .. } => {
       let fields: Vec<AstId> = body.items.to_vec();
-      lower_type_decl(g, params, &fields, o)
+      lower_type_decl(g, params, &fields, None, o)
     }
 
     // ---- union declaration ----
     NodeKind::Union { params, body, .. } => {
       let members: Vec<AstId> = body.items.to_vec();
-      lower_union_decl(g, params, &members, o)
+      lower_union_decl(g, params, &members, None, o)
     }
 
     // ---- enum declaration ----
     NodeKind::Enum { params, body, .. } => {
       let members: Vec<AstId> = body.items.to_vec();
-      lower_enum_decl(g, params, &members, o)
+      lower_enum_decl(g, params, &members, None, o)
     }
   }
 }
@@ -457,7 +470,7 @@ fn lower_bind_stmt(
   // Peel the synthetic `pub` modifier wrapper from the LHS, if present.
   // See `unwrap_modifier_lhs` and `lower_bind`.
   let lhs = unwrap_modifier_lhs(g.ast, lhs);
-  let (val, mut pending) = lower(g, rhs);
+  let (val, mut pending) = lower_bind_rhs(g, lhs, rhs);
   match &g.node(lhs).kind {
     NodeKind::Wildcard => {
       // _ discards — no store, just evaluate for side effects.
@@ -468,6 +481,32 @@ fn lower_bind_stmt(
     }
   }
   pending
+}
+
+/// Lower a bind's RHS, naming a type/union/enum declaration after the bind's
+/// LHS ident (`Foo = type:` -> the type carries the name `Foo`). For any other
+/// LHS shape (pattern destructure, wildcard) or RHS, falls back to the generic
+/// `lower`, which leaves a declaration anonymous.
+fn lower_bind_rhs(g: &mut Gen, lhs: AstId, rhs: AstId) -> Lower {
+  let NodeKind::Ident(name) = g.node(lhs).kind.clone() else {
+    return lower(g, rhs);
+  };
+  let o = Some(rhs);
+  match g.node(rhs).kind.clone() {
+    NodeKind::Type { params, body, .. } => {
+      let fields: Vec<AstId> = body.items.to_vec();
+      lower_type_decl(g, params, &fields, Some(name), o)
+    }
+    NodeKind::Union { params, body, .. } => {
+      let members: Vec<AstId> = body.items.to_vec();
+      lower_union_decl(g, params, &members, Some(name), o)
+    }
+    NodeKind::Enum { params, body, .. } => {
+      let members: Vec<AstId> = body.items.to_vec();
+      lower_enum_decl(g, params, &members, Some(name), o)
+    }
+    _ => lower(g, rhs),
+  }
 }
 
 /// Lower a bind expression (the result IS the bound value — last in block or standalone).
@@ -482,7 +521,7 @@ fn lower_bind(
   // intent is recovered separately by `collect_module_exports` walking the
   // unpeeled AST and is realised by `inject_pub_calls`.
   let lhs = unwrap_modifier_lhs(g.ast, lhs);
-  let (val, mut pending) = lower(g, rhs);
+  let (val, mut pending) = lower_bind_rhs(g, lhs, rhs);
   match &g.node(lhs).kind {
     NodeKind::Wildcard => {
       // _ discards the value — no store, just evaluate for side effects.
@@ -1061,9 +1100,10 @@ fn lower_type_decl(
   g: &mut Gen,
   params: AstId,
   fields: &[AstId],
+  name: Option<&str>,
   origin: Option<AstId>,
 ) -> Lower {
-  wrap_decl_in_params_fn(g, params, origin, |g| lower_type_body(g, fields, origin))
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_type_body(g, fields, name, origin))
 }
 
 // A type/enum/union declaration with params (`type T:`, `enum T:`) is `fn`
@@ -1116,12 +1156,13 @@ fn wrap_decl_in_params_fn(
 // A field is an `Arm { lhs: Ident(name), body: [type-expr] }`: the name is a
 // declaration (a string-literal key, like `rec_put`'s key); the type-expr
 // lowers as an ordinary value (it resolves in scope, like `rec_put`'s value).
-fn lower_type_body(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower {
+fn lower_type_body(g: &mut Gen, fields: &[AstId], name: Option<&str>, origin: Option<AstId>) -> Lower {
   let seed = g.fresh_result(origin);
   let (sk, si) = (seed.kind, seed.id);
+  let name_val = type_name_val(g, name, origin);
   let mut pending = vec![Pending::App {
     func: Callable::BuiltIn(BuiltIn::NewType),
-    args: args_val(vec![]),
+    args: args_val(vec![name_val]),
     result: seed,
     origin,
   }];
@@ -1194,9 +1235,10 @@ fn lower_union_decl(
   g: &mut Gen,
   params: AstId,
   members: &[AstId],
+  name: Option<&str>,
   origin: Option<AstId>,
 ) -> Lower {
-  wrap_decl_in_params_fn(g, params, origin, |g| lower_union_body(g, members, origin))
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_union_body(g, members, name, origin))
 }
 
 // A union is an open union over existing types — represented at runtime as a
@@ -1204,12 +1246,13 @@ fn lower_union_decl(
 // `lower_type_body`): a `·new_union` seed threaded through one `·union_add`
 // per member. Each member lowers to an ordinary value (it references an
 // existing type, which resolves in scope).
-fn lower_union_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Lower {
+fn lower_union_body(g: &mut Gen, members: &[AstId], name: Option<&str>, origin: Option<AstId>) -> Lower {
   let seed = g.fresh_result(origin);
   let (sk, si) = (seed.kind, seed.id);
+  let name_val = type_name_val(g, name, origin);
   let mut pending = vec![Pending::App {
     func: Callable::BuiltIn(BuiltIn::NewUnion),
-    args: args_val(vec![]),
+    args: args_val(vec![name_val]),
     result: seed,
     origin,
   }];
@@ -1243,9 +1286,10 @@ fn lower_enum_decl(
   g: &mut Gen,
   params: AstId,
   members: &[AstId],
+  name: Option<&str>,
   origin: Option<AstId>,
 ) -> Lower {
-  wrap_decl_in_params_fn(g, params, origin, |g| lower_enum_body(g, members, origin))
+  wrap_decl_in_params_fn(g, params, origin, |g| lower_enum_body(g, members, name, origin))
 }
 
 // A closed sum: each member mints a member-type (a `type:` with a tag) added to
@@ -1253,12 +1297,13 @@ fn lower_enum_decl(
 // a `·new_enum` seed threaded through one `·enum_add enum, 'Name', member_type`
 // per member. A nullary member (`Red`) mints a bare member-type; payload-carrying
 // members reuse `lower_type_body` for the payload.
-fn lower_enum_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Lower {
+fn lower_enum_body(g: &mut Gen, members: &[AstId], name: Option<&str>, origin: Option<AstId>) -> Lower {
   let seed = g.fresh_result(origin);
   let (sk, si) = (seed.kind, seed.id);
+  let name_val = type_name_val(g, name, origin);
   let mut pending = vec![Pending::App {
     func: Callable::BuiltIn(BuiltIn::NewEnum),
-    args: args_val(vec![]),
+    args: args_val(vec![name_val]),
     result: seed,
     origin,
   }];
@@ -1271,14 +1316,16 @@ fn lower_enum_body(g: &mut Gen, members: &[AstId], origin: Option<AstId>) -> Low
     //   `Some T`      positional -> body is the Apply args
     //   `Bar {a: T}`  named      -> body is the rec-literal's fields
     let (name_id, member_fields) = enum_member_parts(g, member);
-    let NodeKind::Ident(name) = g.node(name_id).kind.clone() else {
+    let NodeKind::Ident(member_name) = g.node(name_id).kind.clone() else {
       panic!("enum member name is not an Ident");
     };
-    // Mint the member-type (a `type:` with a tag) from its payload body.
-    let (mtype_val, mtype_pending) = lower_type_body(g, &member_fields, member_origin);
+    // Mint the member-type (a `type:` with a tag) from its payload body, named
+    // after the case so a case instance reprs as `Some {...}`.
+    let (mtype_val, mtype_pending) =
+      lower_type_body(g, &member_fields, Some(member_name), member_origin);
     pending.extend(mtype_pending);
     // Add it to the enum under its name.
-    let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(name_id));
+    let key_lit = lit_val(g, Lit::Symbol(member_name.as_bytes().to_vec()), Some(name_id));
     let result = g.fresh_result(member_origin);
     let (rk, ri) = (result.kind, result.id);
     pending.push(Pending::App {

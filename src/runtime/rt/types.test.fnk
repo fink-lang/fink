@@ -479,7 +479,6 @@ skip test 'TODO support typed fn', fn:
 
 
 
-
 test 'enum case match with destructure', fn:
   Opt = enum:
     Some {val: u8}
@@ -499,17 +498,17 @@ test 'fmt typed rec instance', fn:
   Foo = type:
     bar: u8
   foo = Foo {bar: 1}
+
   equals
     '${foo}'
-    '{bar: 1}'
+    'Foo {bar: 1}'
 
 
 test 'repr typed rec instance in list', fn:
   Foo = type:
     bar: u8
-  --- collections repr their elements, so a typed instance in a list
-      exercises the repr $Inst arm (bare payload for now) ---
   lst = [Foo {bar: 1}]
+
   equals
     '${lst}'
-    '[{bar: 1}]'
+    '[Foo {bar: 1}]'
