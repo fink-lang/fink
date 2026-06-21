@@ -1148,6 +1148,75 @@ fn wrap_decl_in_params_fn(
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
 }
 
+// Lower an expression in TYPE position (a field type, a positional type, a
+// result type). Most type expressions are ordinary values -- a type reference
+// (`u8`, `Foo`) resolves in scope to its `$Type` value, so `lower` suffices. The
+// exception is `fn A, ...: R`: in type position it describes a FUNCTION TYPE, a
+// `$FnType` value, not a closure. It is minted by accretion -- a `·new_fn_type`
+// seed, one `·fn_type_param` per arg type, then `·fn_type_result` -- mirroring
+// the tuple body's `·type_push` accretion. Each arg/result is itself a type
+// expression (recursively lowered here), so nested fn types work.
+fn lower_type_expr(g: &mut Gen, id: AstId) -> Lower {
+  lower_type_expr_named(g, id, None)
+}
+
+// As `lower_type_expr`, but for a `fn` type seeds the `$FnType` with `name`
+// (the bind LHS when `Foo = type: fn ...: R` declares the fn type directly).
+// For a non-`fn` type expression the name is irrelevant and ignored.
+fn lower_type_expr_named(g: &mut Gen, id: AstId, name: Option<&str>) -> Lower {
+  let NodeKind::Fn { params, body, .. } = g.node(id).kind.clone() else {
+    return lower(g, id);
+  };
+  let origin = Some(id);
+  let param_ids: Vec<AstId> = match g.node(params).kind.clone() {
+    NodeKind::Patterns(exprs) => exprs.items.to_vec(),
+    _ => vec![],
+  };
+  let result_id = body.items[0];
+
+  // Seed: mint an empty `$FnType` carrying its name (null when anonymous).
+  let name_val = type_name_val(g, name, origin);
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let mut pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewFnType),
+    args: args_val(vec![name_val]),
+    result: seed,
+    origin,
+  }];
+  let mut acc = ref_val(g, sk, si, origin);
+
+  // Accrete each argument type (positionally, in declaration order).
+  for param_id in param_ids {
+    let (pv, pp) = lower_type_expr(g, param_id);
+    pending.extend(pp);
+    let result = g.fresh_result(origin);
+    let (rk, ri) = (result.kind, result.id);
+    pending.push(Pending::App {
+      func: Callable::BuiltIn(BuiltIn::FnTypeParam),
+      args: args_val(vec![acc, pv]),
+      result,
+      origin,
+    });
+    acc = ref_val(g, rk, ri, origin);
+  }
+
+  // Set the result type.
+  let (rv, rp) = lower_type_expr(g, result_id);
+  pending.extend(rp);
+  let result = g.fresh_result(origin);
+  let (rk, ri) = (result.kind, result.id);
+  pending.push(Pending::App {
+    func: Callable::BuiltIn(BuiltIn::FnTypeResult),
+    args: args_val(vec![acc, rv]),
+    result,
+    origin,
+  });
+  acc = ref_val(g, rk, ri, origin);
+
+  (acc, pending)
+}
+
 // Mint a fresh type value via `·new_type`, then accrete each field onto it
 // with `·type_set_field` — the structural mirror of `lower_lit_rec` (a `{}`
 // seed threaded through `·rec_put` calls). The unit form (`type _`) has an
@@ -1157,6 +1226,14 @@ fn wrap_decl_in_params_fn(
 // declaration (a string-literal key, like `rec_put`'s key); the type-expr
 // lowers as an ordinary value (it resolves in scope, like `rec_put`'s value).
 fn lower_type_body(g: &mut Gen, fields: &[AstId], name: Option<&str>, origin: Option<AstId>) -> Lower {
+  // `Foo = type: fn A, ...: R` -- the body is a single `fn` describing a
+  // function type. `Foo` IS that fn type (named), not a tuple wrapping it.
+  if let [only] = fields
+    && matches!(g.node(*only).kind, NodeKind::Fn { .. })
+  {
+    return lower_type_expr_named(g, *only, name);
+  }
+
   let seed = g.fresh_result(origin);
   let (sk, si) = (seed.kind, seed.id);
   let name_val = type_name_val(g, name, origin);
@@ -1193,7 +1270,7 @@ fn lower_type_body(g: &mut Gen, fields: &[AstId], name: Option<&str>, origin: Op
         };
         let key_lit = lit_val(g, Lit::Symbol(name.as_bytes().to_vec()), Some(lhs));
         let type_id = body.items[0];
-        let (tv, tp) = lower(g, type_id);
+        let (tv, tp) = lower_type_expr(g, type_id);
         pending.extend(tp);
         let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);
@@ -1206,8 +1283,10 @@ fn lower_type_body(g: &mut Gen, fields: &[AstId], name: Option<&str>, origin: Op
         acc = ref_val(g, rk, ri, field_origin);
       }
       // A bare type expression — a positional (tuple) field; appended in order.
+      // A `fn ...: ...` here is a function type, minted as a `$FnType` value by
+      // lower_type_expr, then pushed as the positional field-type like any other.
       _ => {
-        let (tv, tp) = lower(g, field);
+        let (tv, tp) = lower_type_expr(g, field);
         pending.extend(tp);
         let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);

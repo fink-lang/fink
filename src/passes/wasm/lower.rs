@@ -1085,6 +1085,24 @@ fn lower_expr(
       emit_rec_key_op(lcx, ctx, target, args, expr.id);
     }
 
+    // NewFnType: `(ctx, name, cont)` — mints a `$FnType`. Same name-symbol seed
+    // as NewType.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::NewFnType), args } => {
+      emit_type_seed(lcx, ctx, lcx.rt.new_fn_type(), args, expr.id);
+    }
+
+    // FnTypeParam: `(ctx, fntype, param_type, cont)` — cons-prepend an arg type.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnTypeParam), args } => {
+      let target = lcx.rt.fn_type_param();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
+    // FnTypeResult: `(ctx, fntype, result_type, cont)` — set the result type.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnTypeResult), args } => {
+      let target = lcx.rt.fn_type_result();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
     // SeqConcat: `(a, b, cont)` — same call shape as SeqPrepend. Used
     // for list literals containing a spread (`[..xs, y]`, `[..a, ..b]`).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqConcat), args } => {

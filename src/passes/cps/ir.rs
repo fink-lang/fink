@@ -286,6 +286,12 @@ pub enum BuiltIn {
   // Accreted one member at a time: each member is a minted type added under its
   // name (the tag). The enum is a namespace (name -> member-type).
   NewEnum, EnumAdd,
+  // Function type — a sibling flavour describing a callable's shape
+  // (`type: fn A, B: R`). NewFnType mints an empty `$FnType`; FnTypeParam
+  // cons-prepends an argument type (mirrors TypePush); FnTypeResult sets the
+  // result type. Args carry types, never values — a `fn` in type position
+  // describes a shape, it does not construct a closure.
+  NewFnType, FnTypeParam, FnTypeResult,
   // String interpolation
   StrFmt,
   // Closure construction — partially applies a lifted fn with its captures.

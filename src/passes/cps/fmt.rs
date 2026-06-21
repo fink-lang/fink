@@ -436,6 +436,9 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::UnionAdd     => "·union_add".into(),
     BuiltIn::NewEnum      => "·new_enum".into(),
     BuiltIn::EnumAdd      => "·enum_add".into(),
+    BuiltIn::NewFnType    => "·new_fn_type".into(),
+    BuiltIn::FnTypeParam  => "·fn_type_param".into(),
+    BuiltIn::FnTypeResult => "·fn_type_result".into(),
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction

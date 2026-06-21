@@ -186,6 +186,10 @@ pub enum Sym {
   // Enum — NewEnum `(ctx, mid i32, cid i32, cont)` mints a `$Enum` (seed). EnumAdd
   // `(ctx, enum, name, member, cont)` adds a case (4-arg, like TypeSetField).
   NewEnum, EnumAdd,
+  // Fn type — NewFnType `(ctx, name, cont)` mints a `$FnType` (seed). FnTypeParam
+  // `(ctx, fntype, param_type, cont)` cons-prepends an arg type. FnTypeResult
+  // `(ctx, fntype, result_type, cont)` sets the result type.
+  NewFnType, FnTypeParam, FnTypeResult,
   // Direct-style rec field setter — `(any, any, any) -> any`. Used by
   // the BuiltIn::Import handler to build the import rec at module-load
   // time without going through the CPS-style rec_set chain.
@@ -347,6 +351,9 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::UnionAdd     => &[Sym::UnionAdd],
     BuiltIn::NewEnum      => &[Sym::NewEnum],
     BuiltIn::EnumAdd      => &[Sym::EnumAdd],
+    BuiltIn::NewFnType    => &[Sym::NewFnType],
+    BuiltIn::FnTypeParam  => &[Sym::FnTypeParam],
+    BuiltIn::FnTypeResult => &[Sym::FnTypeResult],
     // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
@@ -439,6 +446,9 @@ pub struct Runtime {
   union_add:    Option<FuncSym>,
   new_enum:     Option<FuncSym>,
   enum_add:     Option<FuncSym>,
+  new_fn_type:  Option<FuncSym>,
+  fn_type_param: Option<FuncSym>,
+  fn_type_result: Option<FuncSym>,
   panic:        Option<FuncSym>,
   panic_apply:  Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
@@ -494,6 +504,9 @@ impl Runtime {
   pub fn union_add(&self)    -> FuncSym { self.union_add.expect("rt: union_add not declared") }
   pub fn new_enum(&self)     -> FuncSym { self.new_enum.expect("rt: new_enum not declared") }
   pub fn enum_add(&self)     -> FuncSym { self.enum_add.expect("rt: enum_add not declared") }
+  pub fn new_fn_type(&self)  -> FuncSym { self.new_fn_type.expect("rt: new_fn_type not declared") }
+  pub fn fn_type_param(&self)  -> FuncSym { self.fn_type_param.expect("rt: fn_type_param not declared") }
+  pub fn fn_type_result(&self) -> FuncSym { self.fn_type_result.expect("rt: fn_type_result not declared") }
   /// `() -> anyref` signature type. Shared by `args_empty`, `rec_new`,
   /// and the BuiltIn::Import virtual-stdlib accessors.
   pub fn fn_nil_to_list_sig(&self) -> TypeSym {
@@ -663,6 +676,9 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::UnionAdd        => "rt/types.wat:union_add",
     Sym::NewEnum         => "rt/types.wat:new_enum",
     Sym::EnumAdd         => "rt/types.wat:enum_add",
+    Sym::NewFnType       => "rt/types.wat:new_fn_type",
+    Sym::FnTypeParam     => "rt/types.wat:fn_type_param",
+    Sym::FnTypeResult    => "rt/types.wat:fn_type_result",
 
     Sym::OpRngex         => "std/range.fnk:excl",
     Sym::OpRngin         => "std/range.fnk:incl",
@@ -820,6 +836,9 @@ if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecP
   if needed.contains(&Sym::UnionAdd)    { rt.union_add      = Some(FuncSym::Runtime(Sym::UnionAdd)); }
   if needed.contains(&Sym::NewEnum)     { rt.new_enum       = Some(FuncSym::Runtime(Sym::NewEnum)); }
   if needed.contains(&Sym::EnumAdd)     { rt.enum_add       = Some(FuncSym::Runtime(Sym::EnumAdd)); }
+  if needed.contains(&Sym::NewFnType)   { rt.new_fn_type    = Some(FuncSym::Runtime(Sym::NewFnType)); }
+  if needed.contains(&Sym::FnTypeParam) { rt.fn_type_param  = Some(FuncSym::Runtime(Sym::FnTypeParam)); }
+  if needed.contains(&Sym::FnTypeResult){ rt.fn_type_result = Some(FuncSym::Runtime(Sym::FnTypeResult)); }
   if needed.contains(&Sym::ModulesPub)  { rt.modules_pub    = Some(FuncSym::Runtime(Sym::ModulesPub)); }
   if needed.contains(&Sym::ModulesInitModule) { rt.modules_init_module = Some(FuncSym::Runtime(Sym::ModulesInitModule)); }
   if needed.contains(&Sym::ModulesImport) {

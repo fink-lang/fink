@@ -62,6 +62,10 @@
   ;;                 (base's fields + own, built by copying base.fields then
   ;;                 set'ing own; HAMT structural sharing keeps the copy cheap).
   ;;   $TupleType -- positional. `$positionals` is the field-type $List.
+  ;;   $FnType    -- a callable shape (`fn A, B: R`). SIBLING of TupleType, not a
+  ;;                 subtype: a fn type is not a tuple. `$params` is the arg-type
+  ;;                 $List (reverse-stored, readers reverse); `$result` the result
+  ;;                 type. Describes a shape; never applied to construct a value.
   ;; A bare `type _` / chain root is a plain `$Type` (unit); it is a marker/base,
   ;; never applied to construct an instance (no current caller).
   (type $Type (@pub) (sub (struct
@@ -79,6 +83,15 @@
     ;; Positional field-types, in REVERSE declaration order (cons-prepend);
     ;; readers reverse.
     (field $positionals (mut (ref null $List)))
+  )))
+  (type $FnType (@pub) (sub $Type (struct
+    (field $name (ref i31))
+    (field $base (mut (ref null $Type)))
+    ;; Argument types, in REVERSE declaration order (cons-prepend); readers
+    ;; reverse. Null until the first param is accreted.
+    (field $params (mut (ref null $List)))
+    ;; Result type. Null until set by fn_type_result.
+    (field $result (mut (ref null $Type)))
   )))
 
 
@@ -189,6 +202,53 @@
         (local.get $t)
         (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty)))
       (local.get $cont)))
+
+
+  ;; -- new_fn_type / fn_type_param / fn_type_result --------------------
+  ;;
+  ;; A function type (`fn A, B: R`). Minted by accretion, mirroring the tuple
+  ;; family: new_fn_type seeds an empty `$FnType` (carrying its name); each
+  ;; fn_type_param cons-prepends an arg type onto `$params` (reverse-stored,
+  ;; readers reverse); fn_type_result sets `$result`. All cont-taking.
+
+  ;; new_fn_type(ctx, name, cont) -- mint an empty `$FnType` (null params/result).
+  (func $new_fn_type (@pub) (@impl "rt/types.wat:new_fn_type")
+    (param $ctx (ref null any))
+    (param $name (ref null any))
+    (param $cont (ref null any))
+    (return_call $apply_1
+      (local.get $ctx)
+      (struct.new $FnType
+        (ref.cast (ref i31) (local.get $name)) (ref.null none)
+        (ref.null none) (ref.null none))
+      (local.get $cont)))
+
+  ;; fn_type_param(ctx, fntype, param_type, cont) -- cons-prepend an arg type.
+  (func $fn_type_param (@pub) (@impl "rt/types.wat:fn_type_param")
+    (param $ctx (ref null any))
+    (param $fntype (ref null any)) (param $param (ref null any))
+    (param $cont (ref null any))
+    (local $ft (ref $FnType))
+    (local $params (ref $List))
+    (local.set $ft (ref.cast (ref $FnType) (local.get $fntype)))
+    (local.set $params
+      (if (result (ref $List)) (ref.is_null (struct.get $FnType $params (local.get $ft)))
+        (then (call $list_empty))
+        (else (ref.cast (ref $List) (struct.get $FnType $params (local.get $ft))))))
+    (struct.set $FnType $params (local.get $ft)
+      (call $list_prepend (ref.cast (ref any) (local.get $param)) (local.get $params)))
+    (return_call $apply_1 (local.get $ctx) (local.get $ft) (local.get $cont)))
+
+  ;; fn_type_result(ctx, fntype, result_type, cont) -- set the result type.
+  (func $fn_type_result (@pub) (@impl "rt/types.wat:fn_type_result")
+    (param $ctx (ref null any))
+    (param $fntype (ref null any)) (param $result (ref null any))
+    (param $cont (ref null any))
+    (local $ft (ref $FnType))
+    (local.set $ft (ref.cast (ref $FnType) (local.get $fntype)))
+    (struct.set $FnType $result (local.get $ft)
+      (ref.cast (ref $Type) (local.get $result)))
+    (return_call $apply_1 (local.get $ctx) (local.get $ft) (local.get $cont)))
 
 
   ;; -- type_inherit ----------------------------------------------------
