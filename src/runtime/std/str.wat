@@ -41,6 +41,10 @@
   (import "rt/types.wat"   "Inst"      (type $Inst (sub any)))
   (import "rt/types.wat"   "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
+  (import "rt/types.wat"   "inst_type_name"
+    (func $inst_type_name (param (ref null any)) (result (ref i31))))
+  (import "rt/symbols.wat" "repr"
+    (func $symbol_repr (param (ref i31)) (result (ref $Str))))
   (import "rt/apply.wat"   "Fn3"       (type $Fn3       (sub any)))
   (import "rt/apply.wat"   "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
@@ -1664,19 +1668,44 @@
             (local.get $val))))
       (return_call $opaque_fmt))
 
-    ;; Try $Inst (typed instance) — fmt the bare structural payload. Reads
-    ;; strip the type, so `Foo {bar: 1}` formats as `{bar: 1}`.
-    ;; TODO(type-name): show the nominal type name (`Foo {bar: 1}`). The
-    ;; instance's $type carries (mod_id, cps_id); resolving that to "Foo" is
-    ;; host-side reflection (the same channel backtraces use). Bare payload for
-    ;; now.
+    ;; Try $Inst (typed instance) — the nominal name then the fmt'd payload
+    ;; (`Foo {bar: 1}`). Anonymous types (null-name symbol) fmt as bare payload.
     (if (ref.test (ref $Inst) (local.get $val))
-      (then (return_call $fmt_val
-        (ref.as_non_null (call $inst_payload (local.get $val))))))
+      (then (return_call $inst_fmt (local.get $val))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
+
+  ;; $inst_fmt : (ref any $Inst) -> (ref $Str)
+  ;; Nominal type name + space + fmt'd payload (`Foo {bar: 1}`). The name is the
+  ;; type's `$name` symbol, rendered via the symbol repr (bare ident or quoted).
+  ;; An anonymous type carries the null-name symbol, whose repr is empty -- in
+  ;; that case the bare payload is returned (no leading space). Mirrors
+  ;; repr.wat:$inst_repr, but fmt's the payload (so string fields render bare).
+  (func $inst_fmt (param $val (ref null any)) (result (ref $Str))
+    (local $name (ref $Str))
+    (local $payload (ref $Str))
+    (local $name_len i32)
+    (local $pay_len i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local.set $name (call $symbol_repr (call $inst_type_name (local.get $val))))
+    (local.set $payload
+      (call $fmt_val (ref.as_non_null (call $inst_payload (local.get $val)))))
+    (local.set $name_len (call $_str_len (local.get $name)))
+    (if (i32.eqz (local.get $name_len))
+      (then (return (local.get $payload))))
+    (local.set $pay_len (call $_str_len (local.get $payload)))
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $name_len)
+          (i32.add (i32.const 1) (local.get $pay_len)))))
+    (local.set $pos (call $_str_copy_to (local.get $name) (local.get $buf) (i32.const 0)))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20)) ;; space
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (local.set $pos (call $_str_copy_to (local.get $payload) (local.get $buf) (local.get $pos)))
+    (return_call $from_bytes (local.get $buf)))
 
   ;; _str_fmt_i31 : i32 -> (ref $Str)
   ;; Format an i31ref value as a boolean: 0 → "false", 1 → "true".

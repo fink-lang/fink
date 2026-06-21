@@ -6,12 +6,13 @@
 ;; nominal-wrapper shape as $Opaque (rt/opaque.wat), extended with an
 ;; introspection key.
 ;;
-;; Introspection key: a `$Type` carries (mod_id, cps_id) -- the SAME pair the
-;; tracer carries per frame (rt/trace.wat). The host resolves it to a name and
-;; source location on demand (repr / errors / debug); the runtime holds only the
-;; opaque pair, so a fully-resolved type stays erasable. Two i32s, mirroring
-;; trace_push/trace_mark, rather than a packed i64 -- consistent with the one
-;; existing mechanism.
+;; Name: a `$Type` carries a `$name` symbol (a tagged i31, rt/symbols.wat) --
+;; the interned id of its declared ident (`Foo` in `Foo = type: ...`). The
+;; renderer resolves it to a source name in-band via `symbol_to_str` (repr /
+;; errors), no host round-trip. An anonymous declaration (`type _` used inline
+;; as a field type, never bound) carries the null-name symbol (id 0). A symbol
+;; cannot carry a source span; type declarations have no diagnostic that points
+;; at the declaration site, so no source location is held.
 
 (module
 
@@ -53,10 +54,10 @@
   ;; -- $Type and flavour subtypes -------------------------------------
   ;;
   ;; A type is a `$base`-chain of nodes. `$Type` is the shared CORE every flavour
-  ;; carries: the (mod_id, cps_id) introspection key and the `$base` link
-  ;; (`..Super`, or the previous node in a multi-level decl; null at the chain
-  ;; root). Flavour is a SUBTYPE, discriminated by `br_on_cast` -- not a $kind tag
-  ;; and not inferred from collection emptiness:
+  ;; carries: the `$name` symbol and the `$base` link (`..Super`, or the previous
+  ;; node in a multi-level decl; null at the chain root). Flavour is a SUBTYPE,
+  ;; discriminated by `br_on_cast` -- not a $kind tag and not inferred from
+  ;; collection emptiness:
   ;;   $RecType   -- named fields. `$fields` is the FULL name->field-type $Dict
   ;;                 (base's fields + own, built by copying base.fields then
   ;;                 set'ing own; HAMT structural sharing keeps the copy cheap).
@@ -64,19 +65,16 @@
   ;; A bare `type _` / chain root is a plain `$Type` (unit); it is a marker/base,
   ;; never applied to construct an instance (no current caller).
   (type $Type (@pub) (sub (struct
-    (field $mod_id i32)
-    (field $cps_id i32)
+    (field $name (ref i31))
     (field $base (mut (ref null $Type)))
   )))
   (type $RecType (@pub) (sub $Type (struct
-    (field $mod_id i32)
-    (field $cps_id i32)
+    (field $name (ref i31))
     (field $base (mut (ref null $Type)))
     (field $fields (mut (ref null $Dict)))
   )))
   (type $TupleType (@pub) (sub $Type (struct
-    (field $mod_id i32)
-    (field $cps_id i32)
+    (field $name (ref i31))
     (field $base (mut (ref null $Type)))
     ;; Positional field-types, in REVERSE declaration order (cons-prepend);
     ;; readers reverse.
@@ -106,17 +104,18 @@
   ;; -- new_type --------------------------------------------------------
   ;;
   ;; Mint a fresh `$Type`. Called directly by codegen (not a first-class fink
-  ;; value): the lowering supplies mod_id/cps_id as constants (like trace_push).
-  ;; Op calling convention: (ctx, mid, cid, cont) -- tail-applies cont with the
+  ;; value): the lowering supplies the `$name` symbol (the declared ident's
+  ;; interned id, or the null-name symbol for an anonymous `type _`).
+  ;; Op calling convention: (ctx, name, cont) -- tail-applies cont with the
   ;; new type value. Starts with an empty fields dict.
   (func $new_type (@pub) (@impl "rt/types.wat:new_type")
     (param $ctx (ref null any))
-    (param $mid i32) (param $cid i32)
+    (param $name (ref null any))
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Type
-        (local.get $mid) (local.get $cid) (ref.null none))
+        (ref.cast (ref i31) (local.get $name)) (ref.null none))
       (local.get $cont)))
 
 
@@ -152,8 +151,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $RecType
-        (struct.get $Type $mod_id (local.get $t))
-        (struct.get $Type $cps_id (local.get $t))
+        (struct.get $Type $name (local.get $t))
         (local.get $t)
         (ref.cast (ref $Dict)
           (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val))))
@@ -187,8 +185,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $TupleType
-        (struct.get $Type $mod_id (local.get $t))
-        (struct.get $Type $cps_id (local.get $t))
+        (struct.get $Type $name (local.get $t))
         (local.get $t)
         (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty)))
       (local.get $cont)))
@@ -205,7 +202,9 @@
   ;;   - base is a unit $Type -> remain unit-based (new $Type base:base); a later
   ;;     field/positional will wrap it via type_set_field/type_push.
   ;; The prior `type` node (a fresh unit seed at chain start) is replaced by this
-  ;; base-derived node. Cont-taking. (ctx, type, base, cont).
+  ;; base-derived node. The new node keeps the DERIVED type's own `$name` (read
+  ;; off `$type`, the prior seed -- e.g. `FooBar`), NOT base's: a derived type
+  ;; reprs under its own name. Cont-taking. (ctx, type, base, cont).
   (func $type_inherit (@pub) (@impl "rt/types.wat:type_inherit")
     (param $ctx (ref null any))
     (param $type (ref null any)) (param $base (ref null any))
@@ -213,7 +212,10 @@
     (local $b (ref $Type))
     (local $bt (ref $TupleType))
     (local $br (ref $RecType))
+    (local $name (ref i31))
     (local.set $b (ref.cast (ref $Type) (local.get $base)))
+    (local.set $name
+      (struct.get $Type $name (ref.cast (ref $Type) (local.get $type))))
     ;; Tuple base.
     (if (ref.test (ref $TupleType) (local.get $b))
       (then
@@ -221,8 +223,7 @@
         (return_call $apply_1
           (local.get $ctx)
           (struct.new $TupleType
-            (struct.get $Type $mod_id (local.get $b))
-            (struct.get $Type $cps_id (local.get $b))
+            (local.get $name)
             (local.get $b)
             (struct.get $TupleType $positionals (local.get $bt)))
           (local.get $cont))))
@@ -233,8 +234,7 @@
         (return_call $apply_1
           (local.get $ctx)
           (struct.new $RecType
-            (struct.get $Type $mod_id (local.get $b))
-            (struct.get $Type $cps_id (local.get $b))
+            (local.get $name)
             (local.get $b)
             (struct.get $RecType $fields (local.get $br)))
           (local.get $cont))))
@@ -242,8 +242,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Type
-        (struct.get $Type $mod_id (local.get $b))
-        (struct.get $Type $cps_id (local.get $b))
+        (local.get $name)
         (local.get $b))
       (local.get $cont)))
 
@@ -256,8 +255,7 @@
   ;; structural, order-independent -- so union eq delegates to set eq.
   ;; Inherits $Type's fields as the struct prefix (WasmGC rule).
   (type $Union (@pub) (sub $Type (struct
-    (field $mod_id i32)
-    (field $cps_id i32)
+    (field $name (ref i31))
     (field $base (mut (ref null $Type)))
     (field $members (mut (ref null $Set)))
   )))
@@ -266,15 +264,15 @@
   ;; -- new_union -------------------------------------------------------
   ;;
   ;; Mint a fresh `$Union` with an empty member set. Seed constructor, same
-  ;; introspection-key convention as new_type. (ctx, mid, cid, cont).
+  ;; `$name`-symbol convention as new_type. (ctx, name, cont).
   (func $new_union (@pub) (@impl "rt/types.wat:new_union")
     (param $ctx (ref null any))
-    (param $mid i32) (param $cid i32)
+    (param $name (ref null any))
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Union
-        (local.get $mid) (local.get $cid) (ref.null none)
+        (ref.cast (ref i31) (local.get $name)) (ref.null none)
         (call $set_empty))
       (local.get $cont)))
 
@@ -355,8 +353,7 @@
   ;; subtypes $Type and adds $cases: a name -> member-type $Dict (an enum is "a
   ;; namespace = a record"). Inherits $Type's fields as the struct prefix.
   (type $Enum (@pub) (sub $Type (struct
-    (field $mod_id i32)
-    (field $cps_id i32)
+    (field $name (ref i31))
     (field $base (mut (ref null $Type)))
     (field $cases (mut (ref null $Dict)))
   )))
@@ -365,15 +362,15 @@
   ;; -- new_enum --------------------------------------------------------
   ;;
   ;; Mint a fresh `$Enum` with an empty cases dict. Seed constructor.
-  ;; (ctx, mid, cid, cont).
+  ;; (ctx, name, cont).
   (func $new_enum (@pub) (@impl "rt/types.wat:new_enum")
     (param $ctx (ref null any))
-    (param $mid i32) (param $cid i32)
+    (param $name (ref null any))
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Enum
-        (local.get $mid) (local.get $cid) (ref.null none)
+        (ref.cast (ref i31) (local.get $name)) (ref.null none)
         (call $dict_new))
       (local.get $cont)))
 
@@ -493,6 +490,18 @@
       (then (return
         (struct.get $Rec $rec_payload (ref.cast (ref $Rec) (local.get $inst))))))
     (struct.get $Tuple $tup_payload (ref.cast (ref $Tuple) (local.get $inst))))
+
+
+  ;; -- inst_type_name --------------------------------------------------
+  ;;
+  ;; The `$name` symbol of an instance's nominal type. The renderer (repr.wat)
+  ;; reads this and feeds it to the symbol repr to source-quote the type name
+  ;; (`Foo {bar: 1}`). A symbol word, so it routes through the same name
+  ;; resolution any symbol uses -- types.wat owns no string machinery.
+  (func $inst_type_name (@pub)
+    (param $inst (ref null any)) (result (ref i31))
+    (struct.get $Type $name
+      (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $inst)))))
 
 
   ;; -- project_inst ----------------------------------------------------
