@@ -471,12 +471,55 @@ test 'typed tuple destructure spread', fn:
 
 
 
-skip test 'TODO support typed fn', fn:
-  Foo = type:
-    # fn u8, i16: i8
-    u8
+--- TODO rendering a bare type VALUE (not an instance) is unbuilt -- repr_val /
+    fmt_val have no $Type arm yet. These pin the fn-type repr for when type-value
+    rendering lands. ---
+skip test 'fn type repr', fn:
+  Foo = type: fn u8, u8: u8
+
+  equals
+    '${Foo}'
+    'Foo fn u8, u8: u8'
 
 
+skip test 'fn type single arg repr', fn:
+  Foo = type: fn u8: u8
+
+  equals
+    '${Foo}'
+    'Foo fn u8: u8'
+
+
+test 'fn type equality', fn:
+  Foo = type: fn u8, u8: u8
+  Bar = type: fn u8, u8: u8
+
+  not_equals
+    Foo
+    Bar
+
+
+test 'fn type alias equality', fn:
+  Foo = type: fn u8: u8
+  Bar = Foo
+
+  equals
+    Foo
+    Bar
+
+
+--- a fn-type guard runs and is well-defined, but matches nothing yet: fn-type
+    INSTANCES are unconstructable (no type_apply $FnType arm), so a plain closure
+    is not an instance and falls through. Flips to a match when instances land. ---
+test 'fn type guard falls through', fn:
+  FooFn = type: fn u8: u8
+  handler = fn x: x
+
+  result = match handler:
+    FooFn f: 'matched'
+    _: 'other'
+
+  equals result, 'other'
 
 
 test 'enum case match with destructure', fn:

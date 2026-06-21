@@ -657,6 +657,25 @@ fn walk_type_member<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut 
     // resolved at the lexical-scopes level.
     NodeKind::Ident(_) | NodeKind::SynthIdent(_) if is_enum => {}
 
+    // Function type `fn A, ...: R`. In type position the params are NOT binding
+    // sites (as they are for a fn value) -- each is a type REFERENCE, same as the
+    // result. Resolve params and result in the current type scope; do not create
+    // a fn scope or register param binds.
+    NodeKind::Fn { params, body, .. } => {
+      // Params/result are type references regardless of enum context (a bare
+      // ident here is a type name, never a nullary-constructor declaration), so
+      // resolve with is_enum = false.
+      if let NodeKind::Patterns(pat_items) = &ast.nodes.get(params).kind {
+        let param_ids: Vec<AstId> = pat_items.items.to_vec();
+        for param_id in param_ids {
+          walk_type_member(ast, param_id, scope, ctx, false);
+        }
+      }
+      for &stmt_id in body.items.iter() {
+        walk_type_member(ast, stmt_id, scope, ctx, false);
+      }
+    }
+
     // type tuple positional / union member: a type reference (or
     // sub-expression to resolve).
     _ => walk_node(ast, id, scope, ctx),
