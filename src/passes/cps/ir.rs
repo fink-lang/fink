@@ -278,6 +278,10 @@ pub enum BuiltIn {
   // (the `..Foo` spread; mirrors RecMerge, plus the subtyping link).
   // TypePush appends a positional field (the tuple body `type: u8, i8`).
   NewType, TypeSetField, TypeInherit, TypePush,
+  // TypeSetNew records a type-constructor on a type, marking it GENERIC: applying
+  // the type then runs this builder (over the type-params) to produce a concrete
+  // type, rather than constructing an instance. `(type, builder) -> type`.
+  TypeSetNew,
   // Union — an open union over existing types (`union: T1; T2`). Accreted one
   // member at a time (mirrors NewType/TypeSetField); the runtime representation
   // is a set of type refs.
