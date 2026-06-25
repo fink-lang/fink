@@ -18,10 +18,21 @@
 
   (import "rt/apply.wat" "apply_1"
     (func $apply_1 (param (ref null any)) (param $result (ref null any)) (param $cont (ref null any))))
+  ;; Universal closure dispatcher -- used to invoke a generic type's `$new`
+  ;; builder (a closure over the type-params) when applying a GENERIC type.
+  (import "rt/apply.wat" "apply_3"
+    (func $apply_3 (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "rt/apply.wat" "args_head"
     (func $args_head (param (ref null any)) (result (ref null any))))
   (import "rt/apply.wat" "args_tail"
     (func $args_tail (param (ref null any)) (result (ref null any))))
+  (import "rt/apply.wat" "args_prepend"
+    (func $args_prepend (param (ref null any)) (param (ref any)) (result (ref any))))
+  ;; Build the cont that stamps a generic-built type's `$type` back-link.
+  (import "rt/apply.wat" "make_type_stamp_cont"
+    (func $make_type_stamp_cont
+      (param (ref null any)) (param (ref null any)) (param (ref null any))
+      (result (ref null any))))
   (import "std/dict.wat" "Dict" (type $Dict (sub any)))
   ;; Direct-style dict helpers: build an empty fields dict and add entries.
   (import "std/dict.wat" "_rec_new"
@@ -68,17 +79,33 @@
   ;;                 type. Describes a shape; never applied to construct a value.
   ;; A bare `type _` / chain root is a plain `$Type` (unit); it is a marker/base,
   ;; never applied to construct an instance (no current caller).
+  ;; `$type`  -- the DESCRIPTOR: for a type produced by applying a generic, the
+  ;;             generic it was made from (its classifier). Null for directly-
+  ;;             declared types (root/self for now). Drives generic guards.
+  ;; `$new`   -- the type-CONSTRUCTOR: present (non-null) iff this is a GENERIC
+  ;;             type. Applying a $Type with `$new` set calls `$new` with the
+  ;;             type-args to BUILD a type; with `$new` null it builds an
+  ;;             instance (the data constructor). So `$new != null` IS the
+  ;;             genericity tag. A field (not a subtype): a generic `type T:`
+  ;;             body is still a record/tuple, so genericity lives ON the
+  ;;             structure subtype, not as a sibling of it.
   (type $Type (@pub) (sub (struct
     (field $name (ref i31))
+    (field $type (mut (ref null $Type)))
+    (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
   )))
   (type $RecType (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $type (mut (ref null $Type)))
+    (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
     (field $fields (mut (ref null $Dict)))
   )))
   (type $TupleType (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $type (mut (ref null $Type)))
+    (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
     ;; Positional field-types, in REVERSE declaration order (cons-prepend);
     ;; readers reverse.
@@ -86,6 +113,8 @@
   )))
   (type $FnType (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $type (mut (ref null $Type)))
+    (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
     ;; Argument types, in REVERSE declaration order (cons-prepend); readers
     ;; reverse. Null until the first param is accreted.
@@ -114,6 +143,40 @@
   )))
 
 
+  ;; -- type_set_new ----------------------------------------------------
+  ;;
+  ;; Record a type-constructor (`builder`, a closure over the type-params) on a
+  ;; type, marking it GENERIC. Applying a type with `$new` set runs the builder
+  ;; (type_apply's generic branch) to PRODUCE A TYPE, rather than constructing an
+  ;; instance. Cont-taking; tail-applies cont with the (now generic) type.
+  ;; (ctx, type, builder, cont).
+  (func $type_set_new (@pub) (@impl "rt/types.wat:type_set_new")
+    (param $ctx (ref null any))
+    (param $type (ref null any)) (param $builder (ref null any))
+    (param $cont (ref null any))
+    (local $t (ref $Type))
+    (local.set $t (ref.cast (ref $Type) (local.get $type)))
+    (struct.set $Type $new (local.get $t) (local.get $builder))
+    (return_call $apply_1 (local.get $ctx) (local.get $t) (local.get $cont)))
+
+
+  ;; -- type_set_type_field ---------------------------------------------
+  ;;
+  ;; Stamp a type's `$type` descriptor (the generic that produced it) and return
+  ;; the type. Used by the generic-application back-link: apply.wat's stamp cont
+  ;; calls this on the type a generic's `$new` builder just produced, recording
+  ;; `result.$type = the generic` so a `Foo` guard recognizes `Foo u8` instances.
+  ;; apply.wat owns the cont/closure mechanics ($Closure is concrete there);
+  ;; types.wat owns the $Type struct mutation. (t, generic) -> t.
+  (func $type_set_type_field (@pub)
+      (param $t (ref null any)) (param $generic (ref null any))
+      (result (ref null any))
+    (struct.set $Type $type
+      (ref.cast (ref $Type) (local.get $t))
+      (ref.cast (ref $Type) (local.get $generic)))
+    (local.get $t))
+
+
   ;; -- new_type --------------------------------------------------------
   ;;
   ;; Mint a fresh `$Type`. Called directly by codegen (not a first-class fink
@@ -128,7 +191,9 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Type
-        (ref.cast (ref i31) (local.get $name)) (ref.null none))
+        (ref.cast (ref i31) (local.get $name))
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (ref.null none))                 ;; $base
       (local.get $cont)))
 
 
@@ -165,7 +230,8 @@
       (local.get $ctx)
       (struct.new $RecType
         (struct.get $Type $name (local.get $t))
-        (local.get $t)
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (local.get $t)                   ;; $base
         (ref.cast (ref $Dict)
           (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val))))
       (local.get $cont)))
@@ -199,7 +265,8 @@
       (local.get $ctx)
       (struct.new $TupleType
         (struct.get $Type $name (local.get $t))
-        (local.get $t)
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (local.get $t)                   ;; $base
         (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty)))
       (local.get $cont)))
 
@@ -219,8 +286,10 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $FnType
-        (ref.cast (ref i31) (local.get $name)) (ref.null none)
-        (ref.null none) (ref.null none))
+        (ref.cast (ref i31) (local.get $name))
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (ref.null none)                  ;; $base
+        (ref.null none) (ref.null none)) ;; $params, $result
       (local.get $cont)))
 
   ;; fn_type_param(ctx, fntype, param_type, cont) -- cons-prepend an arg type.
@@ -284,7 +353,8 @@
           (local.get $ctx)
           (struct.new $TupleType
             (local.get $name)
-            (local.get $b)
+            (ref.null none) (ref.null none)  ;; $type, $new
+            (local.get $b)                   ;; $base
             (struct.get $TupleType $positionals (local.get $bt)))
           (local.get $cont))))
     ;; Rec base.
@@ -295,7 +365,8 @@
           (local.get $ctx)
           (struct.new $RecType
             (local.get $name)
-            (local.get $b)
+            (ref.null none) (ref.null none)  ;; $type, $new
+            (local.get $b)                   ;; $base
             (struct.get $RecType $fields (local.get $br)))
           (local.get $cont))))
     ;; Unit base: new unit node based on it.
@@ -303,7 +374,8 @@
       (local.get $ctx)
       (struct.new $Type
         (local.get $name)
-        (local.get $b))
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (local.get $b))                  ;; $base
       (local.get $cont)))
 
 
@@ -316,6 +388,8 @@
   ;; Inherits $Type's fields as the struct prefix (WasmGC rule).
   (type $Union (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $type (mut (ref null $Type)))
+    (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
     (field $members (mut (ref null $Set)))
   )))
@@ -332,7 +406,9 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Union
-        (ref.cast (ref i31) (local.get $name)) (ref.null none)
+        (ref.cast (ref i31) (local.get $name))
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (ref.null none)                  ;; $base
         (call $set_empty))
       (local.get $cont)))
 
@@ -414,6 +490,8 @@
   ;; namespace = a record"). Inherits $Type's fields as the struct prefix.
   (type $Enum (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $type (mut (ref null $Type)))
+    (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
     (field $cases (mut (ref null $Dict)))
   )))
@@ -430,7 +508,9 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Enum
-        (ref.cast (ref i31) (local.get $name)) (ref.null none)
+        (ref.cast (ref i31) (local.get $name))
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (ref.null none)                  ;; $base
         (call $dict_new))
       (local.get $cont)))
 
@@ -493,6 +573,24 @@
     (local $cont (ref null any))
     (local $real_args (ref null any))
     (local.set $t (ref.cast (ref $Type) (local.get $type)))
+    ;; GENERIC type: `$new` is the type-constructor (a closure over the
+    ;; type-params). Applying it BUILDS A TYPE, not an instance. Run the builder
+    ;; with the type-args, but WRAP the cont so the built type's `$type`
+    ;; back-link is stamped to this generic before continuing (so a `Foo` guard
+    ;; recognizes `Foo u8`). `$new` null => fall through to instance construction
+    ;; below (the data constructor).
+    (if (i32.eqz (ref.is_null (struct.get $Type $new (local.get $t))))
+      (then
+        (return_call $apply_3
+          ;; Replace the head cont with the stamping cont; keep the type-args.
+          (call $args_prepend
+            (call $make_type_stamp_cont
+              (local.get $ctx)
+              (call $args_head (local.get $args))
+              (local.get $t))
+            (ref.cast (ref any) (call $args_tail (local.get $args))))
+          (local.get $ctx)
+          (struct.get $Type $new (local.get $t)))))
     ;; Fn3 args: cont = head, real args = tail.
     (local.set $cont (call $args_head (local.get $args)))
     (local.set $real_args (call $args_tail (local.get $args)))
@@ -527,12 +625,21 @@
     (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
       (then (return (i32.const 0))))
     ;; Walk the instance's type and its $base chain; ref.eq against `type`.
+    ;; At each node ALSO check its `$type` descriptor: a concrete type built by
+    ;; applying a GENERIC carries `$type -> the generic`, so `Foo u8` matches a
+    ;; `Foo` guard (the generic is the classifier, not in the $base chain).
     (local.set $t (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
     (block $done
       (loop $walk
         (br_if $done (ref.is_null (local.get $t)))
         (if (ref.eq (local.get $t) (ref.cast (ref eq) (local.get $type)))
           (then (return (i32.const 1))))
+        (if (i32.eqz (ref.is_null (struct.get $Type $type (local.get $t))))
+          (then
+            (if (ref.eq
+                  (struct.get $Type $type (local.get $t))
+                  (ref.cast (ref eq) (local.get $type)))
+              (then (return (i32.const 1))))))
         (local.set $t (struct.get $Type $base (local.get $t)))
         (br $walk)))
     (i32.const 0))

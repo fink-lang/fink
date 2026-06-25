@@ -443,6 +443,22 @@ test 'typed tuple equality', fn:
     [1, 2]
 
 
+test 'generic type applied is recognized by its generic', fn:
+  Foo = type T:
+    bar: T
+
+  FooU8 = type:
+    ..Foo u8
+
+  foo = FooU8 {bar: 1}
+
+  Foo f = foo
+
+  equals
+    f
+    FooU8 {bar: 1}
+
+
 
 test 'typed tuple destructure', fn:
   Foo = type: u8

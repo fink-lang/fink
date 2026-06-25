@@ -180,6 +180,9 @@ pub enum Sym {
   // Type positional accretion — `(ctx, type, val, cont) -> ()`. Appends a tuple
   // field-type. TypeInherit — `(ctx, type, base, cont) -> ()`. Records `..Base`.
   TypePush, TypeInherit,
+  // TypeSetNew — `(ctx, type, builder, cont) -> type`. Records the
+  // type-constructor on a type, marking it GENERIC (applying it runs `builder`).
+  TypeSetNew,
   // Union — NewUnion `(ctx, mid i32, cid i32, cont)` mints a `$Union` (seed, like
   // NewType). UnionAdd `(ctx, union, member, cont)` adds a member type-ref.
   NewUnion, UnionAdd,
@@ -345,6 +348,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     // runtime symbol).
     BuiltIn::RecProtocol | BuiltIn::TupleProtocol => &[],
     BuiltIn::TypeSetField => &[Sym::TypeSetField],
+    BuiltIn::TypeSetNew   => &[Sym::TypeSetNew],
     BuiltIn::TypePush     => &[Sym::TypePush],
     BuiltIn::TypeInherit  => &[Sym::TypeInherit],
     BuiltIn::NewUnion     => &[Sym::NewUnion],
@@ -440,6 +444,7 @@ pub struct Runtime {
   guard_apply:  Option<FuncSym>,
   new_type:     Option<FuncSym>,
   type_set_field: Option<FuncSym>,
+  type_set_new: Option<FuncSym>,
   type_push:    Option<FuncSym>,
   type_inherit: Option<FuncSym>,
   new_union:    Option<FuncSym>,
@@ -498,6 +503,7 @@ impl Runtime {
   pub fn guard_apply(&self)  -> FuncSym { self.guard_apply.expect("rt: guard_apply not declared") }
   pub fn new_type(&self)     -> FuncSym { self.new_type.expect("rt: new_type not declared") }
   pub fn type_set_field(&self) -> FuncSym { self.type_set_field.expect("rt: type_set_field not declared") }
+  pub fn type_set_new(&self) -> FuncSym { self.type_set_new.expect("rt: type_set_new not declared") }
   pub fn type_push(&self)    -> FuncSym { self.type_push.expect("rt: type_push not declared") }
   pub fn type_inherit(&self) -> FuncSym { self.type_inherit.expect("rt: type_inherit not declared") }
   pub fn new_union(&self)    -> FuncSym { self.new_union.expect("rt: new_union not declared") }
@@ -670,6 +676,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::GuardApply      => "std/operators.fnk:guard_apply",
     Sym::NewType         => "rt/types.wat:new_type",
     Sym::TypeSetField    => "rt/types.wat:type_set_field",
+    Sym::TypeSetNew      => "rt/types.wat:type_set_new",
     Sym::TypePush        => "rt/types.wat:type_push",
     Sym::TypeInherit     => "rt/types.wat:type_inherit",
     Sym::NewUnion        => "rt/types.wat:new_union",
@@ -830,6 +837,7 @@ if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecP
   if needed.contains(&Sym::GuardApply)  { rt.guard_apply    = Some(FuncSym::Runtime(Sym::GuardApply)); }
   if needed.contains(&Sym::NewType)     { rt.new_type       = Some(FuncSym::Runtime(Sym::NewType)); }
   if needed.contains(&Sym::TypeSetField) { rt.type_set_field = Some(FuncSym::Runtime(Sym::TypeSetField)); }
+  if needed.contains(&Sym::TypeSetNew)  { rt.type_set_new   = Some(FuncSym::Runtime(Sym::TypeSetNew)); }
   if needed.contains(&Sym::TypePush)    { rt.type_push      = Some(FuncSym::Runtime(Sym::TypePush)); }
   if needed.contains(&Sym::TypeInherit) { rt.type_inherit   = Some(FuncSym::Runtime(Sym::TypeInherit)); }
   if needed.contains(&Sym::NewUnion)    { rt.new_union      = Some(FuncSym::Runtime(Sym::NewUnion)); }
