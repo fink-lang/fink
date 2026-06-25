@@ -1056,6 +1056,13 @@ fn lower_expr(
       emit_direct_op_call(lcx, ctx, target, args, expr.id);
     }
 
+    // TypeSetNew: `(ctx, type, builder, cont)` — record the type-constructor on a
+    // type (mark it generic). Same 2-value + cont shape as TypePush.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeSetNew), args } => {
+      let target = lcx.rt.type_set_new();
+      emit_direct_op_call(lcx, ctx, target, args, expr.id);
+    }
+
     // TypeInherit: `(ctx, type, base, cont)` — record a `..Base` supertype link.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::TypeInherit), args } => {
       let target = lcx.rt.type_inherit();

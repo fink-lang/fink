@@ -432,6 +432,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::TypeSetField => "·type_set_field".into(),
     BuiltIn::TypeInherit  => "·type_inherit".into(),
     BuiltIn::TypePush     => "·type_push".into(),
+    BuiltIn::TypeSetNew   => "·type_set_new".into(),
     BuiltIn::NewUnion     => "·new_union".into(),
     BuiltIn::UnionAdd     => "·union_add".into(),
     BuiltIn::NewEnum      => "·new_enum".into(),

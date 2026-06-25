@@ -125,6 +125,22 @@ test 'record type extends', fn:
             Ident 'u8'
 
 
+test 'extends an applied generic', fn:
+  expect ast ƒink:
+    Bar = type:
+      ..Foo u8
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'Bar'
+        Type ':',
+          Patterns
+          Spread '..',
+            Apply
+              Ident 'Foo'
+              Ident 'u8'
+
+
 test 'tuple type extends with prepend', fn:
   expect ast ƒink:
     Nu = type:

@@ -103,18 +103,20 @@ test 'generic type with one param', fn:
     Spam = type T:
       ham: T
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_28, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_37, ·ƒret_2:
       ·letrec fn ·Spam_0:
         ·fn
-          fn ·ƒctx_30, ·ƒret_4, ·T_1:
-            ·new_type ·ƒctx_30, ƒ'Spam', fn ·ƒctx_32, ·ƒv_5:
-              ·type_set_field ·ƒctx_32, ·ƒv_5, ƒ'ham', ·T_1, fn ·ƒctx_34, ·ƒv_10:
-                ·ƒret_4 ·ƒctx_34, ·ƒv_10
+          fn ·ƒctx_39, ·ƒret_4, ·T_1:
+            ·new_type ·ƒctx_39, ƒ'Spam', fn ·ƒctx_41, ·ƒv_5:
+              ·type_set_field ·ƒctx_41, ·ƒv_5, ƒ'ham', ·T_1, fn ·ƒctx_43, ·ƒv_10:
+                ·ƒret_4 ·ƒctx_43, ·ƒv_10
           fn ·ƒv_3:
-            ·set ·Spam_0, ·ƒv_3, fn:
-              ·ƒpub ·ƒctx_28, ·Spam_0, fn ·ƒctx_37:
-                ·ƒret_2 ·ƒctx_37, ·Spam_0
-    # sm:SgABABcAAQAXJAEAFxgBABcSAAIABgEAFwABABcYAQAEEAACAAoBDhAAAQAQCAAUABgBABAWAQoBCgACABIBCRAAAQAQFgAUAAQBABAQAAoAGAEAEA4AAgAWARQGAAEABiIAFAAEARMQDgAEARQDDgAEAQoBCgAKABgBCQYQAAIAGgETEAABABAUABQABAEUBhAAFAETEA4AAgASAQ0XAAEAFwwBAAQQAAQBDhAOAAgAAgAWAQ0EAAEABBAAFAAEAQAEEAAKABQAAgAaAQAEAAEABBQAFAAEAQAE
+            ·new_type ·ƒctx_37, ƒ'Spam', fn ·ƒctx_46, ·ƒv_18:
+              ·type_set_new ·ƒctx_46, ·ƒv_18, ·ƒv_3, fn ·ƒctx_48, ·ƒv_21:
+                ·set ·Spam_0, ·ƒv_21, fn:
+                  ·ƒpub ·ƒctx_48, ·Spam_0, fn ·ƒctx_50:
+                    ·ƒret_2 ·ƒctx_50, ·Spam_0
+    # sm:YAABABcAAQAXJAEAFxgBABcSAAIABgEAFwABABcYAQAEEAACAAoBDhAAAQAQCAAUABgBABAWAQoBCgACABIBCRAAAQAQFgAUAAQBABAQAAoAGAEAEA4AAgAWARQGAAEABiIAFAAEARMQDgAEARQDDgAEAQoBCgAKABgBCQYQAAIAGgETEAABABAUABQABAEUBhAAFAETEA4AAgASAQAQAAEAEBYAFAAEAQAQEAAKABgBABAQAAIAFgEAEAABABAeABQABAEAEBAABAEAEA4ACgAYAQAQEAACABoBDRcAAQAXDAEABBAABAEOEBAACAACAB4BDQQAAQAEEAAUAAQBAAQQAAoAFAACACIBAAQAAQAEFAAUAAQBAAQ
 
 test 'generic type with two params', fn:
   expect cps_module ƒink:
@@ -122,19 +124,21 @@ test 'generic type with two params', fn:
       a: T1
       b: T2
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_35, ·ƒret_3:
+    ·ƒink_module fn ·ƒctx_44, ·ƒret_3:
       ·letrec fn ·P_0:
         ·fn
-          fn ·ƒctx_37, ·ƒret_5, ·T1_1, ·T2_2:
-            ·new_type ·ƒctx_37, ƒ'P', fn ·ƒctx_39, ·ƒv_6:
-              ·type_set_field ·ƒctx_39, ·ƒv_6, ƒ'a', ·T1_1, fn ·ƒctx_41, ·ƒv_11:
-                ·type_set_field ·ƒctx_41, ·ƒv_11, ƒ'b', ·T2_2, fn ·ƒctx_43, ·ƒv_15:
-                  ·ƒret_5 ·ƒctx_43, ·ƒv_15
+          fn ·ƒctx_46, ·ƒret_5, ·T1_1, ·T2_2:
+            ·new_type ·ƒctx_46, ƒ'P', fn ·ƒctx_48, ·ƒv_6:
+              ·type_set_field ·ƒctx_48, ·ƒv_6, ƒ'a', ·T1_1, fn ·ƒctx_50, ·ƒv_11:
+                ·type_set_field ·ƒctx_50, ·ƒv_11, ƒ'b', ·T2_2, fn ·ƒctx_52, ·ƒv_15:
+                  ·ƒret_5 ·ƒctx_52, ·ƒv_15
           fn ·ƒv_4:
-            ·set ·P_0, ·ƒv_4, fn:
-              ·ƒpub ·ƒctx_35, ·P_0, fn ·ƒctx_46:
-                ·ƒret_3 ·ƒctx_46, ·P_0
-    # sm:WQABACAAAQAgJAEAIBgBACASAAIABgEAIAABACAYAQABCgACAAoBCBwAAQAcCAAUABgBABwWAQoCEAEIAgwAAgASAREcAAEAHBYAFAAEAQAcCgAKABgBABwOAAIAFgEeBQABAAUiABQABAEdHA4ABAEeAQoABAEGAgwACgAYAQUFEAACABoBEAUAAQAFIgAUAAQBDwUQAAQBEAEKAAQBBgIMAAoAGAEFBRAAAgAeAS0cAAEAHBQAFAAEAS4FEAAUAS0cDgACABIBByAAAQAgDAEAAQoABAEIHA4ACAACABYBBwEAAQABEAAUAAQBAAEKAAoAFAACABoBAAEAAQABFAAUAAQBAAE
+            ·new_type ·ƒctx_44, ƒ'P', fn ·ƒctx_55, ·ƒv_25:
+              ·type_set_new ·ƒctx_55, ·ƒv_25, ·ƒv_4, fn ·ƒctx_57, ·ƒv_28:
+                ·set ·P_0, ·ƒv_28, fn:
+                  ·ƒpub ·ƒctx_57, ·P_0, fn ·ƒctx_59:
+                    ·ƒret_3 ·ƒctx_59, ·P_0
+    # sm:bwABACAAAQAgJAEAIBgBACASAAIABgEAIAABACAYAQABCgACAAoBCBwAAQAcCAAUABgBABwWAQoCEAEIAgwAAgASAREcAAEAHBYAFAAEAQAcCgAKABgBABwOAAIAFgEeBQABAAUiABQABAEdHA4ABAEeAQoABAEGAgwACgAYAQUFEAACABoBEAUAAQAFIgAUAAQBDwUQAAQBEAEKAAQBBgIMAAoAGAEFBRAAAgAeAS0cAAEAHBQAFAAEAS4FEAAUAS0cDgACABIBABwAAQAcFgAUAAQBABwKAAoAGAEAHBAAAgAWAQAcAAEAHB4AFAAEAQAcEAAEAQAcDgAKABgBABwQAAIAGgEHIAABACAMAQABCgAEAQgcEAAIAAIAHgEHAQABAAEQABQABAEAAQoACgAUAAIAIgEAAQABAAEUABQABAEAAQ
 
 
 
@@ -161,23 +165,25 @@ test 'generic union applies referenced constructor', fn:
       Foo T
       Bar
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_37, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_46, ·ƒret_2:
       ·letrec fn ·U_0:
         ·fn
-          fn ·ƒctx_39, ·ƒret_4, ·T_1:
-            ·new_union ·ƒctx_39, ƒ'U', fn ·ƒctx_41, ·ƒv_5:
+          fn ·ƒctx_48, ·ƒret_4, ·T_1:
+            ·new_union ·ƒctx_48, ƒ'U', fn ·ƒctx_50, ·ƒv_5:
               ·∅Foo
-                ·ƒctx_41
-                fn ·ƒctx_43, ·ƒv_10:
-                  ·union_add ·ƒctx_43, ·ƒv_5, ·ƒv_10, fn ·ƒctx_45, ·ƒv_12:
-                    ·union_add ·ƒctx_45, ·ƒv_12, ·∅Bar, fn ·ƒctx_47, ·ƒv_15:
-                      ·ƒret_4 ·ƒctx_47, ·ƒv_15
+                ·ƒctx_50
+                fn ·ƒctx_52, ·ƒv_10:
+                  ·union_add ·ƒctx_52, ·ƒv_5, ·ƒv_10, fn ·ƒctx_54, ·ƒv_12:
+                    ·union_add ·ƒctx_54, ·ƒv_12, ·∅Bar, fn ·ƒctx_56, ·ƒv_15:
+                      ·ƒret_4 ·ƒctx_56, ·ƒv_15
                 ·T_1
           fn ·ƒv_3:
-            ·set ·U_0, ·ƒv_3, fn:
-              ·ƒpub ·ƒctx_37, ·U_0, fn ·ƒctx_50:
-                ·ƒret_2 ·ƒctx_50, ·U_0
-    # sm:XAABABoAAQAaJAEAGhgBABoSAAIABgEAGgABABoYAQABCgACAAoBCBYAAQAWCAAUABgBABYWAQwBCgACABIBCxYAAQAWGAAUAAQBABYKAAoAGAEAFg4AAgAWARYFAAEAAyoANAAYAQAFEAACAB4BAAUAAQAFGAAUAAQBFRYOAAQBFgUQAAoAGAEABRAAAgAiARADAAEAAxgAFAAEAQ8FEAAEARADEAAKABgBAAMQAAIAJgElFgABABYUABQABAEmAyoBBwEKABQBHRYOAAIAEgEHGgABABoMAQABCgAEAQgWDgAIAAIAFgEHAQABAAEQABQABAEAAQoACgAUAAIAGgEAAQABAAEUABQABAEAAQ
+            ·new_type ·ƒctx_46, ƒ'U', fn ·ƒctx_59, ·ƒv_27:
+              ·type_set_new ·ƒctx_59, ·ƒv_27, ·ƒv_3, fn ·ƒctx_61, ·ƒv_30:
+                ·set ·U_0, ·ƒv_30, fn:
+                  ·ƒpub ·ƒctx_61, ·U_0, fn ·ƒctx_63:
+                    ·ƒret_2 ·ƒctx_63, ·U_0
+    # sm:cgABABoAAQAaJAEAGhgBABoSAAIABgEAGgABABoYAQABCgACAAoBCBYAAQAWCAAUABgBABYWAQwBCgACABIBCxYAAQAWGAAUAAQBABYKAAoAGAEAFg4AAgAWARYFAAEAAyoANAAYAQAFEAACAB4BAAUAAQAFGAAUAAQBFRYOAAQBFgUQAAoAGAEABRAAAgAiARADAAEAAxgAFAAEAQ8FEAAEARADEAAKABgBAAMQAAIAJgElFgABABYUABQABAEmAyoBBwEKABQBHRYOAAIAEgEAFgABABYWABQABAEAFgoACgAYAQAWEAACABYBABYAAQAWHgAUAAQBABYQAAQBABYOAAoAGAEAFhAAAgAaAQcaAAEAGgwBAAEKAAQBCBYQAAgAAgAeAQcBAAEAARAAFAAEAQABCgAKABQAAgAiAQABAAEAARQAFAAEAQAB
 
 
 test 'enum with mixed member payloads', fn:
@@ -210,19 +216,21 @@ test 'generic enum with param', fn:
       Some T
       None
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_47, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_56, ·ƒret_2:
       ·letrec fn ·Option_0:
         ·fn
-          fn ·ƒctx_49, ·ƒret_4, ·T_1:
-            ·new_enum ·ƒctx_49, ƒ'Option', fn ·ƒctx_51, ·ƒv_5:
-              ·new_type ·ƒctx_51, ƒ'Some', fn ·ƒctx_53, ·ƒv_8:
-                ·type_push ·ƒctx_53, ·ƒv_8, ·T_1, fn ·ƒctx_55, ·ƒv_12:
-                  ·enum_add ·ƒctx_55, ·ƒv_5, ƒ'Some', ·ƒv_12, fn ·ƒctx_57, ·ƒv_15:
-                    ·new_type ·ƒctx_57, ƒ'None', fn ·ƒctx_59, ·ƒv_17:
-                      ·enum_add ·ƒctx_59, ·ƒv_15, ƒ'None', ·ƒv_17, fn ·ƒctx_61, ·ƒv_21:
-                        ·ƒret_4 ·ƒctx_61, ·ƒv_21
+          fn ·ƒctx_58, ·ƒret_4, ·T_1:
+            ·new_enum ·ƒctx_58, ƒ'Option', fn ·ƒctx_60, ·ƒv_5:
+              ·new_type ·ƒctx_60, ƒ'Some', fn ·ƒctx_62, ·ƒv_8:
+                ·type_push ·ƒctx_62, ·ƒv_8, ·T_1, fn ·ƒctx_64, ·ƒv_12:
+                  ·enum_add ·ƒctx_64, ·ƒv_5, ƒ'Some', ·ƒv_12, fn ·ƒctx_66, ·ƒv_15:
+                    ·new_type ·ƒctx_66, ƒ'None', fn ·ƒctx_68, ·ƒv_17:
+                      ·enum_add ·ƒctx_68, ·ƒv_15, ƒ'None', ·ƒv_17, fn ·ƒctx_70, ·ƒv_21:
+                        ·ƒret_4 ·ƒctx_70, ·ƒv_21
           fn ·ƒv_3:
-            ·set ·Option_0, ·ƒv_3, fn:
-              ·ƒpub ·ƒctx_47, ·Option_0, fn ·ƒctx_64:
-                ·ƒret_2 ·ƒctx_64, ·Option_0
-    # sm:eAABACAAAQAgJAEAIBgBACASAAIABgEAIAABACAYAQAGFAACAAoBEhcAAQAXCAAUABgBABcWAQoBCgACABIBCRcAAQAXFgAUAAQBABcUAAoAGAEAFw4AAgAWARQGAAEABhYAFAAEAQAGEAAKABgBAAYOAAIAGgEKAQABAAEYABQABAEJBg4ABAEKAQoACgAYAQABEAACAB4BCQYAAQAGFgAUAAQBExcOAAQBFAQQAAQBCgEQAAoAGAEJBhAAAgAiARIEAAEABBYAFAAEAQAEEAAKABgBAAQQAAIAJgEABAABAAQWABQABAERBhAABAESBBAABAEABBAACgAYAQAEEAACACoBJRcAAQAXFAAUAAQBJgQQABQBJRcOAAIAEgERIAABACAMAQAGFAAEARIXDgAIAAIAFgERBgABAAYQABQABAEABhQACgAUAAIAGgEABgABAAYUABQABAEABg
+            ·new_type ·ƒctx_56, ƒ'Option', fn ·ƒctx_73, ·ƒv_37:
+              ·type_set_new ·ƒctx_73, ·ƒv_37, ·ƒv_3, fn ·ƒctx_75, ·ƒv_40:
+                ·set ·Option_0, ·ƒv_40, fn:
+                  ·ƒpub ·ƒctx_75, ·Option_0, fn ·ƒctx_77:
+                    ·ƒret_2 ·ƒctx_77, ·Option_0
+    # sm:jgEAAQAgAAEAICQBACAYAQAgEgACAAYBACAAAQAgGAEABhQAAgAKARIXAAEAFwgAFAAYAQAXFgEKAQoAAgASAQkXAAEAFxYAFAAEAQAXFAAKABgBABcOAAIAFgEUBgABAAYWABQABAEABhAACgAYAQAGDgACABoBCgEAAQABGAAUAAQBCQYOAAQBCgEKAAoAGAEAARAAAgAeAQkGAAEABhYAFAAEARMXDgAEARQEEAAEAQoBEAAKABgBCQYQAAIAIgESBAABAAQWABQABAEABBAACgAYAQAEEAACACYBAAQAAQAEFgAUAAQBEQYQAAQBEgQQAAQBAAQQAAoAGAEABBAAAgAqASUXAAEAFxQAFAAEASYEEAAUASUXDgACABIBABcAAQAXFgAUAAQBABcUAAoAGAEAFxAAAgAWAQAXAAEAFx4AFAAEAQAXEAAEAQAXDgAKABgBABcQAAIAGgERIAABACAMAQAGFAAEARIXEAAIAAIAHgERBgABAAYQABQABAEABhQACgAUAAIAIgEABgABAAYUABQABAEABg

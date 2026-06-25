@@ -40,6 +40,9 @@
   (import "rt/types.wat" "Type" (type $Type (sub any)))
   (import "rt/types.wat" "type_apply"
     (func $type_apply (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  ;; Stamp a generic-built type's `$type` back-link (see $_type_stamp_fn).
+  (import "rt/types.wat" "type_set_type_field"
+    (func $type_set_type_field (param (ref null any)) (param (ref null any)) (result (ref null any))))
 
 
   ;; $Cell — mutable storage cell for a LetRec slot.
@@ -365,6 +368,46 @@
       (array.new_fixed $Captures 4
         (local.get $succ) (local.get $fail)
         (ref.as_non_null (local.get $val)) (local.get $ctx))))
+
+
+  ;; -- type stamp cont ------------------------------------------------
+  ;;
+  ;; Applying a GENERIC type runs its `$new` builder (types.wat:type_apply),
+  ;; which produces a fresh CONCRETE type. This cont intercepts that result and
+  ;; stamps its `$type` back-link to the generic, so a `Foo` guard recognizes a
+  ;; `Foo u8` instance (the generic is the classifier, not in the $base chain).
+  ;; Then it forwards the (now-stamped) type to the original cont. Captures:
+  ;; [orig_cont, generic]. The struct mutation lives in types.wat
+  ;; (type_set_type_field); apply.wat owns the closure mechanics.
+  (elem declare func $_type_stamp_fn)
+
+  (func $_type_stamp_fn (type $Fn3)
+      (param $caps (ref null any))
+      (param $ctx (ref null any))
+      (param $args (ref null any))
+    (local $captures (ref $Captures))
+    (local $orig_cont (ref null any))
+    (local $generic (ref null any))
+    (local $built (ref null any))
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $orig_cont (array.get $Captures (local.get $captures) (i32.const 0)))
+    (local.set $generic   (array.get $Captures (local.get $captures) (i32.const 1)))
+    ;; The builder's result (the freshly built concrete type) is the single arg.
+    (local.set $built (call $args_head (local.get $args)))
+    (return_call $apply_1
+      (local.get $ctx)
+      (call $type_set_type_field (local.get $built) (local.get $generic))
+      (local.get $orig_cont)))
+
+  ;; Build the type-stamp cont closure (see $_type_stamp_fn).
+  (func $make_type_stamp_cont (@pub)
+      (param $ctx (ref null any))
+      (param $orig_cont (ref null any)) (param $generic (ref null any))
+      (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_type_stamp_fn)
+      (array.new_fixed $Captures 2
+        (local.get $orig_cont) (local.get $generic))))
 
 
   ;; -- set_ctx --------------------------------------------------------

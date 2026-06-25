@@ -1103,7 +1103,7 @@ fn lower_type_decl(
   name: Option<&str>,
   origin: Option<AstId>,
 ) -> Lower {
-  wrap_decl_in_params_fn(g, params, origin, |g| lower_type_body(g, fields, name, origin))
+  wrap_decl_in_params_fn(g, params, name, origin, |g| lower_type_body(g, fields, name, origin))
 }
 
 // A type/enum/union declaration with params (`type T:`, `enum T:`) is `fn`
@@ -1114,6 +1114,7 @@ fn lower_type_decl(
 fn wrap_decl_in_params_fn(
   g: &mut Gen,
   params: AstId,
+  name: Option<&str>,
   origin: Option<AstId>,
   build_body: impl FnOnce(&mut Gen) -> Lower,
 ) -> Lower {
@@ -1125,6 +1126,11 @@ fn wrap_decl_in_params_fn(
     return build_body(g);
   }
 
+  // A parametrized decl is GENERIC. The body accretion becomes a builder fn over
+  // the type-params; the decl name binds a `$Type` SHELL whose `$new` is that
+  // builder. Applying the shell (`Foo u8`) runs the builder to produce a concrete
+  // type (type_apply's generic branch), which is back-linked to the shell. So
+  // `Foo` is a nameable, guardable type-value, not a bare fn.
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
@@ -1138,14 +1144,36 @@ fn wrap_decl_in_params_fn(
   };
   g.pop_cont(prev_cont);
   param_names.insert(0, Param::Name(cont));
-  let pending = vec![Pending::Fn {
+
+  let mut pending = vec![Pending::Fn {
     name: fn_name,
     params: param_names,
     fn_kind: CpsFnKind::CpsFunction,
     fn_body,
     origin,
   }];
-  (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
+  let builder = ref_val(g, fn_name_kind, fn_name_id, origin);
+
+  // Mint the shell `$Type` (named) and record the builder as its `$new`.
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let name_val = type_name_val(g, name, origin);
+  pending.push(Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewType),
+    args: args_val(vec![name_val]),
+    result: seed,
+    origin,
+  });
+  let shell = ref_val(g, sk, si, origin);
+  let result = g.fresh_result(origin);
+  let (rk, ri) = (result.kind, result.id);
+  pending.push(Pending::App {
+    func: Callable::BuiltIn(BuiltIn::TypeSetNew),
+    args: args_val(vec![shell, builder]),
+    result,
+    origin,
+  });
+  (ref_val(g, rk, ri, origin), pending)
 }
 
 // Lower an expression in TYPE position (a field type, a positional type, a
@@ -1317,7 +1345,7 @@ fn lower_union_decl(
   name: Option<&str>,
   origin: Option<AstId>,
 ) -> Lower {
-  wrap_decl_in_params_fn(g, params, origin, |g| lower_union_body(g, members, name, origin))
+  wrap_decl_in_params_fn(g, params, name, origin, |g| lower_union_body(g, members, name, origin))
 }
 
 // A union is an open union over existing types — represented at runtime as a
@@ -1368,7 +1396,7 @@ fn lower_enum_decl(
   name: Option<&str>,
   origin: Option<AstId>,
 ) -> Lower {
-  wrap_decl_in_params_fn(g, params, origin, |g| lower_enum_body(g, members, name, origin))
+  wrap_decl_in_params_fn(g, params, name, origin, |g| lower_enum_body(g, members, name, origin))
 }
 
 // A closed sum: each member mints a member-type (a `type:` with a tag) added to
