@@ -1470,7 +1470,7 @@ impl<'src> Parser<'src> {
         Some(group)
       }
     } else if (self.is_arg_start() && !self.at_sep()) || self.at(TokenKind::Partial) {
-      Some(self.parse_infix(0)?)
+      Some(self.parse_apply()?)
     } else {
       None
     };
