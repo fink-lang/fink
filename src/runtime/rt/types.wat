@@ -497,7 +497,7 @@
       (ref.cast (ref $Set)
         (struct.get $Union $members (ref.cast (ref $Union) (local.get $union)))))
     (local.set $t
-      (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+      (call $get_type (local.get $val)))
     (block $done
       (loop $walk
         (br_if $done (ref.is_null (local.get $t)))
@@ -674,7 +674,7 @@
     ;; At each node ALSO check its `$type` descriptor: a concrete type built by
     ;; applying a GENERIC carries `$type -> the generic`, so `Foo u8` matches a
     ;; `Foo` guard (the generic is the classifier, not in the $base chain).
-    (local.set $t (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+    (local.set $t (call $get_type (local.get $val)))
     (block $done
       (loop $walk
         (br_if $done (ref.is_null (local.get $t)))
@@ -705,6 +705,16 @@
     (struct.get $Tuple $tup_payload (ref.cast (ref $Tuple) (local.get $inst))))
 
 
+  ;; -- get_type --------------------------------------------------------
+  ;;
+  ;; The single accessor for an instance's nominal `$Type`. Every reader goes
+  ;; through here instead of reading `$Inst.$type` directly, so the storage can
+  ;; later move (to an id + arena table) without touching call sites.
+  (func $get_type (@pub)
+    (param $val (ref null any)) (result (ref $Type))
+    (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+
+
   ;; -- inst_type_name --------------------------------------------------
   ;;
   ;; The `$name` symbol of an instance's nominal type. The renderer (repr.wat)
@@ -714,7 +724,7 @@
   (func $inst_type_name (@pub)
     (param $inst (ref null any)) (result (ref i31))
     (struct.get $Type $name
-      (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $inst)))))
+      (call $get_type (local.get $inst))))
 
 
   ;; -- project_inst ----------------------------------------------------
@@ -750,8 +760,8 @@
     (param $a (ref $Inst)) (param $b (ref $Inst)) (result i32)
     ;; Nominal: same type.
     (if (i32.eqz
-          (ref.eq (struct.get $Inst $type (local.get $a))
-                  (struct.get $Inst $type (local.get $b))))
+          (ref.eq (call $get_type (local.get $a))
+                  (call $get_type (local.get $b))))
       (then (return (i32.const 0))))
     ;; Structural: delegate to the payload's deep-eq, by flavour.
     (if (ref.test (ref $Rec) (local.get $a))
