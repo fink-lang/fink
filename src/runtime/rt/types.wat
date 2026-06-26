@@ -141,6 +141,14 @@
     (field $type (ref $Type))
     (field $tup_payload (ref $List))
   )))
+  ;; $FnInst -- a function instance: its $FnType + the closure it wraps. The
+  ;; payload is the closure ref (held as anyref since $Closure lives in
+  ;; apply.wat); apply.wat unwraps and casts it to call. A user fn is an
+  ;; instance like $Rec/$Tuple, but callable: apply_3 has a $FnInst arm.
+  (type $FnInst (@pub) (sub $Inst (struct
+    (field $type (ref $Type))
+    (field $fn_payload (ref any))
+  )))
 
 
   ;; -- type_set_new ----------------------------------------------------
@@ -602,6 +610,17 @@
           (struct.new $Rec
             (local.get $t)
             (ref.cast (ref $Dict) (call $args_head (local.get $real_args))))
+          (local.get $cont))))
+    ;; Fn instance: the single real-arg is the closure being tagged. A user fn
+    ;; `Foo fn a, b: ...` applies the fn-type `Foo` to the closure, producing a
+    ;; callable $FnInst (apply_3 has the matching arm). NOT a tuple.
+    (if (ref.test (ref $FnType) (local.get $t))
+      (then
+        (return_call $apply_1
+          (local.get $ctx)
+          (struct.new $FnInst
+            (local.get $t)
+            (ref.as_non_null (call $args_head (local.get $real_args))))
           (local.get $cont))))
     ;; Tuple instance: the real-args list is the positional payload.
     (return_call $apply_1

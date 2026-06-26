@@ -38,6 +38,10 @@
   ;; recognises "callee is a type" and hands off. (Circular with types.wat,
   ;; which imports apply_1/args_head; the linker resolves it.)
   (import "rt/types.wat" "Type" (type $Type (sub any)))
+  ;; $FnInst -- a function instance: a $FnType + the closure it wraps (held as
+  ;; anyref in $fn_payload). apply_3 unwraps and calls it like a bare closure.
+  (import "rt/types.wat" "FnInst"
+    (type $FnInst (sub (struct (field $fi_type (ref $Type)) (field $fn_payload (ref any))))))
   (import "rt/types.wat" "type_apply"
     (func $type_apply (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
   ;; Stamp a generic-built type's `$type` back-link (see $_type_stamp_fn).
@@ -157,6 +161,15 @@
           (local.get $args)
           (local.get $ctx)
           (local.get $callee))))
+
+    ;; A $FnInst callee = a user fn (closure tagged with its fn-type). Unwrap to
+    ;; the inner closure and call it exactly like a bare closure -- the tag is
+    ;; for guards/dispatch, transparent to application.
+    (if (ref.test (ref $FnInst) (local.get $callee))
+      (then
+        (local.set $callee
+          (struct.get $FnInst $fn_payload
+            (ref.cast (ref $FnInst) (local.get $callee))))))
 
     (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
 
