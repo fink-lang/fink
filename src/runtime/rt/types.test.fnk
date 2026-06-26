@@ -704,3 +704,26 @@ test 'repr typed rec instance in list', fn:
   equals
     '${lst}'
     '[Foo {bar: 1}]'
+
+
+--- a fn-type instance fmts as `<type-name> fn:` -- the nominal type name plus
+    the `fn:` flavour marker (mirrors `Foo {..}` for records). The closure
+    payload is not renderable, so only the type identity shows. ---
+test 'fmt fn type instance', fn:
+  Foo = type: fn u8, u8: u8
+  add = Foo fn a, b: a
+
+  equals
+    '${add}'
+    'Foo fn:'
+
+
+--- in a collection, the fn instance reprs (not fmts) -- same `<type-name> fn:`
+    rendering, since a fn has no source-quoted form distinct from its fmt. ---
+test 'repr fn type instance in list', fn:
+  Foo = type: fn u8, u8: u8
+  lst = [Foo fn a, b: a]
+
+  equals
+    '${lst}'
+    '[Foo fn:]'

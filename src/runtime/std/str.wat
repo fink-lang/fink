@@ -39,6 +39,7 @@
   (import "rt/apply.wat"   "Captures"  (type $Captures  (sub any)))
   (import "rt/opaque.wat"  "Opaque"    (type $Opaque (sub (struct (field $inner (ref eq))))))
   (import "rt/types.wat"   "Inst"      (type $Inst (sub any)))
+  (import "rt/types.wat"   "FnInst"    (type $FnInst (sub $Inst)))
   (import "rt/types.wat"   "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"   "inst_type_name"
@@ -1668,6 +1669,12 @@
             (local.get $val))))
       (return_call $opaque_fmt))
 
+    ;; Try $FnInst (function instance) BEFORE $Inst (it is a subtype): a fn has
+    ;; no renderable payload, so it shows `<type-name> fn:` -- the nominal type
+    ;; name plus the fn-flavour marker.
+    (if (ref.test (ref $FnInst) (local.get $val))
+      (then (return_call $fn_inst_fmt (local.get $val))))
+
     ;; Try $Inst (typed instance) — the nominal name then the fmt'd payload
     ;; (`Foo {bar: 1}`). Anonymous types (null-name symbol) fmt as bare payload.
     (if (ref.test (ref $Inst) (local.get $val))
@@ -1676,6 +1683,33 @@
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
+
+  ;; $fn_inst_fmt : (ref any $FnInst) -> (ref $Str)
+  ;; Render a function instance as `<type-name> fn:`. The closure payload is not
+  ;; renderable, so only the nominal type identity shows, followed by the `fn:`
+  ;; flavour marker (mirrors `Foo {bar: 1}` for records). An anonymous fn-type
+  ;; (null-name symbol) renders as bare `fn:`.
+  (func $fn_inst_fmt (@pub) (param $val (ref null any)) (result (ref $Str))
+    (local $name (ref $Str))
+    (local $name_len i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local.set $name (call $symbol_repr (call $inst_type_name (local.get $val))))
+    (local.set $name_len (call $_str_len (local.get $name)))
+    ;; Buffer = name + " fn:" (a leading space only when the name is non-empty).
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $name_len)
+          (select (i32.const 4) (i32.const 3) (local.get $name_len)))))
+    (local.set $pos (call $_str_copy_to (local.get $name) (local.get $buf) (i32.const 0)))
+    (if (local.get $name_len)
+      (then
+        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20)) ;; space
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x66))       ;; 'f'
+    (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 1)) (i32.const 0x6e)) ;; 'n'
+    (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 2)) (i32.const 0x3a)) ;; ':'
+    (return_call $from_bytes (local.get $buf)))
 
   ;; $inst_fmt : (ref any $Inst) -> (ref $Str)
   ;; Nominal type name + space + fmt'd payload (`Foo {bar: 1}`). The name is the
