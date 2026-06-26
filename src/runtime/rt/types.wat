@@ -294,13 +294,14 @@
     ;; it is a $RecType (it is not, here), else empty.
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $RecType
-        (struct.get $Type $name (local.get $t))
-        (i32.const 0)                    ;; $id
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (local.get $t)                   ;; $base
-        (ref.cast (ref $Dict)
-          (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val))))
+      (call $register_type
+        (struct.new $RecType
+          (struct.get $Type $name (local.get $t))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (local.get $t)                   ;; $base
+          (ref.cast (ref $Dict)
+            (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val)))))
       (local.get $cont)))
 
 
@@ -330,12 +331,13 @@
         (return_call $apply_1 (local.get $ctx) (local.get $tt) (local.get $cont))))
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $TupleType
-        (struct.get $Type $name (local.get $t))
-        (i32.const 0)                    ;; $id
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (local.get $t)                   ;; $base
-        (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty)))
+      (call $register_type
+        (struct.new $TupleType
+          (struct.get $Type $name (local.get $t))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (local.get $t)                   ;; $base
+          (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty))))
       (local.get $cont)))
 
 
@@ -448,12 +450,13 @@
         (local.set $bt (ref.cast (ref $TupleType) (local.get $b)))
         (return_call $apply_1
           (local.get $ctx)
-          (struct.new $TupleType
-            (local.get $name)
-            (i32.const 0)                    ;; $id
-            (ref.null none) (ref.null none)  ;; $type, $new
-            (local.get $b)                   ;; $base
-            (struct.get $TupleType $positionals (local.get $bt)))
+          (call $register_type
+            (struct.new $TupleType
+              (local.get $name)
+              (i32.const 0)                    ;; $id
+              (ref.null none) (ref.null none)  ;; $type, $new
+              (local.get $b)                   ;; $base
+              (struct.get $TupleType $positionals (local.get $bt))))
           (local.get $cont))))
     ;; Rec base.
     (if (ref.test (ref $RecType) (local.get $b))
@@ -461,21 +464,23 @@
         (local.set $br (ref.cast (ref $RecType) (local.get $b)))
         (return_call $apply_1
           (local.get $ctx)
-          (struct.new $RecType
-            (local.get $name)
-            (i32.const 0)                    ;; $id
-            (ref.null none) (ref.null none)  ;; $type, $new
-            (local.get $b)                   ;; $base
-            (struct.get $RecType $fields (local.get $br)))
+          (call $register_type
+            (struct.new $RecType
+              (local.get $name)
+              (i32.const 0)                    ;; $id
+              (ref.null none) (ref.null none)  ;; $type, $new
+              (local.get $b)                   ;; $base
+              (struct.get $RecType $fields (local.get $br))))
           (local.get $cont))))
     ;; Unit base: new unit node based on it.
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $Type
-        (local.get $name)
-        (i32.const 0)                    ;; $id
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (local.get $b))                  ;; $base
+      (call $register_type
+        (struct.new $Type
+          (local.get $name)
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (local.get $b)))                 ;; $base
       (local.get $cont)))
 
 
@@ -741,7 +746,7 @@
     ;; Non-instances are never an instance of any type.
     (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
       (then (return (i32.const 0))))
-    ;; Walk the instance's type and its $base chain; ref.eq against `type`.
+    ;; Walk the instance's type and its $base chain; compare ids against `type`.
     ;; At each node ALSO check its `$type` descriptor: a concrete type built by
     ;; applying a GENERIC carries `$type -> the generic`, so `Foo u8` matches a
     ;; `Foo` guard (the generic is the classifier, not in the $base chain).
@@ -749,13 +754,13 @@
     (block $done
       (loop $walk
         (br_if $done (ref.is_null (local.get $t)))
-        (if (ref.eq (local.get $t) (ref.cast (ref eq) (local.get $type)))
+        (if (call $type_id_eq (local.get $t) (local.get $type))
           (then (return (i32.const 1))))
         (if (i32.eqz (ref.is_null (struct.get $Type $type (local.get $t))))
           (then
-            (if (ref.eq
+            (if (call $type_id_eq
                   (struct.get $Type $type (local.get $t))
-                  (ref.cast (ref eq) (local.get $type)))
+                  (local.get $type))
               (then (return (i32.const 1))))))
         (local.set $t (struct.get $Type $base (local.get $t)))
         (br $walk)))
@@ -784,6 +789,15 @@
   (func $get_type (@pub)
     (param $val (ref null any)) (result (ref $Type))
     (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+
+  ;; type_id_eq(a, b) -> 1 if two types are the same, by their dense arena $id.
+  ;; Replaces ref.eq for type identity: every $Type has a unique registered id,
+  ;; so id-equality is identity-equality (and the integer is a cheaper key).
+  (func $type_id_eq (@pub)
+    (param $a (ref null any)) (param $b (ref null any)) (result i32)
+    (i32.eq
+      (struct.get $Type $id (ref.cast (ref $Type) (local.get $a)))
+      (struct.get $Type $id (ref.cast (ref $Type) (local.get $b)))))
 
 
   ;; -- inst_type_name --------------------------------------------------
@@ -829,10 +843,10 @@
   ;; Direct-style: (a, b) -> i32.
   (func $inst_eq (@pub)
     (param $a (ref $Inst)) (param $b (ref $Inst)) (result i32)
-    ;; Nominal: same type.
+    ;; Nominal: same type (by arena id).
     (if (i32.eqz
-          (ref.eq (call $get_type (local.get $a))
-                  (call $get_type (local.get $b))))
+          (call $type_id_eq (call $get_type (local.get $a))
+                            (call $get_type (local.get $b))))
       (then (return (i32.const 0))))
     ;; Structural: delegate to the payload's deep-eq, by flavour.
     (if (ref.test (ref $Rec) (local.get $a))
