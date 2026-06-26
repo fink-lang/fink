@@ -139,20 +139,16 @@
   ;; Iteration 1: field values stored as-is (no per-field constructor yet).
   ;; `$type_id` -- the dense arena id of this instance's nominal type. The
   ;; value->type tag is this SCALAR (not a traced ref), so instance churn costs
-  ;; no GC edge. get_type resolves it via the arena table. The `$type` ref is
-  ;; retained transitionally until all readers move to the id.
+  ;; no GC edge. get_type resolves it to the `$Type` via the arena table.
   (type $Inst (@pub) (sub (struct
     (field $type_id (mut i32))
-    (field $type (ref $Type))
   )))
   (type $Rec (@pub) (sub $Inst (struct
     (field $type_id (mut i32))
-    (field $type (ref $Type))
     (field $rec_payload (ref $Dict))
   )))
   (type $Tuple (@pub) (sub $Inst (struct
     (field $type_id (mut i32))
-    (field $type (ref $Type))
     (field $tup_payload (ref $List))
   )))
   ;; $FnInst -- a function instance: its $FnType + the closure it wraps. The
@@ -161,7 +157,6 @@
   ;; instance like $Rec/$Tuple, but callable: apply_3 has a $FnInst arm.
   (type $FnInst (@pub) (sub $Inst (struct
     (field $type_id (mut i32))
-    (field $type (ref $Type))
     (field $fn_payload (ref any))
   )))
 
@@ -720,7 +715,6 @@
           (local.get $ctx)
           (struct.new $Rec
             (struct.get $Type $id (local.get $t))
-            (local.get $t)
             (ref.cast (ref $Dict) (call $args_head (local.get $real_args))))
           (local.get $cont))))
     ;; Fn instance: the single real-arg is the closure being tagged. A user fn
@@ -732,7 +726,6 @@
           (local.get $ctx)
           (struct.new $FnInst
             (struct.get $Type $id (local.get $t))
-            (local.get $t)
             (ref.as_non_null (call $args_head (local.get $real_args))))
           (local.get $cont))))
     ;; Tuple instance: the real-args list is the positional payload.
@@ -740,7 +733,6 @@
       (local.get $ctx)
       (struct.new $Tuple
         (struct.get $Type $id (local.get $t))
-        (local.get $t)
         (ref.cast (ref $List) (local.get $real_args)))
       (local.get $cont)))
 
@@ -841,7 +833,6 @@
       (then (return
         (struct.new $Rec
           (struct.get $Type $id (ref.cast (ref $Type) (local.get $target)))
-          (ref.cast (ref $Type) (local.get $target))
           (call $dict_copy_by_keys
             (struct.get $RecType $fields (ref.cast (ref $RecType) (local.get $target)))
             (call $inst_payload (local.get $val)))))))
