@@ -137,14 +137,21 @@
   ;; SUBTYPE (so the payload is statically typed): $Rec wraps a $Dict, $Tuple
   ;; wraps a $List. Apply on a $Type builds one of these (see type_apply).
   ;; Iteration 1: field values stored as-is (no per-field constructor yet).
+  ;; `$type_id` -- the dense arena id of this instance's nominal type. The
+  ;; value->type tag is this SCALAR (not a traced ref), so instance churn costs
+  ;; no GC edge. get_type resolves it via the arena table. The `$type` ref is
+  ;; retained transitionally until all readers move to the id.
   (type $Inst (@pub) (sub (struct
+    (field $type_id (mut i32))
     (field $type (ref $Type))
   )))
   (type $Rec (@pub) (sub $Inst (struct
+    (field $type_id (mut i32))
     (field $type (ref $Type))
     (field $rec_payload (ref $Dict))
   )))
   (type $Tuple (@pub) (sub $Inst (struct
+    (field $type_id (mut i32))
     (field $type (ref $Type))
     (field $tup_payload (ref $List))
   )))
@@ -153,6 +160,7 @@
   ;; apply.wat); apply.wat unwraps and casts it to call. A user fn is an
   ;; instance like $Rec/$Tuple, but callable: apply_3 has a $FnInst arm.
   (type $FnInst (@pub) (sub $Inst (struct
+    (field $type_id (mut i32))
     (field $type (ref $Type))
     (field $fn_payload (ref any))
   )))
@@ -711,6 +719,7 @@
         (return_call $apply_1
           (local.get $ctx)
           (struct.new $Rec
+            (struct.get $Type $id (local.get $t))
             (local.get $t)
             (ref.cast (ref $Dict) (call $args_head (local.get $real_args))))
           (local.get $cont))))
@@ -722,6 +731,7 @@
         (return_call $apply_1
           (local.get $ctx)
           (struct.new $FnInst
+            (struct.get $Type $id (local.get $t))
             (local.get $t)
             (ref.as_non_null (call $args_head (local.get $real_args))))
           (local.get $cont))))
@@ -729,6 +739,7 @@
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Tuple
+        (struct.get $Type $id (local.get $t))
         (local.get $t)
         (ref.cast (ref $List) (local.get $real_args)))
       (local.get $cont)))
@@ -788,7 +799,9 @@
   ;; later move (to an id + arena table) without touching call sites.
   (func $get_type (@pub)
     (param $val (ref null any)) (result (ref $Type))
-    (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+    (ref.as_non_null
+      (call $type_table_get
+        (struct.get $Inst $type_id (ref.cast (ref $Inst) (local.get $val))))))
 
   ;; type_id_eq(a, b) -> 1 if two types are the same, by their dense arena $id.
   ;; Replaces ref.eq for type identity: every $Type has a unique registered id,
@@ -827,6 +840,7 @@
     (if (ref.test (ref $RecType) (local.get $target))
       (then (return
         (struct.new $Rec
+          (struct.get $Type $id (ref.cast (ref $Type) (local.get $target)))
           (ref.cast (ref $Type) (local.get $target))
           (call $dict_copy_by_keys
             (struct.get $RecType $fields (ref.cast (ref $RecType) (local.get $target)))
