@@ -59,8 +59,11 @@
     (type $Fn3 (sub any (func (param (ref null any) (ref null any) (ref null any))))))
   (import "rt/types.wat" "Inst" (type $Inst (sub any)))
   (import "rt/types.wat" "FnInst" (type $FnInst (sub $Inst)))
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
   (import "std/str.wat" "fn_inst_fmt"
     (func $fn_inst_fmt (param (ref null any)) (result (ref $Str))))
+  (import "std/str.wat" "type_fmt"
+    (func $type_fmt (param (ref null any)) (result (ref $Str))))
   (import "rt/types.wat" "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat" "inst_type_name"
@@ -173,6 +176,11 @@
     ;; render as the bare payload.
     (if (ref.test (ref $Inst) (local.get $val))
       (then (return_call $inst_repr (local.get $val))))
+
+    ;; Try $Type (a bare type value) — repr == fmt for a type (no source-quoted
+    ;; form distinct from its name/signature). Delegate to str.wat's type_fmt.
+    (if (ref.test (ref $Type) (local.get $val))
+      (then (return_call $type_fmt (local.get $val))))
 
     ;; Unknown type — unreachable for now.
     (unreachable)

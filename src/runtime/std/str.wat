@@ -40,10 +40,19 @@
   (import "rt/opaque.wat"  "Opaque"    (type $Opaque (sub (struct (field $inner (ref eq))))))
   (import "rt/types.wat"   "Inst"      (type $Inst (sub any)))
   (import "rt/types.wat"   "FnInst"    (type $FnInst (sub $Inst)))
+  (import "rt/types.wat"   "Type"      (type $Type (sub any)))
   (import "rt/types.wat"   "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"   "inst_type_name"
     (func $inst_type_name (param (ref null any)) (result (ref i31))))
+  (import "rt/types.wat"   "type_name_sym"
+    (func $type_name_sym (param (ref null any)) (result (ref i31))))
+  (import "rt/types.wat"   "is_fn_type"
+    (func $is_fn_type (param (ref null any)) (result i32)))
+  (import "rt/types.wat"   "fn_type_params"
+    (func $fn_type_params (param (ref null any)) (result (ref null any))))
+  (import "rt/types.wat"   "fn_type_result_of"
+    (func $fn_type_result_of (param (ref null any)) (result (ref null any))))
   (import "rt/symbols.wat" "repr"
     (func $symbol_repr (param (ref i31)) (result (ref $Str))))
   (import "rt/apply.wat"   "Fn3"       (type $Fn3       (sub any)))
@@ -71,6 +80,10 @@
 
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
+  (import "std/list.wat" "empty"
+    (func $list_empty (result (ref $List))))
+  (import "std/list.wat" "prepend"
+    (func $list_prepend (param (ref any)) (param (ref $List)) (result (ref $List))))
   (import "std/list.wat" "fmt"
     (func $list_fmt (param (ref $List)) (result (ref $Str))))
 
@@ -1680,9 +1693,110 @@
     (if (ref.test (ref $Inst) (local.get $val))
       (then (return_call $inst_fmt (local.get $val))))
 
+    ;; Try $Type (a bare type VALUE) — render its name, plus the fn signature
+    ;; for fn-types.
+    (if (ref.test (ref $Type) (local.get $val))
+      (then (return_call $type_fmt (local.get $val))))
+
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
+
+  ;; $type_fmt : (ref any $Type) -> (ref $Str)
+  ;; Render a bare type value. A plain type renders as its nominal name. A
+  ;; fn-type renders its full signature `<name> fn <p1>, <p2>: <result>`, each
+  ;; type position recursively via $type_fmt (so nested types render by name).
+  (func $type_fmt (@pub) (param $val (ref null any)) (result (ref $Str))
+    (local $name (ref $Str))
+    (local $params (ref null any))   ;; reverse-stored arg-type list
+    (local $ordered (ref $List))     ;; params in declaration order
+    (local $cur (ref null any))
+    (local $result_str (ref $Str))
+    (local $total i32)
+    (local $count i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local $is_first i32)
+    (local.set $name (call $symbol_repr (call $type_name_sym (local.get $val))))
+    ;; Non-fn type: just the name.
+    (if (i32.eqz (call $is_fn_type (local.get $val)))
+      (then (return (local.get $name))))
+
+    ;; fn-type: build `<name> fn <params>: <result>`.
+    ;; Reverse $params (cons-prepend stored) into declaration order.
+    (local.set $ordered (call $list_empty))
+    (local.set $params (call $fn_type_params (local.get $val)))
+    (local.set $cur (local.get $params))
+    (if (ref.is_null (local.get $cur)) (then) (else
+      (block $rev_done
+        (loop $rev
+          (br_if $rev_done (call $list_op_empty (local.get $cur)))
+          (local.set $ordered
+            (call $list_prepend
+              (ref.as_non_null (call $head_any (local.get $cur)))
+              (local.get $ordered)))
+          (local.set $cur (call $tail_any (local.get $cur)))
+          (br $rev)))))
+    (local.set $result_str
+      (call $type_fmt (ref.as_non_null (call $fn_type_result_of (local.get $val)))))
+
+    ;; Pass 1: total length.
+    ;;   name + " fn " (4) + sum(param_len) + (count-1)*2 (", ") + ": " (2) + result
+    (local.set $total
+      (i32.add (call $_str_len (local.get $name))
+        (i32.add (i32.const 6) (call $_str_len (local.get $result_str))))) ;; " fn " + ": "
+    (local.set $count (i32.const 0))
+    (local.set $cur (local.get $ordered))
+    (block $len_done
+      (loop $len
+        (br_if $len_done (call $list_op_empty (local.get $cur)))
+        (local.set $total
+          (i32.add (local.get $total)
+            (call $_str_len
+              (call $type_fmt (ref.as_non_null (call $head_any (local.get $cur)))))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $cur (call $tail_any (local.get $cur)))
+        (br $len)))
+    (if (local.get $count)
+      (then
+        (local.set $total
+          (i32.add (local.get $total)
+            (i32.mul (i32.sub (local.get $count) (i32.const 1)) (i32.const 2))))))
+
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
+    ;; name
+    (local.set $pos (call $_str_copy_to (local.get $name) (local.get $buf) (i32.const 0)))
+    ;; " fn "
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20))
+    (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 1)) (i32.const 0x66)) ;; f
+    (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 2)) (i32.const 0x6e)) ;; n
+    (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 3)) (i32.const 0x20))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 4)))
+    ;; params joined ", "
+    (local.set $cur (local.get $ordered))
+    (local.set $is_first (i32.const 1))
+    (block $copy_done
+      (loop $copy
+        (br_if $copy_done (call $list_op_empty (local.get $cur)))
+        (if (i32.eqz (local.get $is_first))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2c)) ;; ,
+            (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 1)) (i32.const 0x20))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 2)))))
+        (local.set $is_first (i32.const 0))
+        (local.set $pos
+          (call $_str_copy_to
+            (call $type_fmt (ref.as_non_null (call $head_any (local.get $cur))))
+            (local.get $buf) (local.get $pos)))
+        (local.set $cur (call $tail_any (local.get $cur)))
+        (br $copy)))
+    ;; ": "
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x3a)) ;; :
+    (array.set $ByteArray (local.get $buf) (i32.add (local.get $pos) (i32.const 1)) (i32.const 0x20))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 2)))
+    ;; result
+    (local.set $pos (call $_str_copy_to (local.get $result_str) (local.get $buf) (local.get $pos)))
+    (return_call $from_bytes (local.get $buf)))
 
   ;; $fn_inst_fmt : (ref any $FnInst) -> (ref $Str)
   ;; Render a function instance as `<type-name> fn:`. The closure payload is not

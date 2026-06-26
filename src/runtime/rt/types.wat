@@ -328,6 +328,33 @@
     (return_call $apply_1 (local.get $ctx) (local.get $ft) (local.get $cont)))
 
 
+  ;; -- type read accessors (for rendering) -----------------------------
+  ;;
+  ;; Direct-style reads of a type's renderable parts. str.wat owns the string
+  ;; building; these expose the $Type fields it needs without str.wat reaching
+  ;; into the struct layout. (t) -> field.
+
+  ;; type_name_sym(t) -> the type's $name symbol (any $Type flavour).
+  (func $type_name_sym (@pub)
+    (param $t (ref null any)) (result (ref i31))
+    (struct.get $Type $name (ref.cast (ref $Type) (local.get $t))))
+
+  ;; is_fn_type(t) -> 1 if t is a $FnType, else 0.
+  (func $is_fn_type (@pub)
+    (param $t (ref null any)) (result i32)
+    (ref.test (ref $FnType) (local.get $t)))
+
+  ;; fn_type_params(t) -> the arg-type $List (reverse-stored), or null if empty.
+  (func $fn_type_params (@pub)
+    (param $t (ref null any)) (result (ref null any))
+    (struct.get $FnType $params (ref.cast (ref $FnType) (local.get $t))))
+
+  ;; fn_type_result(t) -> the result type, or null if unset.
+  (func $fn_type_result_of (@pub)
+    (param $t (ref null any)) (result (ref null any))
+    (struct.get $FnType $result (ref.cast (ref $FnType) (local.get $t))))
+
+
   ;; -- type_inherit ----------------------------------------------------
   ;;
   ;; `..Base` spread. Construct a NEW node based on `base`, with `base`'s flavour

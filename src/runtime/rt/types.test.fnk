@@ -727,3 +727,35 @@ test 'repr fn type instance in list', fn:
   equals
     '${lst}'
     '[Foo fn:]'
+
+
+--- rendering a bare TYPE value: a plain type renders as its nominal name. ---
+test 'plain type value renders its name', fn:
+  Bit = type _
+
+  equals
+    '${Bit}'
+    'Bit'
+
+
+--- a fn-TYPE value renders its full signature `<name> fn <params>: <result>`,
+    each type position by its nominal name. ---
+test 'fn type value renders its signature', fn:
+  Bit = type _
+  Sig = type: fn Bit, Bit: Bit
+
+  equals
+    '${Sig}'
+    'Sig fn Bit, Bit: Bit'
+
+
+--- in a collection, a type value reprs (not fmts) -- same rendering, since a
+    type has no source-quoted form distinct from its fmt. ---
+test 'type value reprs in a list', fn:
+  Bit = type _
+  Sig = type: fn Bit: Bit
+  lst = [Bit; Sig]
+
+  equals
+    '${lst}'
+    '[Bit, Sig fn Bit: Bit]'
