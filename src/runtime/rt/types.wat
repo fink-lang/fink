@@ -89,14 +89,19 @@
   ;;             genericity tag. A field (not a subtype): a generic `type T:`
   ;;             body is still a record/tuple, so genericity lives ON the
   ;;             structure subtype, not as a sibling of it.
+  ;; `$id` -- the type's dense arena id (stamped by register_type). Bridges
+  ;; values to types: a value's type tag is this i32 (a scalar, not a traced
+  ;; ref), resolved to the $Type via the id-indexed arena table.
   (type $Type (@pub) (sub (struct
     (field $name (ref i31))
+    (field $id (mut i32))
     (field $type (mut (ref null $Type)))
     (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
   )))
   (type $RecType (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $id (mut i32))
     (field $type (mut (ref null $Type)))
     (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
@@ -104,6 +109,7 @@
   )))
   (type $TupleType (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $id (mut i32))
     (field $type (mut (ref null $Type)))
     (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
@@ -113,6 +119,7 @@
   )))
   (type $FnType (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $id (mut i32))
     (field $type (mut (ref null $Type)))
     (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
@@ -130,16 +137,27 @@
   ;; SUBTYPE (so the payload is statically typed): $Rec wraps a $Dict, $Tuple
   ;; wraps a $List. Apply on a $Type builds one of these (see type_apply).
   ;; Iteration 1: field values stored as-is (no per-field constructor yet).
+  ;; `$type_id` -- the dense arena id of this instance's nominal type. The
+  ;; value->type tag is this SCALAR (not a traced ref), so instance churn costs
+  ;; no GC edge. get_type resolves it to the `$Type` via the arena table.
   (type $Inst (@pub) (sub (struct
-    (field $type (ref $Type))
+    (field $type_id (mut i32))
   )))
   (type $Rec (@pub) (sub $Inst (struct
-    (field $type (ref $Type))
+    (field $type_id (mut i32))
     (field $rec_payload (ref $Dict))
   )))
   (type $Tuple (@pub) (sub $Inst (struct
-    (field $type (ref $Type))
+    (field $type_id (mut i32))
     (field $tup_payload (ref $List))
+  )))
+  ;; $FnInst -- a function instance: its $FnType + the closure it wraps. The
+  ;; payload is the closure ref (held as anyref since $Closure lives in
+  ;; apply.wat); apply.wat unwraps and casts it to call. A user fn is an
+  ;; instance like $Rec/$Tuple, but callable: apply_3 has a $FnInst arm.
+  (type $FnInst (@pub) (sub $Inst (struct
+    (field $type_id (mut i32))
+    (field $fn_payload (ref any))
   )))
 
 
@@ -177,6 +195,55 @@
     (local.get $t))
 
 
+  ;; -- type arena ------------------------------------------------------
+  ;;
+  ;; A dense, growable table mapping a type's `$id` -> its `$Type`. Every minted
+  ;; type registers here and is stamped with its id. Values bridge to types via
+  ;; the id (a scalar tag, not a traced ref); type_table_get resolves id ->
+  ;; $Type. Grow-by-copy (WasmGC arrays are fixed-length; mirrors dict.wat's
+  ;; HAMT copy-on-write).
+  (type $TypeTable (array (mut (ref null $Type))))
+  (global $type_table (mut (ref null $TypeTable)) (ref.null none))
+  (global $type_count (mut i32) (i32.const 0))
+
+  ;; register_type(t) -> t. Append `t` to the table (growing if full), stamp its
+  ;; `$id`, bump the count. Returns `t` (now carrying its id) for chaining.
+  (func $register_type (@pub)
+    (param $t (ref $Type)) (result (ref $Type))
+    (local $tbl (ref $TypeTable))
+    (local $id i32)
+    (local $cap i32)
+    (local $new (ref $TypeTable))
+    ;; Lazily allocate the table on first registration (cap 64).
+    (if (ref.is_null (global.get $type_table))
+      (then
+        (global.set $type_table (array.new $TypeTable (ref.null none) (i32.const 64)))))
+    (local.set $tbl (ref.as_non_null (global.get $type_table)))
+    (local.set $id (global.get $type_count))
+    (local.set $cap (array.len (local.get $tbl)))
+    ;; Grow-by-copy when full: double, copy existing, swap.
+    (if (i32.ge_u (local.get $id) (local.get $cap))
+      (then
+        (local.set $new
+          (array.new $TypeTable (ref.null none) (i32.mul (local.get $cap) (i32.const 2))))
+        (array.copy $TypeTable $TypeTable
+          (local.get $new) (i32.const 0) (local.get $tbl) (i32.const 0) (local.get $cap))
+        (global.set $type_table (local.get $new))
+        (local.set $tbl (local.get $new))))
+    (struct.set $Type $id (local.get $t) (local.get $id))
+    (array.set $TypeTable (local.get $tbl) (local.get $id) (local.get $t))
+    (global.set $type_count (i32.add (local.get $id) (i32.const 1)))
+    (local.get $t))
+
+  ;; type_table_get(id) -> the $Type at `id`, or null if out of range.
+  (func $type_table_get (@pub)
+    (param $id i32) (result (ref null $Type))
+    (if (result (ref null $Type))
+      (i32.ge_u (local.get $id) (global.get $type_count))
+      (then (ref.null none))
+      (else (array.get $TypeTable (ref.as_non_null (global.get $type_table)) (local.get $id)))))
+
+
   ;; -- new_type --------------------------------------------------------
   ;;
   ;; Mint a fresh `$Type`. Called directly by codegen (not a first-class fink
@@ -190,10 +257,12 @@
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $Type
-        (ref.cast (ref i31) (local.get $name))
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (ref.null none))                 ;; $base
+      (call $register_type
+        (struct.new $Type
+          (ref.cast (ref i31) (local.get $name))
+          (i32.const 0)                    ;; $id (stamped by register_type)
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (ref.null none)))                ;; $base
       (local.get $cont)))
 
 
@@ -228,12 +297,14 @@
     ;; it is a $RecType (it is not, here), else empty.
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $RecType
-        (struct.get $Type $name (local.get $t))
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (local.get $t)                   ;; $base
-        (ref.cast (ref $Dict)
-          (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val))))
+      (call $register_type
+        (struct.new $RecType
+          (struct.get $Type $name (local.get $t))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (local.get $t)                   ;; $base
+          (ref.cast (ref $Dict)
+            (call $dict_set_field (call $dict_new) (local.get $key) (local.get $val)))))
       (local.get $cont)))
 
 
@@ -263,11 +334,13 @@
         (return_call $apply_1 (local.get $ctx) (local.get $tt) (local.get $cont))))
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $TupleType
-        (struct.get $Type $name (local.get $t))
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (local.get $t)                   ;; $base
-        (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty)))
+      (call $register_type
+        (struct.new $TupleType
+          (struct.get $Type $name (local.get $t))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (local.get $t)                   ;; $base
+          (call $list_prepend (ref.cast (ref any) (local.get $val)) (call $list_empty))))
       (local.get $cont)))
 
 
@@ -285,11 +358,13 @@
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $FnType
-        (ref.cast (ref i31) (local.get $name))
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (ref.null none)                  ;; $base
-        (ref.null none) (ref.null none)) ;; $params, $result
+      (call $register_type
+        (struct.new $FnType
+          (ref.cast (ref i31) (local.get $name))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (ref.null none)                  ;; $base
+          (ref.null none) (ref.null none))) ;; $params, $result
       (local.get $cont)))
 
   ;; fn_type_param(ctx, fntype, param_type, cont) -- cons-prepend an arg type.
@@ -318,6 +393,33 @@
     (struct.set $FnType $result (local.get $ft)
       (ref.cast (ref $Type) (local.get $result)))
     (return_call $apply_1 (local.get $ctx) (local.get $ft) (local.get $cont)))
+
+
+  ;; -- type read accessors (for rendering) -----------------------------
+  ;;
+  ;; Direct-style reads of a type's renderable parts. str.wat owns the string
+  ;; building; these expose the $Type fields it needs without str.wat reaching
+  ;; into the struct layout. (t) -> field.
+
+  ;; type_name_sym(t) -> the type's $name symbol (any $Type flavour).
+  (func $type_name_sym (@pub)
+    (param $t (ref null any)) (result (ref i31))
+    (struct.get $Type $name (ref.cast (ref $Type) (local.get $t))))
+
+  ;; is_fn_type(t) -> 1 if t is a $FnType, else 0.
+  (func $is_fn_type (@pub)
+    (param $t (ref null any)) (result i32)
+    (ref.test (ref $FnType) (local.get $t)))
+
+  ;; fn_type_params(t) -> the arg-type $List (reverse-stored), or null if empty.
+  (func $fn_type_params (@pub)
+    (param $t (ref null any)) (result (ref null any))
+    (struct.get $FnType $params (ref.cast (ref $FnType) (local.get $t))))
+
+  ;; fn_type_result(t) -> the result type, or null if unset.
+  (func $fn_type_result_of (@pub)
+    (param $t (ref null any)) (result (ref null any))
+    (struct.get $FnType $result (ref.cast (ref $FnType) (local.get $t))))
 
 
   ;; -- type_inherit ----------------------------------------------------
@@ -351,11 +453,13 @@
         (local.set $bt (ref.cast (ref $TupleType) (local.get $b)))
         (return_call $apply_1
           (local.get $ctx)
-          (struct.new $TupleType
-            (local.get $name)
-            (ref.null none) (ref.null none)  ;; $type, $new
-            (local.get $b)                   ;; $base
-            (struct.get $TupleType $positionals (local.get $bt)))
+          (call $register_type
+            (struct.new $TupleType
+              (local.get $name)
+              (i32.const 0)                    ;; $id
+              (ref.null none) (ref.null none)  ;; $type, $new
+              (local.get $b)                   ;; $base
+              (struct.get $TupleType $positionals (local.get $bt))))
           (local.get $cont))))
     ;; Rec base.
     (if (ref.test (ref $RecType) (local.get $b))
@@ -363,19 +467,23 @@
         (local.set $br (ref.cast (ref $RecType) (local.get $b)))
         (return_call $apply_1
           (local.get $ctx)
-          (struct.new $RecType
-            (local.get $name)
-            (ref.null none) (ref.null none)  ;; $type, $new
-            (local.get $b)                   ;; $base
-            (struct.get $RecType $fields (local.get $br)))
+          (call $register_type
+            (struct.new $RecType
+              (local.get $name)
+              (i32.const 0)                    ;; $id
+              (ref.null none) (ref.null none)  ;; $type, $new
+              (local.get $b)                   ;; $base
+              (struct.get $RecType $fields (local.get $br))))
           (local.get $cont))))
     ;; Unit base: new unit node based on it.
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $Type
-        (local.get $name)
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (local.get $b))                  ;; $base
+      (call $register_type
+        (struct.new $Type
+          (local.get $name)
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (local.get $b)))                 ;; $base
       (local.get $cont)))
 
 
@@ -388,6 +496,7 @@
   ;; Inherits $Type's fields as the struct prefix (WasmGC rule).
   (type $Union (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $id (mut i32))
     (field $type (mut (ref null $Type)))
     (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
@@ -405,11 +514,13 @@
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $Union
-        (ref.cast (ref i31) (local.get $name))
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (ref.null none)                  ;; $base
-        (call $set_empty))
+      (call $register_type
+        (struct.new $Union
+          (ref.cast (ref i31) (local.get $name))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (ref.null none)                  ;; $base
+          (call $set_empty)))
       (local.get $cont)))
 
 
@@ -462,7 +573,7 @@
       (ref.cast (ref $Set)
         (struct.get $Union $members (ref.cast (ref $Union) (local.get $union)))))
     (local.set $t
-      (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+      (call $get_type (local.get $val)))
     (block $done
       (loop $walk
         (br_if $done (ref.is_null (local.get $t)))
@@ -490,6 +601,7 @@
   ;; namespace = a record"). Inherits $Type's fields as the struct prefix.
   (type $Enum (@pub) (sub $Type (struct
     (field $name (ref i31))
+    (field $id (mut i32))
     (field $type (mut (ref null $Type)))
     (field $new (mut (ref null any)))
     (field $base (mut (ref null $Type)))
@@ -507,11 +619,13 @@
     (param $cont (ref null any))
     (return_call $apply_1
       (local.get $ctx)
-      (struct.new $Enum
-        (ref.cast (ref i31) (local.get $name))
-        (ref.null none) (ref.null none)  ;; $type, $new
-        (ref.null none)                  ;; $base
-        (call $dict_new))
+      (call $register_type
+        (struct.new $Enum
+          (ref.cast (ref i31) (local.get $name))
+          (i32.const 0)                    ;; $id
+          (ref.null none) (ref.null none)  ;; $type, $new
+          (ref.null none)                  ;; $base
+          (call $dict_new)))
       (local.get $cont)))
 
 
@@ -600,14 +714,25 @@
         (return_call $apply_1
           (local.get $ctx)
           (struct.new $Rec
-            (local.get $t)
+            (struct.get $Type $id (local.get $t))
             (ref.cast (ref $Dict) (call $args_head (local.get $real_args))))
+          (local.get $cont))))
+    ;; Fn instance: the single real-arg is the closure being tagged. A user fn
+    ;; `Foo fn a, b: ...` applies the fn-type `Foo` to the closure, producing a
+    ;; callable $FnInst (apply_3 has the matching arm). NOT a tuple.
+    (if (ref.test (ref $FnType) (local.get $t))
+      (then
+        (return_call $apply_1
+          (local.get $ctx)
+          (struct.new $FnInst
+            (struct.get $Type $id (local.get $t))
+            (ref.as_non_null (call $args_head (local.get $real_args))))
           (local.get $cont))))
     ;; Tuple instance: the real-args list is the positional payload.
     (return_call $apply_1
       (local.get $ctx)
       (struct.new $Tuple
-        (local.get $t)
+        (struct.get $Type $id (local.get $t))
         (ref.cast (ref $List) (local.get $real_args)))
       (local.get $cont)))
 
@@ -624,21 +749,21 @@
     ;; Non-instances are never an instance of any type.
     (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
       (then (return (i32.const 0))))
-    ;; Walk the instance's type and its $base chain; ref.eq against `type`.
+    ;; Walk the instance's type and its $base chain; compare ids against `type`.
     ;; At each node ALSO check its `$type` descriptor: a concrete type built by
     ;; applying a GENERIC carries `$type -> the generic`, so `Foo u8` matches a
     ;; `Foo` guard (the generic is the classifier, not in the $base chain).
-    (local.set $t (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $val))))
+    (local.set $t (call $get_type (local.get $val)))
     (block $done
       (loop $walk
         (br_if $done (ref.is_null (local.get $t)))
-        (if (ref.eq (local.get $t) (ref.cast (ref eq) (local.get $type)))
+        (if (call $type_id_eq (local.get $t) (local.get $type))
           (then (return (i32.const 1))))
         (if (i32.eqz (ref.is_null (struct.get $Type $type (local.get $t))))
           (then
-            (if (ref.eq
+            (if (call $type_id_eq
                   (struct.get $Type $type (local.get $t))
-                  (ref.cast (ref eq) (local.get $type)))
+                  (local.get $type))
               (then (return (i32.const 1))))))
         (local.set $t (struct.get $Type $base (local.get $t)))
         (br $walk)))
@@ -659,6 +784,27 @@
     (struct.get $Tuple $tup_payload (ref.cast (ref $Tuple) (local.get $inst))))
 
 
+  ;; -- get_type --------------------------------------------------------
+  ;;
+  ;; The single accessor for an instance's nominal `$Type`. Every reader goes
+  ;; through here instead of reading `$Inst.$type` directly, so the storage can
+  ;; later move (to an id + arena table) without touching call sites.
+  (func $get_type (@pub)
+    (param $val (ref null any)) (result (ref $Type))
+    (ref.as_non_null
+      (call $type_table_get
+        (struct.get $Inst $type_id (ref.cast (ref $Inst) (local.get $val))))))
+
+  ;; type_id_eq(a, b) -> 1 if two types are the same, by their dense arena $id.
+  ;; Replaces ref.eq for type identity: every $Type has a unique registered id,
+  ;; so id-equality is identity-equality (and the integer is a cheaper key).
+  (func $type_id_eq (@pub)
+    (param $a (ref null any)) (param $b (ref null any)) (result i32)
+    (i32.eq
+      (struct.get $Type $id (ref.cast (ref $Type) (local.get $a)))
+      (struct.get $Type $id (ref.cast (ref $Type) (local.get $b)))))
+
+
   ;; -- inst_type_name --------------------------------------------------
   ;;
   ;; The `$name` symbol of an instance's nominal type. The renderer (repr.wat)
@@ -668,7 +814,7 @@
   (func $inst_type_name (@pub)
     (param $inst (ref null any)) (result (ref i31))
     (struct.get $Type $name
-      (struct.get $Inst $type (ref.cast (ref $Inst) (local.get $inst)))))
+      (call $get_type (local.get $inst))))
 
 
   ;; -- project_inst ----------------------------------------------------
@@ -686,7 +832,7 @@
     (if (ref.test (ref $RecType) (local.get $target))
       (then (return
         (struct.new $Rec
-          (ref.cast (ref $Type) (local.get $target))
+          (struct.get $Type $id (ref.cast (ref $Type) (local.get $target)))
           (call $dict_copy_by_keys
             (struct.get $RecType $fields (ref.cast (ref $RecType) (local.get $target)))
             (call $inst_payload (local.get $val)))))))
@@ -702,10 +848,10 @@
   ;; Direct-style: (a, b) -> i32.
   (func $inst_eq (@pub)
     (param $a (ref $Inst)) (param $b (ref $Inst)) (result i32)
-    ;; Nominal: same type.
+    ;; Nominal: same type (by arena id).
     (if (i32.eqz
-          (ref.eq (struct.get $Inst $type (local.get $a))
-                  (struct.get $Inst $type (local.get $b))))
+          (call $type_id_eq (call $get_type (local.get $a))
+                            (call $get_type (local.get $b))))
       (then (return (i32.const 0))))
     ;; Structural: delegate to the payload's deep-eq, by flavour.
     (if (ref.test (ref $Rec) (local.get $a))

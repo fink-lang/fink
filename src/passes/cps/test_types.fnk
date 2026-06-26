@@ -234,3 +234,49 @@ test 'generic enum with param', fn:
                   ·ƒpub ·ƒctx_75, ·Option_0, fn ·ƒctx_77:
                     ·ƒret_2 ·ƒctx_77, ·Option_0
     # sm:jgEAAQAgAAEAICQBACAYAQAgEgACAAYBACAAAQAgGAEABhQAAgAKARIXAAEAFwgAFAAYAQAXFgEKAQoAAgASAQkXAAEAFxYAFAAEAQAXFAAKABgBABcOAAIAFgEUBgABAAYWABQABAEABhAACgAYAQAGDgACABoBCgEAAQABGAAUAAQBCQYOAAQBCgEKAAoAGAEAARAAAgAeAQkGAAEABhYAFAAEARMXDgAEARQEEAAEAQoBEAAKABgBCQYQAAIAIgESBAABAAQWABQABAEABBAACgAYAQAEEAACACYBAAQAAQAEFgAUAAQBEQYQAAQBEgQQAAQBAAQQAAoAGAEABBAAAgAqASUXAAEAFxQAFAAEASYEEAAUASUXDgACABIBABcAAQAXFgAUAAQBABcUAAoAGAEAFxAAAgAWAQAXAAEAFx4AFAAEAQAXEAAEAQAXDgAKABgBABcQAAIAGgERIAABACAMAQAGFAAEARIXEAAIAAIAHgERBgABAAYQABQABAEABhQACgAUAAIAIgEABgABAAYUABQABAEABg
+
+
+--- a fn-type declaration: new_fn_type seeds, fn_type_param cons-prepends each
+    arg type, fn_type_result sets the result. ---
+test 'function type declaration', fn:
+  expect cps_module ƒink:
+    Foo = type: fn u8, u8: u8
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
+      ·letrec fn ·Foo_0:
+        ·new_fn_type ·ƒctx_30, ƒ'Foo', fn ·ƒctx_33, ·ƒv_3:
+          ·fn_type_param ·ƒctx_33, ·ƒv_3, ·∅u8, fn ·ƒctx_35, ·ƒv_6:
+            ·fn_type_param ·ƒctx_35, ·ƒv_6, ·∅u8, fn ·ƒctx_37, ·ƒv_9:
+              ·fn_type_result ·ƒctx_37, ·ƒv_9, ·∅u8, fn ·ƒctx_39, ·ƒv_12:
+                ·set ·Foo_0, ·ƒv_12, fn:
+                  ·ƒpub ·ƒctx_39, ·Foo_0, fn ·ƒctx_41:
+                    ·ƒret_1 ·ƒctx_41, ·Foo_0
+    # sm:TwABABkAAQAZJAEAGRgBABkSAAIABgEAGQABABkYAQADDgACAAoBGA0AAQANHAAUAAQBAA0OAAoAGAEADQ4AAgAOAQANAAEADSAAFAAEAQANDgAEAQYCDgAKABgBBQ0OAAIAEgEADQABAA0gABQABAEADQ4ABAEOAg4ACgAYAQ0NDgACABYBAA0AAQANIgAUAAQBAA0OAAQBFgIOAAoAGAEVDRAAAgAaARcZAAEAGQwBAAMOAAQBGA0QAAgAAgAeARcDAAEAAxAAFAAEAQADDgAKABQAAgAiAQADAAEAAxQAFAAEAQAD
+
+
+--- constructing a fn-type instance: build the closure, then APPLY the fn-type
+    `Foo` to it (apply routes to type_apply's $FnType arm -> $FnInst). ---
+test 'function type instance construction', fn:
+  expect cps_module ƒink:
+    Foo = type: fn u8, u8: u8
+    add = Foo fn a, b: a
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_50, ·ƒret_4:
+      ·letrec fn ·Foo_0, ·add_1:
+        ·new_fn_type ·ƒctx_50, ƒ'Foo', fn ·ƒctx_53, ·ƒv_6:
+          ·fn_type_param ·ƒctx_53, ·ƒv_6, ·∅u8, fn ·ƒctx_55, ·ƒv_9:
+            ·fn_type_param ·ƒctx_55, ·ƒv_9, ·∅u8, fn ·ƒctx_57, ·ƒv_12:
+              ·fn_type_result ·ƒctx_57, ·ƒv_12, ·∅u8, fn ·ƒctx_59, ·ƒv_15:
+                ·set ·Foo_0, ·ƒv_15, fn:
+                  ·ƒpub ·ƒctx_59, ·Foo_0, fn ·ƒctx_61:
+                    ·fn
+                      fn ·ƒctx_62, ·ƒret_19, ·a_2, ·b_3: ·ƒret_19 ·ƒctx_62, ·a_2
+                      fn ·ƒv_18:
+                        ·Foo_0
+                          ·ƒctx_61
+                          fn ·ƒctx_65, ·ƒv_24:
+                            ·set ·add_1, ·ƒv_24, fn:
+                              ·ƒpub ·ƒctx_65, ·add_1, fn ·ƒctx_67:
+                                ·ƒret_4 ·ƒctx_67, ·add_1
+                          ·ƒv_18
+    # sm:egABAC4AAQAuJAEALhgBNBQSAAIABgEzLgABAC4YAQADEgE0Aw4AAgAKARsNAAEADRwAFAAEAQANDgAKABgBAA0OAAIADgEADQABAA0gABQABAEADQ4ABAEGAg4ACgAYAQUNDgACABIBAA0AAQANIAAUAAQBAA0OAAQBDgIOAAoAGAENDRAAAgAWAQANAAEADSIAFAAEAQANEAAEARYCDgAKABgBFQ0QAAIAGgEXGQABABkMAQADDgAEARgNEAAIAAIAHgEXAwABAAMQABQABAEAAw4ACgAUAAIAIgFICgABAAoIACwAGAESARgBCwEOAQYBCgAEAQYBAAEAARYAFAAEAQABCgAsAREKEAACACoBBw4AAQADPABIABgBAA4QAAIAMgELFAABABQMAQADDgAEAQwOEAAIAAIANgELAwABAAMQABQABAEAAw4ACgAUAAIAOgEAAwABAAMUABQABAEAAzwBFAo

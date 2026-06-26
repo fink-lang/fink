@@ -84,6 +84,43 @@ test 'generic type', fn:
 
 
 ---
+type: function (a `fn A, ...: R` in type position)
+---
+
+test 'function type', fn:
+  expect ast ƒink:
+    type: fn u8, u8: u8
+  | equals ƒink:
+    Module
+      Type ':',
+        Patterns
+        Fn ':',
+          Patterns
+            Ident 'u8'
+            Ident 'u8'
+          Ident 'u8'
+
+
+--- constructing a fn-type instance: applying the named fn-type to a fn literal.
+    The outer `Fn ':'` is the fn VALUE; it differs from the `Fn ':'` inside a
+    `Type` (which is the fn type). ---
+test 'function type instance construction', fn:
+  expect ast ƒink:
+    add = Foo fn a, b: a
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'add'
+        Apply
+          Ident 'Foo'
+          Fn ':',
+            Patterns
+              Ident 'a'
+              Ident 'b'
+            Ident 'a'
+
+
+---
 enum: closed sum
 ---
 

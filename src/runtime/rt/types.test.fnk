@@ -589,9 +589,9 @@ test 'fn type alias equality', fn:
     Bar
 
 
---- a fn-type guard runs and is well-defined, but matches nothing yet: fn-type
-    INSTANCES are unconstructable (no type_apply $FnType arm), so a plain closure
-    is not an instance and falls through. Flips to a match when instances land. ---
+--- a BARE closure is not a fn-type instance: only `Foo fn ...` (which applies
+    the fn-type, building an $FnInst) is. A plain `fn x: x` carries no fn-type,
+    so a fn-type guard falls through. ---
 test 'fn type guard falls through', fn:
   FooFn = type: fn u8: u8
   handler = fn x: x
@@ -601,6 +601,74 @@ test 'fn type guard falls through', fn:
     _: 'other'
 
   equals result, 'other'
+
+
+--- constructing a fn-type INSTANCE: `Foo fn a, b: ...` tags a closure as an
+    instance of the fn-type `Foo`, so a `Foo` guard recognizes it (the inverse of
+    'fn type guard falls through', where a bare closure is not an instance). ---
+test 'fn type instance is recognized by its fn type', fn:
+  Foo = type: fn u8, u8: u8
+
+  add = Foo fn a, b: a
+
+  result = match add:
+    Foo f: 'matched'
+    _: 'other'
+
+  equals result, 'matched'
+
+
+--- a fn-type instance must be CALLABLE as the function it wraps (not a degenerate
+    tuple that merely carries the tag). Applying it runs the closure body. ---
+test 'fn type instance is callable', fn:
+  Foo = type: fn u8, u8: u8
+
+  add = Foo fn a, b: a
+
+  equals
+    add 3, 4
+    3
+
+
+--- the tag is SPECIFIC: a bare (untagged) closure does NOT match a fn-type
+    guard, and an instance of one fn-type does NOT match a different fn-type. ---
+test 'fn type instance tag is specific', fn:
+  Foo = type: fn u8, u8: u8
+  Bar = type: fn u8, u8: u8
+
+  add = Foo fn a, b: a
+  bare = fn a, b: a
+
+  classify = fn f:
+    match f:
+      Foo _: 'foo'
+      Bar _: 'bar'
+      _: 'other'
+
+  equals
+    [classify add; classify bare]
+    ['foo'; 'other']
+
+
+--- a generic fn-type applied builds a concrete fn-type. Each application mints a
+    fresh $FnType (fn-types compare by identity), so two applications differ and
+    an alias of one application is equal to itself. ---
+test 'generic fn type applied builds a concrete fn type', fn:
+  OpEq = type TL, TR: fn TL, TR: u8
+
+  FnA = OpEq u8, u8
+  FnB = OpEq u8, u8
+
+  not_equals FnA, FnB
+
+
+test 'generic fn type application alias equality', fn:
+  OpEq = type TL, TR: fn TL, TR: u8
+
+  FnA = OpEq u8, u8
+  FnAlias = FnA
+
+  equals FnA, FnAlias
 
 
 test 'enum case match with destructure', fn:
@@ -636,3 +704,58 @@ test 'repr typed rec instance in list', fn:
   equals
     '${lst}'
     '[Foo {bar: 1}]'
+
+
+--- a fn-type instance fmts as `<type-name> fn:` -- the nominal type name plus
+    the `fn:` flavour marker (mirrors `Foo {..}` for records). The closure
+    payload is not renderable, so only the type identity shows. ---
+test 'fmt fn type instance', fn:
+  Foo = type: fn u8, u8: u8
+  add = Foo fn a, b: a
+
+  equals
+    '${add}'
+    'Foo fn:'
+
+
+--- in a collection, the fn instance reprs (not fmts) -- same `<type-name> fn:`
+    rendering, since a fn has no source-quoted form distinct from its fmt. ---
+test 'repr fn type instance in list', fn:
+  Foo = type: fn u8, u8: u8
+  lst = [Foo fn a, b: a]
+
+  equals
+    '${lst}'
+    '[Foo fn:]'
+
+
+--- rendering a bare TYPE value: a plain type renders as its nominal name. ---
+test 'plain type value renders its name', fn:
+  Bit = type _
+
+  equals
+    '${Bit}'
+    'Bit'
+
+
+--- a fn-TYPE value renders its full signature `<name> fn <params>: <result>`,
+    each type position by its nominal name. ---
+test 'fn type value renders its signature', fn:
+  Bit = type _
+  Sig = type: fn Bit, Bit: Bit
+
+  equals
+    '${Sig}'
+    'Sig fn Bit, Bit: Bit'
+
+
+--- in a collection, a type value reprs (not fmts) -- same rendering, since a
+    type has no source-quoted form distinct from its fmt. ---
+test 'type value reprs in a list', fn:
+  Bit = type _
+  Sig = type: fn Bit: Bit
+  lst = [Bit; Sig]
+
+  equals
+    '${lst}'
+    '[Bit, Sig fn Bit: Bit]'
