@@ -603,6 +603,27 @@ test 'fn type guard falls through', fn:
   equals result, 'other'
 
 
+--- a generic fn-type applied builds a concrete fn-type. Each application mints a
+    fresh $FnType (fn-types compare by identity), so two applications differ and
+    an alias of one application is equal to itself. ---
+test 'generic fn type applied builds a concrete fn type', fn:
+  OpEq = type TL, TR: fn TL, TR: u8
+
+  FnA = OpEq u8, u8
+  FnB = OpEq u8, u8
+
+  not_equals FnA, FnB
+
+
+test 'generic fn type application alias equality', fn:
+  OpEq = type TL, TR: fn TL, TR: u8
+
+  FnA = OpEq u8, u8
+  FnAlias = FnA
+
+  equals FnA, FnAlias
+
+
 test 'enum case match with destructure', fn:
   Opt = enum:
     Some {val: u8}
