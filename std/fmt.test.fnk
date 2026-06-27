@@ -1,0 +1,71 @@
+{test, equals} = import 'std/testing.fnk'
+
+{set} = import 'std/set.fnk'
+
+
+# --- Rec formatting ---
+
+test 'rec format empty', fn:
+  equals '${ {} }', '{}'
+
+test 'rec format single field', fn:
+  equals '${ {a: 1} }', '{a: 1}'
+
+test 'rec format nested', fn:
+  equals '${ {a: {b: 1}} }', '{a: {b: 1}}'
+
+test 'rec format bool value', fn:
+  equals '${ {x: true} }', '{x: true}'
+
+test 'rec format string value', fn:
+  equals '${ {name: 'foo \n bar'} }', '{name: \'foo \\n bar\'}'
+
+test 'rec format number value', fn:
+  equals '${ {x: 42} }', '{x: 42}'
+
+test 'rec format float value', fn:
+  equals '${ {pi: 3.14} }', '{pi: 3.14}'
+
+test 'rec format string key', fn:
+  equals '${ {'foo bar': 42} }', '{\'foo bar\': 42}'
+
+test 'rec format expr key', fn:
+  equals '${ {(1 + 2): 42} }', '{(3): 42}'
+
+test 'rec format in template', fn:
+  r = {a: 1}
+  equals 'got: ${r}', 'got: {a: 1}'
+
+
+# --- List formatting ---
+
+test 'list format empty', fn:
+  equals '${ [] }', '[]'
+
+test 'list format', fn:
+  equals '${ [1, 2, 3] }', '[1, 2, 3]'
+
+test 'list format nested', fn:
+  equals '${ [1, [2, 3]] }', '[1, [2, 3]]'
+
+test 'list format nested strings', fn:
+  equals '${ ['foo bar \' spam'] }', '[\'foo bar \\\' spam\']'
+
+
+# --- Set formatting ---
+
+test 'set format empty', fn:
+  equals '${set _}', 'set _'
+
+test 'set format single', fn:
+  equals '${set 1}', 'set 1'
+
+test 'set format', fn:
+  equals '${set 1, 2, 3}', 'set 1, 2, 3'
+
+test 'set format string element', fn:
+  equals '${set 'foo \n bar'}', 'set \'foo \\n bar\''
+
+test 'set format in template', fn:
+  s = set 1, 2
+  equals 'got: ${s}', 'got: set 1, 2'
