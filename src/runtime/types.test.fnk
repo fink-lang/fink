@@ -1,0 +1,762 @@
+{test, equals, not_equals, skip} = import 'std/testing.fnk'
+
+
+{u8} = import 'std/int.fnk'
+
+
+
+test 'type alias equality', fn:
+  Foo = type _
+  Bar = Foo
+
+  equals
+    Foo
+    Bar
+
+
+test 'type equality', fn:
+  Foo = type _
+  Bar = type _
+
+  not_equals
+    Foo
+    Bar
+
+
+test 'union alias', fn:
+  Foo = type _
+  Bar = type _
+
+  FooBar = union:
+    Foo
+    Bar
+
+  Spam = FooBar
+
+  equals
+    FooBar
+    Spam
+
+
+test 'union equality', fn:
+  Foo = type _
+  Bar = type _
+
+  FooBar = union:
+    Foo
+    Bar
+
+  Spam = union:
+    Bar
+    Foo
+
+  equals
+    FooBar
+    Spam
+
+
+test 'union member guard binds instance', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  FooOrSpam x = Foo {bar: 1}
+
+  equals
+    x
+    Foo {bar: 1}
+
+
+test 'union member guard accepts any member', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  classify = fn val:
+    match val:
+      FooOrSpam _: 'member'
+      _: 'other'
+
+  Ham = type:
+    x: u8
+
+  equals
+    [classify Foo {bar: 1}; classify Spam {ham: 2}; classify Ham {x: 3}]
+    ['member'; 'member'; 'other']
+
+
+test 'union member guard preserves concrete type', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  FooOrSpam = union:
+    Foo
+    Spam
+
+  --- a value matched by the union keeps its concrete member type, so a
+      further match on the member type still succeeds ---
+  narrow = fn val:
+    match val:
+      FooOrSpam m:
+        match m:
+          Foo _: 'foo'
+          Spam _: 'spam'
+          _: 'unknown'
+      _: 'other'
+
+  equals
+    [narrow Foo {bar: 1}; narrow Spam {ham: 2}]
+    ['foo'; 'spam']
+
+
+test 'union member matches derived instance via base', fn:
+  --- union lists a BASE type; a derived instance IS-A base, so it is a
+      member (membership walks the instance's $base chain) ---
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  Other = type:
+    ham: u8
+
+  BaseOrOther = union:
+    Base
+    Other
+
+  classify = fn val:
+    match val:
+      BaseOrOther _: 'member'
+      _: 'other'
+
+  equals
+    [classify Derived {bar: 1, spam: 2}; classify Base {bar: 3}; classify Other {ham: 4}]
+    ['member'; 'member'; 'member']
+
+
+test 'union member does not match base of a derived member', fn:
+  --- union lists a DERIVED type; a plain base instance is NOT a Derived,
+      so it is not a member (subtyping is one-directional) ---
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  DerivedOnly = union:
+    Derived
+
+  classify = fn val:
+    match val:
+      DerivedOnly _: 'member'
+      _: 'other'
+
+  equals
+    [classify Derived {bar: 1, spam: 2}; classify Base {bar: 3}]
+    ['member'; 'other']
+
+
+test 'enum aliasing', fn:
+  Foo = enum:
+    Bar {a: u8}
+    Spam u8
+
+  Ham = Foo
+
+  equals
+    Foo
+    Ham
+
+
+test 'enum equality', fn:
+  Foo = enum:
+    Bar {a: u8}
+    Spam u8
+
+  Ham = enum:
+    Bar {a: u8}
+    Spam u8
+
+  not_equals
+    Foo
+    Ham
+
+
+test 'enum case construct named payload', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  equals
+    Opt.Some {val: 12}
+    Opt.Some {val: 12}
+
+
+test 'enum case construct distinct payloads not equal', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  not_equals
+    Opt.Some {val: 1}
+    Opt.Some {val: 2}
+
+
+test 'enum case guard named payload', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  Opt.Some s = Opt.Some {val: 12}
+
+  equals s.val, 12
+
+
+test 'enum destructure cases', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  {Some, None} = Opt
+
+  --- the destructured case types construct and compare like the qualified
+      Opt.Some / Opt.None forms ---
+  equals
+    Some {val: 12}
+    Opt.Some {val: 12}
+
+
+test 'enum level guard binds case instance', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  --- a case instance IS-A its enum, so the enum itself guards it ---
+  some = Opt.Some {val: 12}
+  Opt o = some
+
+  equals o, some
+
+
+test 'enum level match accepts any case', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  is_opt = fn val:
+    match val:
+      Opt _: 'opt'
+      _: 'other'
+
+  Other = type:
+    x: u8
+
+  equals
+    [is_opt Opt.Some {val: 1}; is_opt Opt.None {}; is_opt Other {x: 2}]
+    ['opt'; 'opt'; 'other']
+
+
+test 'typed rec equality', fn:
+  Foo = type:
+    bar: u8
+    spam: u8
+
+  equals
+    Foo {bar: 1, spam: 2}
+    Foo {bar: 1, spam: 2}
+
+  not_equals
+    Foo {bar: 1, spam: 2}
+    {bar: 1, spam: 2}
+
+
+
+test 'typed rec destructure', fn:
+  Foo = type:
+    bar: u8
+
+  {bar} = Foo {bar: 1}
+
+  equals bar, 1
+
+
+test 'typed rec guard', fn:
+  Foo = type:
+    bar: u8
+
+  Foo foo = Foo {bar: 1}
+
+  equals
+    foo
+    Foo {bar: 1}
+
+
+test 'typed rec guard destructure', fn:
+  Foo = type:
+    bar: u8
+
+  Foo {bar} = Foo {bar: 42}
+
+  equals bar, 42
+
+
+test 'typed rec guard destructured with projection to base type', fn:
+  Foo = type:
+    bar: u8
+
+  FooBar = type:
+    ..Foo
+    spam: u8
+
+  Foo foo = FooBar {bar: 1, spam: 2}
+
+  equals
+    foo
+    Foo {bar: 1}
+
+
+test 'rec subtype guard through closure', fn:
+  Base = type:
+    bar: u8
+
+  Derived = type:
+    ..Base
+    spam: u8
+
+  classify = fn val:
+    match val:
+      Base _: 'base'
+      _: 'other'
+
+  equals
+    classify Derived {bar: 1, spam: 2}
+    'base'
+
+
+test 'typed rec match on type', fn:
+  Foo = type:
+    bar: u8
+
+  result = match Foo {bar: 1}:
+    Foo foo: foo
+    _: false
+
+  equals
+    result
+    Foo {bar: 1}
+
+
+test 'typed rec match on type with destructure', fn:
+  Foo = type:
+    bar: u8
+
+  result = match Foo {bar: 42}:
+    Foo {bar}: bar
+    _: 0
+
+  equals result, 42
+
+
+test 'typed rec match selects by type', fn:
+  Foo = type:
+    bar: u8
+
+  Spam = type:
+    ham: u8
+
+  classify = fn val:
+    match val:
+      Foo _: 'foo'
+      Spam _: 'spam'
+      _: 'other'
+
+  equals
+    [classify Foo {bar: 1}; classify Spam {ham: 2}; classify {x: 3}]
+    ['foo'; 'spam'; 'other']
+
+
+test 'typed rec match projects to base type', fn:
+  Foo = type:
+    bar: u8
+
+  FooBar = type:
+    ..Foo
+    spam: u8
+
+  result = match FooBar {bar: 1, spam: 2}:
+    Foo foo: foo
+    _: false
+
+  equals
+    result
+    Foo {bar: 1}
+
+
+test 'typed rec dot op', fn:
+  Foo = type:
+    bar: u8
+
+  foo = Foo {bar: 1}
+
+  equals foo.bar, 1
+
+
+test 'typed rec destructure spread', fn:
+  Foo = type:
+    bar: u8
+    spam: u8
+
+  {..foo} = Foo {bar: 1, spam: 2}
+
+  equals
+    foo
+    {bar: 1, spam: 2}
+
+
+
+test 'typed tuple equality', fn:
+  Foo = type: u8, u8
+
+  equals
+    Foo 1, 2
+    Foo 1, 2
+
+  not_equals
+    Foo 1, 2
+    [1, 2]
+
+
+test 'generic type applied is recognized by its generic', fn:
+  Foo = type T:
+    bar: T
+
+  FooU8 = type:
+    ..Foo u8
+
+  foo = FooU8 {bar: 1}
+
+  Foo f = foo
+
+  equals
+    f
+    FooU8 {bar: 1}
+
+
+test 'direct generic application binds a concrete type', fn:
+  Foo = type T:
+    bar: T
+
+  FooU8 = Foo u8
+
+  foo = FooU8 {bar: 1}
+
+  Foo f = foo
+
+  equals
+    f
+    FooU8 {bar: 1}
+
+
+test 'generic application preserves the field value', fn:
+  Foo = type T:
+    bar: T
+
+  FooU8 = type:
+    ..Foo u8
+
+  foo = FooU8 {bar: 7}
+
+  Foo {bar} = foo
+
+  equals bar, 7
+
+
+test 'multi-param generic recognized by its generic', fn:
+  Pair = type A, B:
+    fst: A
+    snd: B
+
+  Coord = type:
+    ..Pair u8, u8
+
+  c = Coord {fst: 1, snd: 2}
+
+  Pair p = c
+
+  equals
+    p
+    Coord {fst: 1, snd: 2}
+
+
+test 'generic guard rejects an unrelated instance', fn:
+  Foo = type T:
+    bar: T
+
+  FooU8 = type:
+    ..Foo u8
+
+  Other = type:
+    bar: u8
+
+  other = Other {bar: 1}
+
+  matched = match other:
+    Foo _: 'foo'
+    _: 'other'
+
+  equals matched, 'other'
+
+
+
+test 'typed tuple destructure', fn:
+  Foo = type: u8
+
+  [bar] = Foo 1
+
+  equals bar, 1
+
+
+test 'typed tuple dot op', fn:
+  Foo = type: u8
+
+  foo = Foo 1
+
+  equals foo.(0), 1
+
+
+test 'typed tuple destructure spread', fn:
+  Foo = type: u8, u8
+
+  [..foo] = Foo 1, 2
+
+  equals
+    foo
+    [1, 2]
+
+
+
+--- TODO rendering a bare type VALUE (not an instance) is unbuilt -- repr_val /
+    fmt_val have no $Type arm yet. These pin the fn-type repr for when type-value
+    rendering lands. ---
+skip test 'fn type repr', fn:
+  Foo = type: fn u8, u8: u8
+
+  equals
+    '${Foo}'
+    'Foo fn u8, u8: u8'
+
+
+skip test 'fn type single arg repr', fn:
+  Foo = type: fn u8: u8
+
+  equals
+    '${Foo}'
+    'Foo fn u8: u8'
+
+
+test 'fn type equality', fn:
+  Foo = type: fn u8, u8: u8
+  Bar = type: fn u8, u8: u8
+
+  not_equals
+    Foo
+    Bar
+
+
+test 'fn type alias equality', fn:
+  Foo = type: fn u8: u8
+  Bar = Foo
+
+  equals
+    Foo
+    Bar
+
+
+--- a BARE closure is not a fn-type instance: only `Foo fn ...` (which applies
+    the fn-type, building an $FnInst) is. A plain `fn x: x` carries no fn-type,
+    so a fn-type guard falls through. ---
+test 'fn type guard falls through', fn:
+  FooFn = type: fn u8: u8
+  handler = fn x: x
+
+  result = match handler:
+    FooFn f: 'matched'
+    _: 'other'
+
+  equals result, 'other'
+
+
+--- constructing a fn-type INSTANCE: `Foo fn a, b: ...` tags a closure as an
+    instance of the fn-type `Foo`, so a `Foo` guard recognizes it (the inverse of
+    'fn type guard falls through', where a bare closure is not an instance). ---
+test 'fn type instance is recognized by its fn type', fn:
+  Foo = type: fn u8, u8: u8
+
+  add = Foo fn a, b: a
+
+  result = match add:
+    Foo f: 'matched'
+    _: 'other'
+
+  equals result, 'matched'
+
+
+--- a fn-type instance must be CALLABLE as the function it wraps (not a degenerate
+    tuple that merely carries the tag). Applying it runs the closure body. ---
+test 'fn type instance is callable', fn:
+  Foo = type: fn u8, u8: u8
+
+  add = Foo fn a, b: a
+
+  equals
+    add 3, 4
+    3
+
+
+--- the tag is SPECIFIC: a bare (untagged) closure does NOT match a fn-type
+    guard, and an instance of one fn-type does NOT match a different fn-type. ---
+test 'fn type instance tag is specific', fn:
+  Foo = type: fn u8, u8: u8
+  Bar = type: fn u8, u8: u8
+
+  add = Foo fn a, b: a
+  bare = fn a, b: a
+
+  classify = fn f:
+    match f:
+      Foo _: 'foo'
+      Bar _: 'bar'
+      _: 'other'
+
+  equals
+    [classify add; classify bare]
+    ['foo'; 'other']
+
+
+--- a generic fn-type applied builds a concrete fn-type. Each application mints a
+    fresh $FnType (fn-types compare by identity), so two applications differ and
+    an alias of one application is equal to itself. ---
+test 'generic fn type applied builds a concrete fn type', fn:
+  OpEq = type TL, TR: fn TL, TR: u8
+
+  FnA = OpEq u8, u8
+  FnB = OpEq u8, u8
+
+  not_equals FnA, FnB
+
+
+test 'generic fn type application alias equality', fn:
+  OpEq = type TL, TR: fn TL, TR: u8
+
+  FnA = OpEq u8, u8
+  FnAlias = FnA
+
+  equals FnA, FnAlias
+
+
+test 'enum case match with destructure', fn:
+  Opt = enum:
+    Some {val: u8}
+    None
+
+  describe = fn o:
+    match o:
+      Opt.Some s: s.val
+      _: 0
+
+  equals
+    [describe Opt.Some {val: 7}; describe Opt.None {}]
+    [7; 0]
+
+
+test 'fmt typed rec instance', fn:
+  Foo = type:
+    bar: u8
+  foo = Foo {bar: 1}
+
+  equals
+    '${foo}'
+    'Foo {bar: 1}'
+
+
+test 'repr typed rec instance in list', fn:
+  Foo = type:
+    bar: u8
+  lst = [Foo {bar: 1}]
+
+  equals
+    '${lst}'
+    '[Foo {bar: 1}]'
+
+
+--- a fn-type instance fmts as `<type-name> fn:` -- the nominal type name plus
+    the `fn:` flavour marker (mirrors `Foo {..}` for records). The closure
+    payload is not renderable, so only the type identity shows. ---
+test 'fmt fn type instance', fn:
+  Foo = type: fn u8, u8: u8
+  add = Foo fn a, b: a
+
+  equals
+    '${add}'
+    'Foo fn:'
+
+
+--- in a collection, the fn instance reprs (not fmts) -- same `<type-name> fn:`
+    rendering, since a fn has no source-quoted form distinct from its fmt. ---
+test 'repr fn type instance in list', fn:
+  Foo = type: fn u8, u8: u8
+  lst = [Foo fn a, b: a]
+
+  equals
+    '${lst}'
+    '[Foo fn:]'
+
+
+--- rendering a bare TYPE value: a plain type renders as its nominal name. ---
+test 'plain type value renders its name', fn:
+  Bit = type _
+
+  equals
+    '${Bit}'
+    'Bit'
+
+
+--- a fn-TYPE value renders its full signature `<name> fn <params>: <result>`,
+    each type position by its nominal name. ---
+test 'fn type value renders its signature', fn:
+  Bit = type _
+  Sig = type: fn Bit, Bit: Bit
+
+  equals
+    '${Sig}'
+    'Sig fn Bit, Bit: Bit'
+
+
+--- in a collection, a type value reprs (not fmts) -- same rendering, since a
+    type has no source-quoted form distinct from its fmt. ---
+test 'type value reprs in a list', fn:
+  Bit = type _
+  Sig = type: fn Bit: Bit
+  lst = [Bit; Sig]
+
+  equals
+    '${lst}'
+    '[Bit, Sig fn Bit: Bit]'

@@ -1,6 +1,0 @@
-{set_ctx_for, get_ctx_for} = import 'std/effects.fnk'
-{foobar} = import './ctx_common.fnk'
-
-set_ctx_for foobar, '${get_ctx_for foobar} -> bar'
-
-unit = 0

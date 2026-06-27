@@ -1,0 +1,5 @@
+{set_new: rt_set} = import 'rt/set.wat'
+
+set = rt_set
+
+

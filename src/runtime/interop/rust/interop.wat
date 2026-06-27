@@ -29,23 +29,23 @@
 
 
   ;; Inter-wat type imports.
-  (import "std/num.wat"     "Num"       (type $Num      (sub any)))
-  (import "std/str.wat"     "Str"       (type $Str      (sub any)))
-  (import "std/str.wat"     "ByteArray" (type $ByteArray (sub any)))
-  (import "std/list.wat"    "List"      (type $List     (sub any)))
-  (import "std/int.wat"     "Int"       (type $Int      (sub $Num (struct))))
-  (import "std/int.wat"     "I64"       (type $I64      (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat"     "U64"       (type $U64      (sub $Int (struct (field $ival i64)))))
-  (import "std/float.wat"   "F64"       (type $F64      (sub $Num (struct (field $val f64)))))
+  (import "rt/num.wat"     "Num"       (type $Num      (sub any)))
+  (import "rt/str.wat"     "Str"       (type $Str      (sub any)))
+  (import "rt/str.wat"     "ByteArray" (type $ByteArray (sub any)))
+  (import "rt/list.wat"    "List"      (type $List     (sub any)))
+  (import "rt/int.wat"     "Int"       (type $Int      (sub $Num (struct))))
+  (import "rt/int.wat"     "I64"       (type $I64      (sub $Int (struct (field $ival i64)))))
+  (import "rt/int.wat"     "U64"       (type $U64      (sub $Int (struct (field $ival i64)))))
+  (import "rt/float.wat"   "F64"       (type $F64      (sub $Num (struct (field $val f64)))))
 
   ;; Func imports
-  (import "std/list.wat"    "head_any"
+  (import "rt/list.wat"    "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat"    "tail_any"
+  (import "rt/list.wat"    "tail_any"
     (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat"    "empty"
+  (import "rt/list.wat"    "empty"
     (func $list_empty (result (ref $List))))
-  (import "std/list.wat"    "prepend"
+  (import "rt/list.wat"    "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
   (import "rt/apply.wat"    "args_empty"
@@ -77,11 +77,11 @@
   (import "rt/apply.wat" "get_ctx"
     (func $get_ctx (result (ref any))))
 
-  (import "std/int.wat"     "_box_i64"
+  (import "rt/int.wat"     "_box_i64"
     (func $_box_i64 (param $v i64) (result (ref $I64))))
-  (import "std/str.wat"     "_str_wrap_bytes"
+  (import "rt/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
-  (import "std/dict.wat"    "get_any"
+  (import "rt/dict.wat"    "get_any"
     (func $rec_get_any (param $rec (ref null any)) (param $key (ref null any)) (result (ref null any))))
   ;; Forward name->symbol resolution for the host export lookup (no interface
   ;; files yet, so the host indexes a symbol-keyed record by name).
@@ -89,7 +89,7 @@
     (func $str_to_symbol (param (ref eq)) (result (ref eq))))
   ;; TODO: rename str.wat's `bytes` export to `str_bytes` (clashes with
   ;; the `$bytes` local in this file).
-  (import "std/str.wat"     "bytes"
+  (import "rt/str.wat"     "bytes"
     (func $str_bytes (param $s (ref $Str)) (result (ref $ByteArray))))
 
 

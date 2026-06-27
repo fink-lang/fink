@@ -341,6 +341,11 @@ pub const MIGRATED_STDLIB_FNK: &[&str] = &[
   "std/iter.fnk",
   "std/trace.fnk",
   "std/int.fnk",
+  "std/set.fnk",
+  "std/list.fnk",
+  "std/fmt.fnk",
+  "std/repr.fnk",
+  "std/math.fnk",
 ];
 
 #[cfg(feature = "compile")]

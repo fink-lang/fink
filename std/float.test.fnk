@@ -1,0 +1,70 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+# Float literals. A decimal-point literal is the implicit float
+# constructor. Trailing zeros, exponents (e), and digit separators (_)
+# are all accepted and normalise to the same value.
+
+test 'float literal', fn:
+  equals
+    3.140000
+    3.14
+
+test 'float exponent', fn:
+  equals
+    1.0e3
+    1000.0
+
+test 'float exponent fractional', fn:
+  equals
+    1.5e2
+    150.0
+
+test 'float negative exponent', fn:
+  equals
+    1.0e-2
+    0.01
+
+test 'float decimal separator', fn:
+  equals
+    1_000.5
+    1000.5
+
+
+# --- Signed ---
+
+test 'float negative literal', fn:
+  equals
+    -3.14
+    -3.14
+
+test 'float negative differs from positive', fn:
+  not_equals
+    -3.14
+    3.14
+
+# A sign-prefixed literal is signed only in statement position; as a bare
+# call argument `+` parses as the infix operator, so bind it first.
+test 'float plus prefix', fn:
+  x = +2.5
+  equals
+    x
+    2.5
+
+test 'float negative exponent literal', fn:
+  equals
+    -1.0e2
+    -100.0
+
+test 'float signed arithmetic', fn:
+  equals
+    -2.5 + 1.0
+    -1.5
+
+
+# --- Float-specific operators ---
+
+test 'power float', fn:
+  equals
+    2.0 ** 0.5
+    1.414213562373095

@@ -1,0 +1,290 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+# --- Destructure ---
+
+test 'rec destructure', fn:
+  {a, b: c} = {a: 1, b: 2}
+  equals
+    [a, c]
+    [1, 2]
+
+test 'rec single field', fn:
+  {x} = {x: 42}
+  equals
+    x
+    42
+
+test 'rec three fields', fn:
+  {a, b, c} = {a: 1, b: 2, c: 3}
+  equals
+    [a, b, c]
+    [1, 2, 3]
+
+test 'rec shorthand', fn:
+  x = 10
+  y = 20
+  {a, b} = {a: x, b: y}
+  equals
+    [a, b]
+    [10, 20]
+
+test 'rec nested', fn:
+  {a} = {a: {b: 42}}
+  {b} = a
+  equals
+    b
+    42
+
+test 'rec spread update', fn:
+  r = {a: 1, b: 2}
+  {a, b} = {..r, b: 10}
+  equals
+    [a, b]
+    [1, 10]
+
+test 'rec spread merge', fn:
+  r1 = {a: 1}
+  r2 = {b: 2}
+  {a, b} = {..r1, ..r2}
+
+  equals
+    [a, b]
+    [1, 2]
+
+test 'rec in fn arg', fn:
+  sum-fields = fn rec:
+    {a, b} = rec
+    a + b
+
+  equals
+    sum-fields {a: 10, b: 20}
+    30
+
+test 'rec fn return', fn:
+  make-point = fn x, y:
+    {x: x, y: y}
+  {x, y} = make-point 3, 4
+
+  equals
+    [x, y]
+    [3, 4]
+
+test 'rec destructure extra fields', fn:
+  {a, b} = {a: 1, b: 2, c: 3}
+  equals
+    [a, b]
+    [1, 2]
+
+test 'rec spread overwrite', fn:
+  r = {a: 1, b: 2}
+  {a, b} = {..r, a: 99}
+  equals
+    [a, b]
+    [99, 2]
+
+test 'rec empty', fn:
+  r = {}
+  {a} = {..r, a: 1}
+  equals
+    a
+    1
+
+test 'rec rest binding', fn:
+  {a, ..rest} = {a: 1, b: 2, c: 3}
+  {b} = rest
+  equals
+    [a, b, rest]
+    [1, 2, {b: 2, c: 3}]
+
+test 'rec with bool values', fn:
+  {a, b} = {a: true, b: false}
+  equals
+    a and (not b)
+    true
+
+test 'rec with string values', fn:
+  {name} = {name: 'hello'}
+  equals
+    name
+    'hello'
+
+
+# --- Match ---
+
+test 'rec match pattern', fn:
+  r = {x: 42, y: 99}
+  equals
+    match r:
+      {x, ..}: x
+    42
+
+test 'rec match extract field', fn:
+  r = {a: 5, b: 10}
+  equals
+    match r:
+      {a, ..}: a
+    5
+
+test 'rec empty rest exact match', fn:
+  r = {a: 1}
+  equals
+    match r:
+      {a, ..{}}: a
+      _: 0
+    1
+
+test 'rec empty rest rejects extra', fn:
+  r = {a: 1, b: 2}
+  equals
+    match r:
+      {a, ..{}}: a
+      _: 0
+    0
+
+test 'rec guard literal in match', fn:
+  r = {kind: 1, val: 42}
+  equals
+    match r:
+      {kind: 1, val}: val
+      {kind: 2, val}: val + 100
+      _: 0
+    42
+
+test 'rec guard second arm', fn:
+  r = {kind: 2, val: 10}
+  equals
+    match r:
+      {kind: 1, val}: val
+      {kind: 2, val}: val + 100
+      _: 0
+    110
+
+test 'rec with list value', fn:
+  {items} = {items: [1, 2, 3]}
+  equals
+    match items:
+      [a, ..]: a
+    1
+
+
+# --- Field access ---
+
+test 'rec dot access', fn:
+  r = {a: 42}
+  equals
+    r.a
+    42
+
+test 'rec dot access nested', fn:
+  r = {a: {b: 99}}
+  equals
+    r.a.b
+    99
+
+
+test 'rec destructure rest before field', fn:
+  r = {a: 1, b: 2}
+  {..rest, a} = r
+  equals
+    [a, rest]
+    [1, {b: 2}]
+
+
+# --- Structural equality ---
+#
+# `==` is structural: two records are equal when they hold the same fields
+# mapped to the same values, regardless of construction order or path.
+
+test 'rec empty equal', fn:
+  equals
+    {}
+    {}
+
+test 'rec single field equal', fn:
+  equals
+    {a: 1}
+    {a: 1}
+
+test 'rec single field unequal value', fn:
+  not_equals
+    {a: 1}
+    {a: 2}
+
+test 'rec multi field equal', fn:
+  equals
+    {a: 1, b: 2}
+    {a: 1, b: 2}
+
+test 'rec field order independent', fn:
+  equals
+    {a: 1, b: 2}
+    {b: 2, a: 1}
+
+test 'rec missing field unequal', fn:
+  not_equals
+    {a: 1, b: 2}
+    {a: 1}
+
+test 'rec extra field unequal', fn:
+  not_equals
+    {a: 1}
+    {a: 1, b: 2}
+
+test 'rec nested equal', fn:
+  equals
+    {pos: {x: 1, y: 2}}
+    {pos: {x: 1, y: 2}}
+
+test 'rec nested unequal', fn:
+  not_equals
+    {pos: {x: 1, y: 2}}
+    {pos: {x: 1, y: 9}}
+
+test 'rec with list value equal', fn:
+  equals
+    {items: [1, 2, 3]}
+    {items: [1, 2, 3]}
+
+test 'rec with string value equal', fn:
+  equals
+    {name: 'fink'}
+    {name: 'fink'}
+
+test 'rec spread built equals literal', fn:
+  r = {a: 1}
+  equals
+    {..r, b: 2}
+    {a: 1, b: 2}
+
+test 'rec different build order equal', fn:
+  one = {..{a: 1}, b: 2}
+  two = {..{b: 2}, a: 1}
+  equals
+    one
+    two
+
+test 'rec vs num not equal', fn:
+  not_equals
+    {a: 1}
+    1
+
+test 'rec vs string not equal', fn:
+  not_equals
+    {a: 1}
+    'a'
+
+test 'rec vs list not equal', fn:
+  not_equals
+    {a: 1}
+    [1]
+
+test 'rec neq true when different', fn:
+  not_equals
+    {a: 1}
+    {a: 2}
+
+test 'rec neq false when equal', fn:
+  equals
+    {a: 1}
+    {a: 1}

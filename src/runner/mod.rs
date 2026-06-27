@@ -187,8 +187,7 @@ mod tests {
 
   /// IO-asserting test runner: appends `stdout == ":` / `stderr == ":`
   /// blocks after the headline value, so tests can assert on captured
-  /// stream output. Used only by the IO tests (std/io.test.fnk,
-  /// test_linking.fnk).
+  /// stream output. Used only by the IO tests (std/io.test.fnk).
   #[allow(unused)]
   fn run_capture_io(src: &str) -> String {
     run_inner(src, true)
@@ -826,20 +825,7 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("src/runner/test_literals.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_operators.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_bindings.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_functions.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_ranges.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_records.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_strings.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_patterns.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_main.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_sets.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_lists.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_math.fnk", skip-ir);
+  test_macros::include_fink_tests!("std/math.test.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
 }
@@ -925,7 +911,7 @@ mod cli_runner_tests {
     );
   }
 
-  /// Runs the runtime-adjacent fink test suite (`src/runtime/rt/all.test.fnk`)
+  /// Runs the runtime-adjacent fink test suite (`src/runtime/all.test.fnk`)
   /// through the real file-based runner. Same gating as the std suite: behaviour
   /// tests for the runtime substrate (rt/types.test.fnk etc.) live next to the
   /// runtime and aggregate here, not in std/all.test.fnk.
@@ -941,12 +927,12 @@ mod cli_runner_tests {
 
     let exit = super::run_file(
       RunOptions::default(),
-      "src/runtime/rt/all.test.fnk",
+      "src/runtime/all.test.fnk",
       vec![],
       stdin,
       stdout,
       stderr,
-    ).expect("run src/runtime/rt/all.test.fnk");
+    ).expect("run src/runtime/all.test.fnk");
 
     let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
     let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();

@@ -5,7 +5,7 @@
 {write, stdout} = import 'std/io.fnk'
 {sqrt} = import 'std/math.fnk'
 {repr} = import 'std/repr.fnk'
-{fmt} = import 'std/str.fnk'
+{fmt} = import 'std/fmt.fnk'
 {list} = import 'std/list.fnk'
 {set} = import 'std/set.fnk'
 

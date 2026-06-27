@@ -1,3 +1,0 @@
-{unique} = import 'std/effects.fnk'
-
-foobar = unique _

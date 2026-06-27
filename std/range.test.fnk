@@ -1,0 +1,123 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+# --- Formatting ---
+#
+# Rendering is the subject here, so these compare the formatted string.
+
+test 'range exclusive formatting', fn:
+  equals
+    '${0..10}'
+    '0..10'
+
+test 'open range exclusive formatting', fn:
+  equals
+    '${0..}'
+    '0..'
+
+test 'range inclusive formatting', fn:
+  equals
+    '${0...10}'
+    '0...10'
+
+test 'range exclusive construction', fn:
+  r = 2..5
+  equals
+    '${r}'
+    '2..5'
+
+test 'range inclusive construction', fn:
+  r = 2...5
+  equals
+    '${r}'
+    '2...5'
+
+
+# --- Membership ---
+
+test 'range in exclusive', fn:
+  equals
+    5 in 0..10
+    true
+
+test 'range in exclusive upper bound', fn:
+  equals
+    10 in 0..10
+    false
+
+test 'range in open', fn:
+  equals
+    1000 in 0..
+    true
+
+test 'range not in open', fn:
+  equals
+    -1 in 0..
+    false
+
+test 'range in inclusive upper bound', fn:
+  equals
+    10 in 0...10
+    true
+
+test 'range not in', fn:
+  equals
+    20 not in 0..10
+    true
+
+test 'range match pattern', fn:
+  x = 5
+  equals
+    match x:
+      0..10: true
+    true
+
+
+# --- Structural equality ---
+#
+# Two ranges are equal iff same start, same end, same inclusivity.
+
+test 'range equal', fn:
+  equals
+    0..10
+    0..10
+
+test 'range unequal end', fn:
+  not_equals
+    0..10
+    0..11
+
+test 'range unequal start', fn:
+  not_equals
+    0..10
+    1..10
+
+test 'range excl vs incl unequal', fn:
+  not_equals
+    0..10
+    0...10
+
+test 'range open equal', fn:
+  equals
+    0..
+    0..
+
+test 'range open vs closed unequal', fn:
+  not_equals
+    0..
+    0..10
+
+test 'range nested in rec equal', fn:
+  equals
+    {r: 0..10}
+    {r: 0..10}
+
+test 'range vs num not equal', fn:
+  not_equals
+    0..10
+    5
+
+test 'range neq', fn:
+  not_equals
+    0..10
+    0..11

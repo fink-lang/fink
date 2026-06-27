@@ -1,0 +1,69 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+# Numeric operators that work across the tower (int and float). Ops
+# exclusive to one type live in that type's tests: int-only integer
+# division / modulo / divmod and the bits-family ops are in int.test.fnk;
+# float-specific power is in float.test.fnk.
+
+
+# --- Arithmetic ---
+
+test 'add', fn:
+  equals
+    2 + 3
+    5
+
+test 'subtract', fn:
+  equals
+    10 - 3
+    7
+
+test 'multiply', fn:
+  equals
+    4 * 5
+    20
+
+# Division promotes across the tower: int / int yields a float.
+test 'divide promotes to float', fn:
+  equals
+    10 / 4
+    2.5
+
+test 'power', fn:
+  equals
+    2 ** 8
+    256
+
+
+# --- Comparison ---
+
+test 'equal', fn:
+  equals
+    3 == 3
+    true
+
+test 'not equal', fn:
+  not_equals
+    3
+    4
+
+test 'less than', fn:
+  equals
+    3 < 4
+    true
+
+test 'less than or equal', fn:
+  equals
+    3 <= 3
+    true
+
+test 'greater than', fn:
+  equals
+    4 > 3
+    true
+
+test 'greater than or equal', fn:
+  equals
+    3 >= 3
+    true

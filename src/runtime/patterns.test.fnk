@@ -1,0 +1,239 @@
+{test, equals} = import 'std/testing.fnk'
+
+
+# Pattern matching across container shapes (list/rec), spread forms,
+# rest-in-middle, predicate guards, and cross-type rejection. This is a
+# language/runtime feature (match destructuring), so it lives next to the
+# runtime rather than being split across the per-type modules.
+
+
+# --- Seq guards ---
+
+test 'seq guard literal in match', fn:
+  equals
+    match [1, 42]:
+      [1, val, ..rest]: val
+      [2, val, ..rest]: val + 100
+      _: 0
+    42
+
+test 'seq guard second arm', fn:
+  equals
+    match [2, 10]:
+      [1, val, ..rest]: val
+      [2, val, ..rest]: val + 100
+      _: 0
+    110
+
+
+# --- Predicate / comparison guards ---
+
+test 'predicate guard in match -- bare element', fn:
+  is_even = fn n: n == 4
+  equals
+    match [4]:
+      [is_even x]: x
+      _: 0
+    4
+
+test 'predicate guard rec matching', fn:
+  g = fn: 2
+  is_eq_g = fn v: v == g
+  equals
+    match {k: g}:
+      {k: is_eq_g p}: true
+      _: false
+    true
+
+test 'comparison in match -- rec', fn:
+  equals
+    match {k: 4}:
+      {k: bar == 4}: bar
+      _: 0
+    4
+
+test 'predicate guard in match -- list of rec with spread', fn:
+  is_eq_4 = fn v: v == 4
+  equals
+    match [{k: 4}, {k: 99}]:
+      [{k: is_eq_4 p}, ..]: p
+      _: 0
+    4
+
+test 'predicate guard in match -- closure-valued field, 2-elem list', fn:
+  g = fn: 2
+  is_eq_g = fn v: v == g
+  equals
+    match [{k: g}, {k: 123}]:
+      [{k: is_eq_g p}, ..]: true
+      _: false
+    true
+
+
+# --- Rest in middle / trailing ---
+
+test 'list rest in middle', fn:
+  equals
+    match [1, 2, 3, 4]:
+      [first, ..mid, last]: first + last
+    5
+
+test 'list bare in middle', fn:
+  equals
+    match [1, 2, 3, 4]:
+      [first, .., last]: first + last
+    5
+
+test 'list trailing only -- bare spread plus tail', fn:
+  equals
+    match [1, 2, 3, 4]:
+      [.., last]: last
+    4
+
+
+# --- Bare vs triple spread (empty matching) ---
+
+test 'list bare spread matches empty', fn:
+  equals
+    match []:
+      [..]: true
+    true
+
+test 'list bare spread matches non empty', fn:
+  equals
+    match [1]:
+      [..]: true
+    true
+
+test 'list triple spread does not match empty', fn:
+  equals
+    match []:
+      [...]: true
+      _: false
+    false
+
+test 'list triple spread matches non empty', fn:
+  equals
+    match [1]:
+      [...]: true
+    true
+
+test 'list bare spread matches empty rest', fn:
+  equals
+    match [1]:
+      [foo, ..]: foo
+    1
+
+test 'list bare spread matches non empty rest', fn:
+  equals
+    match [1, 2]:
+      [foo, ..]: foo
+    1
+
+test 'list bare triple spread does not match empty rest', fn:
+  equals
+    match [1]:
+      [foo, ...]: foo
+      _: false
+    false
+
+test 'list bare triple spread matches non empty rest', fn:
+  equals
+    match [1, 2]:
+      [foo, ...]: foo
+    1
+
+
+# --- Multiple back / front elements ---
+
+test 'list trailing only -- multiple back elements', fn:
+  equals
+    match [1, 2, 3, 4, 5]:
+      [..rest, x, y, z]: x + y + z
+    12
+
+test 'list front + trailing with named rest', fn:
+  equals
+    match [1, 2, 3, 4, 5, 6]:
+      [a, b, ..mid, x, y]: a + b + x + y
+    14
+
+test 'list rest in middle -- empty mid', fn:
+  equals
+    match [1, 2]:
+      [a, ..mid, last]: a + last
+      _: 99
+    3
+
+test 'list rest in middle -- too few elements', fn:
+  equals
+    match [1]:
+      [a, ..mid, last]: a + last
+      _: 99
+    99
+
+test 'list rest in middle -- empty list', fn:
+  equals
+    match []:
+      [a, ..mid, last]: a + last
+      _: 99
+    99
+
+test 'list rest in middle -- literal trailing', fn:
+  equals
+    match [1, 2, 3, 4]:
+      [a, ..mid, 4]: a
+      _: 99
+    1
+
+test 'list rest in middle -- literal trailing fails', fn:
+  equals
+    match [1, 2, 3, 4]:
+      [a, ..mid, 5]: a
+      _: 99
+    99
+
+test 'list rest in middle -- nested seq pattern in trailing', fn:
+  equals
+    match [1, [10, 20], [30, 40]]:
+      [first, ..mid, [a, b]]: first + a + b
+    71
+
+
+# --- Cross-type shape rejection ---
+
+test 'rec empty check', fn:
+  r = {}
+  equals
+    match r:
+      {}: true
+      _: false
+    true
+
+test 'rec pattern rejects empty list', fn:
+  equals
+    match []:
+      {}: true
+      _: false
+    false
+
+test 'rec pattern rejects list', fn:
+  equals
+    match [1, 2]:
+      {a}: a
+      _: false
+    false
+
+test 'seq pattern rejects empty rec', fn:
+  equals
+    match {}:
+      []: true
+      _: false
+    false
+
+test 'seq pattern rejects rec', fn:
+  equals
+    match {a: 1}:
+      [x, ..]: x
+      _: false
+    false

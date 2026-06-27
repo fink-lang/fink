@@ -39,26 +39,19 @@ run_test = fn test_case:
   set_curr_test test_case
 
   run_result = suspend fn resume:
-    {name, body, skip} = upd_curr_test fn {name, body, skip}:
-      [{name, body, skip}, {abort: resume}]
-
+    {name, body} = upd_curr_test fn {name, body}:
+      [{name, body}, {abort: resume}]
 
     write stderr, '${name} ... '
-    match skip:
-      false: body _
-      true: true
-
-    resume {success: true, skip}
+    body _
+    resume {success: true}
 
   match run_result:
     {failure}:
       write stderr, 'FAIL\n  ${failure}\n\n'
       false
-    {success: true, skip: false}:
+    {success: true}:
       write stderr, 'SUCCESS\n'
-      true
-    {skip: true}:
-      write stderr, 'SKIPPED\n'
       true
 
 
@@ -83,17 +76,22 @@ fail = fn msg:
 
 
 
-run_tests = fn tests, fail_cnt:
+run_tests = fn tests, succ_cnt, fail_cnt, skip_cnt:
   match tests:
-    []: fail_cnt
+    []: [succ_cnt, fail_cnt, skip_cnt]
     [test, ..rest]:
-      succ = run_test test
 
-      cnt = match succ:
-        true: fail_cnt
-        false: fail_cnt + 1
+      cnts = match test:
+        {skip: true, name}:
+          write stderr, '${name} ... SKIPPED\n'
+          [succ_cnt, fail_cnt, skip_cnt + 1]
+        _:
+          succ = run_test test
+          match succ:
+            true: [succ_cnt + 1, fail_cnt, skip_cnt]
+            false: [succ_cnt, fail_cnt + 1, skip_cnt]
 
-      run_tests rest, cnt
+      run_tests rest, ..cnts
 
 
 
@@ -101,7 +99,10 @@ test_all = fn:
   tests = upd_tests fn {tests}:
     [tests, {tests: []}]
 
-  run_tests tests, 0
+  [passed, failed, skipped] = run_tests tests, 0, 0, 0
+  total = passed + failed + skipped
+  write stderr, '\nTotal: ${total}, Passed: ${passed}, Failed: ${failed} Skipped: ${skipped}\n'
+  failed
 
 
 

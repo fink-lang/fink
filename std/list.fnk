@@ -1,0 +1,3 @@
+{list: rt_list} = import 'rt/list.wat'
+
+list = rt_list

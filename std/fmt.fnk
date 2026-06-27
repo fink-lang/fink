@@ -1,0 +1,4 @@
+{fmt: rt_fmt} = import 'rt/str.wat'
+
+
+fmt = rt_fmt
