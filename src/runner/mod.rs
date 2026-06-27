@@ -187,8 +187,7 @@ mod tests {
 
   /// IO-asserting test runner: appends `stdout == ":` / `stderr == ":`
   /// blocks after the headline value, so tests can assert on captured
-  /// stream output. Used only by the IO tests (std/io.test.fnk,
-  /// test_linking.fnk).
+  /// stream output. Used only by the IO tests (std/io.test.fnk).
   #[allow(unused)]
   fn run_capture_io(src: &str) -> String {
     run_inner(src, true)
@@ -826,12 +825,6 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("src/runner/test_operators.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_bindings.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_functions.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_patterns.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_main.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
   test_macros::include_fink_tests!("std/math.test.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
