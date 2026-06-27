@@ -1,0 +1,14 @@
+{test, equals} = import 'std/testing.fnk'
+
+
+# Bool literals.
+
+test 'bool literal true', fn:
+  equals
+    true
+    true
+
+test 'bool literal false', fn:
+  equals
+    false
+    false

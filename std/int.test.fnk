@@ -1,0 +1,68 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+# Integer literals. A bare decimal is the implicit int constructor
+# (math family, signed). Hex / octal / binary are the bits family --
+# all u64 -- and do not mix with the math family (`0xFF == 255` traps),
+# so bits-family literals are compared against each other.
+
+test 'int literal', fn:
+  equals
+    42
+    42
+
+test 'int decimal separator', fn:
+  equals
+    1_000_000
+    1000000
+
+
+# --- Signed (math family) ---
+#
+# Bare decimals are math-family signed. A leading `+`/`-` is a sign on
+# the literal (in statement position; as a bare call argument `+`/`-`
+# parses as the infix operator, so bind first then compare).
+
+test 'int negative literal', fn:
+  equals
+    -5
+    -5
+
+test 'int negative differs from positive', fn:
+  not_equals
+    -5
+    5
+
+test 'int signed arithmetic', fn:
+  equals
+    -5 + 3
+    -2
+
+test 'int plus prefix', fn:
+  x = +1
+  equals
+    x
+    1
+
+
+# --- Bits family (hex / octal / binary) ---
+
+test 'hex literal', fn:
+  equals
+    0xFF
+    0xFF
+
+test 'hex equals octal same value', fn:
+  equals
+    0xFF
+    0o377
+
+test 'hex equals binary same value', fn:
+  equals
+    0xFF
+    0b1111_1111
+
+test 'hex separator', fn:
+  equals
+    0xFF_FF
+    0xFFFF

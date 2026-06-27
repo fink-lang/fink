@@ -826,7 +826,6 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("src/runner/test_literals.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_operators.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_bindings.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_functions.fnk", skip-ir);
