@@ -1,0 +1,153 @@
+{test, skip, equals, not_equals} = import 'std/testing.fnk'
+
+
+# Functions are first-class values with a type (Fn). These cover function
+# application, varargs, recursion, closures, and function equality.
+
+
+# --- Application ---
+
+test 'multi-param fn called in same scope', fn:
+  add = fn a, b:
+    a + b
+  equals
+    add 3, 4
+    7
+
+# TODO bug: `2 | add 3, ?` (pipe with a `?` placeholder) panics the
+# compiler ("Partial should be eliminated before CPS transform") when
+# nested in a test fn body -- works in a plain top-level main. A compile
+# panic, so it cannot even be present as a skip. Re-add when fixed.
+
+
+# --- Recursion ---
+
+test 'factorial', fn:
+  fac = fn n:
+    match n:
+      0: 1
+      n: n * fac n - 1
+  equals
+    fac 5
+    120
+
+test 'add list items', fn:
+  sum = fn items, c:
+    match items:
+      []: c
+      [a, ..rest]: sum rest, c + a
+  equals
+    sum [1, 2, 3, 4], 0
+    10
+
+test 'mutual recursion at module scope', fn:
+  is_even = fn n:
+    match n:
+      0: true
+      _: is_odd n - 1
+
+  is_odd = fn n:
+    match n:
+      0: false
+      _: is_even n - 1
+
+  equals
+    is_even 4
+    true
+
+test 'mutual recursion inside fn body', fn:
+  m = fn:
+    is_even = fn n:
+      match n:
+        0: true
+        _: is_odd n - 1
+
+    is_odd = fn n:
+      match n:
+        0: false
+        _: is_even n - 1
+
+    is_even 4
+
+  equals
+    m _
+    true
+
+# Inner-let fn referencing its own binding lexically (self-recursive
+# closure: the recursive slot is patched after the closure is bound).
+test 'self-recursive fn defined inside another fn', fn:
+  outer = fn x:
+    inner = fn n:
+      match n:
+        0: x
+        _: inner n - 1
+    inner 3
+
+  equals
+    outer 42
+    42
+
+
+# --- Varargs ---
+
+test 'varargs identity', fn:
+  identity = fn ..args: args
+  equals
+    identity 10, 20, 30
+    [10, 20, 30]
+
+# TODO bug: spread-application (`f ..xs`) inside a test body traps with
+# invoke_resume (works standalone). Same spread-under-suspend bug as the
+# list/set construct-with-spread tests. Un-skip once fixed.
+skip test 'varargs first via spread', fn:
+  first = fn ..args:
+    match args:
+      [a, ..]: a
+  equals
+    first ..[42, 99]
+    42
+
+skip test 'varargs mixed fixed and rest via spread', fn:
+  head-and-rest = fn a, ..rest:
+    match rest:
+      [b, ..]: a + b
+  equals
+    head-and-rest 10, ..[20, 30]
+    30
+
+test 'tagged template varargs', fn:
+  first = fn ..parts:
+    match parts:
+      [a, ..]: a
+  x = 42
+  y = first'hello ${x} world'
+  equals
+    y
+    'hello '
+
+
+# --- Function equality ---
+#
+# Functions compare by identity: the same fn is equal to itself; distinct
+# fns (and distinct closures from the same fn) are not.
+
+test 'fn equality -- same fn', fn:
+  foo = fn: 123
+  equals
+    foo
+    foo
+
+test 'fn equality -- different fns', fn:
+  foo = fn: 123
+  bar = fn: 456
+  not_equals
+    foo
+    bar
+
+test 'fn equality -- distinct closures from same fn', fn:
+  spam = fn: fn: 789
+  f1 = spam _
+  f2 = spam _
+  not_equals
+    f1
+    f2

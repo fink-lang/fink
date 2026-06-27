@@ -1,2 +1,0 @@
-foo = fn ni:
-  ni * 2
