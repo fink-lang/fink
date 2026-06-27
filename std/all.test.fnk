@@ -17,6 +17,7 @@ import './num.test.fnk'
 import './int.test.fnk'
 import './float.test.fnk'
 import './bool.test.fnk'
+import './fn.test.fnk'
 
 
 
