@@ -2,6 +2,7 @@
 
 import './symbols.test.fnk'
 import './types.test.fnk'
+import './patterns.test.fnk'
 
 
 main = fn ..args:
