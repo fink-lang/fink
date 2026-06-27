@@ -11,6 +11,8 @@ import './list.test.fnk'
 import './set.test.fnk'
 import './range.test.fnk'
 import './str.test.fnk'
+import './rec.test.fnk'
+import './dict.test.fnk'
 
 
 

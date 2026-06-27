@@ -1,0 +1,116 @@
+{test, equals, not_equals} = import 'std/testing.fnk'
+
+
+# A rec stops being a static record and becomes a dict as soon as a
+# non-static (string / expr / value) key is used. These exercise that
+# dynamic-key behaviour.
+
+
+test 'dict string key destructure', fn:
+  {'foo bar': v} = {'foo bar': 42}
+  equals
+    v
+    42
+
+test 'dict expr key destructure', fn:
+  {(4): foo} = {(1 + 3): 42}
+  equals
+    foo
+    42
+
+test 'dict fn as key destructure', fn:
+  foo = fn: 123
+  {(foo): bar} = {(foo): 42}
+  equals
+    bar
+    42
+
+
+# --- Membership ---
+
+test 'dict key membership', fn:
+  r = {'a': 1}
+  equals
+    'a' in r
+    true
+
+test 'dict key not member', fn:
+  r = {'a': 1, 'b': 2}
+  equals
+    'c' not in r
+    true
+
+
+# --- Dot access ---
+
+test 'dict dot access string key', fn:
+  r = {'foo bar': 42}
+  equals
+    r.('foo bar')
+    42
+
+test 'dict dot access string key short', fn:
+  r = {'foo bar': 42}
+  equals
+    r.'foo bar'
+    42
+
+test 'dict dot access dynamic key', fn:
+  r = {'a': 42}
+  k = 'a'
+  equals
+    r.(k)
+    42
+
+
+# --- Runtime keys ---
+
+test 'dict runtime key equal', fn:
+  k = 'a'
+  equals
+    {(k): 1}
+    {'a': 1}
+
+test 'dict runtime key unequal', fn:
+  k = 'a'
+  not_equals
+    {(k): 1}
+    {'a': 2}
+
+
+# --- rec/dicts as keys ---
+#
+# Structural key equality: a value stored under a record key is found by
+# any structurally-equal record, not just the same allocation.
+
+test 'dict rec key lookup by equal', fn:
+  k = {id: 1}
+  m = {(k): 'found'}
+  equals
+    m.({id: 1})
+    'found'
+
+test 'dict rec key distinct keys coexist', fn:
+  m = {({id: 1}): 'a', ({id: 2}): 'b'}
+  equals
+    m.({id: 2})
+    'b'
+
+test 'dict rec key membership by equal rec', fn:
+  m = {({id: 1}): 'a'}
+  equals
+    {id: 1} in m
+    true
+
+test 'dict rec key absent by unequal rec', fn:
+  m = {({id: 1}): 'a'}
+  equals
+    {id: 2} not in m
+    true
+
+test 'dict rec key update overwrites equal rec', fn:
+  m = {({id: 1}): 'a'}
+  m2 = {..m, ({id: 1}): 'b'}
+  equals
+    m2.({id: 1})
+    'b'
