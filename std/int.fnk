@@ -1,2 +1,4 @@
+# TODO re-export types from wat
+# TODO {rt_u8} = import 'rt/int.wat'
 
-u8 = type _
+u8 = type _ #TODO rt_u8
