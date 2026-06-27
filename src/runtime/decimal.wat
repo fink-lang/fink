@@ -8,9 +8,9 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat" "Num" (type $Num (sub any) (struct)))
-  (import "std/str.wat" "Str" (type $Str (sub any) (struct)))
-  (import "std/float.wat" "from_f64"
+  (import "rt/num.wat" "Num" (type $Num (sub any) (struct)))
+  (import "rt/str.wat" "Str" (type $Str (sub any) (struct)))
+  (import "rt/float.wat" "from_f64"
     (func $float_from_f64 (param f64) (result (ref $Str))))
 
   (type $Decimal (@pub) (sub final $Num

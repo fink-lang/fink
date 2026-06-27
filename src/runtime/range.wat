@@ -19,17 +19,17 @@
 (module
 
   ;; Type imports
-  (import "std/int.wat"  "Int"  (type $Int  (sub any) (struct)))
-  (import "std/int.wat"  "I64"  (type $I64  (sub $Int (struct (field $ival i64)))))
-  (import "std/str.wat"  "Str"  (type $Str  (sub any) (struct)))
-  (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "rt/int.wat"  "Int"  (type $Int  (sub any) (struct)))
+  (import "rt/int.wat"  "I64"  (type $I64  (sub $Int (struct (field $ival i64)))))
+  (import "rt/str.wat"  "Str"  (type $Str  (sub any) (struct)))
+  (import "rt/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref any)) (param $cont (ref null any))))
-  (import "std/int.wat"  "fmt" (func $int_fmt (param (ref $Int)) (result (ref $Str))))
-  (import "std/str.wat"  "from_bytes" (func $str_from_bytes
+  (import "rt/int.wat"  "fmt" (func $int_fmt (param (ref $Int)) (result (ref $Str))))
+  (import "rt/str.wat"  "from_bytes" (func $str_from_bytes
     (param (ref $ByteArray)) (result (ref $Str))))
-  (import "std/str.wat"  "bytes" (func $str_bytes
+  (import "rt/str.wat"  "bytes" (func $str_bytes
     (param (ref $Str)) (result (ref $ByteArray))))
 
 

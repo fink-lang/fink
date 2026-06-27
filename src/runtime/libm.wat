@@ -15,8 +15,8 @@
 
 (module
 
-  (import "std/num.wat"   "Num" (type $Num (sub any) (struct)))
-  (import "std/float.wat" "F64"
+  (import "rt/num.wat"   "Num" (type $Num (sub any) (struct)))
+  (import "rt/float.wat" "F64"
     (type $F64 (sub final $Num (struct (field $val f64)))))
 
 

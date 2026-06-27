@@ -33,32 +33,32 @@
     (func $make_type_stamp_cont
       (param (ref null any)) (param (ref null any)) (param (ref null any))
       (result (ref null any))))
-  (import "std/dict.wat" "Dict" (type $Dict (sub any)))
+  (import "rt/dict.wat" "Dict" (type $Dict (sub any)))
   ;; Direct-style dict helpers: build an empty fields dict and add entries.
-  (import "std/dict.wat" "_rec_new"
+  (import "rt/dict.wat" "_rec_new"
     (func $dict_new (result (ref $Dict))))
-  (import "std/dict.wat" "_set_field"
+  (import "rt/dict.wat" "_set_field"
     (func $dict_set_field (param (ref null any)) (param (ref null any)) (param (ref null any)) (result (ref null any))))
-  (import "std/dict.wat" "rec_deep_eq"
+  (import "rt/dict.wat" "rec_deep_eq"
     (func $dict_deep_eq (param (ref $Dict)) (param (ref $Dict)) (result i32)))
-  (import "std/dict.wat" "copy_by_keys"
+  (import "rt/dict.wat" "copy_by_keys"
     (func $dict_copy_by_keys (param (ref null any)) (param (ref null any)) (result (ref $Dict))))
-  (import "std/list.wat" "List" (type $List (sub any)))
-  (import "std/list.wat" "empty" (func $list_empty (result (ref $List))))
-  (import "std/list.wat" "prepend"
+  (import "rt/list.wat" "List" (type $List (sub any)))
+  (import "rt/list.wat" "empty" (func $list_empty (result (ref $List))))
+  (import "rt/list.wat" "prepend"
     (func $list_prepend (param (ref any)) (param (ref $List)) (result (ref $List))))
-  (import "std/list.wat" "concat"
+  (import "rt/list.wat" "concat"
     (func $list_concat (param (ref $List)) (param (ref $List)) (result (ref $List))))
-  (import "std/list.wat" "list_deep_eq"
+  (import "rt/list.wat" "list_deep_eq"
     (func $list_deep_eq (param (ref $List)) (param (ref $List)) (result i32)))
   ;; Union members are a $Set ("union is just a set"); eq delegates to set eq.
-  (import "std/set.wat" "Set" (type $Set (sub any)))
-  (import "std/set.wat" "impl_empty" (func $set_empty (result (ref $Set))))
-  (import "std/set.wat" "impl_set"
+  (import "rt/set.wat" "Set" (type $Set (sub any)))
+  (import "rt/set.wat" "impl_empty" (func $set_empty (result (ref $Set))))
+  (import "rt/set.wat" "impl_set"
     (func $set_add (param (ref $Set)) (param (ref eq)) (result (ref $Set))))
-  (import "std/set.wat" "op_eq"
+  (import "rt/set.wat" "op_eq"
     (func $set_eq (param (ref $Set)) (param (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_in"
+  (import "rt/set.wat" "op_in"
     (func $set_in (param (ref $Set)) (param (ref eq)) (result i32)))
 
 

@@ -32,31 +32,31 @@
   (import "rt/modules.wat"   "init"
     (func $modules_init (param (ref null any)) (result i32)))
 
-  (import "std/num.wat"     "Num"       (type $Num       (sub any)))
-  (import "std/int.wat"     "Int"       (type $Int       (sub any)))
-  (import "std/int.wat"     "I64"       (type $I64       (sub $Int)))
-  (import "std/int.wat"     "U64"       (type $U64       (sub $Int)))
-  (import "std/float.wat"   "F64"       (type $F64       (sub $Num)))
-  (import "std/decimal.wat" "Decimal"   (type $Decimal   (sub $Num)))
-  (import "std/str.wat"     "Str"       (type $Str       (sub any)))
-  (import "std/str.wat"     "ByteArray" (type $ByteArray (sub any)))
-  (import "std/list.wat"    "List"      (type $List      (sub any)))
-  (import "std/dict.wat"    "Dict"       (type $Dict       (sub any)))
+  (import "rt/num.wat"     "Num"       (type $Num       (sub any)))
+  (import "rt/int.wat"     "Int"       (type $Int       (sub any)))
+  (import "rt/int.wat"     "I64"       (type $I64       (sub $Int)))
+  (import "rt/int.wat"     "U64"       (type $U64       (sub $Int)))
+  (import "rt/float.wat"   "F64"       (type $F64       (sub $Num)))
+  (import "rt/decimal.wat" "Decimal"   (type $Decimal   (sub $Num)))
+  (import "rt/str.wat"     "Str"       (type $Str       (sub any)))
+  (import "rt/str.wat"     "ByteArray" (type $ByteArray (sub any)))
+  (import "rt/list.wat"    "List"      (type $List      (sub any)))
+  (import "rt/dict.wat"    "Dict"       (type $Dict       (sub any)))
 
-  (import "std/str.wat" "_str_wrap_bytes"
+  (import "rt/str.wat" "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
-  (import "std/str.wat" "bytes"
+  (import "rt/str.wat" "bytes"
     (func $str_bytes (param $s (ref $Str)) (result (ref $ByteArray))))
 
-  (import "std/list.wat" "head_any"
+  (import "rt/list.wat" "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "tail_any"
+  (import "rt/list.wat" "tail_any"
     (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "size"
+  (import "rt/list.wat" "size"
     (func $list_size_inner (param $list (ref $List)) (result i32)))
-  (import "std/list.wat" "empty"
+  (import "rt/list.wat" "empty"
     (func $list_empty_inner (result (ref $List))))
-  (import "std/list.wat" "prepend"
+  (import "rt/list.wat" "prepend"
     (func $list_prepend_inner
       (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
@@ -95,7 +95,7 @@
   ;; std/dict.wat:get takes the public $Dict type; JS only ever holds
   ;; opaque (ref any), so we wrap with a JS-friendly shim (rec_get below)
   ;; that does the cast.
-  (import "std/dict.wat" "get"
+  (import "rt/dict.wat" "get"
     (func $rec_get_inner (param $rec (ref $Dict)) (param $key (ref eq))
       (result (ref null eq))))
   ;; Forward name->symbol resolution: JS navigates recs by name (no interface

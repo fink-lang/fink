@@ -84,7 +84,7 @@ ctx is passed as the second positional wasm arg to `apply_3` (not via the args l
 
 ## Builtins
 
-Fixed-arity builtins (`op_plus`, `seq_prepend`, `str_fmt`, etc.) keep their direct WASM signatures and are called without going through `apply_3`. Each takes ctx as its first param, followed by its value args and the continuation; it dispatches its result to the caller's continuation via `apply_1` (which threads the same ctx). See [`rt/protocols.wat`](../../runtime/rt/protocols.wat) for the dispatch pattern.
+Fixed-arity builtins (`op_plus`, `seq_prepend`, `str_fmt`, etc.) keep their direct WASM signatures and are called without going through `apply_3`. Each takes ctx as its first param, followed by its value args and the continuation; it dispatches its result to the caller's continuation via `apply_1` (which threads the same ctx). See [`rt/protocols.wat`](../../runtime/protocols.wat) for the dispatch pattern.
 
 ## Apply helpers
 
@@ -113,9 +113,9 @@ Both compile to the same `$Fn3`. The distinction only affects how continuations 
 
 ## Thunks and async resumption
 
-Suspended continuations are parked as `$Closure` thunks whose captures hold `[cont, value, ctx]`. When userland later fires a thunk, the thunk's body calls `apply_3` with the **captured ctx** — restoring the suspender's universe rather than running under the resumer's. The `suspend` primitive hands the current continuation to userland as such a thunk-closure; userland (e.g. `std/tasks.fnk`) decides when to resume it. See [`rt/apply.wat`](../../runtime/rt/apply.wat) `$_thunk_fn`, `$make_thunk`, and `$suspend_apply`.
+Suspended continuations are parked as `$Closure` thunks whose captures hold `[cont, value, ctx]`. When userland later fires a thunk, the thunk's body calls `apply_3` with the **captured ctx** — restoring the suspender's universe rather than running under the resumer's. The `suspend` primitive hands the current continuation to userland as such a thunk-closure; userland (e.g. `std/tasks.fnk`) decides when to resume it. See [`rt/apply.wat`](../../runtime/apply.wat) `$_thunk_fn`, `$make_thunk`, and `$suspend_apply`.
 
 ## See also
 
 - [../../../docs/execution-model.md](../../../docs/execution-model.md) — why every function takes implicit context and continuation arguments (the language-level model this convention realises).
-- [`rt/apply.wat`](../../runtime/rt/apply.wat) — `apply_3`, `apply_0/1/2_vals`, `make_thunk`, `_thunk_fn`.
+- [`rt/apply.wat`](../../runtime/apply.wat) — `apply_3`, `apply_0/1/2_vals`, `make_thunk`, `_thunk_fn`.

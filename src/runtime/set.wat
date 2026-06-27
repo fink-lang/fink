@@ -53,36 +53,36 @@
   (import "rt/apply.wat"     "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"     "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat"     "Fn3"      (type $Fn3      (sub any)))
-  (import "std/list.wat"     "List"     (type $List     (sub any)))
-  (import "std/num.wat"      "Num"      (type $Num      (sub any)))
-  (import "std/str.wat"      "Str"      (type $Str      (sub any)))
+  (import "rt/list.wat"     "List"     (type $List     (sub any)))
+  (import "rt/num.wat"      "Num"      (type $Num      (sub any)))
+  (import "rt/str.wat"      "Str"      (type $Str      (sub any)))
   ;; TODO: $ByteArray is currently a private type in std/str.wat; it's
   ;; used by fmt to write bytes directly. Either expose it via @pub or
   ;; move fmt's byte-buffer construction behind a public str helper.
-  (import "std/str.wat"      "ByteArray" (type $ByteArray (sub any)))
+  (import "rt/str.wat"      "ByteArray" (type $ByteArray (sub any)))
 
   ;; Func imports
-  (import "std/hashing.wat"  "hash_i31"
+  (import "rt/hashing.wat"  "hash_i31"
     (func $hash_i31 (param $key (ref eq)) (result i32)))
   (import "rt/protocols.wat" "deep_eq"
     (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat"     "head_any"
+  (import "rt/list.wat"     "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat"     "tail_any"
+  (import "rt/list.wat"     "tail_any"
     (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat"     "is_empty"
+  (import "rt/list.wat"     "is_empty"
     (func $list_is_empty (param (ref $List)) (result i32)))
-  (import "std/str.wat"      "_str_copy_to"
+  (import "rt/str.wat"      "_str_copy_to"
     (func $str_copy_to (param $dst (ref $ByteArray)) (param $pos i32) (param $src (ref $Str)) (result i32)))
   ;; repr_val — element formatter (per-type repr protocol dispatcher).
-  (import "std/repr.wat" "repr_val"
+  (import "rt/repr.wat" "repr_val"
     (func $repr_val (param $val (ref any)) (result (ref $Str))))
-  (import "std/str.wat"      "_str_len"
+  (import "rt/str.wat"      "_str_len"
     (func $str_len (param $str (ref $Str)) (result i32)))
-  (import "std/str.wat"      "StrBytesImpl" (type $StrBytesImpl (sub $Str)))
+  (import "rt/str.wat"      "StrBytesImpl" (type $StrBytesImpl (sub $Str)))
 
 
   ;; -- $Set type ------------------------------------------------------------

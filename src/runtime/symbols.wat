@@ -29,17 +29,17 @@
   ;; Dict + Str imports for the symbol name table. (Mutual import with
   ;; dict.wat, which imports Symbol/repr back -- the linker resolves the cycle,
   ;; as with opaque<->hashing.)
-  (import "std/dict.wat" "Dict"    (type $Dict (sub any)))
-  (import "std/dict.wat" "_rec_new"
+  (import "rt/dict.wat" "Dict"    (type $Dict (sub any)))
+  (import "rt/dict.wat" "_rec_new"
     (func $rec_new (result (ref $Dict))))
-  (import "std/dict.wat" "_rec_set_any"
+  (import "rt/dict.wat" "_rec_set_any"
     (func $rec_set (param (ref null any)) (param (ref eq)) (param (ref eq)) (result (ref $Dict))))
-  (import "std/dict.wat" "get"
+  (import "rt/dict.wat" "get"
     (func $rec_get (param (ref $Dict)) (param (ref eq)) (result (ref null eq))))
-  (import "std/str.wat" "Str" (type $Str (sub any)))
-  (import "std/str.wat" "str_empty" (func $str_empty (result (ref $Str))))
-  (import "std/str.wat" "repr" (func $str_repr (param (ref $Str)) (result (ref $Str))))
-  (import "std/dict.wat" "_is_key_ident"
+  (import "rt/str.wat" "Str" (type $Str (sub any)))
+  (import "rt/str.wat" "str_empty" (func $str_empty (result (ref $Str))))
+  (import "rt/str.wat" "repr" (func $str_repr (param (ref $Str)) (result (ref $Str))))
+  (import "rt/dict.wat" "_is_key_ident"
     (func $str_is_key_ident (param (ref $Str)) (result i32)))
 
   ;; -- tag + decode / discriminate -----------------------------------

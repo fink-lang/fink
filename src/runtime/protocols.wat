@@ -27,16 +27,16 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"      "Num"         (type $Num         (sub any)))
-  (import "std/int.wat"      "Int"         (type $Int         (sub any)))
-  (import "std/int.wat"      "I64"         (type $I64         (sub any)))
-  (import "std/float.wat"    "F64"         (type $F64         (sub any)))
-  (import "std/str.wat"      "Str"         (type $Str         (sub any)))
-  (import "std/list.wat"     "List"        (type $List        (sub any)))
+  (import "rt/num.wat"      "Num"         (type $Num         (sub any)))
+  (import "rt/int.wat"      "Int"         (type $Int         (sub any)))
+  (import "rt/int.wat"      "I64"         (type $I64         (sub any)))
+  (import "rt/float.wat"    "F64"         (type $F64         (sub any)))
+  (import "rt/str.wat"      "Str"         (type $Str         (sub any)))
+  (import "rt/list.wat"     "List"        (type $List        (sub any)))
   ;; Pull std/math.wat into the link DAG. rt/protocols doesn't call any
   ;; math primitive directly; this import exists so the linker reaches
   ;; math.wat's `(@impl "std/math.fnk:...")` entries.
-  (import "std/math.wat"     "abs_f64"
+  (import "rt/math.wat"     "abs_f64"
     (func $_link_math_anchor (param (ref $F64)) (result (ref $F64))))
   ;; Same anchor pattern for rt/types.wat: codegen calls `new_type`
   ;; directly (resolved via the runtime func-name table), so the module
@@ -64,9 +64,9 @@
     (func $is_union_member (param (ref null any)) (param (ref null any)) (result i32)))
   (import "rt/types.wat"     "project_inst"
     (func $project_inst (param (ref null any)) (param (ref null any)) (result (ref null any))))
-  (import "std/dict.wat"     "Dict"         (type $Dict         (sub any)))
-  (import "std/set.wat"      "Set"         (type $Set         (sub any)))
-  (import "std/range.wat"    "Range"       (type $Range       (sub any)))
+  (import "rt/dict.wat"     "Dict"         (type $Dict         (sub any)))
+  (import "rt/set.wat"      "Set"         (type $Set         (sub any)))
+  (import "rt/range.wat"    "Range"       (type $Range       (sub any)))
 
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
@@ -80,77 +80,77 @@
   (import "rt/opaque.wat" "Opaque" (type $Opaque (sub any)))
   (import "rt/opaque.wat" "op_eq"  (func $opaque_op_eq  (param (ref $Opaque)) (param (ref $Opaque)) (result i32)))
   (import "rt/opaque.wat" "op_neq" (func $opaque_op_neq (param (ref $Opaque)) (param (ref $Opaque)) (result i32)))
-  (import "std/list.wat" "op_empty"
+  (import "rt/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
-  (import "std/list.wat" "seq_pop"
+  (import "rt/list.wat" "seq_pop"
     (func $list_seq_pop (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
-  (import "std/list.wat" "seq_pop_back"
+  (import "rt/list.wat" "seq_pop_back"
     (func $list_seq_pop_back (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
-  (import "std/list.wat" "seq_prepend"
+  (import "rt/list.wat" "seq_prepend"
     (func $list_seq_prepend (param $ctx (ref null any)) (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat" "seq_concat"
+  (import "rt/list.wat" "seq_concat"
     (func $list_seq_concat (param $ctx (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
   ;; Func imports — set ops
-  (import "std/set.wat" "op_plus"     (func $set_op_plus     (param $b (ref $Set)) (result (ref $Set))))
-  (import "std/set.wat" "op_minus"    (func $set_op_minus    (param $b (ref $Set)) (result (ref $Set))))
-  (import "std/set.wat" "op_eq"       (func $set_op_eq       (param $b (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_disjoint" (func $set_op_disjoint (param $b (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_lt"       (func $set_op_lt       (param $b (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_lte"      (func $set_op_lte      (param $b (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_gt"       (func $set_op_gt       (param $b (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_gte"      (func $set_op_gte      (param $b (ref $Set)) (result i32)))
-  (import "std/set.wat" "op_and"      (func $set_op_and      (param $b (ref $Set)) (result (ref $Set))))
-  (import "std/set.wat" "op_or"       (func $set_op_or       (param $b (ref $Set)) (result (ref $Set))))
-  (import "std/set.wat" "op_xor"      (func $set_op_xor      (param $b (ref $Set)) (result (ref $Set))))
-  (import "std/set.wat" "op_in"       (func $set_op_in       (param $set (ref $Set)) (param $key (ref eq)) (result i32)))
-  (import "std/set.wat" "op_notin"    (func $set_op_notin    (param $set (ref $Set)) (param $key (ref eq)) (result i32)))
-  (import "std/set.wat" "op_empty"    (func $set_op_empty    (result i32)))
-  (import "std/set.wat" "seq_pop"     (func $set_seq_pop     (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
+  (import "rt/set.wat" "op_plus"     (func $set_op_plus     (param $b (ref $Set)) (result (ref $Set))))
+  (import "rt/set.wat" "op_minus"    (func $set_op_minus    (param $b (ref $Set)) (result (ref $Set))))
+  (import "rt/set.wat" "op_eq"       (func $set_op_eq       (param $b (ref $Set)) (result i32)))
+  (import "rt/set.wat" "op_disjoint" (func $set_op_disjoint (param $b (ref $Set)) (result i32)))
+  (import "rt/set.wat" "op_lt"       (func $set_op_lt       (param $b (ref $Set)) (result i32)))
+  (import "rt/set.wat" "op_lte"      (func $set_op_lte      (param $b (ref $Set)) (result i32)))
+  (import "rt/set.wat" "op_gt"       (func $set_op_gt       (param $b (ref $Set)) (result i32)))
+  (import "rt/set.wat" "op_gte"      (func $set_op_gte      (param $b (ref $Set)) (result i32)))
+  (import "rt/set.wat" "op_and"      (func $set_op_and      (param $b (ref $Set)) (result (ref $Set))))
+  (import "rt/set.wat" "op_or"       (func $set_op_or       (param $b (ref $Set)) (result (ref $Set))))
+  (import "rt/set.wat" "op_xor"      (func $set_op_xor      (param $b (ref $Set)) (result (ref $Set))))
+  (import "rt/set.wat" "op_in"       (func $set_op_in       (param $set (ref $Set)) (param $key (ref eq)) (result i32)))
+  (import "rt/set.wat" "op_notin"    (func $set_op_notin    (param $set (ref $Set)) (param $key (ref eq)) (result i32)))
+  (import "rt/set.wat" "op_empty"    (func $set_op_empty    (result i32)))
+  (import "rt/set.wat" "seq_pop"     (func $set_seq_pop     (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
 
   ;; Func imports — int ops
   ;; Numeric ops — all routed through num.wat (the numeric dispatcher).
-  (import "std/num.wat" "op_plus"   (func $num_op_plus   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_minus"  (func $num_op_minus  (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_mul"    (func $num_op_mul    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_div"    (func $num_op_div    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_eq"     (func $num_op_eq     (param (ref $Num)) (param (ref $Num)) (result i32)))
-  (import "std/num.wat" "op_neq"    (func $num_op_neq    (param (ref $Num)) (param (ref $Num)) (result i32)))
-  (import "std/num.wat" "op_lt"     (func $num_op_lt     (param (ref $Num)) (param (ref $Num)) (result i32)))
-  (import "std/num.wat" "op_lte"    (func $num_op_lte    (param (ref $Num)) (param (ref $Num)) (result i32)))
-  (import "std/num.wat" "op_gt"     (func $num_op_gt     (param (ref $Num)) (param (ref $Num)) (result i32)))
-  (import "std/num.wat" "op_gte"    (func $num_op_gte    (param (ref $Num)) (param (ref $Num)) (result i32)))
-  (import "std/num.wat" "op_intdiv" (func $num_op_intdiv (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_rem"    (func $num_op_rem    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_intmod" (func $num_op_intmod (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_pow"    (func $num_op_pow    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_divmod" (func $num_op_divmod (param (ref $Num)) (param (ref $Num)) (result (ref $List))))
-  (import "std/num.wat" "op_rotl"   (func $num_op_rotl   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_rotr"   (func $num_op_rotr   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_not"    (func $num_op_not    (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_and"    (func $num_op_and    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_or"     (func $num_op_or     (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_xor"    (func $num_op_xor    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_shl"    (func $num_op_shl    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/num.wat" "op_shr"    (func $num_op_shr    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_plus"   (func $num_op_plus   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_minus"  (func $num_op_minus  (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_mul"    (func $num_op_mul    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_div"    (func $num_op_div    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_eq"     (func $num_op_eq     (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "rt/num.wat" "op_neq"    (func $num_op_neq    (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "rt/num.wat" "op_lt"     (func $num_op_lt     (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "rt/num.wat" "op_lte"    (func $num_op_lte    (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "rt/num.wat" "op_gt"     (func $num_op_gt     (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "rt/num.wat" "op_gte"    (func $num_op_gte    (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "rt/num.wat" "op_intdiv" (func $num_op_intdiv (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_rem"    (func $num_op_rem    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_intmod" (func $num_op_intmod (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_pow"    (func $num_op_pow    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_divmod" (func $num_op_divmod (param (ref $Num)) (param (ref $Num)) (result (ref $List))))
+  (import "rt/num.wat" "op_rotl"   (func $num_op_rotl   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_rotr"   (func $num_op_rotr   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_not"    (func $num_op_not    (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_and"    (func $num_op_and    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_or"     (func $num_op_or     (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_xor"    (func $num_op_xor    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_shl"    (func $num_op_shl    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "rt/num.wat" "op_shr"    (func $num_op_shr    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
 
   ;; Func imports — str ops
-  (import "std/str.wat" "op_eq"  (func $str_op_eq  (param (ref $Str)) (result i32)))
-  (import "std/str.wat" "op_dot" (func $str_op_dot (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "rt/str.wat" "op_eq"  (func $str_op_eq  (param (ref $Str)) (result i32)))
+  (import "rt/str.wat" "op_dot" (func $str_op_dot (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — dict ops
-  (import "std/dict.wat" "op_in"     (func $dict_op_in     (param (ref $Dict)) (param (ref eq)) (result i32)))
-  (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Dict)) (param (ref eq)) (result i32)))
-  (import "std/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Dict)) (param (ref $Dict)) (result i32)))
-  (import "std/list.wat" "list_deep_eq" (func $list_deep_eq (param (ref $List)) (param (ref $List)) (result i32)))
-  (import "std/range.wat" "range_deep_eq" (func $range_deep_eq (param (ref $Range)) (param (ref $Range)) (result i32)))
-  (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
-  (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "rt/dict.wat" "op_in"     (func $dict_op_in     (param (ref $Dict)) (param (ref eq)) (result i32)))
+  (import "rt/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $Dict)) (param (ref eq)) (result i32)))
+  (import "rt/dict.wat" "rec_deep_eq" (func $rec_deep_eq  (param (ref $Dict)) (param (ref $Dict)) (result i32)))
+  (import "rt/list.wat" "list_deep_eq" (func $list_deep_eq (param (ref $List)) (param (ref $List)) (result i32)))
+  (import "rt/range.wat" "range_deep_eq" (func $range_deep_eq (param (ref $Range)) (param (ref $Range)) (result i32)))
+  (import "rt/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
+  (import "rt/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "rt/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — range ops
-  (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
-  (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
+  (import "rt/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
+  (import "rt/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
   ;; Func imports — interop (host bridge)
   ;; ctx-aware: each leading (ref null any) is the caller's $Ctx.

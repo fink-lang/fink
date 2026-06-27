@@ -22,18 +22,18 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"     "Num"     (type $Num     (sub any)))
-  (import "std/num.wat"     "fmt"     (func $num_fmt   (param (ref $Num))   (result (ref $Str))))
-  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
-  (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
-  (import "std/range.wat"   "fmt"      (func $range_fmt     (param (ref $Range)) (result (ref $Str))))
-  (import "std/range.wat"   "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
-  (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
-  (import "std/range.wat"  "Range"     (type $Range     (sub any)))
-  (import "std/dict.wat"   "Dict"       (type $Dict       (sub any)))
-  (import "std/set.wat"    "Set"       (type $Set       (sub any)))
-  (import "std/list.wat"   "List"      (type $List      (sub any)))
+  (import "rt/num.wat"     "Num"     (type $Num     (sub any)))
+  (import "rt/num.wat"     "fmt"     (func $num_fmt   (param (ref $Num))   (result (ref $Str))))
+  (import "rt/int.wat"     "Int"     (type $Int     (sub any) (struct)))
+  (import "rt/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
+  (import "rt/range.wat"   "fmt"      (func $range_fmt     (param (ref $Range)) (result (ref $Str))))
+  (import "rt/range.wat"   "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
+  (import "rt/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
+  (import "rt/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
+  (import "rt/range.wat"  "Range"     (type $Range     (sub any)))
+  (import "rt/dict.wat"   "Dict"       (type $Dict       (sub any)))
+  (import "rt/set.wat"    "Set"       (type $Set       (sub any)))
+  (import "rt/list.wat"   "List"      (type $List      (sub any)))
   (import "rt/apply.wat"   "VarArgs"   (type $VarArgs   (sub any)))
   (import "rt/apply.wat"   "Closure"   (type $Closure   (sub any)))
   (import "rt/apply.wat"   "Captures"  (type $Captures  (sub any)))
@@ -65,26 +65,26 @@
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
-  (import "std/set.wat" "fmt"
+  (import "rt/set.wat" "fmt"
     (func $set_fmt (param (ref $Set)) (result (ref $Str))))
 
-  (import "std/dict.wat" "fmt"
+  (import "rt/dict.wat" "fmt"
     (func $rec_fmt (param (ref $Dict)) (result (ref $Str))))
 
-  (import "std/list.wat" "size"
+  (import "rt/list.wat" "size"
     (func $list_size (param $list (ref $List)) (result i32)))
-  (import "std/list.wat" "head_any"
+  (import "rt/list.wat" "head_any"
     (func $head_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "tail_any"
+  (import "rt/list.wat" "tail_any"
     (func $tail_any (param $list (ref null any)) (result (ref null any))))
 
-  (import "std/list.wat" "op_empty"
+  (import "rt/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
-  (import "std/list.wat" "empty"
+  (import "rt/list.wat" "empty"
     (func $list_empty (result (ref $List))))
-  (import "std/list.wat" "prepend"
+  (import "rt/list.wat" "prepend"
     (func $list_prepend (param (ref any)) (param (ref $List)) (result (ref $List))))
-  (import "std/list.wat" "fmt"
+  (import "rt/list.wat" "fmt"
     (func $list_fmt (param (ref $List)) (result (ref $Str))))
 
   ;; Continuation dispatch: $std/list.wat:apply_1 (defined in list.wat) wraps a single

@@ -38,8 +38,8 @@
 (module
 
   ;; Type imports
-  (import "std/dict.wat"  "Dict"      (type $Dict      (sub any)))
-  (import "std/list.wat"  "List"     (type $List     (sub any)))
+  (import "rt/dict.wat"  "Dict"      (type $Dict      (sub any)))
+  (import "rt/list.wat"  "List"     (type $List     (sub any)))
   (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat"  "Fn3"      (type $Fn3      (sub any)))
@@ -52,18 +52,18 @@
       (param $callee (ref null any))))
   (import "rt/apply.wat"  "empty_ctx"
     (func $empty_ctx (result (ref any))))
-  (import "std/dict.wat"  "_rec_new"
+  (import "rt/dict.wat"  "_rec_new"
     (func $rec_new (result (ref $Dict))))
-  (import "std/dict.wat"  "get"
+  (import "rt/dict.wat"  "get"
     (func $rec_get (param $rec (ref $Dict)) (param $key (ref eq)) (result (ref null eq))))
-  (import "std/dict.wat"  "_set_field"
+  (import "rt/dict.wat"  "_set_field"
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
-  (import "std/list.wat"  "head_any"
+  (import "rt/list.wat"  "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $val (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat"  "empty"
+  (import "rt/list.wat"  "empty"
     (func $list_empty (result (ref $List))))
-  (import "std/list.wat"  "prepend"
+  (import "rt/list.wat"  "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
   ;; Args machinery + int unboxing for the fink-callable get_module_url
@@ -76,9 +76,9 @@
     (func $args_empty (result (ref any))))
   (import "rt/apply.wat" "args_prepend"
     (func $args_prepend (param (ref null any)) (param (ref any)) (result (ref any))))
-  (import "std/num.wat" "Num" (type $Num (sub any)))
-  (import "std/int.wat" "Int" (type $Int (sub $Num (struct))))
-  (import "std/int.wat" "_int_ival"
+  (import "rt/num.wat" "Num" (type $Num (sub any)))
+  (import "rt/int.wat" "Int" (type $Int (sub $Num (struct))))
+  (import "rt/int.wat" "_int_ival"
     (func $int_ival (param (ref $Int)) (result i64)))
 
 

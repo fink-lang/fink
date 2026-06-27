@@ -13,15 +13,15 @@
 
 (module
 
-  (import "std/num.wat" "Num" (type $Num (sub any)))
-  (import "std/str.wat" "Str" (type $Str (sub any)))
+  (import "rt/num.wat" "Num" (type $Num (sub any)))
+  (import "rt/str.wat" "Str" (type $Str (sub any)))
   (import "rt/apply.wat" "Closure" (type $Closure (sub any)))
   (import "rt/opaque.wat" "Opaque" (type $Opaque (sub any)))
-  (import "std/dict.wat" "Dict" (type $Dict (sub any)))
+  (import "rt/dict.wat" "Dict" (type $Dict (sub any)))
 
-  (import "std/num.wat" "hash_i31"
+  (import "rt/num.wat" "hash_i31"
     (func $num_hash_i31 (param (ref $Num)) (result i32)))
-  (import "std/str.wat" "hash_i31"
+  (import "rt/str.wat" "hash_i31"
     (func $str_hash_i31 (param (ref $Str)) (result i32)))
   (import "rt/apply.wat" "hash_i31"
     (func $clos_hash_i31 (param (ref $Closure)) (result i32)))

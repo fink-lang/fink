@@ -8,10 +8,10 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat" "Num" (type $Num (sub any) (struct)))
-  (import "std/str.wat" "Str" (type $Str (sub any) (struct)))
-  (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
-  (import "std/str.wat" "from_bytes"
+  (import "rt/num.wat" "Num" (type $Num (sub any) (struct)))
+  (import "rt/str.wat" "Str" (type $Str (sub any) (struct)))
+  (import "rt/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "rt/str.wat" "from_bytes"
     (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
 
   ;; $F64 — IEEE 754 binary64. Subtype of $Num; for now shares $Num's
@@ -85,7 +85,7 @@
   ;; op_pow on floats — delegates to std/libm.wat:pow (faithfully-rounded
   ;; port of rust-libm). The `**` operator routes here via num.wat for
   ;; `$F64` operands and mixed Int/F64 (after Int→F64 widening).
-  (import "std/libm.wat" "pow"
+  (import "rt/libm.wat" "pow"
     (func $libm_pow (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
 
   (func $op_pow (@pub)

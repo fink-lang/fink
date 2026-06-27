@@ -925,7 +925,7 @@ mod cli_runner_tests {
     );
   }
 
-  /// Runs the runtime-adjacent fink test suite (`src/runtime/rt/all.test.fnk`)
+  /// Runs the runtime-adjacent fink test suite (`src/runtime/all.test.fnk`)
   /// through the real file-based runner. Same gating as the std suite: behaviour
   /// tests for the runtime substrate (rt/types.test.fnk etc.) live next to the
   /// runtime and aggregate here, not in std/all.test.fnk.
@@ -941,12 +941,12 @@ mod cli_runner_tests {
 
     let exit = super::run_file(
       RunOptions::default(),
-      "src/runtime/rt/all.test.fnk",
+      "src/runtime/all.test.fnk",
       vec![],
       stdin,
       stdout,
       stderr,
-    ).expect("run src/runtime/rt/all.test.fnk");
+    ).expect("run src/runtime/all.test.fnk");
 
     let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
     let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();

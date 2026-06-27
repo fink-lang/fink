@@ -19,19 +19,19 @@
 
 (module
 
-  (import "std/list.wat" "List" (type $List (sub any)))
+  (import "rt/list.wat" "List" (type $List (sub any)))
 
   ;; List operations — args calling-convention storage. apply.wat owns
   ;; the args ABI; list.wat just provides the underlying data structure.
-  (import "std/list.wat" "empty"
+  (import "rt/list.wat" "empty"
     (func $list_empty (result (ref $List))))
-  (import "std/list.wat" "prepend"
+  (import "rt/list.wat" "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
-  (import "std/list.wat" "head_any"
+  (import "rt/list.wat" "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "tail_any"
+  (import "rt/list.wat" "tail_any"
     (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "concat"
+  (import "rt/list.wat" "concat"
     (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
   ;; Type construction: when an apply callee is a $Type, building an instance
   ;; is delegated wholesale to types.wat. apply.wat stays dumb -- it only

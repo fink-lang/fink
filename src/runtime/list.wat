@@ -15,23 +15,23 @@
   (import "rt/apply.wat" "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat" "Fn3"      (type $Fn3      (sub any)))
-  (import "std/str.wat"  "Str"      (type $Str      (sub any) (struct)))
-  (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "rt/str.wat"  "Str"      (type $Str      (sub any) (struct)))
+  (import "rt/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
   (import "rt/apply.wat" "apply_0" (func $apply_0 (;apply-ctx;) (param (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $result (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_2_vals" (func $apply_2_vals (;apply-ctx;) (param (ref null any)) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
-  (import "std/str.wat" "from_bytes"
+  (import "rt/str.wat" "from_bytes"
     (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
-  (import "std/str.wat" "_str_len"
+  (import "rt/str.wat" "_str_len"
     (func $_str_len (param (ref $Str)) (result i32)))
-  (import "std/str.wat" "_str_copy_to"
+  (import "rt/str.wat" "_str_copy_to"
     (func $_str_copy_to (param (ref $Str)) (param (ref $ByteArray)) (param i32) (result i32)))
-  (import "std/str.wat" "_str_from_ascii_2"
+  (import "rt/str.wat" "_str_from_ascii_2"
     (func $_str_from_ascii_2 (param i32) (param i32) (result (ref $Str))))
   ;; repr_val — element formatter (per-type repr protocol dispatcher).
-  (import "std/repr.wat" "repr_val"
+  (import "rt/repr.wat" "repr_val"
     (func $repr_val (param (ref any)) (result (ref $Str))))
 
   ;; deep_eq — structural element comparison for list equality.
@@ -39,11 +39,11 @@
     (func $deep_eq (param (ref eq)) (param (ref eq)) (result i32)))
 
   ;; Range / I64 imports for $op_dot indexing & slicing.
-  (import "std/int.wat"   "I64"      (type $I64   (sub any) (struct (field $ival i64))))
-  (import "std/range.wat" "Range"    (type $Range (sub any)))
-  (import "std/range.wat" "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat" "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
-  (import "std/range.wat" "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
+  (import "rt/int.wat"   "I64"      (type $I64   (sub any) (struct (field $ival i64))))
+  (import "rt/range.wat" "Range"    (type $Range (sub any)))
+  (import "rt/range.wat" "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
+  (import "rt/range.wat" "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
+  (import "rt/range.wat" "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
 
 
   ;; -- Type definitions ------------------------------------------------

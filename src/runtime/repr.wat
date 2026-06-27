@@ -23,25 +23,25 @@
 
   ;; ---- Type imports ----------------------------------------------------
 
-  (import "std/str.wat"   "Str"   (type $Str   (sub any)))
-  (import "std/num.wat"   "Num"   (type $Num   (sub any)))
-  (import "std/range.wat" "Range" (type $Range (sub any)))
-  (import "std/list.wat"  "List"  (type $List  (sub any)))
-  (import "std/dict.wat"  "Dict"   (type $Dict   (sub any)))
-  (import "std/set.wat"   "Set"   (type $Set   (sub any)))
+  (import "rt/str.wat"   "Str"   (type $Str   (sub any)))
+  (import "rt/num.wat"   "Num"   (type $Num   (sub any)))
+  (import "rt/range.wat" "Range" (type $Range (sub any)))
+  (import "rt/list.wat"  "List"  (type $List  (sub any)))
+  (import "rt/dict.wat"  "Dict"   (type $Dict   (sub any)))
+  (import "rt/set.wat"   "Set"   (type $Set   (sub any)))
 
 
   ;; ---- Per-type repr impl imports --------------------------------------
   ;;
   ;; num.wat owns the inner numeric dispatch ($Int / $F64 / $Decimal).
 
-  (import "std/str.wat"   "repr"         (func $str_repr     (param (ref $Str))     (result (ref $Str))))
-  (import "std/str.wat"   "closure_repr" (func $closure_repr (param (ref $Closure)) (result (ref $Str))))
-  (import "std/num.wat"   "repr" (func $num_repr   (param (ref $Num))   (result (ref $Str))))
-  (import "std/range.wat" "repr" (func $range_repr (param (ref $Range)) (result (ref $Str))))
-  (import "std/list.wat"  "repr" (func $list_repr  (param (ref $List))  (result (ref $Str))))
-  (import "std/dict.wat"  "repr" (func $rec_repr   (param (ref $Dict))   (result (ref $Str))))
-  (import "std/set.wat"   "repr" (func $set_repr   (param (ref $Set))   (result (ref $Str))))
+  (import "rt/str.wat"   "repr"         (func $str_repr     (param (ref $Str))     (result (ref $Str))))
+  (import "rt/str.wat"   "closure_repr" (func $closure_repr (param (ref $Closure)) (result (ref $Str))))
+  (import "rt/num.wat"   "repr" (func $num_repr   (param (ref $Num))   (result (ref $Str))))
+  (import "rt/range.wat" "repr" (func $range_repr (param (ref $Range)) (result (ref $Str))))
+  (import "rt/list.wat"  "repr" (func $list_repr  (param (ref $List))  (result (ref $Str))))
+  (import "rt/dict.wat"  "repr" (func $rec_repr   (param (ref $Dict))   (result (ref $Str))))
+  (import "rt/set.wat"   "repr" (func $set_repr   (param (ref $Set))   (result (ref $Str))))
 
 
   ;; ---- CPS apply (for the fink-importable repr) ------------------------
@@ -60,9 +60,9 @@
   (import "rt/types.wat" "Inst" (type $Inst (sub any)))
   (import "rt/types.wat" "FnInst" (type $FnInst (sub $Inst)))
   (import "rt/types.wat" "Type" (type $Type (sub any)))
-  (import "std/str.wat" "fn_inst_fmt"
+  (import "rt/str.wat" "fn_inst_fmt"
     (func $fn_inst_fmt (param (ref null any)) (result (ref $Str))))
-  (import "std/str.wat" "type_fmt"
+  (import "rt/str.wat" "type_fmt"
     (func $type_fmt (param (ref null any)) (result (ref $Str))))
   (import "rt/types.wat" "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
@@ -73,16 +73,16 @@
 
   ;; ByteArray-assembly helpers for prepending a nominal type name to an
   ;; instance's payload repr (`Foo {bar: 1}`). Same idiom dict/list fmt use.
-  (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
-  (import "std/str.wat" "from_bytes"
+  (import "rt/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "rt/str.wat" "from_bytes"
     (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
-  (import "std/str.wat" "_str_len"
+  (import "rt/str.wat" "_str_len"
     (func $_str_len (param (ref $Str)) (result i32)))
-  (import "std/str.wat" "_str_copy_to"
+  (import "rt/str.wat" "_str_copy_to"
     (func $_str_copy_to (param (ref $Str)) (param (ref $ByteArray)) (param i32) (result i32)))
 
   ;; i31 (bool) renderer — repr same as fmt; share str.wat's helper.
-  (import "std/str.wat" "_str_fmt_i31"
+  (import "rt/str.wat" "_str_fmt_i31"
     (func $_str_fmt_i31 (param i32) (result (ref $Str))))
 
 

@@ -11,12 +11,12 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"   "Num"  (type $Num  (sub any) (struct)))
-  (import "std/float.wat" "F64"  (type $F64  (sub $Num (struct (field $val f64)))))
-  (import "std/list.wat"  "List" (type $List (sub any)))
-  (import "std/str.wat"   "Str"  (type $Str  (sub any) (struct)))
-  (import "std/str.wat"   "ByteArray" (type $ByteArray (array (mut i8))))
-  (import "std/str.wat"   "from_bytes" (func $str_from_bytes
+  (import "rt/num.wat"   "Num"  (type $Num  (sub any) (struct)))
+  (import "rt/float.wat" "F64"  (type $F64  (sub $Num (struct (field $val f64)))))
+  (import "rt/list.wat"  "List" (type $List (sub any)))
+  (import "rt/str.wat"   "Str"  (type $Str  (sub any) (struct)))
+  (import "rt/str.wat"   "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "rt/str.wat"   "from_bytes" (func $str_from_bytes
     (param (ref $ByteArray)) (result (ref $Str))))
 
   ;; $Int — abstract, nominal-only supertype. No fields. Storage
@@ -136,9 +136,9 @@
         (call $_int_ival (local.get $b))))))
 
   ;; Func imports — list constructors via the public API.
-  (import "std/list.wat" "empty"
+  (import "rt/list.wat" "empty"
     (func $list_empty (result (ref $List))))
-  (import "std/list.wat" "prepend"
+  (import "rt/list.wat" "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
   ;; Internal box helper — wrap an i64 result as $U64.

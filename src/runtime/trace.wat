@@ -46,18 +46,18 @@
     (func $apply_3
       (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
-  (import "std/list.wat" "List" (type $List (sub any)))
-  (import "std/list.wat" "empty"
+  (import "rt/list.wat" "List" (type $List (sub any)))
+  (import "rt/list.wat" "empty"
     (func $list_empty (result (ref $List))))
-  (import "std/list.wat" "prepend"
+  (import "rt/list.wat" "prepend"
     (func $list_prepend (param (ref any)) (param (ref $List)) (result (ref $List))))
 
-  (import "std/num.wat" "Num" (type $Num (sub any)))
-  (import "std/int.wat" "Int" (type $Int (sub $Num (struct))))
-  (import "std/int.wat" "I64" (type $I64 (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat" "_box_i64"
+  (import "rt/num.wat" "Num" (type $Num (sub any)))
+  (import "rt/int.wat" "Int" (type $Int (sub $Num (struct))))
+  (import "rt/int.wat" "I64" (type $I64 (sub $Int (struct (field $ival i64)))))
+  (import "rt/int.wat" "_box_i64"
     (func $box_i64 (param i64) (result (ref $I64))))
-  (import "std/int.wat" "_int_ival"
+  (import "rt/int.wat" "_int_ival"
     (func $int_ival (param (ref $Int)) (result i64)))
 
   ;; Host resolves (module_id, cps_id) -> source line (0 if unknown), via

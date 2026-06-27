@@ -22,44 +22,44 @@
   (import "rt/apply.wat" "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat" "Fn3"      (type $Fn3      (sub any)))
-  (import "std/num.wat"  "Num"      (type $Num      (sub any) (struct)))
-  (import "std/int.wat"  "Int"      (type $Int      (sub $Num (struct))))
-  (import "std/float.wat" "F64"     (type $F64      (sub final $Num (struct (field $val f64)))))
+  (import "rt/num.wat"  "Num"      (type $Num      (sub any) (struct)))
+  (import "rt/int.wat"  "Int"      (type $Int      (sub $Num (struct))))
+  (import "rt/float.wat" "F64"     (type $F64      (sub final $Num (struct (field $val f64)))))
 
   ;; Func imports — apply / list plumbing
   (import "rt/apply.wat" "apply_1" (func $apply_1 (;apply-ctx;) (param (ref null any)) (param $result (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat" "head_any"
+  (import "rt/list.wat" "head_any"
     (func $head_any (param (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "tail_any"
+  (import "rt/list.wat" "tail_any"
     (func $tail_any (param (ref null any)) (result (ref null any))))
-  (import "std/list.wat" "List"
+  (import "rt/list.wat" "List"
     (type $List (sub any)))
-  (import "std/list.wat" "is_empty"
+  (import "rt/list.wat" "is_empty"
     (func $list_is_empty (param (ref $List)) (result i32)))
 
   ;; Func imports — float arms
-  (import "std/float.wat" "abs"        (func $float_abs        (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "neg"        (func $float_neg        (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "ceil"       (func $float_ceil       (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "floor"      (func $float_floor      (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "trunc"      (func $float_trunc      (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "round"      (func $float_round      (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "round_even" (func $float_round_even (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "sqrt"       (func $float_sqrt       (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "sign"       (func $float_sign       (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "fract"      (func $float_fract      (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "min"        (func $float_min        (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "max"        (func $float_max        (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "copysign"   (func $float_copysign   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
-  (import "std/float.wat" "clamp"      (func $float_clamp      (param (ref $F64)) (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "abs"        (func $float_abs        (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "neg"        (func $float_neg        (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "ceil"       (func $float_ceil       (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "floor"      (func $float_floor      (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "trunc"      (func $float_trunc      (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "round"      (func $float_round      (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "round_even" (func $float_round_even (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "sqrt"       (func $float_sqrt       (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "sign"       (func $float_sign       (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "fract"      (func $float_fract      (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "min"        (func $float_min        (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "max"        (func $float_max        (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "copysign"   (func $float_copysign   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/float.wat" "clamp"      (func $float_clamp      (param (ref $F64)) (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
 
   ;; Func imports — int arms
-  (import "std/int.wat" "abs"      (func $int_abs      (param (ref $Int)) (result (ref $Int))))
-  (import "std/int.wat" "neg"      (func $int_neg      (param (ref $Int)) (result (ref $Int))))
-  (import "std/int.wat" "sign"     (func $int_sign     (param (ref $Int)) (result (ref $Int))))
-  (import "std/int.wat" "min"      (func $int_min      (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
-  (import "std/int.wat" "max"      (func $int_max      (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
-  (import "std/int.wat" "copysign" (func $int_copysign (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "rt/int.wat" "abs"      (func $int_abs      (param (ref $Int)) (result (ref $Int))))
+  (import "rt/int.wat" "neg"      (func $int_neg      (param (ref $Int)) (result (ref $Int))))
+  (import "rt/int.wat" "sign"     (func $int_sign     (param (ref $Int)) (result (ref $Int))))
+  (import "rt/int.wat" "min"      (func $int_min      (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "rt/int.wat" "max"      (func $int_max      (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "rt/int.wat" "copysign" (func $int_copysign (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
 
 
   ;; -- Dispatchers — branch on $F64 vs $Int over $Num. ----------------
@@ -230,7 +230,7 @@
   ;;
   ;; Imports `op_minus` from int.wat so we get a zero of the right
   ;; family without needing int.wat to grow a zero-builder.
-  (import "std/int.wat" "op_minus"
+  (import "rt/int.wat" "op_minus"
     (func $int_op_minus (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
 
   (func $int_sub_self (param $n (ref $Int)) (result (ref $Int))
@@ -453,33 +453,33 @@
   ;; =========================================================================
 
   ;; Coercion helper from num.wat for the Int→F64 widen path.
-  (import "std/num.wat" "as_f64"
+  (import "rt/num.wat" "as_f64"
     (func $as_f64 (param (ref $Num)) (result (ref $F64))))
 
   ;; Func imports — libm arms.
-  (import "std/libm.wat" "exp"   (func $libm_exp   (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "exp2"  (func $libm_exp2  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "expm1" (func $libm_expm1 (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "log"   (func $libm_log   (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "log2"  (func $libm_log2  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "log10" (func $libm_log10 (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "log1p" (func $libm_log1p (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "pow"   (func $libm_pow   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "cbrt"  (func $libm_cbrt  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "hypot" (func $libm_hypot (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "sin"   (func $libm_sin   (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "cos"   (func $libm_cos   (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "tan"   (func $libm_tan   (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "asin"  (func $libm_asin  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "acos"  (func $libm_acos  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "atan"  (func $libm_atan  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "atan2" (func $libm_atan2 (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "sinh"  (func $libm_sinh  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "cosh"  (func $libm_cosh  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "tanh"  (func $libm_tanh  (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "asinh" (func $libm_asinh (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "acosh" (func $libm_acosh (param (ref $F64)) (result (ref $F64))))
-  (import "std/libm.wat" "atanh" (func $libm_atanh (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "exp"   (func $libm_exp   (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "exp2"  (func $libm_exp2  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "expm1" (func $libm_expm1 (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "log"   (func $libm_log   (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "log2"  (func $libm_log2  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "log10" (func $libm_log10 (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "log1p" (func $libm_log1p (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "pow"   (func $libm_pow   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "cbrt"  (func $libm_cbrt  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "hypot" (func $libm_hypot (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "sin"   (func $libm_sin   (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "cos"   (func $libm_cos   (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "tan"   (func $libm_tan   (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "asin"  (func $libm_asin  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "acos"  (func $libm_acos  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "atan"  (func $libm_atan  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "atan2" (func $libm_atan2 (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "sinh"  (func $libm_sinh  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "cosh"  (func $libm_cosh  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "tanh"  (func $libm_tanh  (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "asinh" (func $libm_asinh (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "acosh" (func $libm_acosh (param (ref $F64)) (result (ref $F64))))
+  (import "rt/libm.wat" "atanh" (func $libm_atanh (param (ref $F64)) (result (ref $F64))))
 
 
   ;; -- Fn2 adapters for Tier 2 ---------------------------------------------

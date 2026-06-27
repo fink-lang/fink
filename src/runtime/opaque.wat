@@ -42,7 +42,7 @@
 
   ;; Hashing dispatcher -- forward the inner value's hash. Circular with
   ;; hashing.wat (which imports our hash_i31); WAT resolves it at link.
-  (import "std/hashing.wat" "hash_i31"
+  (import "rt/hashing.wat" "hash_i31"
     (func $hash_dispatch (param (ref eq)) (result i32)))
 
 

@@ -656,22 +656,22 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::IsSeqLike       => "rt/protocols.wat:is_seq_like",
     Sym::IsRecLike       => "rt/protocols.wat:is_rec_like",
 
-    Sym::Num             => "std/num.wat:Num",
-    Sym::I64             => "std/int.wat:I64",
-    Sym::U64             => "std/int.wat:U64",
-    Sym::F64             => "std/float.wat:F64",
-    Sym::Decimal         => "std/decimal.wat:Decimal",
+    Sym::Num             => "rt/num.wat:Num",
+    Sym::I64             => "rt/int.wat:I64",
+    Sym::U64             => "rt/int.wat:U64",
+    Sym::F64             => "rt/float.wat:F64",
+    Sym::Decimal         => "rt/decimal.wat:Decimal",
 
     Sym::SeqPrepend      => "rt/protocols.wat:seq_prepend",
     Sym::SeqConcat       => "rt/protocols.wat:seq_concat",
     Sym::SeqPop          => "rt/protocols.wat:seq_pop",
     Sym::SeqPopBack      => "rt/protocols.wat:seq_pop_back",
 
-    Sym::RecMerge        => "std/dict.wat:rec_merge",
-    Sym::RecPut          => "std/dict.wat:rec_put",
-    Sym::RecPop          => "std/dict.wat:rec_pop",
-    Sym::RecEmpty        => "std/dict.wat:_rec_new",
-    Sym::RecSetField     => "std/dict.wat:_set_field",
+    Sym::RecMerge        => "rt/dict.wat:rec_merge",
+    Sym::RecPut          => "rt/dict.wat:rec_put",
+    Sym::RecPop          => "rt/dict.wat:rec_pop",
+    Sym::RecEmpty        => "rt/dict.wat:_rec_new",
+    Sym::RecSetField     => "rt/dict.wat:_set_field",
 
     Sym::GuardApply      => "rt/protocols.wat:guard_apply",
     Sym::NewType         => "rt/types.wat:new_type",
@@ -687,14 +687,14 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::FnTypeParam     => "rt/types.wat:fn_type_param",
     Sym::FnTypeResult    => "rt/types.wat:fn_type_result",
 
-    Sym::OpRngex         => "std/range.wat:cps_excl",
-    Sym::OpRngin         => "std/range.wat:cps_incl",
-    Sym::OpRngFrom       => "std/range.wat:cps_from",
+    Sym::OpRngex         => "rt/range.wat:cps_excl",
+    Sym::OpRngin         => "rt/range.wat:cps_incl",
+    Sym::OpRngFrom       => "rt/range.wat:cps_from",
 
-    Sym::StrFromData     => "std/str.wat:from_data",
-    Sym::StrEmpty        => "std/str.wat:str_empty",
-    Sym::StrFmt          => "std/str.wat:_fmt_inner",
-    Sym::StrMatch        => "std/str.wat:match",
+    Sym::StrFromData     => "rt/str.wat:from_data",
+    Sym::StrEmpty        => "rt/str.wat:str_empty",
+    Sym::StrFmt          => "rt/str.wat:_fmt_inner",
+    Sym::StrMatch        => "rt/str.wat:match",
 
     Sym::ModulesPub        => "rt/modules.wat:pub",
     Sym::ModulesImport     => "rt/modules.wat:import",
@@ -827,7 +827,7 @@ if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecP
       let s = ty_func(frag,
         vec![],
         vec![anyref_n.clone()],
-        "std/dict.wat:Fn_rec_new");
+        "rt/dict.wat:Fn_rec_new");
       rt.fn_nil_to_list = Some(s);
     }
     rt.rec_empty = Some(FuncSym::Runtime(Sym::RecEmpty));
@@ -860,7 +860,7 @@ if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecP
       let s = ty_func(frag,
         vec![],
         vec![anyref_n.clone()],
-        "std/dict.wat:Fn_rec_new");
+        "rt/dict.wat:Fn_rec_new");
       rt.fn_nil_to_list = Some(s);
     }
   }
