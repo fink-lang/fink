@@ -1,0 +1,52 @@
+{
+  abs: rt_abs, neg: rt_neg, sign: rt_sign,
+  ceil: rt_ceil, floor: rt_floor, trunc: rt_trunc,
+  round: rt_round, round_even: rt_round_even, fract: rt_fract,
+  sqrt: rt_sqrt, cbrt: rt_cbrt, pow: rt_pow,
+  exp: rt_exp, exp2: rt_exp2, expm1: rt_expm1,
+  log: rt_log, log2: rt_log2, log10: rt_log10, log1p: rt_log1p,
+  sin: rt_sin, cos: rt_cos, tan: rt_tan,
+  asin: rt_asin, acos: rt_acos, atan: rt_atan, atan2: rt_atan2,
+  sinh: rt_sinh, cosh: rt_cosh, tanh: rt_tanh,
+  asinh: rt_asinh, acosh: rt_acosh, atanh: rt_atanh,
+  hypot: rt_hypot, copysign: rt_copysign,
+  min: rt_min, max: rt_max, clamp: rt_clamp
+} = import 'rt/math.wat'
+
+abs = rt_abs
+neg = rt_neg
+sign = rt_sign
+ceil = rt_ceil
+floor = rt_floor
+trunc = rt_trunc
+round = rt_round
+round_even = rt_round_even
+fract = rt_fract
+sqrt = rt_sqrt
+cbrt = rt_cbrt
+pow = rt_pow
+exp = rt_exp
+exp2 = rt_exp2
+expm1 = rt_expm1
+log = rt_log
+log2 = rt_log2
+log10 = rt_log10
+log1p = rt_log1p
+sin = rt_sin
+cos = rt_cos
+tan = rt_tan
+asin = rt_asin
+acos = rt_acos
+atan = rt_atan
+atan2 = rt_atan2
+sinh = rt_sinh
+cosh = rt_cosh
+tanh = rt_tanh
+asinh = rt_asinh
+acosh = rt_acosh
+atanh = rt_atanh
+hypot = rt_hypot
+copysign = rt_copysign
+min = rt_min
+max = rt_max
+clamp = rt_clamp

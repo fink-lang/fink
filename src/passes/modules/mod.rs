@@ -137,6 +137,7 @@ const STDLIB_EMBED: &[(&str, &str)] = &[
   ("/std/list.fnk",    include_str!("../../../std/list.fnk")),
   ("/std/fmt.fnk",     include_str!("../../../std/fmt.fnk")),
   ("/std/repr.fnk",    include_str!("../../../std/repr.fnk")),
+  ("/std/math.fnk",    include_str!("../../../std/math.fnk")),
 ];
 
 impl<L: SourceLoader> SourceLoader for StdlibLoader<L> {
