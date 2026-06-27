@@ -7,6 +7,7 @@ import './effects.test.fnk'
 import './io.test.fnk'
 import './trace.test.fnk'
 import './fmt.test.fnk'
+import './list.test.fnk'
 
 
 

@@ -837,7 +837,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_main.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
   test_macros::include_fink_tests!("std/set.test.fnk", skip-ir);
-  test_macros::include_fink_tests!("std/list.test.fnk", skip-ir);
   test_macros::include_fink_tests!("std/math.test.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
