@@ -1,0 +1,248 @@
+{test, skip, equals, not_equals} = import 'std/testing.fnk'
+
+
+test 'string literal', fn:
+  equals
+    'hello'
+    'hello'
+
+test 'string escape newline', fn:
+  equals
+    'hello\nworld'
+    ":
+      hello
+      world
+
+test 'string escape tab', fn:
+  equals
+    'a\tb'
+    'a	b'
+
+
+test 'string escape backslash', fn:
+  equals
+    'a\\b'
+    'a\x5Cb'
+
+test 'string escape hex', fn:
+  equals
+    '\xC3\xA9'
+    'é'
+
+
+# Lone \xFF is a valid byte but not valid UTF-8 on its own. Strings in
+# fink are byte arrays, not UTF-8 strings — this must round-trip without
+# panic. Guards against `crate::strings::render` returning a Rust
+# `String` that rejects non-UTF-8 bytes.
+test 'string escape non-utf8 byte', fn:
+  equals
+    '\xFF'
+    '\xFF'
+
+test 'string escape unicode', fn:
+  equals
+    '\u{1F600}'
+    '😀'
+
+test 'empty string literal', fn:
+  equals
+    ''
+    ''
+
+
+test 'empty string eq template', fn:
+  equals
+    ''
+    '${''}'
+
+
+
+test 'string eq different', fn:
+  not_equals
+    'hello'
+    'world'
+
+
+test 'str template string only', fn:
+  name = 'world'
+
+  equals
+    'hello ${name}'
+    'hello world'
+
+
+# TODO these should live in num/int/fmt tests
+
+test 'str template with number', fn:
+  x = 42
+
+  equals
+    'value: ${x}'
+    'value: 42'
+
+
+test 'str template with bool', fn:
+  equals
+    'done: ${true}'
+    'done: true'
+
+
+test 'str template multiple segments', fn:
+  a = 1
+  b = 2
+
+  equals
+    '${a} + ${b} = ${a + b}'
+    '1 + 2 = 3'
+
+
+test 'str template with float', fn:
+  equals
+    'pi: ${3.14}'
+    'pi: 3.14'
+
+
+test 'str template float arithmetic', fn:
+  x = 1.5
+  y= 2.3
+
+  equals
+    '${x} + ${y} = ${x + y}'
+    '1.5 + 2.3 = 3.8'
+
+
+
+# --- String slicing ---
+
+test 'str slice exclusive range', fn:
+  equals
+    'hello'.(1..3)
+    'el'
+
+test 'str slice inclusive range', fn:
+  equals
+    'hello'.(1...3)
+    'ell'
+
+test 'str slice single byte', fn:
+  equals
+    'hello'.(0)
+    'h'
+
+test 'str slice last byte', fn:
+  equals
+    'hello'.(4)
+    'o'
+
+test 'str slice full range', fn:
+  equals
+    'hello'.(0..5)
+    'hello'
+
+test 'str slice empty range', fn:
+  equals
+    'hello'.(2..2)
+    ''
+
+test 'str slice from start', fn:
+  equals
+    'hello'.(0..3)
+    'hel'
+
+test 'str slice to end', fn:
+  equals
+    'hello'.(3..5)
+    'lo'
+
+test 'str slice negative range', fn:
+  equals
+    'foobar'.(-3..-1)
+    'ba'
+
+test 'str slice negative single byte', fn:
+  equals
+    'hello'.(-2)
+    'l'
+
+test 'str slice open range', fn:
+  equals
+    'foobar'.(-3..)
+    'bar'
+
+
+# --- String template pattern ---
+
+test 'str templ pattern: capture all', fn:
+  '${foo}' = 'hello'
+  equals
+    foo
+    'hello'
+
+test 'str templ pattern: prefix and suffix', fn:
+  'foo${bar}spam' = 'fooBARspam'
+  equals
+    bar
+    'BAR'
+
+test 'str templ pattern: capture at start', fn:
+  '${foo}bar' = 'hellobar'
+  equals
+    foo
+    'hello'
+
+test 'str templ pattern: capture at end', fn:
+  'foo${bar}' = 'fooworld'
+  equals
+    bar
+    'world'
+
+test 'str templ pattern: escape in template', fn:
+  '\n${foo}\n' = '\nstuff\n'
+  equals
+    foo
+    'stuff'
+
+# Non-UTF-8 byte sequence in template pattern. Strings in fink are byte
+# arrays, not UTF-8 strings — so \xFF (a lone continuation byte) is a
+# valid 1-byte string. Exercises str template patterns end-to-end with
+# non-UTF-8 literal parts.
+test 'str templ pattern: non-utf8 byte match', fn:
+  '\xFF${foo}\xFF' = '\xFFhello\xFF'
+  equals
+    foo
+    'hello'
+
+
+test 'str templ pattern: empty capture', fn:
+  'foo${bar}spam' = 'foospam'
+  equals
+    bar
+    ''
+
+test 'str templ pattern: overlapping prefix suffix', fn:
+  'abc${x}abc' = 'abcabc'
+  equals
+    x
+    ''
+
+
+test 'str templ pattern: input shorter than template', fn:
+  equals
+    match 'fo':
+      'foo${x}bar': x
+      _: 'no match'
+    'no match'
+
+test 'str templ pattern: match arm', fn:
+  equals
+    match 'hello world':
+      'hello ${name}': name
+      _: 'no match'
+    'world'
+
+test 'str templ pattern: match arm fallthrough', fn:
+  equals
+    match 'goodbye world':
+      'hello ${name}': name
+      _: 'no match'
+    'no match'

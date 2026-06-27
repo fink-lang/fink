@@ -10,6 +10,7 @@ import './fmt.test.fnk'
 import './list.test.fnk'
 import './set.test.fnk'
 import './range.test.fnk'
+import './str.test.fnk'
 
 
 
