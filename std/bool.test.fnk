@@ -12,3 +12,55 @@ test 'bool literal false', fn:
   equals
     false
     false
+
+
+# --- Equality ---
+
+test 'bool true equals true', fn:
+  equals
+    true == true
+    true
+
+test 'bool false equals false', fn:
+  equals
+    false == false
+    true
+
+test 'bool true not equals false', fn:
+  equals
+    true == false
+    false
+
+test 'bool true neq false', fn:
+  equals
+    true != false
+    true
+
+
+# --- Logical operators ---
+
+test 'not', fn:
+  equals
+    not true
+    false
+
+test 'and', fn:
+  equals
+    true and false
+    false
+
+test 'or', fn:
+  equals
+    true or false
+    true
+
+test 'xor', fn:
+  equals
+    true xor true
+    false
+
+test 'chain with bool', fn:
+  x = 3 > 2
+  equals
+    x and true
+    true

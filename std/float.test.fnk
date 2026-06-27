@@ -60,3 +60,11 @@ test 'float signed arithmetic', fn:
   equals
     -2.5 + 1.0
     -1.5
+
+
+# --- Float-specific operators ---
+
+test 'power float', fn:
+  equals
+    2.0 ** 0.5
+    1.414213562373095
