@@ -1,5 +1,6 @@
-{tokenize: rt_tokenize, ast: rt_ast} = import 'rt/interop.wat'
+{tokenize: rt_tokenize, ast: rt_ast, desugar: rt_desugar} = import 'rt/interop.wat'
 
 
 tokenize = rt_tokenize
 ast = rt_ast
+desugar = rt_desugar

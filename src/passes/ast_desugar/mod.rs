@@ -56,6 +56,35 @@ pub fn apply(ast: Ast<'_>) -> Result<Ast<'_>, TransformError> {
   Ok(builder.finish(new_root))
 }
 
+/// Parse `src`, run the desugar pass, and render the result as text --
+/// or "No Change" if desugaring left the AST untouched. For a single
+/// top-level statement the Module wrapper is elided. Backs the `desugar`
+/// compiler-as-host-service primitive (and the desugar snapshot tests).
+pub fn desugar_debug(src: &str) -> String {
+  use crate::ast::parser::{parse_with_blocks, BlockMode};
+  let ast = match parse_with_blocks(src, "test.fnk", &[("test_block", BlockMode::Ast)]) {
+    Ok(ast) => ast,
+    Err(e) => return format!("PARSE ERROR: {}", e.message),
+  };
+  let before = ast.print();
+  match apply(ast) {
+    Ok(new_ast) => {
+      let after = new_ast.print();
+      if before == after {
+        return "No Change".to_string();
+      }
+      let root = new_ast.nodes.get(new_ast.root);
+      if let NodeKind::Module { exprs, .. } = &root.kind
+        && exprs.items.len() == 1
+      {
+        return new_ast.print_subtree(exprs.items[0]);
+      }
+      after
+    }
+    Err(e) => format!("ERROR: {}", e.message),
+  }
+}
+
 /// Walk the Module root and, for each top-level `Bind` whose LHS is a
 /// plain `Ident(name)` and whose RHS is not an `import ...` call,
 /// rewrite the LHS to `Apply(Ident "pub", Ident name)`. This makes the
@@ -1086,38 +1115,3 @@ impl<'src> Transform<'src> for PartialPass {
   }
 }
 
-// --- test runner ---
-
-#[cfg(test)]
-mod tests {
-  fn partial(src: &str) -> String {
-    use crate::ast::NodeKind;
-    match crate::parser::parse(src, "test") {
-      Err(e) => format!("PARSE ERROR: {}", e.message),
-      Ok(ast) => {
-        let before = ast.print();
-        match super::apply(ast) {
-          Ok(new_ast) => {
-            let after = new_ast.print();
-            if before == after {
-              return "No Change".to_string();
-            }
-            // For a single-stmt module, print just the stmt to match the
-            // old pre-flatten test expectations (which didn't include
-            // the Module wrapper).
-            let root = new_ast.nodes.get(new_ast.root);
-            if let NodeKind::Module { exprs, .. } = &root.kind
-              && exprs.items.len() == 1 {
-                return new_ast.print_subtree(exprs.items[0]);
-              }
-            after
-          }
-          Err(e) => format!("ERROR: {}", e.message),
-        }
-      }
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/ast_desugar/test_partial.fnk");
-  test_macros::include_fink_tests!("src/passes/ast_desugar/test_pub.fnk");
-}

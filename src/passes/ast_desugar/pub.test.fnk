@@ -1,5 +1,10 @@
-{test, expect, equals, partial} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
+{desugar} = import 'fink/compile.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -17,7 +22,7 @@ bindings that already start with `pub` are left alone.
 
 
 test 'top-level simple binding gets implicit pub', fn:
-  expect partial ƒink:
+  desugar ƒink:
     foo = 1
   | equals ƒink:
     Bind '=',
@@ -28,7 +33,7 @@ test 'top-level simple binding gets implicit pub', fn:
 
 
 test 'top-level fn binding gets implicit pub', fn:
-  expect partial ƒink:
+  desugar ƒink:
     inc = fn x: x + 1
   | equals ƒink:
     Bind '=',
@@ -48,7 +53,7 @@ Two top-level bindings — both get pub.
 ---
 
 test 'two top-level bindings', fn:
-  expect partial ƒink:
+  desugar ƒink:
     foo = 1
     bar = 2
   | equals ƒink:
@@ -71,14 +76,14 @@ so no implicit pub is injected.
 ---
 
 test 'top-level seq destructure stays plain', fn:
-  expect partial ƒink:
+  desugar ƒink:
     [a, b] = [1, 2]
   | equals ":
     No Change
 
 
 test 'top-level rec destructure stays plain', fn:
-  expect partial ƒink:
+  desugar ƒink:
     {x, y} = point
   | equals ":
     No Change
@@ -89,7 +94,7 @@ Imports at module scope are not exports — left alone.
 ---
 
 test 'top-level import binding stays plain', fn:
-  expect partial ƒink:
+  desugar ƒink:
     {foo} = import './bar.fnk'
   | equals ":
     No Change
@@ -100,7 +105,7 @@ Explicit `pub` written by the user is preserved as-is (no double-wrap).
 ---
 
 test 'explicit pub stays single', fn:
-  expect partial ƒink:
+  desugar ƒink:
     pub foo = 1
   | equals ":
     No Change
@@ -111,7 +116,7 @@ Nested-scope bindings are local — never get implicit pub.
 ---
 
 test 'fn-body bindings are not exported', fn:
-  expect partial ƒink:
+  desugar ƒink:
     foo = fn:
       x = 1
       x
