@@ -1,0 +1,4 @@
+{tokenize: rt_tokenize} = import 'rt/interop.wat'
+
+
+tokenize = rt_tokenize

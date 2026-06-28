@@ -1080,13 +1080,6 @@ fn tokenize_debug(src: &str) -> String {
     }
   }
 
-  fn tokenize(src: &str) -> String {
-    tokenize_debug(src)
-  }
-
-  include_fink_tests!("src/passes/ast/test_lexer.fnk");
-
-
   #[test]
   fn test_tokenize_iterator() {
     use super::{tokenize, TokenKind};

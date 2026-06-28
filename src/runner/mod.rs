@@ -975,4 +975,36 @@ mod cli_runner_tests {
     );
   }
 
+  /// Runs the compiler-pass fink test suite (`src/passes/ast/all.test.fnk`)
+  /// through the real file-based runner. Pass-level tests that exercise the
+  /// compiler as a host service (tokenize etc.) live next to the pass and
+  /// aggregate here, migrated off the `include_fink_tests!` macro.
+  #[test]
+  fn passes_native_test_suite_runs() {
+    use super::IoReadStream;
+
+    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stdout: IoStream = stdout_buf.clone();
+    let stderr: IoStream = stderr_buf.clone();
+
+    let exit = super::run_file(
+      RunOptions::default(),
+      "src/passes/ast/all.test.fnk",
+      vec![],
+      stdin,
+      stdout,
+      stderr,
+    ).expect("run src/passes/ast/all.test.fnk");
+
+    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
+    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
+    assert_eq!(
+      exit, 0,
+      "passes-native test suite reported failures (exit {exit})\n\
+       --- stdout ---\n{out}\n--- stderr ---\n{err}",
+    );
+  }
+
 }
