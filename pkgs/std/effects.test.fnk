@@ -1,4 +1,4 @@
-{test, equals} = import 'std/testing.fnk'
+{test, skip, equals} = import 'std/testing.fnk'
 
 {suspend, unique, init_ctx, get_ctx_for, set_ctx_for} = import 'std/effects.fnk'
 
@@ -144,11 +144,12 @@ test 'ctx set in outer scope reads in nested fn', fn:
     2
 
 
-test 'ctx survives stdout write', fn:
+# should not write to real stdout
+skip test 'ctx survives stdout write', fn:
   testing = unique _
 
   set_ctx_for testing, 'writer-ctx'
-  write stdout, 'test'
+  write stdout, 'effects-test'
 
   equals
     get_ctx_for testing

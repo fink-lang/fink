@@ -38,4 +38,4 @@ test 'get_module_url', fn:
 
   equals
     get_module_url mod_id
-    './trace.test.fnk'
+    './pkgs/std/trace.test.fnk'

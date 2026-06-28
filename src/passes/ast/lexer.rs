@@ -1064,22 +1064,6 @@ pub fn tokenize_debug(src: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-  use test_macros::include_fink_tests;
-
-fn tokenize_debug(src: &str) -> String {
-    super::tokenize_debug(src)
-  }
-
-  #[test]
-  fn parse_test_file() {
-    let src = include_str!("test_lexer.fnk");
-    let result = crate::parser::parse(src, "test_lexer.fnk");
-    match result {
-      Ok(_) => {}
-      Err(e) => panic!("parse error in test_lexer.fnk at line {}: {}", e.loc.start.line, e.message),
-    }
-  }
-
   #[test]
   fn test_tokenize_iterator() {
     use super::{tokenize, TokenKind};

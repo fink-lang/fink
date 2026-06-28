@@ -212,6 +212,32 @@ pub fn run(
   runner::run_source(Default::default(), src, path, args, stdin, stdout, stderr)
 }
 
+/// Compile and run fink source from stdin. Multi-module — `import './...'`
+/// deps resolve off-disk relative to the cwd. Used by `fink run -`.
+#[cfg(feature = "run")]
+pub fn run_stdin(
+  src: &str,
+  args: Vec<Vec<u8>>,
+  stdin: runner::IoReadStream,
+  stdout: runner::IoStream,
+  stderr: runner::IoStream,
+) -> Result<i64, String> {
+  runner::run_stdin(Default::default(), src, args, stdin, stdout, stderr)
+}
+
+/// Discover and run the native ƒink test suite under the cwd. `target`
+/// selects files (see `runner::run_tests`). Used by `fink test`.
+#[cfg(feature = "run")]
+pub fn run_tests(
+  target: Option<&str>,
+  args: Vec<Vec<u8>>,
+  stdin: runner::IoReadStream,
+  stdout: runner::IoStream,
+  stderr: runner::IoStream,
+) -> Result<i64, String> {
+  runner::run_tests(Default::default(), target, args, stdin, stdout, stderr)
+}
+
 /// Compile and run a `.fnk` (or `.wasm`) file from disk. Multi-module —
 /// imports are resolved through `FileSourceLoader`. Use this from the
 /// CLI / DAP / anywhere the entry is a real path on disk.

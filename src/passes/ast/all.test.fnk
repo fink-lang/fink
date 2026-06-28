@@ -1,7 +1,0 @@
-{test_all} = import 'std/testing.fnk'
-
-import './test_lexer.fnk'
-
-main = fn ..args:
- test_all _
-

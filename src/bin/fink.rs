@@ -50,6 +50,25 @@ fn main() {
     "wat", "wasm", "compile", "run", "dap", "decode-sm",
   ];
 
+  // `fink test [target]` — discover and run the native ƒink test suite.
+  // Handled before the path/source-reading flow: it takes an optional
+  // file-selector, not a source file to read.
+  if positional.first() == Some(&"test") {
+    #[cfg(not(feature = "run"))]
+    { eprintln!("error: 'test' command requires the 'run' feature"); process::exit(1); }
+    #[cfg(feature = "run")]
+    {
+      use std::sync::{Arc, Mutex};
+      let target = positional.get(1).copied();
+      let stdin: fink::runner::IoReadStream = Arc::new(Mutex::new(std::io::stdin()));
+      let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
+      let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
+      let exit_code = fink::run_tests(target, vec![b"test".to_vec()], stdin, stdout, stderr)
+        .unwrap_or_else(|e| die(&e));
+      process::exit(exit_code as i32);
+    }
+  }
+
   let (cmd, path) = match positional.as_slice() {
     // `fink <cmd> <path> [..]` — explicit subcommand. Extra positionals
     // after the source are forwarded to the user's main by `run`.
@@ -280,7 +299,7 @@ fn main() {
         // `run` path is reserved for `-` (stdin) where there's no
         // filesystem entry to resolve imports against.
         let exit_code = if path == "-" {
-          fink::run(&src, path, cli_args, stdin, stdout, stderr)
+          fink::run_stdin(&src, cli_args, stdin, stdout, stderr)
         } else {
           fink::run_file(path, cli_args, stdin, stdout, stderr)
         }.unwrap_or_else(|e| die(&e));

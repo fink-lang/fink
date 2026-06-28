@@ -3,6 +3,7 @@
 //! Wires the user program's IO channels (stdin/stdout/stderr) to host
 //! streams, sets up the scheduler, and returns the exit code from `main`.
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub mod wasmtime_runner;
@@ -89,6 +90,105 @@ pub fn run_file(
   } else {
     Err("only .fnk and .wasm files are supported".into())
   }
+}
+
+/// Run fink source read from stdin. The entry source is `src`; its
+/// `import './...'` deps resolve off-disk relative to the current working
+/// directory, with embedded stdlib served as usual. Lets `fink run -`
+/// drive a real multi-module program (e.g. a generated test aggregator).
+pub fn run_stdin(
+  mut opts: RunOptions,
+  src: &str,
+  args: Vec<Vec<u8>>,
+  stdin: IoReadStream,
+  stdout: IoStream,
+  stderr: IoStream,
+) -> Result<i64, String> {
+  // Entry lives at `<cwd>/<stdin>.fnk` so deps resolve against the cwd.
+  let entry_path = std::env::current_dir()
+    .map_err(|e| format!("cannot read cwd: {e}"))?
+    .join("<stdin>.fnk");
+  if opts.source_label == "fink" {
+    opts.source_label = "<stdin>".to_string();
+  }
+  let mut loader = crate::passes::modules::StdlibLoader::new(
+    crate::passes::modules::OverlayLoader::new(
+      entry_path.clone(),
+      src.to_string(),
+      crate::passes::modules::FileSourceLoader::new(),
+    ),
+  );
+  let wasm = crate::compile_package(&entry_path, &mut loader, crate::passes::wasm::emit::Interop::Rust)?;
+  wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
+}
+
+/// Discover `*.test.fnk` files under the cwd, synthesize an aggregator that
+/// imports them all and calls `test_all`, and run it. Backs `fink test`.
+///
+/// `target` selects the files: `None` -> every `*.test.fnk`; a bare name
+/// `bool` -> `bool.test.fnk`; anything with `/` -> that exact relative path.
+/// Globs are resolved by the discovery walk, not the shell.
+pub fn run_tests(
+  opts: RunOptions,
+  target: Option<&str>,
+  args: Vec<Vec<u8>>,
+  stdin: IoReadStream,
+  stdout: IoStream,
+  stderr: IoStream,
+) -> Result<i64, String> {
+  let cwd = std::env::current_dir().map_err(|e| format!("cannot read cwd: {e}"))?;
+  let mut files: Vec<String> = Vec::new();
+  collect_test_files(&cwd, &cwd, &mut files)?;
+  files.sort();
+
+  let selected: Vec<String> = match target {
+    None => files,
+    Some(t) if t.contains('/') => files.into_iter().filter(|f| f == t).collect(),
+    Some(t) => {
+      let leaf = format!("{t}.test.fnk");
+      files.into_iter().filter(|f| f.ends_with(&leaf)).collect()
+    }
+  };
+
+  if selected.is_empty() {
+    return Err(format!("no test files match: {}", target.unwrap_or("*.test.fnk")));
+  }
+
+  let mut src = String::from("{test_all} = import 'std/testing.fnk'\n");
+  for f in &selected {
+    src.push_str(&format!("import './{f}'\n"));
+  }
+  src.push_str("main = fn ..args:\n  test_all _\n");
+
+  run_stdin(opts, &src, args, stdin, stdout, stderr)
+}
+
+/// Recursively collect repo-relative paths of `*.test.fnk` files under
+/// `dir`, skipping `target/` and hidden directories.
+fn collect_test_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), String> {
+  let entries = std::fs::read_dir(dir)
+    .map_err(|e| format!("cannot read dir {}: {e}", dir.display()))?;
+  for entry in entries {
+    let entry = entry.map_err(|e| e.to_string())?;
+    let path = entry.path();
+    let name = entry.file_name();
+    let name = name.to_string_lossy();
+    // Skip dot-files and dot-dirs (.git, .brain, ...) entirely.
+    if name.starts_with('.') {
+      continue;
+    }
+    if path.is_dir() {
+      if name == "target" {
+        continue;
+      }
+      collect_test_files(root, &path, out)?;
+    } else if name.ends_with(".test.fnk") {
+      if let Ok(rel) = path.strip_prefix(root) {
+        out.push(rel.to_string_lossy().into_owned());
+      }
+    }
+  }
+  Ok(())
 }
 
 #[cfg(test)]
@@ -857,7 +957,6 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("pkgs/std/math.test.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
 }
@@ -910,101 +1009,48 @@ mod cli_runner_tests {
     assert_eq!(err, "");
   }
 
-  /// Runs the fink-native test suite (`std/all.test.fnk`) through the
-  /// real file-based runner during `cargo test`. `test_all` returns a
-  /// non-zero exit code when any fink test fails, so this gates the
-  /// whole fink-native suite on `cargo test`. On failure, the captured
-  /// stderr (each test's SUCCESS/FAIL + diff) is surfaced in the panic.
+  /// Runs the whole native ƒink test suite during `cargo test`, the same
+  /// way `fink test` does: discover every `*.test.fnk` under the repo,
+  /// synthesize an aggregator, run it. `test_all` returns a non-zero exit
+  /// code when any ƒink test fails, gating the suite on `cargo test`. On
+  /// failure the captured stderr (each test's SUCCESS/FAIL + diff) is
+  /// surfaced in the panic.
   #[test]
-  fn fink_native_test_suite_runs() {
+  fn native_test_suite_runs() {
     use super::IoReadStream;
 
-    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
-    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stdout: IoStream = stdout_buf.clone();
-    let stderr: IoStream = stderr_buf.clone();
+    // The whole suite runs in one wasmtime instance; ƒink's deep
+    // cons-list recursion needs a larger stack than the ~2MB cargo test
+    // threads default to. Run the body on a dedicated 64MB-stack thread.
+    std::thread::Builder::new()
+      .stack_size(64 * 1024 * 1024)
+      .spawn(|| {
+        let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+        let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        let stdout: IoStream = stdout_buf.clone();
+        let stderr: IoStream = stderr_buf.clone();
 
-    let exit = super::run_file(
-      RunOptions::default(),
-      "pkgs/std/all.test.fnk",
-      vec![],
-      stdin,
-      stdout,
-      stderr,
-    ).expect("run pkgs/std/all.test.fnk");
+        let exit = super::run_tests(
+          RunOptions::default(),
+          None,
+          vec![b"test".to_vec()],
+          stdin,
+          stdout,
+          stderr,
+        ).expect("run native test suite");
 
-    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
-    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
-    assert_eq!(
-      exit, 0,
-      "fink-native test suite reported failures (exit {exit})\n\
-       --- stdout ---\n{out}\n--- stderr ---\n{err}",
-    );
-  }
-
-  /// Runs the runtime-adjacent fink test suite (`src/runtime/all.test.fnk`)
-  /// through the real file-based runner. Same gating as the std suite: behaviour
-  /// tests for the runtime substrate (rt/types.test.fnk etc.) live next to the
-  /// runtime and aggregate here, not in std/all.test.fnk.
-  #[test]
-  fn runtime_native_test_suite_runs() {
-    use super::IoReadStream;
-
-    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
-    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stdout: IoStream = stdout_buf.clone();
-    let stderr: IoStream = stderr_buf.clone();
-
-    let exit = super::run_file(
-      RunOptions::default(),
-      "src/runtime/all.test.fnk",
-      vec![],
-      stdin,
-      stdout,
-      stderr,
-    ).expect("run src/runtime/all.test.fnk");
-
-    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
-    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
-    assert_eq!(
-      exit, 0,
-      "runtime-native test suite reported failures (exit {exit})\n\
-       --- stdout ---\n{out}\n--- stderr ---\n{err}",
-    );
-  }
-
-  /// Runs the compiler-pass fink test suite (`src/passes/ast/all.test.fnk`)
-  /// through the real file-based runner. Pass-level tests that exercise the
-  /// compiler as a host service (tokenize etc.) live next to the pass and
-  /// aggregate here, migrated off the `include_fink_tests!` macro.
-  #[test]
-  fn passes_native_test_suite_runs() {
-    use super::IoReadStream;
-
-    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
-    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stdout: IoStream = stdout_buf.clone();
-    let stderr: IoStream = stderr_buf.clone();
-
-    let exit = super::run_file(
-      RunOptions::default(),
-      "src/passes/ast/all.test.fnk",
-      vec![],
-      stdin,
-      stdout,
-      stderr,
-    ).expect("run src/passes/ast/all.test.fnk");
-
-    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
-    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
-    assert_eq!(
-      exit, 0,
-      "passes-native test suite reported failures (exit {exit})\n\
-       --- stdout ---\n{out}\n--- stderr ---\n{err}",
-    );
+        let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
+        let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
+        assert_eq!(
+          exit, 0,
+          "native test suite reported failures (exit {exit})\n\
+           --- stdout ---\n{out}\n--- stderr ---\n{err}",
+        );
+      })
+      .expect("spawn test thread")
+      .join()
+      .expect("native test suite thread panicked");
   }
 
 }

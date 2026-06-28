@@ -105,6 +105,33 @@ impl SourceLoader for InMemorySourceLoader {
   }
 }
 
+/// Wraps any `SourceLoader`, serving one pre-set entry path from an
+/// in-memory string and delegating everything else to the inner loader.
+/// Used for `fink run -` (stdin): the entry source comes from stdin, but
+/// its `import './...'` deps resolve off-disk via the inner loader, with
+/// the cwd as the base directory.
+pub struct OverlayLoader<L: SourceLoader> {
+  entry_path: PathBuf,
+  entry_source: String,
+  inner: L,
+}
+
+impl<L: SourceLoader> OverlayLoader<L> {
+  pub fn new(entry_path: impl Into<PathBuf>, entry_source: impl Into<String>, inner: L) -> Self {
+    Self { entry_path: entry_path.into(), entry_source: entry_source.into(), inner }
+  }
+}
+
+impl<L: SourceLoader> SourceLoader for OverlayLoader<L> {
+  fn load(&mut self, path: &Path) -> Result<String, String> {
+    if path == self.entry_path {
+      Ok(self.entry_source.clone())
+    } else {
+      self.inner.load(path)
+    }
+  }
+}
+
 /// Wraps any `SourceLoader` and intercepts requests for migrated stdlib
 /// `.fnk` files, serving them from sources embedded at compile time via
 /// `include_str!`. Anything else delegates to the inner loader.
