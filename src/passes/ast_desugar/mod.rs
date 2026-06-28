@@ -126,6 +126,14 @@ fn rhs_is_import_call(src: &Ast<'_>, rhs: AstId) -> bool {
   matches!(src.nodes.get(*func).kind, NodeKind::Ident("import"))
 }
 
+/// A source block (`ƒink:` / `ƒtok:`) — its body is opaque source text
+/// (lowered to a string literal of its verbatim source), not live code.
+/// No desugaring descends into it: a `?` inside is quoted source, not a
+/// partial to lift. Mirrors the scope pass, which also skips these bodies.
+fn is_source_block(ast: &Ast<'_>, name: AstId) -> bool {
+  matches!(ast.nodes.get(name).kind, NodeKind::Ident("ƒink") | NodeKind::Ident("ƒtok"))
+}
+
 /// Pre-pass: rewrite `Apply(f, [Wildcard])` -> `Apply(f, [])`.
 /// `_` as the sole argument means "call with no args".
 fn rewrite_wildcard_call<'src>(
@@ -348,6 +356,10 @@ fn rewrite_wildcard_call<'src>(
       }
     }
     NodeKind::Block { name, params, sep, body } => {
+      // Source blocks (ƒink:/ƒtok:) are opaque -- never rewrite their body.
+      if is_source_block(src, name) {
+        return id;
+      }
       let new_items: Vec<AstId> = body.items.iter()
         .map(|&i| rewrite_wildcard_call(builder, src, i))
         .collect();
@@ -443,6 +455,11 @@ fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
       has_partial(ast, *lhs) || body.items.iter().any(|&id| has_partial(ast, id))
     }
     NodeKind::Block { name, params, body, .. } => {
+      // Source blocks (ƒink:/ƒtok:) are opaque -- a `?` inside is quoted
+      // source, not a partial. Don't look into the body.
+      if is_source_block(ast, *name) {
+        return has_partial(ast, *name) || has_partial(ast, *params);
+      }
       has_partial(ast, *name) || has_partial(ast, *params)
         || body.items.iter().any(|&id| has_partial(ast, id))
     }
@@ -893,6 +910,10 @@ fn has_partial_builder(builder: &AstBuilder<'_>, id: AstId) -> bool {
       has_partial_builder(builder, *lhs) || body.items.iter().any(|&id| has_partial_builder(builder, id))
     }
     NodeKind::Block { name, params, body, .. } => {
+      // Source blocks (ƒink:/ƒtok:) are opaque -- skip their body.
+      if matches!(builder.read(*name).kind, NodeKind::Ident("ƒink") | NodeKind::Ident("ƒtok")) {
+        return has_partial_builder(builder, *name) || has_partial_builder(builder, *params);
+      }
       has_partial_builder(builder, *name) || has_partial_builder(builder, *params)
         || body.items.iter().any(|&id| has_partial_builder(builder, id))
     }
