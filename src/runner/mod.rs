@@ -857,7 +857,7 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("std/math.test.fnk", skip-ir);
+  test_macros::include_fink_tests!("pkgs/std/math.test.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
 
 }
@@ -927,12 +927,12 @@ mod cli_runner_tests {
 
     let exit = super::run_file(
       RunOptions::default(),
-      "std/all.test.fnk",
+      "pkgs/std/all.test.fnk",
       vec![],
       stdin,
       stdout,
       stderr,
-    ).expect("run std/all.test.fnk");
+    ).expect("run pkgs/std/all.test.fnk");
 
     let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
     let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();

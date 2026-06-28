@@ -263,10 +263,10 @@ fn enqueue_dep(
   queue: &mut VecDeque<(String, PathBuf)>,
   visited: &BTreeSet<String>,
 ) {
-  // Skip non-relative imports that aren't `std/*.fnk` source modules.
+  // Skip non-relative imports that aren't package-source modules.
   // Bare identifiers, future remote schemes, and `.wat` runtime modules
   // aren't user fragments and don't need package-compile.
-  if !is_relative_url(raw_url) && !is_std_fnk(raw_url) {
+  if !is_relative_url(raw_url) && !is_pkg_source_url(raw_url) {
     return;
   }
 
@@ -327,13 +327,16 @@ pub fn finalize_marks(
 // Stdlib URL recognition
 // ──────────────────────────────────────────────────────────────────
 
-/// A `std/*.fnk` URL: a real ƒink-source stdlib module at
-/// `<repo>/std/<...>.fnk`. These compile through the user-fragment path
-/// (real fragment, disk-resolved). Every imported `std/*.fnk` is a real
-/// source file; nothing under `std/` uses the virtual-rec path anymore,
-/// so membership is structural -- no hand-maintained list.
-pub fn is_std_fnk(url: &str) -> bool {
-  url.starts_with("std/") && url.ends_with(".fnk")
+/// A package-source URL: a non-relative `<pkg>/**.fnk` import naming a
+/// real ƒink-source module that lives under `pkgs/<pkg>/`. These compile
+/// through the user-fragment path (real fragment, disk-resolved).
+///
+/// All non-relative imports share the `<pkg>/**` grammar; the file kind
+/// splits the backing: `.fnk` = a package source fragment (this
+/// predicate), `.wat` = an intrinsic `rt/*` runtime module (virtual-rec,
+/// not fink source, never under `pkgs/`).
+pub fn is_pkg_source_url(url: &str) -> bool {
+  !is_relative_url(url) && url.ends_with(".fnk")
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -348,8 +351,10 @@ pub fn is_std_fnk(url: &str) -> bool {
 /// the result themselves.
 #[cfg(feature = "compile")]
 pub fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
-  if is_std_fnk(canonical_url) {
-    return Path::new(env!("CARGO_MANIFEST_DIR")).join(canonical_url);
+  // Package-source URLs (`<pkg>/**.fnk`) live under `<repo>/pkgs/`; the
+  // URL is namespace-relative, the `pkgs/` root is the disk mapping.
+  if is_pkg_source_url(canonical_url) {
+    return Path::new(env!("CARGO_MANIFEST_DIR")).join("pkgs").join(canonical_url);
   }
   let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);
   entry_dir.join(rest)

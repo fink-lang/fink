@@ -129,16 +129,16 @@ impl<L: SourceLoader> StdlibLoader<L> {
 /// stdlib module that needs to ship embedded. Order: most-specific
 /// suffix first if there's any overlap risk.
 const STDLIB_EMBED: &[(&str, &str)] = &[
-  ("/std/effects.fnk", include_str!("../../../std/effects.fnk")),
-  ("/std/tasks.fnk",   include_str!("../../../std/tasks.fnk")),
-  ("/std/channels.fnk", include_str!("../../../std/channels.fnk")),
-  ("/std/testing.fnk", include_str!("../../../std/testing.fnk")),
-  ("/std/io.fnk",      include_str!("../../../std/io.fnk")),
-  ("/std/set.fnk",     include_str!("../../../std/set.fnk")),
-  ("/std/list.fnk",    include_str!("../../../std/list.fnk")),
-  ("/std/fmt.fnk",     include_str!("../../../std/fmt.fnk")),
-  ("/std/repr.fnk",    include_str!("../../../std/repr.fnk")),
-  ("/std/math.fnk",    include_str!("../../../std/math.fnk")),
+  ("/std/effects.fnk", include_str!("../../../pkgs/std/effects.fnk")),
+  ("/std/tasks.fnk",   include_str!("../../../pkgs/std/tasks.fnk")),
+  ("/std/channels.fnk", include_str!("../../../pkgs/std/channels.fnk")),
+  ("/std/testing.fnk", include_str!("../../../pkgs/std/testing.fnk")),
+  ("/std/io.fnk",      include_str!("../../../pkgs/std/io.fnk")),
+  ("/std/set.fnk",     include_str!("../../../pkgs/std/set.fnk")),
+  ("/std/list.fnk",    include_str!("../../../pkgs/std/list.fnk")),
+  ("/std/fmt.fnk",     include_str!("../../../pkgs/std/fmt.fnk")),
+  ("/std/repr.fnk",    include_str!("../../../pkgs/std/repr.fnk")),
+  ("/std/math.fnk",    include_str!("../../../pkgs/std/math.fnk")),
 ];
 
 impl<L: SourceLoader> SourceLoader for StdlibLoader<L> {
