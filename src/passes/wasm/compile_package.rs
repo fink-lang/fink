@@ -263,11 +263,10 @@ fn enqueue_dep(
   queue: &mut VecDeque<(String, PathBuf)>,
   visited: &BTreeSet<String>,
 ) {
-  // Skip non-relative imports unless they're in the migrated stdlib
-  // list. Bare identifiers, future remote schemes, and unmigrated
-  // virtual stdlib URLs aren't user fragments and don't need
-  // package-compile.
-  if !is_relative_url(raw_url) && !is_migrated_stdlib_fnk(raw_url) {
+  // Skip non-relative imports that aren't `std/*.fnk` source modules.
+  // Bare identifiers, future remote schemes, and `.wat` runtime modules
+  // aren't user fragments and don't need package-compile.
+  if !is_relative_url(raw_url) && !is_std_fnk(raw_url) {
     return;
   }
 
@@ -325,32 +324,16 @@ pub fn finalize_marks(
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Stdlib migration list
+// Stdlib URL recognition
 // ──────────────────────────────────────────────────────────────────
 
-/// Stdlib `.fnk` URLs that have a real ƒink-source file at
-/// `<repo>/std/<...>.fnk`. These compile through the user-fragment
-/// path; everything else under `std/` keeps its current virtual-rec
-/// + @impl alias resolution. Hand-maintained during migration.
-pub const MIGRATED_STDLIB_FNK: &[&str] = &[
-  "std/effects.fnk",
-  "std/tasks.fnk",
-  "std/channels.fnk",
-  "std/testing.fnk",
-  "std/io.fnk",
-  "std/iter.fnk",
-  "std/trace.fnk",
-  "std/int.fnk",
-  "std/set.fnk",
-  "std/list.fnk",
-  "std/fmt.fnk",
-  "std/repr.fnk",
-  "std/math.fnk",
-];
-
-#[cfg(feature = "compile")]
-fn is_migrated_stdlib_fnk(url: &str) -> bool {
-  MIGRATED_STDLIB_FNK.contains(&url)
+/// A `std/*.fnk` URL: a real ƒink-source stdlib module at
+/// `<repo>/std/<...>.fnk`. These compile through the user-fragment path
+/// (real fragment, disk-resolved). Every imported `std/*.fnk` is a real
+/// source file; nothing under `std/` uses the virtual-rec path anymore,
+/// so membership is structural -- no hand-maintained list.
+pub fn is_std_fnk(url: &str) -> bool {
+  url.starts_with("std/") && url.ends_with(".fnk")
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -365,7 +348,7 @@ fn is_migrated_stdlib_fnk(url: &str) -> bool {
 /// the result themselves.
 #[cfg(feature = "compile")]
 pub fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
-  if is_migrated_stdlib_fnk(canonical_url) {
+  if is_std_fnk(canonical_url) {
     return Path::new(env!("CARGO_MANIFEST_DIR")).join(canonical_url);
   }
   let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);

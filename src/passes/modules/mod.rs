@@ -124,9 +124,10 @@ impl<L: SourceLoader> StdlibLoader<L> {
   }
 }
 
-/// Migrated stdlib files embedded into the binary. Add one line per
-/// `MIGRATED_STDLIB_FNK` entry. Order: most-specific suffix first if
-/// there's any overlap risk.
+/// Stdlib `std/*.fnk` source files embedded into the binary so a
+/// deployed binary resolves them without disk access. Add one line per
+/// stdlib module that needs to ship embedded. Order: most-specific
+/// suffix first if there's any overlap risk.
 const STDLIB_EMBED: &[(&str, &str)] = &[
   ("/std/effects.fnk", include_str!("../../../std/effects.fnk")),
   ("/std/tasks.fnk",   include_str!("../../../std/tasks.fnk")),
