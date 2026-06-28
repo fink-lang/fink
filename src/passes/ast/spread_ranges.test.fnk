@@ -1,5 +1,10 @@
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -7,7 +12,7 @@ spread
 ---
 
 test 'spread into sequence', fn:
-  expect ast ƒink:
+  ast ƒink:
     [head, ..tail]
   | equals ƒink:
     Module
@@ -17,7 +22,7 @@ test 'spread into sequence', fn:
           Ident 'tail'
 
 test 'spread concat sequences', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..seq1, ..seq2]
   | equals ƒink:
     Module
@@ -28,7 +33,7 @@ test 'spread concat sequences', fn:
           Ident 'seq2'
 
 test 'spread into record', fn:
-  expect ast ƒink:
+  ast ƒink:
     {foo: bar, ..rest}
   | equals ƒink:
     Module
@@ -40,7 +45,7 @@ test 'spread into record', fn:
           Ident 'rest'
 
 test 'spread merge records', fn:
-  expect ast ƒink:
+  ast ƒink:
     {..rec1, ..rec2}
   | equals ƒink:
     Module
@@ -51,7 +56,7 @@ test 'spread merge records', fn:
           Ident 'rec2'
 
 test 'bare spread in sequence pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..]
   | equals ƒink:
     Module
@@ -60,7 +65,7 @@ test 'bare spread in sequence pattern', fn:
 
 
 test 'bare triple spread in sequence pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     [...]
   | equals ƒink:
     Module
@@ -69,7 +74,7 @@ test 'bare triple spread in sequence pattern', fn:
 
 
 test 'bare spread in record pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     {..}
   | equals ƒink:
     Module
@@ -77,7 +82,7 @@ test 'bare spread in record pattern', fn:
         Spread '..'
 
 test 'spread with range guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     [head, ..(0..2), ..rest]
   | equals ƒink:
     Module
@@ -92,7 +97,7 @@ test 'spread with range guard', fn:
           Ident 'rest'
 
 test 'spread with function guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..(is_odd), ..evens]
   | equals ƒink:
     Module
@@ -104,7 +109,7 @@ test 'spread with function guard', fn:
           Ident 'evens'
 
 test 'spread with range expression guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..(1 + 2)..(3 + 4)]
   | equals ƒink:
     Module
@@ -121,7 +126,7 @@ test 'spread with range expression guard', fn:
                 LitInt '4'
 
 test 'spread with ident range guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..foo...bar]
   | equals ƒink:
     Module
@@ -132,7 +137,7 @@ test 'spread with ident range guard', fn:
             Ident 'bar'
 
 test 'spread with bare range guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     [head, ..0..2, ..rest]
   | equals ƒink:
     Module
@@ -146,7 +151,7 @@ test 'spread with bare range guard', fn:
           Ident 'rest'
 
 test 'spread with range to grouped expression', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..0..(l)]
   | equals ƒink:
     Module
@@ -163,7 +168,7 @@ ranges
 ---
 
 test 'exclusive range', fn:
-  expect ast ƒink:
+  ast ƒink:
     0..10
   | equals ƒink:
     Module
@@ -172,7 +177,7 @@ test 'exclusive range', fn:
         LitInt '10'
 
 test 'inclusive range', fn:
-  expect ast ƒink:
+  ast ƒink:
     0...10
   | equals ƒink:
     Module
@@ -181,7 +186,7 @@ test 'inclusive range', fn:
         LitInt '10'
 
 test 'char range', fn:
-  expect ast ƒink:
+  ast ƒink:
     'a'...'z'
   | equals ƒink:
     Module
@@ -190,7 +195,7 @@ test 'char range', fn:
         LitStr 'z'
 
 test 'expression range exclusive', fn:
-  expect ast ƒink:
+  ast ƒink:
     (1 + 2)..(3 + 4)
   | equals ƒink:
     Module
@@ -205,7 +210,7 @@ test 'expression range exclusive', fn:
             LitInt '4'
 
 test 'expression range inclusive', fn:
-  expect ast ƒink:
+  ast ƒink:
     (1 + 2)...(3 + 4)
   | equals ƒink:
     Module

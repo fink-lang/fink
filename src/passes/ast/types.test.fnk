@@ -1,5 +1,10 @@
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -7,7 +12,7 @@ type: record (named fields)
 ---
 
 test 'record type', fn:
-  expect ast ƒink:
+  ast ƒink:
     type:
       shrub: u8
   | equals ƒink:
@@ -20,7 +25,7 @@ test 'record type', fn:
 
 
 test 'named record type binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     Foo = type:
       shrub: u8
       ni: i8
@@ -43,7 +48,7 @@ type: tuple (positional fields)
 ---
 
 test 'tuple type', fn:
-  expect ast ƒink:
+  ast ƒink:
     type: u8, i8
   | equals ƒink:
     Module
@@ -58,7 +63,7 @@ type: unit
 ---
 
 test 'unit type', fn:
-  expect ast ƒink:
+  ast ƒink:
     type _
   | equals ƒink:
     Module
@@ -70,7 +75,7 @@ type: generic params
 ---
 
 test 'generic type', fn:
-  expect ast ƒink:
+  ast ƒink:
     type T:
       ham: T
   | equals ƒink:
@@ -88,7 +93,7 @@ type: function (a `fn A, ...: R` in type position)
 ---
 
 test 'function type', fn:
-  expect ast ƒink:
+  ast ƒink:
     type: fn u8, u8: u8
   | equals ƒink:
     Module
@@ -105,7 +110,7 @@ test 'function type', fn:
     The outer `Fn ':'` is the fn VALUE; it differs from the `Fn ':'` inside a
     `Type` (which is the fn type). ---
 test 'function type instance construction', fn:
-  expect ast ƒink:
+  ast ƒink:
     add = Foo fn a, b: a
   | equals ƒink:
     Module
@@ -125,7 +130,7 @@ enum: closed sum
 ---
 
 test 'enum type', fn:
-  expect ast ƒink:
+  ast ƒink:
     enum T:
       Some T
       None
@@ -145,7 +150,7 @@ type: extension via ..Foo (type-level spread)
 ---
 
 test 'record type extends', fn:
-  expect ast ƒink:
+  ast ƒink:
     Bar = type:
       ..Foo
       ni: u8
@@ -163,7 +168,7 @@ test 'record type extends', fn:
 
 
 test 'extends an applied generic', fn:
-  expect ast ƒink:
+  ast ƒink:
     Bar = type:
       ..Foo u8
   | equals ƒink:
@@ -179,7 +184,7 @@ test 'extends an applied generic', fn:
 
 
 test 'tuple type extends with prepend', fn:
-  expect ast ƒink:
+  ast ƒink:
     Nu = type:
       u8
       ..Ni
@@ -199,7 +204,7 @@ union: open union
 ---
 
 test 'union block', fn:
-  expect ast ƒink:
+  ast ƒink:
     union:
       SignedInt
       UnsignedInt

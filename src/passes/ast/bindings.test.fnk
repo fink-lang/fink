@@ -1,5 +1,10 @@
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -7,7 +12,7 @@ left-hand binding
 ---
 
 test 'simple binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo = 1
   | equals ƒink:
     Module
@@ -16,7 +21,7 @@ test 'simple binding', fn:
         LitInt '1'
 
 test 'sequence destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     [a, b] = [1, 2]
   | equals ƒink:
     Module
@@ -29,7 +34,7 @@ test 'sequence destructure', fn:
           LitInt '2'
 
 test 'record destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     {x, y} = point
   | equals ƒink:
     Module
@@ -40,7 +45,7 @@ test 'record destructure', fn:
         Ident 'point'
 
 test 'record destructure with rename', fn:
-  expect ast ƒink:
+  ast ƒink:
     {x, y: z} = point
   | equals ƒink:
     Module
@@ -53,7 +58,7 @@ test 'record destructure with rename', fn:
         Ident 'point'
 
 test 'nested record destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     {a, b: {c, d}} = foo
   | equals ƒink:
     Module
@@ -68,7 +73,7 @@ test 'nested record destructure', fn:
         Ident 'foo'
 
 test 'nested destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     [a, [b, c]] = [1, [2, 3]]
   | equals ƒink:
     Module
@@ -85,7 +90,7 @@ test 'nested destructure', fn:
             LitInt '3'
 
 test 'spread head and tail', fn:
-  expect ast ƒink:
+  ast ƒink:
     [head, ..tail] = [1, 2, 3, 4]
   | equals ƒink:
     Module
@@ -101,7 +106,7 @@ test 'spread head and tail', fn:
           LitInt '4'
 
 test 'spread head middle and end', fn:
-  expect ast ƒink:
+  ast ƒink:
     [head, ..middle, end] = [1, 2, 3, 4]
   | equals ƒink:
     Module
@@ -118,7 +123,7 @@ test 'spread head middle and end', fn:
           LitInt '4'
 
 test 'spread with guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     [head > 3, ..tail] = [4, 5, 6]
   | equals ƒink:
     Module
@@ -135,7 +140,7 @@ test 'spread with guard', fn:
           LitInt '6'
 
 test 'guard with function call in pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     [(is_odd head), ..tail] = [3, 4, 5]
   | equals ƒink:
     Module
@@ -153,7 +158,7 @@ test 'guard with function call in pattern', fn:
           LitInt '5'
 
 test 'record destructure with spread rest', fn:
-  expect ast ƒink:
+  ast ƒink:
     {x, ..rest} = point
   | equals ƒink:
     Module
@@ -165,7 +170,7 @@ test 'record destructure with spread rest', fn:
         Ident 'point'
 
 test 'record destructure with non-empty rest assertion', fn:
-  expect ast ƒink:
+  ast ƒink:
     {x, ..} = point
   | equals ƒink:
     Module
@@ -176,7 +181,7 @@ test 'record destructure with non-empty rest assertion', fn:
         Ident 'point'
 
 test 'record destructure exact - empty rest', fn:
-  expect ast ƒink:
+  ast ƒink:
     {x, ..{}} = point
   | equals ƒink:
     Module
@@ -188,7 +193,7 @@ test 'record destructure exact - empty rest', fn:
         Ident 'point'
 
 test 'seq destructure exact - empty rest', fn:
-  expect ast ƒink:
+  ast ƒink:
     [a, ..[]] = foo
   | equals ƒink:
     Module
@@ -200,7 +205,7 @@ test 'seq destructure exact - empty rest', fn:
         Ident 'foo'
 
 test 'string pattern binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     'start ${middle} end' = 'foo bar spam'
   | equals ƒink:
     Module
@@ -217,7 +222,7 @@ right-hand binding
 ---
 
 test 'simple right-hand binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     123 |= b
   | equals ƒink:
     Module
@@ -226,7 +231,7 @@ test 'simple right-hand binding', fn:
         Ident 'b'
 
 test 'multiline right-hand binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo
       arg1
       arg2
@@ -241,7 +246,7 @@ test 'multiline right-hand binding', fn:
         Ident 'result'
 
 test 'nested right-hand binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     [a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
   | equals ƒink:
     Module
@@ -264,7 +269,7 @@ test 'nested right-hand binding', fn:
             LitInt '4'
 
 test 'right-hand binding with sequence destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     get_pair foo |= [a, b]
   | equals ƒink:
     Module
@@ -277,7 +282,7 @@ test 'right-hand binding with sequence destructure', fn:
           Ident 'b'
 
 test 'right-hand binding with record destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     get_point foo |= {x, y}
   | equals ƒink:
     Module
@@ -290,7 +295,7 @@ test 'right-hand binding with record destructure', fn:
           Ident 'y'
 
 test 'right-hand binding with nested destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     compute foo |= {x, y: [a, b]}
   | equals ƒink:
     Module
@@ -307,7 +312,7 @@ test 'right-hand binding with nested destructure', fn:
               Ident 'b'
 
 test 'nested right-hand binding in record pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     {foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
   | equals ƒink:
     Module
@@ -336,7 +341,7 @@ test 'nested right-hand binding in record pattern', fn:
                 LitInt '2'
 
 test 'spread guard with right-hand binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     [..(str) |= strings, ..other] = [1, '2', 3, '4']
   | equals ƒink:
     Module
@@ -356,7 +361,7 @@ test 'spread guard with right-hand binding', fn:
           LitStr '4'
 
 test 'import', fn:
-  expect ast ƒink:
+  ast ƒink:
     {foo, bar} = import './foobar.fnk'
   | equals ƒink:
     Module
@@ -374,14 +379,14 @@ wildcard
 ---
 
 test 'bare wildcard', fn:
-  expect ast ƒink:
+  ast ƒink:
     _
   | equals ƒink:
     Module
       Wildcard
 
 test 'wildcard in sequence destructure', fn:
-  expect ast ƒink:
+  ast ƒink:
     [_, x] = [1, 2]
   | equals ƒink:
     Module
@@ -394,7 +399,7 @@ test 'wildcard in sequence destructure', fn:
           LitInt '2'
 
 test 'wildcard in fn params', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn _, b: b
   | equals ƒink:
     Module
@@ -405,14 +410,14 @@ test 'wildcard in fn params', fn:
         Ident 'b'
 
 test 'wildcard does not match _foo', fn:
-  expect ast ƒink:
+  ast ƒink:
     _foo
   | equals ƒink:
     Module
       Ident '_foo'
 
 test 'implicit wildcard - middle slots', fn:
-  expect ast ƒink:
+  ast ƒink:
     [_, _, n]
   | equals ƒink:
     Module
@@ -422,7 +427,7 @@ test 'implicit wildcard - middle slots', fn:
         Ident 'n'
 
 test 'implicit wildcard - leading comma', fn:
-  expect ast ƒink:
+  ast ƒink:
     [, , n]
   | equals ƒink:
     Module
@@ -432,7 +437,7 @@ test 'implicit wildcard - leading comma', fn:
         Ident 'n'
 
 test 'implicit wildcard - mixed explicit and implicit', fn:
-  expect ast ƒink:
+  ast ƒink:
     [_, , n]
   | equals ƒink:
     Module
@@ -442,7 +447,7 @@ test 'implicit wildcard - mixed explicit and implicit', fn:
         Ident 'n'
 
 test 'implicit wildcard in fn params', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn , , c: c
   | equals ƒink:
     Module

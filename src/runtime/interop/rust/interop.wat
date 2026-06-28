@@ -94,7 +94,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -146,6 +146,13 @@
   ;; is a step in strangling Rust out of the toolchain -- the fink-side
   ;; primitive is host-agnostic.
   (import "env" "host_tokenize" (func $host_tokenize
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: parse the source and render the AST dump
+  ;; (or a caret diagnostic on parse error). Same contract shape as
+  ;; host_tokenize -- bytes in, rendered bytes out.
+  (import "env" "host_ast" (func $host_ast
     (param $src (ref $ByteArray))
     (result (ref $ByteArray))))
 
@@ -347,6 +354,49 @@
   (func $tokenize (@pub) (@impl "interop.fnk:tokenize")
     (result (ref any))
     (global.get $tokenize_closure))
+
+
+  ;; -- ast ---------------------------------------------------------------
+  ;; User-level call: `ast src`. CPS args = [k_caller, src]. Same shape as
+  ;; tokenize: source bytes in, rendered AST-dump bytes out.
+  (elem declare func $ast_apply)
+
+  (func $ast_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_ast (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $ast_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $ast_apply)
+      (ref.null $Captures)))
+
+  (func $ast (@pub) (@impl "interop.fnk:ast")
+    (result (ref any))
+    (global.get $ast_closure))
 
 
   ;; -- monotonic clock -------------------------------------------------

@@ -1,5 +1,10 @@
-{test, skip, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -7,7 +12,7 @@ arithmetic
 ---
 
 test 'unary minus', fn:
-  expect ast ƒink:
+  ast ƒink:
     -a
   | equals ƒink:
     Module
@@ -15,7 +20,7 @@ test 'unary minus', fn:
         Ident 'a'
 
 test 'add', fn:
-  expect ast ƒink:
+  ast ƒink:
     a + b
   | equals ƒink:
     Module
@@ -24,7 +29,7 @@ test 'add', fn:
         Ident 'b'
 
 test 'subtract', fn:
-  expect ast ƒink:
+  ast ƒink:
     a - b
   | equals ƒink:
     Module
@@ -33,7 +38,7 @@ test 'subtract', fn:
         Ident 'b'
 
 test 'multiply', fn:
-  expect ast ƒink:
+  ast ƒink:
     a * b
   | equals ƒink:
     Module
@@ -42,7 +47,7 @@ test 'multiply', fn:
         Ident 'b'
 
 test 'divide', fn:
-  expect ast ƒink:
+  ast ƒink:
     a / b
   | equals ƒink:
     Module
@@ -51,7 +56,7 @@ test 'divide', fn:
         Ident 'b'
 
 test 'integer divide', fn:
-  expect ast ƒink:
+  ast ƒink:
     a // b
   | equals ƒink:
     Module
@@ -60,7 +65,7 @@ test 'integer divide', fn:
         Ident 'b'
 
 test 'power', fn:
-  expect ast ƒink:
+  ast ƒink:
     a ** b
   | equals ƒink:
     Module
@@ -69,7 +74,7 @@ test 'power', fn:
         Ident 'b'
 
 test 'remainder', fn:
-  expect ast ƒink:
+  ast ƒink:
     a % b
   | equals ƒink:
     Module
@@ -78,7 +83,7 @@ test 'remainder', fn:
         Ident 'b'
 
 test 'true modulus', fn:
-  expect ast ƒink:
+  ast ƒink:
     a %% b
   | equals ƒink:
     Module
@@ -87,7 +92,7 @@ test 'true modulus', fn:
         Ident 'b'
 
 test 'divmod', fn:
-  expect ast ƒink:
+  ast ƒink:
     a /% b
   | equals ƒink:
     Module
@@ -96,7 +101,7 @@ test 'divmod', fn:
         Ident 'b'
 
 test 'power is right associative', fn:
-  expect ast ƒink:
+  ast ƒink:
     a ** b ** c
   | equals ƒink:
     Module
@@ -107,7 +112,7 @@ test 'power is right associative', fn:
           Ident 'c'
 
 test 'multiply binds tighter than add', fn:
-  expect ast ƒink:
+  ast ƒink:
     a + b * c
   | equals ƒink:
     Module
@@ -123,7 +128,7 @@ logical
 ---
 
 test 'not', fn:
-  expect ast ƒink:
+  ast ƒink:
     not a
   | equals ƒink:
     Module
@@ -131,7 +136,7 @@ test 'not', fn:
         Ident 'a'
 
 test 'and', fn:
-  expect ast ƒink:
+  ast ƒink:
     a and b
   | equals ƒink:
     Module
@@ -140,7 +145,7 @@ test 'and', fn:
         Ident 'b'
 
 test 'or', fn:
-  expect ast ƒink:
+  ast ƒink:
     a or b
   | equals ƒink:
     Module
@@ -149,7 +154,7 @@ test 'or', fn:
         Ident 'b'
 
 test 'xor', fn:
-  expect ast ƒink:
+  ast ƒink:
     a xor b
   | equals ƒink:
     Module
@@ -158,7 +163,7 @@ test 'xor', fn:
         Ident 'b'
 
 test 'not binds tighter than and', fn:
-  expect ast ƒink:
+  ast ƒink:
     not a and not b
   | equals ƒink:
     Module
@@ -169,7 +174,7 @@ test 'not binds tighter than and', fn:
           Ident 'b'
 
 test 'and binds tighter than or', fn:
-  expect ast ƒink:
+  ast ƒink:
     a or b and c
   | equals ƒink:
     Module
@@ -180,7 +185,7 @@ test 'and binds tighter than or', fn:
           Ident 'c'
 
 test 'add binds tighter than and', fn:
-  expect ast ƒink:
+  ast ƒink:
     a + b and c + d
   | equals ƒink:
     Module
@@ -198,7 +203,7 @@ comparison
 ---
 
 test 'greater than', fn:
-  expect ast ƒink:
+  ast ƒink:
     a > b
   | equals ƒink:
     Module
@@ -207,7 +212,7 @@ test 'greater than', fn:
         Ident 'b'
 
 test 'greater than or equal', fn:
-  expect ast ƒink:
+  ast ƒink:
     a >= b
   | equals ƒink:
     Module
@@ -216,7 +221,7 @@ test 'greater than or equal', fn:
         Ident 'b'
 
 test 'less than', fn:
-  expect ast ƒink:
+  ast ƒink:
     a < b
   | equals ƒink:
     Module
@@ -225,7 +230,7 @@ test 'less than', fn:
         Ident 'b'
 
 test 'less than or equal', fn:
-  expect ast ƒink:
+  ast ƒink:
     a <= b
   | equals ƒink:
     Module
@@ -234,7 +239,7 @@ test 'less than or equal', fn:
         Ident 'b'
 
 test 'equal', fn:
-  expect ast ƒink:
+  ast ƒink:
     a == b
   | equals ƒink:
     Module
@@ -243,7 +248,7 @@ test 'equal', fn:
         Ident 'b'
 
 test 'not equal', fn:
-  expect ast ƒink:
+  ast ƒink:
     a != b
   | equals ƒink:
     Module
@@ -252,7 +257,7 @@ test 'not equal', fn:
         Ident 'b'
 
 test 'chained comparison same op', fn:
-  expect ast ƒink:
+  ast ƒink:
     a > b > c
   | equals ƒink:
     Module
@@ -264,7 +269,7 @@ test 'chained comparison same op', fn:
         Ident 'c'
 
 test 'chained comparison mixed ops', fn:
-  expect ast ƒink:
+  ast ƒink:
     a >= b > c
   | equals ƒink:
     Module
@@ -276,7 +281,7 @@ test 'chained comparison mixed ops', fn:
         Ident 'c'
 
 test 'containment', fn:
-  expect ast ƒink:
+  ast ƒink:
     a in b
   | equals ƒink:
     Module
@@ -285,7 +290,7 @@ test 'containment', fn:
         Ident 'b'
 
 test 'not containment', fn:
-  expect ast ƒink:
+  ast ƒink:
     a not in b
   | equals ƒink:
     Module
@@ -294,7 +299,7 @@ test 'not containment', fn:
         Ident 'b'
 
 test 'disjoint', fn:
-  expect ast ƒink:
+  ast ƒink:
     a >< b
   | equals ƒink:
     Module
@@ -303,7 +308,7 @@ test 'disjoint', fn:
         Ident 'b'
 
 test 'comparison binds tighter than and', fn:
-  expect ast ƒink:
+  ast ƒink:
     a > 0 and b < 10
   | equals ƒink:
     Module
@@ -321,7 +326,7 @@ bitwise
 ---
 
 test 'bitwise not', fn:
-  expect ast ƒink:
+  ast ƒink:
     not 0xFF
   | equals ƒink:
     Module
@@ -329,7 +334,7 @@ test 'bitwise not', fn:
         LitInt '0xFF'
 
 test 'bitwise and', fn:
-  expect ast ƒink:
+  ast ƒink:
     0xFF and 0x0F
   | equals ƒink:
     Module
@@ -338,7 +343,7 @@ test 'bitwise and', fn:
         LitInt '0x0F'
 
 test 'bitwise or', fn:
-  expect ast ƒink:
+  ast ƒink:
     0xFF or 0x0F
   | equals ƒink:
     Module
@@ -347,7 +352,7 @@ test 'bitwise or', fn:
         LitInt '0x0F'
 
 test 'bitwise xor', fn:
-  expect ast ƒink:
+  ast ƒink:
     0xFF xor 0x0F
   | equals ƒink:
     Module
@@ -356,7 +361,7 @@ test 'bitwise xor', fn:
         LitInt '0x0F'
 
 test 'shift right', fn:
-  expect ast ƒink:
+  ast ƒink:
     a >> b
   | equals ƒink:
     Module
@@ -365,7 +370,7 @@ test 'shift right', fn:
         Ident 'b'
 
 test 'shift left', fn:
-  expect ast ƒink:
+  ast ƒink:
     a << b
   | equals ƒink:
     Module
@@ -374,7 +379,7 @@ test 'shift left', fn:
         Ident 'b'
 
 test 'rotate right', fn:
-  expect ast ƒink:
+  ast ƒink:
     a >>> b
   | equals ƒink:
     Module
@@ -383,7 +388,7 @@ test 'rotate right', fn:
         Ident 'b'
 
 test 'rotate left', fn:
-  expect ast ƒink:
+  ast ƒink:
     a <<< b
   | equals ƒink:
     Module
@@ -397,7 +402,7 @@ member access
 ---
 
 test 'member by name', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo.bar
   | equals ƒink:
     Module
@@ -406,7 +411,7 @@ test 'member by name', fn:
         Ident 'bar'
 
 test 'chained member access', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo.bar.spam
   | equals ƒink:
     Module
@@ -417,7 +422,7 @@ test 'chained member access', fn:
         Ident 'spam'
 
 test 'member by hyphenated name', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo.bar-spam
   | equals ƒink:
     Module
@@ -426,7 +431,7 @@ test 'member by hyphenated name', fn:
         Ident 'bar-spam'
 
 test 'member by expression', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo.(expr)
   | equals ƒink:
     Module
@@ -436,7 +441,7 @@ test 'member by expression', fn:
           Ident 'expr'
 
 test 'member by string key shorthand', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo.'bar baz'
   | equals ƒink:
     Module
@@ -445,7 +450,7 @@ test 'member by string key shorthand', fn:
         LitStr 'bar baz'
 
 test 'sequence index', fn:
-  expect ast ƒink:
+  ast ƒink:
     [1, 2, 3].(0)
   | equals ƒink:
     Module
@@ -458,7 +463,7 @@ test 'sequence index', fn:
           LitInt '0'
 
 test 'sequence range slice', fn:
-  expect ast ƒink:
+  ast ƒink:
     [0, 1, 2, 3, 4].(2...3)
   | equals ƒink:
     Module
@@ -475,7 +480,7 @@ test 'sequence range slice', fn:
             LitInt '3'
 
 test 'member access on record literal', fn:
-  expect ast ƒink:
+  ast ƒink:
     {foo: 123}.foo
   | equals ƒink:
     Module
@@ -487,7 +492,7 @@ test 'member access on record literal', fn:
         Ident 'foo'
 
 test 'member by string key', fn:
-  expect ast ƒink:
+  ast ƒink:
     {'ni nu': 123}.('ni nu')
   | equals ƒink:
     Module
@@ -500,7 +505,7 @@ test 'member by string key', fn:
           LitStr 'ni nu'
 
 test 'member by sequence key', fn:
-  expect ast ƒink:
+  ast ƒink:
     [0, 1, 2, 3, 4].([2, 3])
   | equals ƒink:
     Module
@@ -518,7 +523,7 @@ test 'member by sequence key', fn:
 
 
 test 'infix rhs multiline block application', fn:
-  expect ast ƒink:
+  ast ƒink:
     [3, 7] == seq
       add 1, 2
       add 3, 4
@@ -545,7 +550,7 @@ operator vs application precedence
 ---
 
 test 'subtract with call rhs', fn:
-  expect ast ƒink:
+  ast ƒink:
     a - add b
   | equals ƒink:
     Module
@@ -557,7 +562,7 @@ test 'subtract with call rhs', fn:
 
 
 test 'add with multi-arg call rhs', fn:
-  expect ast ƒink:
+  ast ƒink:
     a + foo 1, 2
   | equals ƒink:
     Module
@@ -570,7 +575,7 @@ test 'add with multi-arg call rhs', fn:
 
 
 test 'call rhs with trailing infix', fn:
-  expect ast ƒink:
+  ast ƒink:
     a - foo b + c
   | equals ƒink:
     Module
@@ -584,7 +589,7 @@ test 'call rhs with trailing infix', fn:
 
 
 test 'call on both sides of infix', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo a - bar b
   | equals ƒink:
     Module
@@ -598,7 +603,7 @@ test 'call on both sides of infix', fn:
 
 
 test 'multiply with call rhs', fn:
-  expect ast ƒink:
+  ast ƒink:
     a * foo b
   | equals ƒink:
     Module
@@ -618,7 +623,7 @@ expression starts after a comma.
 ---
 
 test 'apply with negative int literal as second arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo 1, -2
   | equals ƒink:
     Module
@@ -628,7 +633,7 @@ test 'apply with negative int literal as second arg', fn:
         LitInt '-2'
 
 test 'apply with negative float literal as second arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo 3.0, -2.0
   | equals ƒink:
     Module
@@ -638,7 +643,7 @@ test 'apply with negative float literal as second arg', fn:
         LitFloat '-2.0'
 
 test 'apply with unary-minus ident as second arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo a, -b
   | equals ƒink:
     Module
@@ -649,7 +654,7 @@ test 'apply with unary-minus ident as second arg', fn:
           Ident 'b'
 
 test 'apply with negative literal as first arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo -3.0, 2.0
   | equals ƒink:
     Module

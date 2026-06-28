@@ -1,9 +1,14 @@
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'match on literal values', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foo:
       1: 'one'
       2: 'two'
@@ -26,7 +31,7 @@ test 'match on literal values', fn:
           LitStr 'other'
 
 test 'match with binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foo:
       [head, ..tail]: head
       []: 'empty'
@@ -47,7 +52,7 @@ test 'match with binding', fn:
           LitStr 'empty'
 
 test 'match with inline guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foo:
       n > 0 and n < 10: 'small positive'
       n > 0: 'large positive'
@@ -78,7 +83,7 @@ test 'match with inline guard', fn:
           LitStr 'other'
 
 test 'match on type', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foo:
       str s: 'its a string'
       u8 n: 'its a u8'
@@ -101,7 +106,7 @@ test 'match on type', fn:
 
 
 test 'match string pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     match s:
       'hello ${rest}': rest
       'a'...'z': 'lowercase letter'
@@ -124,7 +129,7 @@ test 'match string pattern', fn:
 
 
 test 'match sequence patterns', fn:
-  expect ast ƒink:
+  ast ƒink:
     match items:
       []: 'empty'
       [x]: 'one element'
@@ -157,7 +162,7 @@ test 'match sequence patterns', fn:
           LitStr 'one or more'
 
 test 'match sequence bare spread pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     match items:
       [..]: 'non-empty'
       []: 'empty'
@@ -176,7 +181,7 @@ test 'match sequence bare spread pattern', fn:
           LitStr 'empty'
 
 test 'match record bare spread pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foobar:
       {..}: 'non-empty'
       {}: 'empty'
@@ -195,7 +200,7 @@ test 'match record bare spread pattern', fn:
           LitStr 'empty'
 
 test 'match record patterns', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foobar:
       {}: 'empty'
       {foo: 1}: 'foo is 1'
@@ -225,7 +230,7 @@ test 'match record patterns', fn:
           LitStr 'foo is 1 and more'
 
 test 'match record exact - empty rest', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foobar:
       {foo: 1, ..{}}: 'foo is 1 and nothing else'
   | equals ƒink:
@@ -243,7 +248,7 @@ test 'match record exact - empty rest', fn:
           LitStr 'foo is 1 and nothing else'
 
 test 'match record with bound rest', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foobar:
       {foo: 1, ..rest}: rest
   | equals ƒink:
@@ -261,7 +266,7 @@ test 'match record with bound rest', fn:
           Ident 'rest'
 
 test 'match seq exact - empty rest', fn:
-  expect ast ƒink:
+  ast ƒink:
     match items:
       [a, ..[]]:'only a'
   | equals ƒink:
@@ -277,7 +282,7 @@ test 'match seq exact - empty rest', fn:
           LitStr 'only a'
 
 test 'match nested record pattern', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foo:
       {x: 1, y: {z}}: z
   | equals ƒink:
@@ -297,7 +302,7 @@ test 'match nested record pattern', fn:
           Ident 'z'
 
 test 'inline match in application', fn:
-  expect ast ƒink:
+  ast ƒink:
     log match a: x > 0: x
   | equals ƒink:
     Module
@@ -313,7 +318,7 @@ test 'inline match in application', fn:
             Ident 'x'
 
 test 'multi-subject match', fn:
-  expect ast ƒink:
+  ast ƒink:
     match a, b:
       1, 2: 'one two'
       1, x: 'one other'
@@ -340,7 +345,7 @@ test 'multi-subject match', fn:
           LitStr 'other'
 
 test 'guard combined with spread in match arm', fn:
-  expect ast ƒink:
+  ast ƒink:
     match items:
       [x > 0, ..rest]: rest
       _: []
@@ -363,7 +368,7 @@ test 'guard combined with spread in match arm', fn:
           LitSeq '[..]'
 
 test 'rec value with infix comparison guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     match r:
       {foo: bar == 4}: bar
   | equals ƒink:
@@ -381,7 +386,7 @@ test 'rec value with infix comparison guard', fn:
           Ident 'bar'
 
 test 'rec value with predicate guard', fn:
-  expect ast ƒink:
+  ast ƒink:
     match r:
       {foo: is_even bar}: bar
   | equals ƒink:
@@ -399,7 +404,7 @@ test 'rec value with predicate guard', fn:
           Ident 'bar'
 
 test 'list of rec with predicate guard and spread', fn:
-  expect ast ƒink:
+  ast ƒink:
     match items:
       [{k: is_even v}, ..]: v
   | equals ƒink:
@@ -420,7 +425,7 @@ test 'list of rec with predicate guard and spread', fn:
 
 
 test 'nested pattern with guard in binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     [[x, y], z > 0] = foo
   | equals ƒink:
     Module
@@ -435,7 +440,7 @@ test 'nested pattern with guard in binding', fn:
         Ident 'foo'
 
 test 'multiline arm body', fn:
-  expect ast ƒink:
+  ast ƒink:
     match n:
       n > 0:
         x = n * 2
@@ -464,7 +469,7 @@ test 'multiline arm body', fn:
           LitInt '0'
 
 test 'wildcard arm body as application', fn:
-  expect ast ƒink:
+  ast ƒink:
     match n:
       0: true
       _: is_odd n - 1
@@ -486,7 +491,7 @@ test 'wildcard arm body as application', fn:
               LitInt '1'
 
 test 'Ok and Err patterns in match', fn:
-  expect ast ƒink:
+  ast ƒink:
     match bar result:
       Ok x: x + 1
       Err err: log err
@@ -514,7 +519,7 @@ test 'Ok and Err patterns in match', fn:
             Ident 'err'
 
 test 'error chaining', fn:
-  expect ast ƒink:
+  ast ƒink:
     Err e, 'foo failed'
   | equals ƒink:
     Module
@@ -524,7 +529,7 @@ test 'error chaining', fn:
         LitStr 'foo failed'
 
 test 'match arm with nested right-hand binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     match foobar:
       {foo: f |= {bar}}: bar
   | equals ƒink:

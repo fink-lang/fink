@@ -1,15 +1,20 @@
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'empty module', fn:
-  expect module ''
+  ast ''
   | equals ƒink:
     Module
 
 
 test 'single expression', fn:
-  expect module ƒink:
+  ast ƒink:
     foo bar
   | equals ƒink:
     Module
@@ -19,7 +24,7 @@ test 'single expression', fn:
 
 
 test 'multiple expressions', fn:
-  expect module ƒink:
+  ast ƒink:
     foo = 1
     bar = 2
   | equals ƒink:

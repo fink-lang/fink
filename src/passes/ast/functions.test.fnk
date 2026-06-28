@@ -1,9 +1,14 @@
-
-{test, expect, equals, ast} = import '!fake'
+{test, skip, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
 
 test 'multiline function', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn a, b:
       a + b
   | equals ƒink:
@@ -17,7 +22,7 @@ test 'multiline function', fn:
           Ident 'b'
 
 test 'fn with params and colon on separate lines', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn
       foo, bar
       spam
@@ -33,7 +38,7 @@ test 'fn with params and colon on separate lines', fn:
         Ident 'spam'
 
 test 'single line function', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn a, b: a + b
   | equals ƒink:
     Module
@@ -46,7 +51,7 @@ test 'single line function', fn:
           Ident 'b'
 
 test 'named function binding', fn:
-  expect ast ƒink:
+  ast ƒink:
     add = fn a, b:
       result = a + b
       result
@@ -66,7 +71,7 @@ test 'named function binding', fn:
           Ident 'result'
 
 test 'no-arg function', fn:
-  expect ast ƒink:
+  ast ƒink:
     greet = fn: 'hello'
   | equals ƒink:
     Module
@@ -77,7 +82,7 @@ test 'no-arg function', fn:
           LitStr 'hello'
 
 test 'inline body comma separates expressions', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn: 1, 2
   | equals ƒink:
     Module
@@ -87,7 +92,7 @@ test 'inline body comma separates expressions', fn:
         LitInt '2'
 
 test 'inline body comma equivalent to multiline block', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn a, b: a, b
   | equals ƒink:
     Module
@@ -99,7 +104,7 @@ test 'inline body comma equivalent to multiline block', fn:
         Ident 'b'
 
 test 'block body comma separated expressions', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn:
       1, foo, ni
   | equals ƒink:
@@ -114,7 +119,7 @@ test 'block body comma separated expressions', fn:
 # arg list (strong separator), but parse_inline_exprs greedily consumes it.
 # Needs context-aware ; parsing.
 # test 'semicolon in application with fn arg returns to outer', fn:
-#   expect ast ƒink:
+#   ast ƒink:
 #     foo a, fn a: bar; spam
 #   | equals ƒink:
 #     Apply
@@ -127,7 +132,7 @@ test 'block body comma separated expressions', fn:
 #       Ident 'spam'
 
 test 'block body semicolon separated expressions', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn:
       1; foo; ni
   | equals ƒink:
@@ -139,7 +144,7 @@ test 'block body semicolon separated expressions', fn:
         Ident 'ni'
 
 test 'block body semicolon after non-application', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn:
       1; 2; 3
   | equals ƒink:
@@ -152,7 +157,7 @@ test 'block body semicolon after non-application', fn:
 
 
 test 'function with default arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     greet = fn name='world':
       'hello ${name}'
   | equals ƒink:
@@ -169,7 +174,7 @@ test 'function with default arg', fn:
             Ident 'name'
 
 test 'function with record pattern arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo = fn {x, y}: x + y
   | equals ƒink:
     Module
@@ -185,7 +190,7 @@ test 'function with record pattern arg', fn:
             Ident 'y'
 
 test 'function with sequence pattern arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     bar = fn [head, ..tail]: head
   | equals ƒink:
     Module
@@ -200,7 +205,7 @@ test 'function with sequence pattern arg', fn:
           Ident 'head'
 
 test 'function with rest args', fn:
-  expect ast ƒink:
+  ast ƒink:
     baz = fn arg, ..rest: arg
   | equals ƒink:
     Module
@@ -214,7 +219,7 @@ test 'function with rest args', fn:
           Ident 'arg'
 
 test 'spread in middle of params', fn:
-  expect ast ƒink:
+  ast ƒink:
     baz = fn x, ..ys, z: x
   | equals ƒink:
     Module
@@ -229,12 +234,12 @@ test 'spread in middle of params', fn:
           Ident 'x'
 
 
----
-fn match sugar
----
+# ---
+# fn match sugar
+# ---
 
 test 'fn match single arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     classify = fn match n:
       n > 0: 'positive'
       n < 0: 'negative'
@@ -266,7 +271,7 @@ test 'fn match single arg', fn:
               LitStr 'zero'
 
 test 'fn match multi arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo = fn match a, ..b:
       1, ..: 1
       2, x, ..y: 2
@@ -297,12 +302,12 @@ test 'fn match multi arg', fn:
               LitInt '2'
 
 
----
-higher order
----
+# ---
+# higher order
+# ---
 
 test 'returning a function', fn:
-  expect ast ƒink:
+  ast ƒink:
     map = fn map_fn: fn match items:
       []: []
       [item, ..rest]:
@@ -348,7 +353,7 @@ application
 ---
 
 test 'simple application', fn:
-  expect ast ƒink:
+  ast ƒink:
     log 'hello'
   | equals ƒink:
     Module
@@ -357,7 +362,7 @@ test 'simple application', fn:
         LitStr 'hello'
 
 test 'multi-arg application', fn:
-  expect ast ƒink:
+  ast ƒink:
     add 1, 2
   | equals ƒink:
     Module
@@ -367,7 +372,7 @@ test 'multi-arg application', fn:
         LitInt '2'
 
 test 'multiline args', fn:
-  expect ast ƒink:
+  ast ƒink:
     add
       mul 2, 3
       mul 3, 4
@@ -385,7 +390,7 @@ test 'multiline args', fn:
           LitInt '4'
 
 test 'semicolon grouped args', fn:
-  expect ast ƒink:
+  ast ƒink:
     add mul 2, 3; mul 3, 4
   | equals ƒink:
     Module
@@ -402,7 +407,7 @@ test 'semicolon grouped args', fn:
 
 
 test 'trailing comma dedent error', fn:
-  expect ast ":
+  ast ":
     foo
       bar,
     spam
@@ -415,7 +420,7 @@ test 'trailing comma dedent error', fn:
 
 
 test 'trailing semicolon dedent error', fn:
-  expect ast ":
+  ast ":
     foo
       bar;
     spam
@@ -428,7 +433,7 @@ test 'trailing semicolon dedent error', fn:
 
 
 test 'nested right-to-left application', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo bar spam ham
   | equals ƒink:
     Module
@@ -441,7 +446,7 @@ test 'nested right-to-left application', fn:
             Ident 'ham'
 
 test 'postfix tagged application', fn:
-  expect ast ƒink:
+  ast ƒink:
     [1, 2, 3]foo
   | equals ƒink:
     Module
@@ -453,7 +458,7 @@ test 'postfix tagged application', fn:
           LitInt '3'
 
 test 'partial application placeholder', fn:
-  expect ast ƒink:
+  ast ƒink:
     add5 = add 5, ?
   | equals ƒink:
     Module
@@ -465,7 +470,7 @@ test 'partial application placeholder', fn:
           Partial
 
 test 'partial operator', fn:
-  expect ast ƒink:
+  ast ƒink:
     add5 = ? + 5
   | equals ƒink:
     Module
@@ -476,12 +481,12 @@ test 'partial operator', fn:
           LitInt '5'
 
 
----
-pipes
----
+# ---
+# pipes
+# ---
 
 test 'simple pipe', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo | bar | spam
   | equals ƒink:
     Module
@@ -491,7 +496,7 @@ test 'simple pipe', fn:
         Ident 'spam'
 
 test 'multiline pipe', fn:
-  expect ast ƒink:
+  ast ƒink:
     'hello'
     | capitalize
     | log
@@ -503,7 +508,7 @@ test 'multiline pipe', fn:
         Ident 'log'
 
 test 'pipe with spread partial', fn:
-  expect ast ƒink:
+  ast ƒink:
     [1, 2] | add ..?
   | equals ƒink:
     Module
@@ -518,7 +523,7 @@ test 'pipe with spread partial', fn:
 
 # TODO: Jan, think about | precedence, should it be (foo (bar | (spam ham))?
 test 'pipe with apply in each stage', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo bar | spam ham
   | equals ƒink:
     Module
@@ -531,7 +536,7 @@ test 'pipe with apply in each stage', fn:
           Ident 'ham'
 
 test 'fn literal as grouped arg', fn:
-  expect ast ƒink:
+  ast ƒink:
     map (fn x: x + 1), items
   | equals ƒink:
     Module
@@ -548,7 +553,7 @@ test 'fn literal as grouped arg', fn:
 
 
 test 'inline body comma is arg separator inside application', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn: foo a, b
   | equals ƒink:
     Module
@@ -560,7 +565,7 @@ test 'inline body comma is arg separator inside application', fn:
           Ident 'b'
 
 test 'inline body comma after binding starts new expression', fn:
-  expect ast ƒink:
+  ast ƒink:
     fn: a = 1, b
   | equals ƒink:
     Module
@@ -571,9 +576,9 @@ test 'inline body comma after binding starts new expression', fn:
           LitInt '1'
         Ident 'b'
 
-
+# TODO, error during testing with ƒink: block
 test 'fn params multiline continuation', fn:
-  expect ast ƒink:
+  ast ":
     fn a,
       b: a + b
   | equals ƒink:
@@ -588,7 +593,7 @@ test 'fn params multiline continuation', fn:
 
 
 test 'multiline application', fn:
-  expect ast ƒink:
+  ast ƒink:
     ni = foo
       bar
   | equals ƒink:
@@ -600,12 +605,12 @@ test 'multiline application', fn:
           Ident 'bar'
 
 
----
-fn as infix operand
----
+# ---
+# fn as infix operand
+# ---
 
 test 'fn as rhs of ==', fn:
-  expect ast ƒink:
+  ast ƒink:
     [1, ?] == fn $: [1, $]
   | equals ƒink:
     Module

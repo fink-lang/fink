@@ -2015,6 +2015,27 @@ pub fn parse_with_blocks<'src>(
   Ok(p.into_ast().finish(root))
 }
 
+/// Parse `src` and render the AST as text, or render a parse error as a
+/// caret diagnostic. Backs the `ast` compiler-as-host-service primitive
+/// (and the AST snapshot tests). A `test_block` block is registered so
+/// block-syntax tests can exercise custom block parsing.
+pub fn parse_debug(src: &str) -> String {
+  let url = "test.fnk";
+  match parse_with_blocks(src, url, &[("test_block", BlockMode::Ast)]) {
+    Ok(ast) => ast.print(),
+    Err(e) => {
+      let diag = crate::errors::Diagnostic {
+        url: url.to_string(),
+        message: e.message,
+        loc: e.loc,
+        hint: None,
+      };
+      let provider = crate::errors::SingleSource { url, src };
+      crate::errors::format_diagnostic(&provider, &diag, &crate::errors::FormatOptions::default())
+    }
+  }
+}
+
 /// Compute the span loc covering every item in an Exprs, falling back to
 /// `default` when empty. Reads first/last node locs via the parser's arena.
 fn compute_exprs_loc<'src>(p: &Parser<'src>, exprs: &Exprs<'src>, default: Loc) -> Loc {
@@ -2071,20 +2092,7 @@ mod tests {
   }
 
   fn parse_debug(src: &str) -> String {
-    let url = "test.fnk";
-    match super::parse_with_blocks(src, url, &[("test_block", BlockMode::Ast)]) {
-      Ok(ast) => ast.print(),
-      Err(e) => {
-        let diag = crate::errors::Diagnostic {
-          url: url.to_string(),
-          message: e.message,
-          loc: e.loc,
-          hint: None,
-        };
-        let provider = crate::errors::SingleSource { url, src };
-        crate::errors::format_diagnostic(&provider, &diag, &crate::errors::FormatOptions::default())
-      }
-    }
+    super::parse_debug(src)
   }
 
   /// Parse source and print the full AST including Module root.
@@ -2185,20 +2193,4 @@ mod tests {
       inner.loc.end.idx,
     );
   }
-
-  test_macros::include_fink_tests!("src/passes/ast/test_try.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_literals.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_operators.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_grouping.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_spread_ranges.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_range.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_bindings.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_functions.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_block_modes.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_member_apply.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_errors.fnk");
-  test_macros::include_fink_tests!("src/passes/ast/test_types.fnk");
 }

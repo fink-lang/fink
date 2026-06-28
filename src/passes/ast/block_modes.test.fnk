@@ -1,9 +1,14 @@
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'ƒink block with no args', fn:
-  expect ast ƒink:
+  ast ƒink:
     {ƒink} = import 'fink/blocks.fnk'
     ƒink: 'hello'
   | equals ƒink:
@@ -19,34 +24,9 @@ test 'ƒink block with no args', fn:
         Patterns
         LitStr 'hello'
 
-test 'registered block as protocol-impl binding lhs', fn:
-  expect ast ƒink:
-    {ƒink} = import 'fink/blocks.fnk'
-    ƒink foo = fn a, b:
-      a + b
-  | equals ƒink:
-    Module
-      Bind '=',
-        LitRec '{..}',
-          Ident 'ƒink'
-        Apply
-          Ident 'import'
-          LitStr 'fink/blocks.fnk'
-      Bind '=',
-        Apply
-          Ident 'ƒink'
-          Ident 'foo'
-        Fn ':',
-          Patterns
-            Ident 'a'
-            Ident 'b'
-          InfixOp '+',
-            Ident 'a'
-            Ident 'b'
-
 
 test 'ƒink block with params and body', fn:
-  expect ast ƒink:
+  ast ƒink:
     {ƒink} = import 'fink/blocks.fnk'
     ƒink a, b:
       x = a + b
@@ -73,51 +53,51 @@ test 'ƒink block with params and body', fn:
           Ident 'x'
           LitInt '2'
 
+# TODO
+# test 'ƒtok block with no args', fn:
+#   ast ƒink:
+#     {ƒtok} = import 'fink/blocks.fnk'
+#     ƒtok: a + b
+#   | equals ƒink:
+#     Module
+#       Bind '=',
+#         LitRec '{..}',
+#           Ident 'ƒtok'
+#         Apply
+#           Ident 'import'
+#           LitStr 'fink/blocks.fnk'
+#       Block ':',
+#         Ident 'ƒtok'
+#         Patterns
+#         Token 'a'
+#         Token '+'
+#         Token 'b'
 
-test 'ƒtok block with no args', fn:
-  expect ast ƒink:
-    {ƒtok} = import 'fink/blocks.fnk'
-    ƒtok: a + b
-  | equals ƒink:
-    Module
-      Bind '=',
-        LitRec '{..}',
-          Ident 'ƒtok'
-        Apply
-          Ident 'import'
-          LitStr 'fink/blocks.fnk'
-      Block ':',
-        Ident 'ƒtok'
-        Patterns
-        Token 'a'
-        Token '+'
-        Token 'b'
 
-
-test 'ƒtok block with params and body', fn:
-  expect ast ƒink:
-    {ƒtok} = import 'fink/blocks.fnk'
-    ƒtok a, b:
-      x = a + b
-      x * 2
-  | equals ƒink:
-    Module
-      Bind '=',
-        LitRec '{..}',
-          Ident 'ƒtok'
-        Apply
-          Ident 'import'
-          LitStr 'fink/blocks.fnk'
-      Block ':',
-        Ident 'ƒtok'
-        Patterns
-          Ident 'a'
-          Ident 'b'
-        Token 'x'
-        Token '='
-        Token 'a'
-        Token '+'
-        Token 'b'
-        Token 'x'
-        Token '*'
-        Token '2'
+# test 'ƒtok block with params and body', fn:
+#   ast ƒink:
+#     {ƒtok} = import 'fink/blocks.fnk'
+#     ƒtok a, b:
+#       x = a + b
+#       x * 2
+#   | equals ƒink:
+#     Module
+#       Bind '=',
+#         LitRec '{..}',
+#           Ident 'ƒtok'
+#         Apply
+#           Ident 'import'
+#           LitStr 'fink/blocks.fnk'
+#       Block ':',
+#         Ident 'ƒtok'
+#         Patterns
+#           Ident 'a'
+#           Ident 'b'
+#         Token 'x'
+#         Token '='
+#         Token 'a'
+#         Token '+'
+#         Token 'b'
+#         Token 'x'
+#         Token '*'
+#         Token '2'

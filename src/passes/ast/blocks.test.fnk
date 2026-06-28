@@ -1,10 +1,14 @@
-
-{test, expect, equals, ast} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'block with no args and expression body', fn:
-  expect ast ":
+  ast ":
     test_block: 'hello'
   | equals ƒink:
     Module
@@ -14,7 +18,7 @@ test 'block with no args and expression body', fn:
         LitStr 'hello'
 
 test 'block with patterns and expression body', fn:
-  expect ast ":
+  ast ":
     test_block a, b: a + b
   | equals ƒink:
     Module
@@ -28,7 +32,7 @@ test 'block with patterns and expression body', fn:
           Ident 'b'
 
 test 'block with patterns and multiline body', fn:
-  expect ast ":
+  ast ":
     test_block a, b:
       x = a + b
       x * 2
@@ -49,7 +53,7 @@ test 'block with patterns and multiline body', fn:
           LitInt '2'
 
 test 'block with arms', fn:
-  expect ast ":
+  ast ":
     test_block a:
       1: 'one'
       2: 'two'
@@ -67,7 +71,7 @@ test 'block with arms', fn:
           LitStr 'two'
 
 test 'block bound to name', fn:
-  expect ast ":
+  ast ":
     result = test_block a, b:
       a + b
   | equals ƒink:
@@ -84,7 +88,7 @@ test 'block bound to name', fn:
             Ident 'b'
 
 test 'inline block in application', fn:
-  expect ast ":
+  ast ":
     log test_block: 'hello'
   | equals ƒink:
     Module
@@ -96,7 +100,7 @@ test 'inline block in application', fn:
           LitStr 'hello'
 
 test 'block with sequence destructure param', fn:
-  expect ast ":
+  ast ":
     test_block [a, b]: a + b
   | equals ƒink:
     Module
@@ -111,7 +115,7 @@ test 'block with sequence destructure param', fn:
           Ident 'b'
 
 test 'block with record destructure param', fn:
-  expect ast ":
+  ast ":
     test_block {x, y}: x + y
   | equals ƒink:
     Module
@@ -127,7 +131,7 @@ test 'block with record destructure param', fn:
 
 
 test 'inline fn arg followed by trailing call', fn:
-  expect ast ƒink:
+  ast ƒink:
     foo fn: 123
     bar _
   | equals ƒink:
