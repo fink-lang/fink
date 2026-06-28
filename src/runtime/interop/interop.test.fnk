@@ -1,5 +1,5 @@
 {test, equals} = import 'std/testing.fnk'
-{tokenize} = import 'interop.wat'
+{tokenize} = import 'rt/interop.wat'
 
 
 test 'tokenize exposes the lexer as a host service', fn:

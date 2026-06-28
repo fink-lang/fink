@@ -707,7 +707,7 @@ test 'match empty string', fn:
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_184))
       )
       (func $test::v_159 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 1))
+        (call $rt/interop.wat:panic (i32.const 1))
         unreachable
       )
       (func $test::v_171 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -832,7 +832,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:fYgFAJoBAUABiAEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJsAQAC1goAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBiAEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAFgAhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEA6AsAnAEAbgDCAQCaAQCmAQCYAQCaAQBsAHoA0AEAoAEArgEAkgEAdADYAQC0AQBuANABAKYFAHoA5gEAigEA
+    ;; sm:fYgFAJoBAUABiAEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJsAQAC1goAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBiAEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAF4AhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEA6AsAnAEAbgDCAQCaAQCmAQCYAQCaAQBsAHoA0AEAoAEArgEAkgEAdADYAQC0AQBuANABAKYFAHoA5gEAigEA
 
 
 test 'empty string eq template', fn:

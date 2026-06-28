@@ -1,6 +1,6 @@
 {suspend, init_ctx, get_ctx_for, with, unique} = import 'std/effects.fnk'
 
-{io_write, io_read} = import 'interop.wat'
+{io_write, io_read} = import 'rt/interop.wat'
 
 stdin = 0
 stdout = 1

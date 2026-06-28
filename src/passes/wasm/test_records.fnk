@@ -175,7 +175,7 @@ test 'rec destructure', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_12) (local.get $:v_93) (local.get $:v_95))
       )
       (func $test::v_146 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_168 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -264,7 +264,7 @@ test 'rec destructure', fn:
       (data $d_1 "a")
       (data $d_2 "b")
     )
-    ;; sm:YYoIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfgHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRhiAQAYmAkAlgEAugEAyAEAyAEA6AEA0gEBABhkAQAYxAYAugEAyAEAbgCWCQCcAQCaAQCcAQCaAQCWAQDkAQDSAQC4AQDSAQBmAQAY4gQAWACmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAWABBgGGAQEFBIALAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmALQBANQBAQ0MagECAWIBBgGGAQEFBPYFAHoA5gEAigEA
+    ;; sm:YYoIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfgHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRhiAQAYmAkAlgEAugEAyAEAyAEA6AEA0gEBABhkAQAYxAYAugEAyAEAbgCWCQCcAQCaAQCcAQCaAQCWAQDkAQDSAQC4AQDSAQBmAQAY4gQAXgCmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAWABBgGGAQEFBIALAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmALQBANQBAQ0MagECAWIBBgGGAQEFBPYFAHoA5gEAigEA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -552,7 +552,7 @@ test 'rec nested destructure', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_34) (local.get $:v_122) (local.get $:v_124))
       )
       (func $test::v_172 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_232 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -647,7 +647,7 @@ test 'rec nested destructure', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_12) (local.get $:v_131) (local.get $:v_133))
       )
       (func $test::v_218 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_240 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -740,7 +740,7 @@ test 'rec nested destructure', fn:
       (data $d_1 "a")
       (data $d_2 "b")
     )
-    ;; sm:hwHABwCWAQC6AQDGAQCiAQCuAQBuAMoBAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBJgdiAQAHxgYAugEAyAEAbgCaCQCcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQBmAQAH5gQAWAD2CQCWAQC6AQDGAQCiAQC4AQDSAQB6ANIBAHoA0gEArgEAbgDKAQC-AQC-AQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBASUSZAEAEsYGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAEuYEAFgApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxqAQIBYgEACuwLAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdqAQIBYAEGAogBAQUF9gUAegDmAQCKAQA
+    ;; sm:hwHABwCWAQC6AQDGAQCiAQCuAQBuAMoBAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBJgdiAQAHxgYAugEAyAEAbgCaCQCcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQBmAQAH5gQAXgD2CQCWAQC6AQDGAQCiAQC4AQDSAQB6ANIBAHoA0gEArgEAbgDKAQC-AQC-AQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBASUSZAEAEsYGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAEuYEAF4ApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxqAQIBYgEACuwLAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdqAQIBYAEGAogBAQUF9gUAegDmAQCKAQA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:

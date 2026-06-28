@@ -1,4 +1,4 @@
-{interop_yield} = import 'interop.wat'
+{interop_yield} = import 'rt/interop.wat'
 {suspend, init_ctx, get_ctx_for, with, unique} = import 'std/effects.fnk'
 {for_each} = import 'std/iter.fnk'
 

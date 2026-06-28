@@ -94,7 +94,7 @@ test 'multi module import', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_7) (local.get $:v_68) (local.get $:v_70))
       )
       (func $./test.fnk::v_106 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test.fnk::v_128 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -264,7 +264,7 @@ test 'multi module import', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_9) (local.get $:v_87) (local.get $:v_89))
       )
       (func $./test_link/simple.fnk::v_133 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test_link/simple.fnk::v_155 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -396,7 +396,7 @@ test 'multi module import', fn:
       (data $d_7 "./test_link/foobar/spam.fnk")
       (data $d_8 "foo")
     )
-    ;; sm:xAHiCwCWAQC6AQDGAQECBVgBXgKKAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEA0AgAlgEAugEAxgEAxgEAuAEA3AEBXyliAQApygYAugEAxgEAbgCaCQCaAQCaAQCaAQCaAQCUAQDgAQDeAQC2AQDcAQBmAQAp7AQAWACwCQCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA3gEAbgC8AQC-AQC-AQCaCgCcAQBuAMIBAJwBAKYBAJgBALQBAN4BAJQBAIIBAJoCAIYGAHoA8gEAjAEAoAcAmgEAmgEAlgEAhAEAugEAwgEAbgC-AQDCAQCCAQCgCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlAEAdgDcAQDcAQBuANIBAKAHAJYBAJoBAJYBALoBAMgBAG4AvgEA7ggAlgEAugEAyAEAyAEAugEA9gEBASJkAQAi6AYAugEAyAEAbgC4CQCcAQCaAQCcAQCaAQCUAQDkAQD2AQC4AQD2AQBmAQAihAUAWADICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCkCwCcAQBwAMIBAJwBAG4AwgEAnAEApgEAmAEAnAEAlAEAtAEA9gEAlAEAggEApAIAzgYAegCKAgCMAQCABgCYAQCaAQCUAQCCAQEoAYYBAQkGvAwAnAEAcADCAQCcAQCmAQCYAQCYAQCWAQB6APwBAMwBANgBAJQBAHQA1AEA3gEAbgDOAQCwBgB6AJQCAIwBAA
+    ;; sm:xAHiCwCWAQC6AQDGAQECBVgBXgKKAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEA0AgAlgEAugEAxgEAxgEAuAEA3AEBXyliAQApygYAugEAxgEAbgCaCQCaAQCaAQCaAQCaAQCUAQDgAQDeAQC2AQDcAQBmAQAp7AQAXgCwCQCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA3gEAbgC8AQC-AQC-AQCaCgCcAQBuAMIBAJwBAKYBAJgBALQBAN4BAJQBAIIBAJoCAIYGAHoA8gEAjAEAoAcAmgEAmgEAlgEAhAEAugEAwgEAbgC-AQDCAQCCAQCgCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlAEAdgDcAQDcAQBuANIBAKAHAJYBAJoBAJYBALoBAMgBAG4AvgEA7ggAlgEAugEAyAEAyAEAugEA9gEBASJkAQAi6AYAugEAyAEAbgC4CQCcAQCaAQCcAQCaAQCUAQDkAQD2AQC4AQD2AQBmAQAihAUAXgDICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCkCwCcAQBwAMIBAJwBAG4AwgEAnAEApgEAmAEAnAEAlAEAtAEA9gEAlAEAggEApAIAzgYAegCKAgCMAQCABgCYAQCaAQCUAQCCAQEoAYYBAQkGvAwAnAEAcADCAQCcAQCmAQCYAQCYAQCWAQB6APwBAMwBANgBAJQBAHQA1AEA3gEAbgDOAQCwBgB6AJQCAIwBAA
 
 
 ---
@@ -499,7 +499,7 @@ test 'diamond with two paths to same dep', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_7) (local.get $:v_65) (local.get $:v_67))
       )
       (func $./test.fnk::v_103 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test.fnk::v_125 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -679,7 +679,7 @@ test 'diamond with two paths to same dep', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_60) (local.get $:v_205) (local.get $:v_207))
       )
       (func $./test_link/diamond.fnk::v_285 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test_link/diamond.fnk::v_315 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -798,7 +798,7 @@ test 'diamond with two paths to same dep', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_35) (local.get $:v_217) (local.get $:v_219))
       )
       (func $./test_link/diamond.fnk::v_347 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test_link/diamond.fnk::v_373 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -913,7 +913,7 @@ test 'diamond with two paths to same dep', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_10) (local.get $:v_229) (local.get $:v_231))
       )
       (func $./test_link/diamond.fnk::v_405 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test_link/diamond.fnk::v_427 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1128,7 +1128,7 @@ test 'diamond with two paths to same dep', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_8) (local.get $:v_85) (local.get $:v_87))
       )
       (func $./test_link/sub/left.fnk::v_131 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test_link/sub/left.fnk::v_153 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1297,7 +1297,7 @@ test 'diamond with two paths to same dep', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_8) (local.get $:v_85) (local.get $:v_87))
       )
       (func $./test_link/sub/right.fnk::v_131 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $./test_link/sub/right.fnk::v_153 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1390,4 +1390,4 @@ test 'diamond with two paths to same dep', fn:
       (data $d_19 "base")
       (data $d_20 "right_val")
     )
-    ;; sm:6APkDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqYgEAKsoGALoBAMYBAG4AmgkAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEAZgEAKuwEAFgAsAkAlAEAugEAxgEAuAEA3gEAegDeAQB6AN4BAG4AvAEAvgEAvgEAmgoAnAEAbgDCAQCcAQCmAQCYAQC0AQDeAQCUAQCCAQCcAgCGBgB6APIBAIwBAK4JAJYBALoBAMYBAMoBANgBAJQBAHYA3AEA3gEAbgDSAQCuCACWAQC6AQDGAQDQAQC4AQD6AQGACRuACgCWAQC6AQDGAQDQAQDOAQGrAwRWAO4BAPoBAawDD9wHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBrQMiZAEAIuwGALoBAMgBAG4AwAkAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEAZgEAIowFAFgA9AoAlgEAugEAxgEA0AEAzgEAogIA-AEAegD4AQB6APoBAG4AvgEAwAEAvgEAjgsAlgEAugEAxgEAzgEBSwlgAJ4CAPoBAJQBAIIBAKICANwHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBASZkAQAm7AYAugEAyAEAbgDACQCcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQBmAQAmjAUAWACiCgCWAQC6AQDGAQDOAQDsAQD6AQB6APgBAHoA-gEAbgC-AQDAAQDAAQC6CgCWAQC6AQDGAQFHCF4A6AEA-gEAlAEAggEAoAIA3AcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQEBJGQBACTsBgC6AQDIAQBuAMAJAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAGYBACSMBQBYAM4JAJQBALoBAMYBALgBAPoBAHoA-AEAegD6AQBuALwBAMABAMABAKgLAJwBAHAAwgEAnAEAcADCAQCcAQBwAMIBAJ4BAG4AwgEAnAEApgEAmAEAnAEAlgEAtAEA-gEAlAEAggEAngIA1gYAegCMAgCMAQCuCwCeAQBwAMIBAJ4BAKYBAJgBAJoBAJgBAbkEBIgBANABANoBAJYBAHYA2AEA4AEAbgDQAQCqBgB6AJICAI4BAL4JAJYBALoBAMQBANIBAOYBAJYBAH4A6AEA7AEAbgDYAQDmCACWAQC6AQDGAQHuAQRWALgBAPgBAWIBiAEBDQjSBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAVUeZAEAHuwGALoBAMgBAG4AugkAmgEAmgEAnAEAmgEAlAEA4gEA-gEAuAEA-gEAZgEAHogFAFgAzAkAlAEAugEAxgEAuAEA-gEAegD6AQB6APoBAG4AvAEAvgEAvgEArgsAngEAcADCAQCeAQBwAMIBAJ4BAKYBAJgBAKIBAKQBALQBAPoBAJYBAIIBAKICANoGAHoAjgIAjgEAxgkAlgEAugEAxAEA1gEA7AEAlgEAgAEA7AEA8gEAbgDaAQDoCACWAQC6AQDGAQGMAwRWALgBAPoBAW4BiAEBDQjUBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPQIAJYBALoBAMgBAMgBALoBAPwBAWEjZAEAI-4GALoBAMgBAG4AvAkAmgEAmgEAnAEAmgEAlAEA4gEA_AEAuAEA_AEAZgEAI4oFAFgAzgkAlAEAugEAxgEAuAEA_AEAegD8AQB6APwBAG4AvAEAvgEAvgEAsgsAngEAcADCAQCeAQBwAMIBAJ4BAKYBAJgBAKQBAKoBALQBAPwBAJYBAIIBAKICAOAGAHoAkAIAjgEA
+    ;; sm:6APkDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqYgEAKsoGALoBAMYBAG4AmgkAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEAZgEAKuwEAF4AsAkAlAEAugEAxgEAuAEA3gEAegDeAQB6AN4BAG4AvAEAvgEAvgEAmgoAnAEAbgDCAQCcAQCmAQCYAQC0AQDeAQCUAQCCAQCcAgCGBgB6APIBAIwBAK4JAJYBALoBAMYBAMoBANgBAJQBAHYA3AEA3gEAbgDSAQCuCACWAQC6AQDGAQDQAQC4AQD6AQGACRuACgCWAQC6AQDGAQDQAQDOAQGrAwRWAO4BAPoBAawDD9wHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBrQMiZAEAIuwGALoBAMgBAG4AwAkAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEAZgEAIowFAF4A9AoAlgEAugEAxgEA0AEAzgEAogIA-AEAegD4AQB6APoBAG4AvgEAwAEAvgEAjgsAlgEAugEAxgEAzgEBSwlgAJ4CAPoBAJQBAIIBAKICANwHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBASZkAQAm7AYAugEAyAEAbgDACQCcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQBmAQAmjAUAXgCiCgCWAQC6AQDGAQDOAQDsAQD6AQB6APgBAHoA-gEAbgC-AQDAAQDAAQC6CgCWAQC6AQDGAQFHCF4A6AEA-gEAlAEAggEAoAIA3AcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQEBJGQBACTsBgC6AQDIAQBuAMAJAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAGYBACSMBQBeAM4JAJQBALoBAMYBALgBAPoBAHoA-AEAegD6AQBuALwBAMABAMABAKgLAJwBAHAAwgEAnAEAcADCAQCcAQBwAMIBAJ4BAG4AwgEAnAEApgEAmAEAnAEAlgEAtAEA-gEAlAEAggEAngIA1gYAegCMAgCMAQCuCwCeAQBwAMIBAJ4BAKYBAJgBAJoBAJgBAbkEBIgBANABANoBAJYBAHYA2AEA4AEAbgDQAQCqBgB6AJICAI4BAL4JAJYBALoBAMQBANIBAOYBAJYBAH4A6AEA7AEAbgDYAQDmCACWAQC6AQDGAQHuAQRWALgBAPgBAWIBiAEBDQjSBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAVUeZAEAHuwGALoBAMgBAG4AugkAmgEAmgEAnAEAmgEAlAEA4gEA-gEAuAEA-gEAZgEAHogFAF4AzAkAlAEAugEAxgEAuAEA-gEAegD6AQB6APoBAG4AvAEAvgEAvgEArgsAngEAcADCAQCeAQBwAMIBAJ4BAKYBAJgBAKIBAKQBALQBAPoBAJYBAIIBAKICANoGAHoAjgIAjgEAxgkAlgEAugEAxAEA1gEA7AEAlgEAgAEA7AEA8gEAbgDaAQDoCACWAQC6AQDGAQGMAwRWALgBAPoBAW4BiAEBDQjUBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPQIAJYBALoBAMgBAMgBALoBAPwBAWEjZAEAI-4GALoBAMgBAG4AvAkAmgEAmgEAnAEAmgEAlAEA4gEA_AEAuAEA_AEAZgEAI4oFAF4AzgkAlAEAugEAxgEAuAEA_AEAegD8AQB6APwBAG4AvAEAvgEAvgEAsgsAngEAcADCAQCeAQBwAMIBAJ4BAKYBAJgBAKQBAKoBALQBAPwBAJYBAIIBAKICAOAGAHoAkAIAjgEA

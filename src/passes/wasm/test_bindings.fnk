@@ -417,7 +417,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_9) (local.get $:v_87) (local.get $:v_89))
       )
       (func $test::v_133 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_155 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -494,6 +494,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:XrwIAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF5goAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAkgEAcgDUAQCwAQBuAM4BAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAyggAlgEAugEAyAEAyAEAugEA0gEBMw1kAQANxAYAugEAyAEAbgCUCQCcAQCaAQCcAQCaAQCUAQDkAQDSAQC4AQDSAQBmAQAN4AQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCgCwCcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAZgCYAQBoALQBANIBAQwHagECAWIBBgKIAQEFBfQFAHoA5gEAigEA
+    ;; sm:XrwIAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF5goAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAkgEAcgDUAQCwAQBuAM4BAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAyggAlgEAugEAyAEAyAEAugEA0gEBMw1kAQANxAYAugEAyAEAbgCUCQCcAQCaAQCcAQCaAQCUAQDkAQDSAQC4AQDSAQBmAQAN4AQAXgCkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCgCwCcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAZgCYAQBoALQBANIBAQwHagECAWIBBgKIAQEFBfQFAHoA5gEAigEA
 
 

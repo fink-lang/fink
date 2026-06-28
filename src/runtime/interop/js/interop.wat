@@ -555,7 +555,7 @@
 
   ;; -- Runtime-contract stubs (all `unreachable`) ------------------------
   ;;
-  ;; The runtime imports these by name from "interop.wat". Each must
+  ;; The runtime imports these by name from "rt/interop.wat". Each must
   ;; exist as an export with the right signature; bodies trap until JS
   ;; interop is actually implemented.
 

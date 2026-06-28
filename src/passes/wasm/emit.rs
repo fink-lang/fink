@@ -186,7 +186,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
     // imported by other WAT and by the compiler via `import_key`. The source
     // files live flat under `runtime/`; interop stays nested (target-selected).
     let modules: &[(&str, &str)] = &[
-      ("interop.wat",      interop_src),
+      ("rt/interop.wat",   interop_src),
       ("rt/apply.wat",     include_str!("../../runtime/apply.wat")),
       ("rt/trace.wat",     include_str!("../../runtime/trace.wat")),
       ("rt/opaque.wat",    include_str!("../../runtime/opaque.wat")),

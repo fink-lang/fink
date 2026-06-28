@@ -98,7 +98,7 @@ test 'set_ctx import + call', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_7) (local.get $:v_68) (local.get $:v_70))
       )
       (func $test::v_106 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_128 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -168,4 +168,4 @@ test 'set_ctx import + call', fn:
       (data $d_1 "test")
       (data $d_2 "set_ctx")
     )
-    ;; sm:TIQIAJYBALoBAMYBAQIHXAFSBZABAG4AwgEAxAEAggEA-gYAlgEAmgEAlgEAugEAxgEAbgC-AQDECACWAQC6AQDGAQDGAQC4AQDQAQFTIWIBACG-BgC6AQDGAQBuAI4JAJoBAJoBAJoBAJoBAJQBAOABANIBALYBANABAGYBACHgBABYAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BAO4LAJwBAG4AwgEAmgEApgEAmAEAtAEA0gEAbgB-AHQAlgIAbgDEAQCkBQB6AOYBAIoBAA
+    ;; sm:TIQIAJYBALoBAMYBAQIHXAFSBZABAG4AwgEAxAEAggEA-gYAlgEAmgEAlgEAugEAxgEAbgC-AQDECACWAQC6AQDGAQDGAQC4AQDQAQFTIWIBACG-BgC6AQDGAQBuAI4JAJoBAJoBAJoBAJoBAJQBAOABANIBALYBANABAGYBACHgBABeAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BAO4LAJwBAG4AwgEAmgEApgEAmAEAtAEA0gEAbgB-AHQAlgIAbgDEAQCkBQB6AOYBAIoBAA

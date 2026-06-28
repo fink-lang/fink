@@ -99,7 +99,7 @@ test 'set import + construction', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_7) (local.get $:v_70) (local.get $:v_72))
       )
       (func $test::v_108 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_130 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -165,7 +165,7 @@ test 'set import + construction', fn:
       (data $d_1 "test")
       (data $d_2 "set")
     )
-    ;; sm:TYwJAJYBALoBAMYBAQIDVAFAAYgBAQYBiAEBBgGIAQBuAMIBAMIBAMIBAMQBAIIBAPIGAJYBAJoBAJYBALoBAMYBAG4AvgEAxAgAlgEAugEAxgEAxgEAuAEA0AEBTRxiAQAcvgYAugEAxgEAbgCOCQCaAQCaAQCaAQCaAQCUAQDgAQDSAQC2AQDQAQBmAQAc4AQAWACkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQDOCwCcAQBuAMIBAJoBAKYBAJgBALQBANIBAJQBAIIBAIICAOIFAHoA5gEAigEA
+    ;; sm:TYwJAJYBALoBAMYBAQIDVAFAAYgBAQYBiAEBBgGIAQBuAMIBAMIBAMIBAMQBAIIBAPIGAJYBAJoBAJYBALoBAMYBAG4AvgEAxAgAlgEAugEAxgEAxgEAuAEA0AEBTRxiAQAcvgYAugEAxgEAbgCOCQCaAQCaAQCaAQCaAQCUAQDgAQDSAQC2AQDQAQBmAQAc4AQAXgCkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQDOCwCcAQBuAMIBAJoBAKYBAJgBALQBANIBAJQBAIIBAIICAOIFAHoA5gEAigEA
 
 
 test 'set spread', fn:
@@ -308,7 +308,7 @@ test 'set spread', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_7) (local.get $:v_98) (local.get $:v_100))
       )
       (func $test::v_166 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_188 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -374,7 +374,7 @@ test 'set spread', fn:
       (data $d_1 "test")
       (data $d_2 "set")
     )
-    ;; sm:YbgHAJYBALoBAMQBAMYBAG4AvAEAxAEAggEAwAgAlgEAugEAxAEAxgEA4gEA0gEBSAGIAQEAAfYIAJYBALoBAMQBAMYBAOIBANIBAQYBiAEBAAG6CQCWAQC6AQDGAQFLA1QA3gEA0gEBUgGIAQENCXIBDgG0BwCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBAVMcYgEAHMQGALoBAMgBAG4AkgkAmgEAmgEAmgEAmgEAlAEA4AEA0gEAtgEA1AEAZgEAHOIEAFgApAkAlAEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvAEAvgEAvgEA0AsAnAEAbgDCAQCaAQCmAQCYAQC0AQDUAQCUAQCCAQCCAgDkBQB6AOYBAIoBAA
+    ;; sm:YbgHAJYBALoBAMQBAMYBAG4AvAEAxAEAggEAwAgAlgEAugEAxAEAxgEA4gEA0gEBSAGIAQEAAfYIAJYBALoBAMQBAMYBAOIBANIBAQYBiAEBAAG6CQCWAQC6AQDGAQFLA1QA3gEA0gEBUgGIAQENCXIBDgG0BwCWAQCaAQCWAQC6AQDIAQBuAL4BAMoIAJYBALoBAMgBAMgBALoBANIBAVMcYgEAHMQGALoBAMgBAG4AkgkAmgEAmgEAmgEAmgEAlAEA4AEA0gEAtgEA1AEAZgEAHOIEAF4ApAkAlAEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvAEAvgEAvgEA0AsAnAEAbgDCAQCaAQCmAQCYAQC0AQDUAQCUAQCCAQCCAgDkBQB6AOYBAIoBAA
 
 
 test 'set destructure empty', fn:
@@ -541,7 +541,7 @@ test 'set destructure empty', fn:
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_287))
       )
       (func $test::v_262 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 1))
+        (call $rt/interop.wat:panic (i32.const 1))
         unreachable
       )
       (func $test::v_274 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -712,7 +712,7 @@ test 'set destructure empty', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_8) (local.get $:v_206) (local.get $:v_208))
       )
       (func $test::v_352 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_374 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -786,7 +786,7 @@ test 'set destructure empty', fn:
       (data $d_2 "s")
       (data $d_3 "set")
     )
-    ;; sm:xwGIBgCaAQFsAYgBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvoFALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAApQLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANIBAHoA0gEAbgC-AQDEAQC-AQDIBQCaAQEWAYgBAG4AwgEAxAcAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAPoPAJYBALoBAMYBAJwBAKIBAJIBAG4AzAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANQBAKgBAG4AygEAxAEArggAlgEAugEAxgEBdwNUALgBANQBAG4AwAEAhAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQEBHGQBABzGBgC6AQDIAQBuAJYJAJoBAJoBAJwBAJoBAJQBAOIBANQBALgBANQBAGYBABzkBABYAKgJAJQBALoBAMYBALgBANQBAHoA0gEAegDUAQBuALwBAMABAMABALoMAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgALQBANQBAJQBAIIBAIICAOQFAHoA5gEAigEA
+    ;; sm:xwGIBgCaAQFsAYgBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvoFALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAApQLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANIBAHoA0gEAbgC-AQDEAQC-AQDIBQCaAQEWAYgBAG4AwgEAxAcAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABeAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAPoPAJYBALoBAMYBAJwBAKIBAJIBAG4AzAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANQBAKgBAG4AygEAxAEArggAlgEAugEAxgEBdwNUALgBANQBAG4AwAEAhAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQEBHGQBABzGBgC6AQDIAQBuAJYJAJoBAJoBAJwBAJoBAJQBAOIBANQBALgBANQBAGYBABzkBABeAKgJAJQBALoBAMYBALgBANQBAHoA0gEAegDUAQBuALwBAMABAMABALoMAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgALQBANQBAJQBAIIBAIICAOQFAHoA5gEAigEA
 
 
 test 'set destructure non-empty', fn:
@@ -953,7 +953,7 @@ test 'set destructure non-empty', fn:
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_290))
       )
       (func $test::v_265 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 1))
+        (call $rt/interop.wat:panic (i32.const 1))
         unreachable
       )
       (func $test::v_277 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1133,7 +1133,7 @@ test 'set destructure non-empty', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_8) (local.get $:v_209) (local.get $:v_211))
       )
       (func $test::v_355 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_377 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1207,7 +1207,7 @@ test 'set destructure non-empty', fn:
       (data $d_2 "s")
       (data $d_3 "set")
     )
-    ;; sm:zQGIBgCaAQF4AYgBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvoFALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAApQLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANIBAHoA0gEAbgC-AQDEAQC-AQDIBQCaAQEWAYgBAG4AwgEAxAcAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAPoPAJYBALoBAMYBAJwBAKIBAJIBAG4AzAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANQBAKgBAG4AygEAxAEAhgoAlgEAugEAxgEBgwEDVAC4AQDUAQFIAYgBAQYBiAEBBgGIAQBuAMIBAMIBAMIBAMABAIQBAPYGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBVRxkAQAcxgYAugEAyAEAbgCWCQCaAQCaAQCcAQCaAQCUAQDiAQDUAQC4AQDUAQBmAQAc5AQAWACoCQCUAQC6AQDGAQC4AQDUAQB6ANIBAHoA1AEAbgC8AQDAAQDAAQC6DACcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAYAC0AQDUAQCUAQCCAQCCAgDkBQB6AOYBAIoBAA
+    ;; sm:zQGIBgCaAQF4AYgBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvoFALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAApQLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANIBAHoA0gEAbgC-AQDEAQC-AQDIBQCaAQEWAYgBAG4AwgEAxAcAnAEAmgEAnAEAmgEAlgEAugEAwgEAbgDEAQCABABeAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD0CACaAQCaAQCWAQC6AQDCAQDCAQCEAgDUAQBuAL4BAMABAMIBAPoPAJYBALoBAMYBAJwBAKIBAJIBAG4AzAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANQBAKgBAG4AygEAxAEAhgoAlgEAugEAxgEBgwEDVAC4AQDUAQFIAYgBAQYBiAEBBgGIAQBuAMIBAMIBAMIBAMABAIQBAPYGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBVRxkAQAcxgYAugEAyAEAbgCWCQCaAQCaAQCcAQCaAQCUAQDiAQDUAQC4AQDUAQBmAQAc5AQAXgCoCQCUAQC6AQDGAQC4AQDUAQB6ANIBAHoA1AEAbgC8AQDAAQDAAQC6DACcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAYAC0AQDUAQCUAQCCAQCCAgDkBQB6AOYBAIoBAA
 
 
 test 'set destructure peel one', fn:
@@ -1461,7 +1461,7 @@ test 'set destructure peel one', fn:
         (return_call $rt/apply.wat:apply_3 (local.get $:args) (local.get $:ctx_param) (local.get $:v_102))
       )
       (func $test::v_359 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 1))
+        (call $rt/interop.wat:panic (i32.const 1))
         unreachable
       )
       (func $test::v_371 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1641,7 +1641,7 @@ test 'set destructure peel one', fn:
         (return_call $rt/protocols.wat:guard_apply (local.get $:ctx_param) (local.get $:protocol) (local.get $:v_9) (local.get $:v_261) (local.get $:v_263))
       )
       (func $test::v_449 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
-        (call $interop.wat:panic (i32.const 0))
+        (call $rt/interop.wat:panic (i32.const 0))
         unreachable
       )
       (func $test::v_471 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1715,5 +1715,5 @@ test 'set destructure peel one', fn:
       (data $d_2 "s")
       (data $d_3 "set")
     )
-    ;; sm:-gGIBgCaAQF4AYgBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvoFALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAApQLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANIBAHoA0gEAbgC-AQDEAQC-AQDSBQCcAQCaAQCSAQEqA44BAQcH7gcAlgEAugEAwgEAyAEBDwFQAG4AvgEAxgEA-AYAlgEAmgEAlgEAugEAyAEAbgC-AQCECACWAQC6AQDIAQDIAQC6AQDUAQEBB6YGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAB5gLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANQBAHoA1AEAbgC-AQDEAQDAAQCABABYAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD4CACcAQCaAQCYAQC6AQDCAQDCAQCIAgDUAQBuAMABAMABAMQBAP4PAJYBALoBAMYBAJwBAKIBAJIBAG4AzAEAegDSAQCyAQDSAQB6ANQBALQBANQBANoBANQBAKgBAG4AygEAxAEAhgoAlgEAugEAxgEBfQNUALgBANQBAUgBiAEBBgGIAQEGAYgBAG4AwgEAwgEAwgEAwAEAhAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQFVHGQBABzGBgC6AQDIAQBuAJgJAJwBAJoBAJwBAJoBAJQBAOQBANQBALgBANQBAGYBABzkBABYAKgJAJQBALoBAMYBALgBANQBAHoA0gEAegDUAQBuALwBAMABAMABALoMAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgALQBANQBAJQBAIIBAIICAOQFAHoA5gEAigEA
+    ;; sm:-gGIBgCaAQF4AYgBAG4AwgEAuAYAugEAwgEAyAEAbgDGAQCyCACWAQC6AQDIAQDIAQCGAQB8ALINAJYBALoBAMgBAMgBAQcCVADoAQDUAQEAAvoFALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAApQLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANIBAHoA0gEAbgC-AQDEAQC-AQDSBQCcAQCaAQCSAQEqA44BAQcH7gcAlgEAugEAwgEAyAEBDwFQAG4AvgEAxgEA-AYAlgEAmgEAlgEAugEAyAEAbgC-AQCECACWAQC6AQDIAQDIAQC6AQDUAQEBB6YGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAB5gLAJwBAJoBAJwBAJoBAJYBALoBAMIBAOABANQBAHoA1AEAbgC-AQDEAQDAAQCABABeAIQHALoBAMIBAMYBAMIBAHoA1AEAbgDAAQDAAQDEAQD4CACcAQCaAQCYAQC6AQDCAQDCAQCIAgDUAQBuAMABAMABAMQBAP4PAJYBALoBAMYBAJwBAKIBAJIBAG4AzAEAegDSAQCyAQDSAQB6ANQBALQBANQBANoBANQBAKgBAG4AygEAxAEAhgoAlgEAugEAxgEBfQNUALgBANQBAUgBiAEBBgGIAQEGAYgBAG4AwgEAwgEAwgEAwAEAhAEA9gYAlgEAmgEAlgEAugEAyAEAbgC-AQDMCACWAQC6AQDIAQDIAQC6AQDUAQFVHGQBABzGBgC6AQDIAQBuAJgJAJwBAJoBAJwBAJoBAJQBAOQBANQBALgBANQBAGYBABzkBABeAKgJAJQBALoBAMYBALgBANQBAHoA0gEAegDUAQBuALwBAMABAMABALoMAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgALQBANQBAJQBAIIBAIICAOQFAHoA5gEAigEA
 
