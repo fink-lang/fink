@@ -94,7 +94,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -138,6 +138,16 @@
   ;; deltas. Impure -- exposed as a debug/perf primitive, not a pure
   ;; value.
   (import "env" "host_mono_ns" (func $host_mono_ns (result i64)))
+
+  ;; Compiler-as-host-service: the host runs a compiler pass over the
+  ;; source bytes and returns the rendered output bytes. Today the Rust
+  ;; host delegates to the in-process compiler (lexer/parser/...); a
+  ;; future self-hosted host backs the same contract differently. This
+  ;; is a step in strangling Rust out of the toolchain -- the fink-side
+  ;; primitive is host-agnostic.
+  (import "env" "host_tokenize" (func $host_tokenize
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
 
 
   ;; Host-callable entry point: fire a previously-yielded resume
@@ -293,6 +303,50 @@
   (func $io_read (@pub) (@impl "interop.fnk:io_read")
     (result (ref any))
     (global.get $io_read_closure))
+
+
+  ;; -- tokenize ----------------------------------------------------------
+  ;; User-level call: `tokenize src`. CPS args = [k_caller, src].
+  ;; Extracts the source ByteArray, hands it to the host's compiler-as-
+  ;; service, wraps the rendered bytes back as a $Str, tail-calls k_caller.
+  (elem declare func $tokenize_apply)
+
+  (func $tokenize_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_tokenize (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $tokenize_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $tokenize_apply)
+      (ref.null $Captures)))
+
+  (func $tokenize (@pub) (@impl "interop.fnk:tokenize")
+    (result (ref any))
+    (global.get $tokenize_closure))
 
 
   ;; -- monotonic clock -------------------------------------------------

@@ -876,6 +876,13 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
     NodeKind::Block { name, params, body, .. } => {
       walk_node(ast, name, scope, ctx);
       walk_node(ast, params, scope, ctx);
+      // A `ƒink:` block's body is opaque source text (lowered to a string
+      // literal of its verbatim source), not live code. Free names inside it
+      // are part of the quoted source, not references to resolve -- so don't
+      // walk the body, or they'd surface as bogus `unbound name` diagnostics.
+      if matches!(ast.nodes.get(name).kind, NodeKind::Ident("ƒink")) {
+        return;
+      }
       let body_items: Vec<AstId> = body.items.to_vec();
       walk_stmts(ast, &body_items, scope, ctx);
     }

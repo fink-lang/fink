@@ -3,6 +3,7 @@
 import './symbols.test.fnk'
 import './types.test.fnk'
 import './patterns.test.fnk'
+import './interop/interop.test.fnk'
 
 
 main = fn ..args:
