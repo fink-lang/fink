@@ -46,7 +46,7 @@ fn main() {
   // Subcommand keywords; anything else in the first positional slot is
   // treated as a file path with the implicit `run` command.
   const COMMANDS: &[&str] = &[
-    "tokens", "ast", "fmt", "fmt2", "cps", "marks",
+    "tokens", "ast", "fmt", "cps", "marks",
     "wat", "wasm", "compile", "run", "dap", "decode-sm",
   ];
 
@@ -77,13 +77,13 @@ fn main() {
     // source file; the rest become argv for the user's main.
     [path, ..] => ("run", *path),
     _ => {
-      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap|decode-sm>] [options] <file>");
+      eprintln!("usage: fink [<tokens|ast|fmt|cps|marks|wat|wasm|compile|run|dap|decode-sm>] [options] <file>");
       eprintln!("       fink <file> [args..]    (implicit `run`)");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted]               CPS transform (optionally closure-converted + hoisted)");
       eprintln!("  marks                        debugger step-stops (per-CpsId markers + source map)");
-      eprintln!("  ast/fmt/fmt2/cps [--source-map]  append embedded source map comment");
+      eprintln!("  ast/fmt/cps [--source-map]  append embedded source map comment");
       eprintln!("  wat                          emit WAT text from IR fragment to stdout");
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wasm [-O|-O1..4|-Os|-Oz]     run wasm-opt (default -O)");
@@ -140,18 +140,6 @@ fn main() {
         println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {
         println!("{}", fink::ast::fmt::fmt(&ast));
-      }
-    }
-
-    "fmt2" => {
-      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
-      let cfg = fink::fmt::FmtConfig::default();
-      let laid_out = fink::fmt::layout::layout(&ast, &cfg);
-      if source_map {
-        let (output, srcmap) = fink::fmt::print::print_mapped_native(&laid_out);
-        println!("{output}\n# sm:{}", srcmap.encode_base64url());
-      } else {
-        println!("{}", fink::fmt::print::print(&laid_out));
       }
     }
 
