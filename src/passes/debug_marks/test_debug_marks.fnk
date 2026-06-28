@@ -20,7 +20,7 @@ debug-marks pass tests
 # we can widen when we step through code and see something missing.
 
 {test, expect, equals, marks} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 test 'int literal — single return stop', fn:

@@ -16,7 +16,7 @@ isolation (without hoisting), see `test_convert.fnk`.
 ---
 
 {test, skip, equals, expect, cps_hoisted} = import 'fake!'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 {·ƒink_module,·import,·ƒpub, ·closure, ·if, ·panic
   ·op_plus, ·op_mul, ·op_eq, ·op_minus
   ·fn, ·letrec, ·let, ·set, ·letcaps

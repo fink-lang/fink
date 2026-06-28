@@ -1,6 +1,6 @@
 
 {test, expect, equals, ast} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 test 'multiline function', fn:
   expect ast ƒink:

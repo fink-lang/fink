@@ -1,5 +1,5 @@
 {test, equals, expect, cps_module} = import 'fake!'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 test 'match block bind', fn:
   expect cps_module ƒink:

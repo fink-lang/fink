@@ -1,5 +1,5 @@
 {skip, skip-ir, test, expect, equals, wat, wat} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 # WAT-snapshot tests for list construction with spread. The CPS layer

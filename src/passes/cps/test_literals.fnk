@@ -20,7 +20,7 @@ cps_c IR — pretty-printer tests
 #       <expected cps output>
 
 {test, expect, equals, cps_module} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 {·ƒink_module} = import '@fink/compile/builtins'
 
 ---
@@ -120,14 +120,14 @@ test 'string literal', fn:
 
 test 'fink block lowers to source string', fn:
   expect cps_module ƒink:
-    {ƒink} = import '@fink/parse/blocks.fnk'
+    {ƒink} = import 'fink/blocks.fnk'
     ƒink:
       foo
         1 + 2
 
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_45, ·ƒret_2:
-      ·import ·ƒctx_45, '@fink/parse/blocks.fnk', fn ·ƒctx_48, ·ƒv_5:
+      ·import ·ƒctx_45, 'fink/blocks.fnk', fn ·ƒctx_48, ·ƒv_5:
         ·fn
           fn ·ƒctx_49, ·ƒv_10:
             ·let ·ƒv_10, fn ·ƒink_0:
@@ -144,5 +144,5 @@ test 'fink block lowers to source string', fn:
                 ·fn
                   fn ·ƒctx_59: ·panic ·ƒctx_59
                   fn ·ƒv_36: ·ƒv_25 ·ƒctx_48, ·ƒv_33, ·ƒv_36, ·ƒv_5
-    # sm:dQABAEAAAQBAJAEAQBgBVBYSAAIABgE_HwABAB8SABQABAEOGAABABgCAQAYLAEAGAIACgAYAQ0fDgACAAoBEykAAQApCAAUABgBACkQAAIAEgECBQABAAUMAQEpEAAKAQIFEgACABYBUhYAAQAWFAAUAAQBABYAAQAWAgEAFhoBABYCABQBUykQAAIAEgEAKQABACkIABwAGAAYABgBACkOAAIAGgEAKQABACkcABQABAEAKRwABAEAKQ4AAgAkABgBACkQAAIAIgEAKQABACkUABQABAEAKRAABAEAKRIABAEAKRQACgAYAQApFAEAKRAAAgAmAQApAAEAKRYAFAAEAQApEAAkABQABAEAKQABACkWABQAHAEAKRAAAgAaAQApAAEAKQgAJAAUAAQBACkAAQApEAAUACQBACkQAAQBACkAAQApEgAUAAQBACkQAAQBACkQAAQBFB8
+    # sm:dQABADkAAQA5JAEAORgBRhYSAAIABgExGAABABgSABQABAEOEQABABECAQARHgEAEQIACgAYAQ0YDgACAAoBEyIAAQAiCAAUABgBACIQAAIAEgECBQABAAUMAQEiEAAKAQIFEgACABYBRBYAAQAWFAAUAAQBABYAAQAWAgEAFhoBABYCABQBRSIQAAIAEgEAIgABACIIABwAGAAYABgBACIOAAIAGgEAIgABACIcABQABAEAIhwABAEAIg4AAgAkABgBACIQAAIAIgEAIgABACIUABQABAEAIhAABAEAIhIABAEAIhQACgAYAQAiFAEAIhAAAgAmAQAiAAEAIhYAFAAEAQAiEAAkABQABAEAIgABACIWABQAHAEAIhAAAgAaAQAiAAEAIggAJAAUAAQBACIAAQAiEAAUACQBACIQAAQBACIAAQAiEgAUAAQBACIQAAQBACIQAAQBFBg
 

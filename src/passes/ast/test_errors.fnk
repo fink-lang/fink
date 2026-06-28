@@ -9,7 +9,7 @@ went wrong, in plain language.
 ---
 
 {test, expect, equals, ast} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 test 'parse error: unclosed paren', fn:

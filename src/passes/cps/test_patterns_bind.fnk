@@ -28,7 +28,7 @@ CPS pattern lowering tests
 # Wildcard (_): discard; no binding, temp passed directly to next primitive
 
 {test, equals, expect, cps_module} = import 'fake!'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 ---

@@ -1,6 +1,6 @@
 
 {test, expect, equals, fmt} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 ---
 AST → Fink pretty-printer tests

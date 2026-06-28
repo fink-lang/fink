@@ -1,5 +1,5 @@
 {test, expect, equals, cps_module} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 ---
 application — ·apply synthesis

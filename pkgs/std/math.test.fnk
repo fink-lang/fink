@@ -1,5 +1,5 @@
 {test, skip, expect, equals, run} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 # TODO open follow-ups for std/math:

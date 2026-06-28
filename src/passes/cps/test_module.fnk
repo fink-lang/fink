@@ -14,7 +14,7 @@ module-level CPS — lower_module produces flat chain + export terminal
 #       <expected cps output>
 
 {test, expect, equals, cps_module} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 {·ƒink_module, ·import, ·fn,·let, ·export, ·op_plus, ·op_mul, ·is_rec_like, ·rec_pop,
  ·ƒsucc_11, ·ƒfail_12, ·panic, ·ƒpub, i8, ·seq_pop, ·is_seq_like, ·seq_prepend, ·empty, ·if,
  ·rec_put

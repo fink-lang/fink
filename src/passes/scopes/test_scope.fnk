@@ -35,7 +35,7 @@ scope analysis tests
 
 
 {test, skip, expect, equals, scope} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 ---

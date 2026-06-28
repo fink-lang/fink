@@ -26,7 +26,7 @@ Test format mirrors test_letrec.fnk — bless to populate the
 ---
 
 {test, expect, equals, cps_closures} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 ---

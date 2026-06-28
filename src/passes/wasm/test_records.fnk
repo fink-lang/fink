@@ -1,5 +1,5 @@
 {test, expect, equals, wat, wat} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 test 'rec literal', fn:

@@ -1,5 +1,5 @@
 {test, expect, ast, equals} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 ---
 parentheses

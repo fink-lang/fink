@@ -1,10 +1,12 @@
 {test, equals} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 {tokenize} = import 'rt/interop.wat'
 
 
 test 'tokenize exposes the lexer as a host service', fn:
   equals
-    tokenize 'foo'
+    tokenize ƒink:
+      foo
     ":
       BlockStart loc [0, 1, 0], [0, 1, 0]
       Ident 'foo', loc [0, 1, 0], [3, 1, 3]

@@ -14,7 +14,7 @@ are routed through Diagnostic.
 ---
 
 {test, skip, expect, equals, run} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 

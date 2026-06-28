@@ -1,6 +1,6 @@
 
 {test, expect, equals, ast} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 test 'block with no args and expression body', fn:

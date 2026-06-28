@@ -24,7 +24,7 @@ Test format mirrors test_module.fnk.
 ---
 
 {test, skip, expect, equals, cps_module} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 ---

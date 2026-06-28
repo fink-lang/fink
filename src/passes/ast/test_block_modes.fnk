@@ -1,10 +1,10 @@
 {test, expect, equals, ast} = import '!fake'
-{ƒink} = import '@fink/parse/blocks.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 test 'ƒink block with no args', fn:
   expect ast ƒink:
-    {ƒink} = import '@fink/parse/blocks.fnk'
+    {ƒink} = import 'fink/blocks.fnk'
     ƒink: 'hello'
   | equals ƒink:
     Module
@@ -13,7 +13,7 @@ test 'ƒink block with no args', fn:
           Ident 'ƒink'
         Apply
           Ident 'import'
-          LitStr '@fink/parse/blocks.fnk'
+          LitStr 'fink/blocks.fnk'
       Block ':',
         Ident 'ƒink'
         Patterns
@@ -21,7 +21,7 @@ test 'ƒink block with no args', fn:
 
 test 'registered block as protocol-impl binding lhs', fn:
   expect ast ƒink:
-    {ƒink} = import '@fink/parse/blocks.fnk'
+    {ƒink} = import 'fink/blocks.fnk'
     ƒink foo = fn a, b:
       a + b
   | equals ƒink:
@@ -31,7 +31,7 @@ test 'registered block as protocol-impl binding lhs', fn:
           Ident 'ƒink'
         Apply
           Ident 'import'
-          LitStr '@fink/parse/blocks.fnk'
+          LitStr 'fink/blocks.fnk'
       Bind '=',
         Apply
           Ident 'ƒink'
@@ -47,7 +47,7 @@ test 'registered block as protocol-impl binding lhs', fn:
 
 test 'ƒink block with params and body', fn:
   expect ast ƒink:
-    {ƒink} = import '@fink/parse/blocks.fnk'
+    {ƒink} = import 'fink/blocks.fnk'
     ƒink a, b:
       x = a + b
       x * 2
@@ -58,7 +58,7 @@ test 'ƒink block with params and body', fn:
           Ident 'ƒink'
         Apply
           Ident 'import'
-          LitStr '@fink/parse/blocks.fnk'
+          LitStr 'fink/blocks.fnk'
       Block ':',
         Ident 'ƒink'
         Patterns
@@ -76,7 +76,7 @@ test 'ƒink block with params and body', fn:
 
 test 'ƒtok block with no args', fn:
   expect ast ƒink:
-    {ƒtok} = import '@fink/parse/blocks.fnk'
+    {ƒtok} = import 'fink/blocks.fnk'
     ƒtok: a + b
   | equals ƒink:
     Module
@@ -85,7 +85,7 @@ test 'ƒtok block with no args', fn:
           Ident 'ƒtok'
         Apply
           Ident 'import'
-          LitStr '@fink/parse/blocks.fnk'
+          LitStr 'fink/blocks.fnk'
       Block ':',
         Ident 'ƒtok'
         Patterns
@@ -96,7 +96,7 @@ test 'ƒtok block with no args', fn:
 
 test 'ƒtok block with params and body', fn:
   expect ast ƒink:
-    {ƒtok} = import '@fink/parse/blocks.fnk'
+    {ƒtok} = import 'fink/blocks.fnk'
     ƒtok a, b:
       x = a + b
       x * 2
@@ -107,7 +107,7 @@ test 'ƒtok block with params and body', fn:
           Ident 'ƒtok'
         Apply
           Ident 'import'
-          LitStr '@fink/parse/blocks.fnk'
+          LitStr 'fink/blocks.fnk'
       Block ':',
         Ident 'ƒtok'
         Patterns

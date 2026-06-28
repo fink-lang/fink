@@ -132,7 +132,7 @@ impl<'src> Parser<'src> {
     };
 
     // Only register blocks from the known block-definitions module.
-    if url != "@fink/parse/blocks.fnk" { return; }
+    if url != "fink/blocks.fnk" { return; }
 
     for name in names {
       let mode = match name {
