@@ -47,7 +47,7 @@ mod tests {
   fn cps_closures(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared);
+        let cps = crate::passes::lower(&desugared, src);
         let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
         let lifted = super::cont_lift(threaded);
         let result = super::convert(lifted);
@@ -60,7 +60,6 @@ mod tests {
           bind_kinds: Some(&bk),
         };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
-        let _ = src;
         let b64 = srcmap.encode_base64url();
         format!("{output}\n# sm:{b64}")
       }
@@ -72,7 +71,7 @@ mod tests {
   fn cps_hoisted(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared);
+        let cps = crate::passes::lower(&desugared, src);
         let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
         let lifted = super::cont_lift(threaded);
         let converted = super::convert(lifted);
@@ -86,7 +85,6 @@ mod tests {
           bind_kinds: Some(&bk),
         };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
-        let _ = src;
         let b64 = srcmap.encode_base64url();
         format!("{output}\n# sm:{b64}")
       }

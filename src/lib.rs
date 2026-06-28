@@ -108,7 +108,7 @@ pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::D
   if let Some(diag) = first_unresolved_diagnostic(&desugared, url) {
     return Err(diag);
   }
-  let cps = passes::lower(&desugared);
+  let cps = passes::lower(&desugared, src);
   Ok((cps, desugared))
 }
 

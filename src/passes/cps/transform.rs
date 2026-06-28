@@ -51,10 +51,13 @@ pub struct Gen<'scope, 'src> {
   /// The current continuation — the `·ƒ_cont` in scope for the current function body.
   /// Set to the module-level cont at transform start; swapped per LetFn scope.
   cont: CpsId,
+  /// The original module source. Needed to recover the verbatim body text of
+  /// `ƒink:` blocks (lowered to a string literal of their source slice).
+  src: &'src str,
 }
 
 impl<'scope, 'src> Gen<'scope, 'src> {
-  pub fn new(ast: &'scope Ast<'src>, scope: &'scope ScopeResult) -> Self {
+  pub fn new(ast: &'scope Ast<'src>, scope: &'scope ScopeResult, src: &'src str) -> Self {
     let n = scope.binds.len();
     let mut origin: PropGraph<CpsId, Option<AstId>> = PropGraph::with_size(n, None);
     let mut bind_to_cps: PropGraph<BindId, CpsId> = PropGraph::new();
@@ -85,7 +88,7 @@ impl<'scope, 'src> Gen<'scope, 'src> {
       _ => ast.root,
     };
     let cont_id: CpsId = origin.push(Some(ret_origin));
-    Gen { ast, origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, binds: &scope.binds, cont: cont_id }
+    Gen { ast, origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, binds: &scope.binds, cont: cont_id, src }
   }
 
   /// Look up a node in the AST.
@@ -338,7 +341,15 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     }
 
     // ---- block: `name params: body` ----
-    NodeKind::Block { name, params, body, .. } => {
+    NodeKind::Block { name, params, body, sep } => {
+      // A `ƒink:` block lowers to a string literal of its verbatim source
+      // text (dedented + trimmed) — the parsed body subtree is kept for
+      // scope/tooling but ignored here. This is the native equivalent of the
+      // `include_fink_tests!` macro's `extract_block_body_text`.
+      if matches!(g.node(name).kind, NodeKind::Ident("ƒink")) {
+        let text = fink_block_text(g.src, sep, g.node(id).loc.end.idx);
+        return (lit_val(g, Lit::Str(text.into_bytes()), o), vec![]);
+      }
       let body_items: Vec<AstId> = body.items.to_vec();
       lower_block(g, name, params, &body_items, o)
     }
@@ -1822,6 +1833,35 @@ fn lower_match_arm(g: &mut Gen, arm: AstId, _origin: Option<AstId>) -> ArmCps {
 // Block: `name params: body`
 // ---------------------------------------------------------------------------
 
+/// Recover the verbatim source text of a `ƒink:` block: the slice from the
+/// separator's end to the block node's end, dedented and trimmed.
+///
+/// Mirrors `extract_block_body_text` + `dedent_str` in the `include_fink_tests!`
+/// macro so a `ƒink:` block lowered natively produces byte-identical text to one
+/// extracted by the macro.
+fn fink_block_text(src: &str, sep: crate::ast::lexer::Token, node_end: u32) -> String {
+  let body_start = sep.loc.end.idx as usize;
+  let body_end = node_end as usize;
+  if body_start >= body_end {
+    return String::new();
+  }
+  dedent_str(&src[body_start..body_end]).trim().to_string()
+}
+
+/// Strip the common leading-whitespace prefix from every non-blank line.
+fn dedent_str(s: &str) -> String {
+  let indent = s
+    .lines()
+    .filter(|l| !l.trim().is_empty())
+    .map(|l| l.len() - l.trim_start().len())
+    .min()
+    .unwrap_or(0);
+  s.lines()
+    .map(|l| if l.len() >= indent { &l[indent..] } else { l })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
 fn lower_block(
   g: &mut Gen,
   name: AstId,
@@ -2431,8 +2471,8 @@ fn walk_bind_lhs(
   }
 }
 
-pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeResult) -> CpsResult {
-  let mut g = Gen::new(ast, scope);
+pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeResult, src: &'src str) -> CpsResult {
+  let mut g = Gen::new(ast, scope, src);
 
   // The module-level continuation — ƒret. Pre-allocated by Gen::new.
   // The module body forwards its last expression's result to ƒret,
@@ -2752,8 +2792,8 @@ fn rewrite_lets_to_sets_cont(
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
-pub fn lower_expr<'src>(ast: &'src Ast<'src>, id: AstId, scope: &ScopeResult) -> CpsResult {
-  let mut g = Gen::new(ast, scope);
+pub fn lower_expr<'src>(ast: &'src Ast<'src>, id: AstId, scope: &ScopeResult, src: &'src str) -> CpsResult {
+  let mut g = Gen::new(ast, scope, src);
   let (val, pending) = lower(&mut g, id);
   let cont = g.cont;
   let root = if pending.is_empty() {
@@ -4052,12 +4092,11 @@ mod module_tests {
   fn cps_module(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared);
+        let cps = crate::passes::lower(&desugared, src);
         let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
         let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
-        let _ = src;
         let b64 = srcmap.encode_base64url();
         format!("{output}\n# sm:{b64}")
       }

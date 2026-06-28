@@ -138,7 +138,7 @@ fn main() {
 
     "cps" => {
       let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
-      let cps = fink::passes::lower(&desugared);
+      let cps = fink::passes::lower(&desugared, &src);
 
       let result = if lifted {
         fink::passes::lift(cps, &desugared).result

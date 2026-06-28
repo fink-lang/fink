@@ -76,13 +76,14 @@ pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::trans
 /// Lower desugared AST to CPS IR.
 pub fn lower<'src>(
   desugared: &'src DesugaredAst<'src>,
+  src: &'src str,
 ) -> Cps {
   let root_node = desugared.ast.nodes.get(desugared.ast.root);
   let exprs: Vec<ast::AstId> = match &root_node.kind {
     ast::NodeKind::Module { exprs, .. } => exprs.items.to_vec(),
     _ => panic!("lower: expected Module root"),
   };
-  let result = cps::transform::lower_module(&desugared.ast, &exprs, &desugared.scope);
+  let result = cps::transform::lower_module(&desugared.ast, &exprs, &desugared.scope, src);
   Cps { result }
 }
 
