@@ -756,6 +756,37 @@ mod tests {
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
+          "host_fmt" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Parse, render the AST pretty-printer output.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_fmt: source not UTF-8: {e}")))?;
+              let out = crate::passes::ast::fmt::fmt_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_fmt byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
           "host_panic" => {
             linker.func_new("env", &name, ft, move |_c, params, _r| {
               let reason_code = params[0].unwrap_i32();
