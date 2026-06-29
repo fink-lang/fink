@@ -1187,6 +1187,22 @@ fn wrap_decl_in_params_fn(
   (ref_val(g, rk, ri, origin), pending)
 }
 
+// Mint a bare unit `$Type` value: a single `·new_type` seed carrying `name`
+// (null when anonymous), with no fields accreted. This is what the unit form
+// `type _` lowers to, and what an inferred type position (`_`) reuses.
+fn mint_unit_type(g: &mut Gen, name: Option<&str>, origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let name_val = type_name_val(g, name, origin);
+  let pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewType),
+    args: args_val(vec![name_val]),
+    result: seed,
+    origin,
+  }];
+  (ref_val(g, sk, si, origin), pending)
+}
+
 // Lower an expression in TYPE position (a field type, a positional type, a
 // result type). Most type expressions are ordinary values -- a type reference
 // (`u8`, `Foo`) resolves in scope to its `$Type` value, so `lower` suffices. The
@@ -1203,6 +1219,15 @@ fn lower_type_expr(g: &mut Gen, id: AstId) -> Lower {
 // (the bind LHS when `Foo = type: fn ...: R` declares the fn type directly).
 // For a non-`fn` type expression the name is irrelevant and ignored.
 fn lower_type_expr_named(g: &mut Gen, id: AstId, name: Option<&str>) -> Lower {
+  // `_` in type position means "inferred" -- the field/positional exists, its
+  // type is left to inference. Lower it to a bare anonymous `$Type` (a unit
+  // type, the same value `type _` mints) so it is a real type value rather than
+  // the wildcard scope-ref placeholder. No checker reads it yet, so this is the
+  // accepted-any-shape slot; a dedicated `$Inferred` sentinel can replace this
+  // when inference lands.
+  if matches!(g.node(id).kind, NodeKind::Wildcard) {
+    return mint_unit_type(g, None, Some(id));
+  }
   let NodeKind::Fn { params, body, .. } = g.node(id).kind.clone() else {
     return lower(g, id);
   };

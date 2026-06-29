@@ -553,6 +553,53 @@ test 'typed tuple destructure spread', fn:
 
 
 
+--- `_` in field type position means "inferred" -- the field exists, its type
+    is left to inference. It constructs, projects, guards, and destructures like
+    any typed field (no checker enforces the type today, so `_` behaves like an
+    accepted any-shaped slot). ---
+test 'inferred field constructs and projects', fn:
+  Foo = type:
+    bar: _
+
+  foo = Foo {bar: 1}
+
+  equals foo.bar, 1
+
+
+test 'inferred field guards', fn:
+  Foo = type:
+    bar: _
+
+  Foo foo = Foo {bar: 7}
+
+  equals
+    foo
+    Foo {bar: 7}
+
+
+test 'inferred field destructures', fn:
+  Foo = type:
+    bar: _
+    spam: u8
+
+  {bar, spam} = Foo {bar: 'x', spam: 2}
+
+  equals
+    [bar, spam]
+    ['x', 2]
+
+
+--- `_` in positional (tuple) type position is equally inferred. ---
+test 'inferred positional constructs and projects', fn:
+  Foo = type: _, u8
+
+  foo = Foo 'x', 2
+
+  equals
+    [foo.(0), foo.(1)]
+    ['x', 2]
+
+
 --- TODO rendering a bare type VALUE (not an instance) is unbuilt -- repr_val /
     fmt_val have no $Type arm yet. These pin the fn-type repr for when type-value
     rendering lands. ---
