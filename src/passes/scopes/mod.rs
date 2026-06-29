@@ -958,6 +958,23 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
 // Formatter — produces nested scope output for tests
 // ---------------------------------------------------------------------------
 
+/// Render the scope-analysis output for a source string. Backs the
+/// `scope` host service (`fink/compile.fnk`) and the native scope test
+/// files. Parses with the `test_block` AST-mode trigger (mirroring
+/// `ast_debug` / `desugar_debug`), desugars, runs scope analysis, and
+/// renders the nested scope tree via `format_result`.
+pub fn scope_debug(src: &str) -> String {
+  use crate::ast::parser::{parse_with_blocks, BlockMode};
+  let ast = match parse_with_blocks(src, "test.fnk", &[("test_block", BlockMode::Ast)]) {
+    Ok(ast) => ast,
+    Err(e) => return format!("PARSE ERROR: {}", e.message),
+  };
+  match crate::passes::ast_desugar::apply(ast) {
+    Ok(desugared) => format_result(&analyse(&desugared, &[])),
+    Err(e) => format!("ERROR: {}", e.message),
+  }
+}
+
 pub fn format_result(result: &ScopeResult) -> String {
   let mut out = String::new();
   if !result.scopes.is_empty() {
@@ -1034,21 +1051,3 @@ fn write_indent(out: &mut String, level: usize) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Test function — called by test macro for `expect scope`
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  fn scope(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => format_result(&desugared.scope),
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/scopes/test_scope.fnk");
-  test_macros::include_fink_tests!("src/passes/scopes/test_scope_types.fnk");
-}

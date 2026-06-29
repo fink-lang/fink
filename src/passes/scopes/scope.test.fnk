@@ -34,8 +34,13 @@ scope analysis tests
 #       ref 'add', 'B0', depth 1
 
 
-{test, skip, expect, equals, scope} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{scope} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -43,7 +48,7 @@ basic bindings
 ---
 
 test 'single binding', fn:
-  expect scope ƒink:
+  scope ƒink:
     x = 1
   | equals ƒink:
     scope 7, 'module',
@@ -51,7 +56,7 @@ test 'single binding', fn:
 
 
 test 'nested bind in rhs is sequential', fn:
-  expect scope ƒink:
+  scope ƒink:
     foo = spam = 1
   | equals ƒink:
     scope 9, 'module',
@@ -60,7 +65,7 @@ test 'nested bind in rhs is sequential', fn:
 
 
 test 'guard pattern bind', fn:
-  expect scope ƒink:
+  scope ƒink:
     a > 0 = foo
   | equals ƒink:
     scope 5, 'module',
@@ -70,7 +75,7 @@ test 'guard pattern bind', fn:
 
 
 test 'fn params in scope', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn a, b:
       a + b
   | equals ƒink:
@@ -85,7 +90,7 @@ test 'fn params in scope', fn:
 
 
 test 'partial application', fn:
-  expect scope ƒink:
+  scope ƒink:
     foo = 2 + ?
   | equals ƒink:
     scope 17, 'module',
@@ -97,7 +102,7 @@ test 'partial application', fn:
 
 
 test 'multiple partials — same param', fn:
-  expect scope ƒink:
+  scope ƒink:
     foo = ? + ?
   | equals ƒink:
     scope 18, 'module',
@@ -110,7 +115,7 @@ test 'multiple partials — same param', fn:
 
 
 test 'wildcard _ does not bind', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn _: 42
   | equals ƒink:
     scope 10, 'module',
@@ -120,7 +125,7 @@ test 'wildcard _ does not bind', fn:
 
 
 test 'wildcard in destructure', fn:
-  expect scope ƒink:
+  scope ƒink:
     [_, b] = [1, 2]
     b
   | equals ƒink:
@@ -130,7 +135,7 @@ test 'wildcard in destructure', fn:
 
 
 test 'wildcard in match arm', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn x:
       match x:
         _: 42
@@ -146,7 +151,7 @@ test 'wildcard in match arm', fn:
 
 
 test 'sequential bindings in fn body', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn:
       x = 1
       y = x + 1
@@ -163,7 +168,7 @@ test 'sequential bindings in fn body', fn:
 
 
 test 'self-recursion', fn:
-  expect scope ƒink:
+  scope ƒink:
     fib = fn n:
       fib n - 1
   | equals ƒink:
@@ -177,7 +182,7 @@ test 'self-recursion', fn:
 
 
 test 'nested fn — closure depth', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn a:
       fn b:
         a + b
@@ -199,7 +204,7 @@ unresolved
 ---
 
 test 'unresolved ref', fn:
-  expect scope ƒink:
+  scope ƒink:
     ni = spam
     spam = ni
     bar = spam
@@ -227,7 +232,7 @@ module level — mutual recursion
 ---
 
 test 'two fns — main refs add', fn:
-  expect scope ƒink:
+  scope ƒink:
     add = fn a, b:
       a + b
 
@@ -250,7 +255,7 @@ test 'two fns — main refs add', fn:
 
 
 test 'mutual recursion — is-even refs is-odd', fn:
-  expect scope ƒink:
+  scope ƒink:
     is-even = fn n:
       match n:
         0: true
@@ -288,7 +293,7 @@ test 'mutual recursion — is-even refs is-odd', fn:
 
 
 test 'match with binding in arm', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn x:
       match x:
         0: 42
@@ -309,7 +314,7 @@ test 'match with binding in arm', fn:
 
 
 test 'pipe — refs to fns', fn:
-  expect scope ƒink:
+  scope ƒink:
     double = fn x: x * 2
     inc = fn x: x + 1
     main = fn: 5 | double | inc
@@ -337,7 +342,7 @@ shadowing
 ---
 
 test 'inner binding shadows outer', fn:
-  expect scope ƒink:
+  scope ƒink:
     add = fn a, b:
       a + b
 
@@ -381,7 +386,7 @@ destructuring
 ---
 
 test 'seq destructure', fn:
-  expect scope ƒink:
+  scope ƒink:
     [a, b] = [1, 2]
     a + b
   | equals ƒink:
@@ -393,7 +398,7 @@ test 'seq destructure', fn:
 
 
 test 'nested seq destructure', fn:
-  expect scope ƒink:
+  scope ƒink:
     [a, [b, c]] = [1, [2, 3]]
     a + b + c
   | equals ƒink:
@@ -407,7 +412,7 @@ test 'nested seq destructure', fn:
 
 
 test 'record destructure', fn:
-  expect scope ƒink:
+  scope ƒink:
     {x, y} = {x: 1, y: 2}
     x + y
   | equals ƒink:
@@ -419,7 +424,7 @@ test 'record destructure', fn:
 
 
 test 'fn with destructured params', fn:
-  expect scope ƒink:
+  scope ƒink:
     f = fn [a, b]: a + b
   | equals ƒink:
     scope 14, 'module',
@@ -433,7 +438,7 @@ test 'fn with destructured params', fn:
 
 
 test 'spread in seq destructure', fn:
-  expect scope ƒink:
+  scope ƒink:
     [a, ..rest] = [1, 2, 3]
     a + rest
   | equals ƒink:
@@ -445,7 +450,7 @@ test 'spread in seq destructure', fn:
 
 
 test 'bind-right destructure in seq pattern', fn:
-  expect scope ƒink:
+  scope ƒink:
     [foo |= [bar, spam]] = [[1, 2]]
     foo + bar + spam
   | equals ƒink:
@@ -459,7 +464,7 @@ test 'bind-right destructure in seq pattern', fn:
 
 # TODO
 test 'bind-right at statement top', fn:
-  expect scope ƒink:
+  scope ƒink:
     foo arg1
       arg2
     |= result
@@ -474,7 +479,7 @@ test 'bind-right at statement top', fn:
 
 
 test 'record destructure with field rename', fn:
-  expect scope ƒink:
+  scope ƒink:
     {x, y: z} = point
   | equals ƒink:
     scope 7, 'module',
@@ -484,7 +489,7 @@ test 'record destructure with field rename', fn:
 
 
 test 'predicate guard in seq pattern', fn:
-  expect scope ƒink:
+  scope ƒink:
     [a, is_even b] = foo
   | equals ƒink:
     scope 7, 'module',
@@ -495,7 +500,7 @@ test 'predicate guard in seq pattern', fn:
 
 
 test 'str templ pattern', fn:
-  expect scope ƒink:
+  scope ƒink:
     'foo${bar}spam' = val
     bar
   | equals ƒink:
@@ -504,7 +509,7 @@ test 'str templ pattern', fn:
       ref 'bar', 2
 
 test 'str templ pattern capture all', fn:
-  expect scope ƒink:
+  scope ƒink:
     '${x}' = val
     x
   | equals ƒink:
@@ -513,7 +518,7 @@ test 'str templ pattern capture all', fn:
       ref 'x', 0
 
 test 'str templ pattern in match', fn:
-  expect scope ƒink:
+  scope ƒink:
     match val:
       'foo${x}bar': x
       _: 0
@@ -533,7 +538,7 @@ member access
 ---
 
 test 'member dynamic key resolves rhs binding', fn:
-  expect scope ƒink:
+  scope ƒink:
     r = {a: 42}
     k = 'a'
     r.(k)
@@ -550,11 +555,10 @@ prelude
 ---
 
 test 'import resolves to prelude', fn:
-  expect scope ƒink:
+  scope ƒink:
     {foo} = import './bar.fnk'
   | equals ƒink:
     scope 8, 'module',
       bind 0, 'foo'
       ref 'import', builtin 0
-
 

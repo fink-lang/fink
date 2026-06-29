@@ -1,10 +1,15 @@
-{test, skip, expect, equals, scope} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{scope} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 # union members are references to existing types (unresolved here in isolation).
 test 'union members are references', fn:
-  expect scope ƒink:
+  scope ƒink:
     Int = union:
       SignedInt
       UnsignedInt
@@ -20,7 +25,7 @@ test 'union members are references', fn:
 # record field names are declarations, not references; only the field type
 # resolves (unresolved here in isolation).
 test 'record field names are not references', fn:
-  expect scope ƒink:
+  scope ƒink:
     Foo = type:
       shrub: u8
   | equals ƒink:
@@ -36,7 +41,7 @@ test 'record field names are not references', fn:
 # constructor name like a record field name: not bound, not resolved. Only the
 # generic param binds and the payload type resolves against it.
 test 'enum member names are not lexical binds', fn:
-  expect scope ƒink:
+  scope ƒink:
     Option = enum T:
       Some T
       None
