@@ -4106,6 +4106,27 @@ fn unwrap_modifier_lhs(ast: &Ast<'_>, id: AstId) -> AstId {
   id
 }
 
+/// Render the module-level CPS IR (with a base64url source-map line) for a
+/// source string. Backs the `cps_module` host service (`fink/compile.fnk`)
+/// and the native cps_module test files. Mirrors the `module_tests::cps_module`
+/// renderer: desugar, lower, thread ctx, then `fmt_with_mapped_native` plus the
+/// `# sm:<b64>` source-map line.
+pub fn cps_module_debug(src: &str) -> String {
+  use crate::passes::cps::fmt::Ctx;
+  match crate::to_desugared(src, "test") {
+    Ok(desugared) => {
+      let cps = crate::passes::lower(&desugared, src);
+      let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+      let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
+      let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
+      let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
+      let b64 = srcmap.encode_base64url();
+      format!("{output}\n# sm:{b64}")
+    }
+    Err(e) => format!("ERROR: {e}"),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -4129,7 +4150,6 @@ mod module_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/cps/test_module.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_letrec.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");

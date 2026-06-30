@@ -8,22 +8,23 @@ module-level CPS — lower_module produces flat chain + export terminal
 #
 # Test format:
 #   test 'name', fn:
-#     expect cps_module ƒink:
+#     cps_module ƒink:
 #       <fink source>
 #     | equals ƒink:
 #       <expected cps output>
 
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{·ƒink_module, ·import, ·fn,·let, ·export, ·op_plus, ·op_mul, ·is_rec_like, ·rec_pop,
- ·ƒsucc_11, ·ƒfail_12, ·panic, ·ƒpub, i8, ·seq_pop, ·is_seq_like, ·seq_prepend, ·empty, ·if,
- ·rec_put
-} = import '@fink/compile/builtins'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 
 test 'single module expr', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -36,7 +37,7 @@ single binding
 ---
 
 test 'single binding export', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
@@ -48,7 +49,7 @@ test 'single binding export', fn:
 
 
 test 'single binding export with trailing expr', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
     42
   | equals ƒink:
@@ -65,7 +66,7 @@ multiple bindings
 ---
 
 test 'two bindings export', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
     bar = 2
   | equals ƒink:
@@ -80,7 +81,7 @@ test 'two bindings export', fn:
 
 
 test 'two fns export', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     add = fn a, b:
       a + b
 
@@ -108,7 +109,7 @@ imports excluded from exports
 ---
 
 test 'import not in exports', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {foo} = import './bar.fnk'
     main = fn:
       foo 1
@@ -145,7 +146,7 @@ pattern bindings excluded from exports
 ---
 
 test 'destructure not in exports', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, b] = [1, 2]
     foo = fn: a
   | equals ƒink:
@@ -190,7 +191,7 @@ standalone top-level destructures — no trailing binding
 # Mirrors the 4 failing repros in lifting/test_lifting.fnk.
 
 test 'standalone top-level seq destructure with literal rhs', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, b] = [1, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_64, ·ƒret_2:
@@ -222,7 +223,7 @@ test 'standalone top-level seq destructure with literal rhs', fn:
 
 
 test 'standalone top-level rec destructure with literal rhs', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {x} = {x: 1}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_44, ·ƒret_1:
@@ -248,7 +249,7 @@ test 'standalone top-level rec destructure with literal rhs', fn:
 
 
 test 'standalone top-level destructure with call rhs', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, b] = some_call x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_59, ·ƒret_2:
@@ -282,7 +283,7 @@ test 'standalone top-level destructure with call rhs', fn:
 
 
 test 'standalone top-level destructure with import rhs', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {foo} = import './bar.fnk'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_43, ·ƒret_2:
@@ -315,7 +316,7 @@ trailing `·s_1, 3, 1, 2` are args from the two call sites leaking in.
 ---
 
 test 'export args do not leak call args', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     add = fn a, b:
       a + b
 

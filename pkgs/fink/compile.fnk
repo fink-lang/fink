@@ -1,4 +1,4 @@
-{tokenize: rt_tokenize, ast: rt_ast, desugar: rt_desugar, scope: rt_scope, fmt: rt_fmt} = import 'rt/interop.wat'
+{tokenize: rt_tokenize, ast: rt_ast, desugar: rt_desugar, scope: rt_scope, fmt: rt_fmt, cps_module: rt_cps_module} = import 'rt/interop.wat'
 
 
 tokenize = rt_tokenize
@@ -6,3 +6,4 @@ ast = rt_ast
 desugar = rt_desugar
 scope = rt_scope
 fmt = rt_fmt
+cps_module = rt_cps_module
