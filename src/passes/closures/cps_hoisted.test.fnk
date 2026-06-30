@@ -15,21 +15,19 @@ For the curated happy-path showing the convert pass output in
 isolation (without hoisting), see `test_convert.fnk`.
 ---
 
-{test, skip, equals, expect, cps_hoisted} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{·ƒink_module,·import,·ƒpub, ·closure, ·if, ·panic
-  ·op_plus, ·op_mul, ·op_eq, ·op_minus
-  ·fn, ·letrec, ·let, ·set, ·letcaps
-  ·empty, ·is_seq_like, ·is_rec_like
-  ·seq_pop, ·seq_prepend
-  ·rec_put, ·rec_pop, i8, i16
-} = import '@fink/compile/builtins'
+{cps_hoisted} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 
 
 test 'single module expr', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -38,7 +36,7 @@ test 'single module expr', fn:
 
 
 test 'single binding export', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn: 123
   | equals ƒink:
     ·fn
@@ -53,7 +51,7 @@ test 'single binding export', fn:
     # sm:PgABDAcAAQAHCAAMABoAGAEIAxIABAEAAwABAAMUABQABgEAAwABAAMGAQADCAAMAQcHEAACAAoBCw0AAQANJAEADRgBAA0SAAIADgEADQABAA0YAQADDgACABIBDAcAAQAHFAEABxAABAEABwABAAcCAQAHAgAKAQAHDgACABYBCw0AAQANDAEAAw4ABAEMBw4ACAACABoBCwMAAQADEAAUAAQBAAMOAAoAFAACAB4BAAMAAQADFAAUAAQBAAM
 
 test 'single binding export with trailing expr', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn: 123
     42
   | equals ƒink:
@@ -71,7 +69,7 @@ test 'single binding export with trailing expr', fn:
 
 
 test 'two fn exports', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn: 123
     bar = fn: 345
   | equals ƒink:
@@ -93,7 +91,7 @@ test 'two fn exports', fn:
     # sm:bQABDAcAAQAHCAAMABoAGAEIAxIABAEAAwABAAMUABQABgEAAwABAAMGAQADCAAMAQcHEAACAAoBHAcAAQAHCAAUABoAGAEIAxQABAEAAwABAAMWABQABgEAAwABAAMIAQADCAAUAQcHEAACABIBJxsAAQAbJAEAGxgBHA0SAAIAFgEbGwABABsYAQADEgEcAw4AAgAaAQ8HAAEABxQBAAcQAAQBAAcAAQAHAgEABwIACgEABw4AAgAeAQsNAAEADQwBAAMOAAQBDAcOAAgAAgAiAQsDAAEAAxAAFAAEAQADDgAKABQAAgAmASgHAAEABxQBAAcQAAQBAAcAAQAHAgEABwIACgEABw4AAgAqAQsNAAEADQwBAAMOAAQBDAcOAAgAAgAuAQsDAAEAAxAAFAAEAQADDgAKABQAAgAyAQADAAEAAxQAFAAEAQAD
 
 test 'fooobar — multi fn with calls', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     add = fn a, b:
       a + b
 
@@ -143,7 +141,7 @@ pure functions — no captures, unchanged
 ---
 
 test 'pure fn is unchanged', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     f = fn x: x
 
   | equals ƒink:
@@ -160,7 +158,7 @@ test 'pure fn is unchanged', fn:
 
 
 test 'pure nested fn — no captures, hoisted to module scope', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn a:
       fn b: b
 
@@ -187,7 +185,7 @@ continuation lifting — inline Cont::Expr bodies become named fns
 ---
 
 test 'fn call result bound at module level', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     add = fn a, b: a + b
     x = add 1, 2
   | equals ƒink:
@@ -212,7 +210,7 @@ test 'fn call result bound at module level', fn:
 
 
 test 'chained ops at module level', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     2 * 3 + 4
   | equals ƒink:
     ·fn
@@ -227,7 +225,7 @@ test 'chained ops at module level', fn:
 
 
 test 'chained arithmetic — cont body lifted', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     x = 2 * 3
     x + 4
   | equals ƒink:
@@ -250,7 +248,7 @@ depth-1 closures — single level of capture
 ---
 
 test 'captured binding becomes leading param', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn a:
       fn b:
         a + b
@@ -276,7 +274,7 @@ test 'captured binding becomes leading param', fn:
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     f = fn x:
       x
     g = fn a:
@@ -313,7 +311,7 @@ depth-2 closures — multiple nesting levels
 ---
 
 test 'depth-2 closure', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn a:
       fn b:
         fn c:
@@ -352,7 +350,7 @@ test 'depth-2 closure', fn:
 
 
 test 'multiple captures at depth-2', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn a:
       fn b:
         fn c:
@@ -385,7 +383,7 @@ test 'multiple captures at depth-2', fn:
 
 
 test 'multi-fn module — add and main', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     add = fn a, b:
       a + b
 
@@ -418,7 +416,7 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
   # result), so ·v_28 must be baked into the cont beforehand.
   # The ·closure could be eliminated by threading ·v_28 as an extra param
   # through ·double_0 — see the "closure elimination" note in lifting/mod.rs.
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     double = fn x:
       x * 2
     inc = fn x:
@@ -467,7 +465,7 @@ pattern matching
 ---
 
 test 'seq destructure', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     spam = fn foo:
       [a] = foo
       a + 1
@@ -530,7 +528,7 @@ test 'seq destructure', fn:
 
 
 test 'record destructure', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     ham = fn foo:
       {x} = foo
       x + 1
@@ -585,7 +583,7 @@ test 'record destructure', fn:
 
 
 test 'match — no forward refs after lift', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn n:
       match n:
         0: 42
@@ -644,7 +642,7 @@ test 'match — no forward refs after lift', fn:
 
 
 test 'match with binding', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     foo = fn n:
       r = match n:
         0: n + 1
@@ -714,7 +712,7 @@ test 'match with binding', fn:
 
 
 test 'match arm refs top-level binding', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     x = 5
     match x:
       0: 0
@@ -787,7 +785,7 @@ test 'match arm refs top-level binding', fn:
 
 
 test 'recursive fn in match', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     fib = fn n:
       r = match n:
         0: 1
@@ -881,7 +879,7 @@ test 'recursive fn in match', fn:
 
 
 test 'mutual recursion — ping pong', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     ping = fn x: pong x
     pong = fn x: ping x
   | equals ƒink:
@@ -908,7 +906,7 @@ test 'mutual recursion — ping pong', fn:
 
 
 test 'mutual recursion — is_even / is_odd', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     is_even = fn n:
       match n:
         0: true
@@ -1067,7 +1065,7 @@ test 'mutual recursion — is_even / is_odd', fn:
 
 
 test 'str eq', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     'hello' == 'hello'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -1076,7 +1074,7 @@ test 'str eq', fn:
 
 
 test 'str literal', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     'hello'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -1084,7 +1082,7 @@ test 'str literal', fn:
     # sm:DgABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABAEABwABAAcCAQAHCgEABw
 
 test 'match — seq literal guard', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     match [1, 42]:
       [1, val, ..]: val
       _: 0
@@ -1198,7 +1196,7 @@ test 'match — seq literal guard', fn:
     # sm:7AYAASIRAAEAEQgADAAcABoAGAEIAw4ABAEUAwABAAMWABYABAEAAw4ADAEbERIAAgAKAQIBAAEAAQgAFAAcABYAAgASAQABAAEAARQBAAEYAAoBAAEAAQABAgEBDBIABAEAERIABAAYAAABAgECAAIAFgEGAwABAAMMAQcMEgAKAQgDDgACABoBBxEAAQARFAAWAAQBABEYAAQBAAwSABQBAgESAAIAEgAAAAgAHAAcABoBAAEQAAIAGgAAABQAGAAKAAAAAgAYAAQAGAAAAAIAAgAeAQABAAEAAQoBAAEQAAIAJgAEAQABAAEAARoAFgAmAAQBAAEAAQABGgAWABwAEgACABoBAAEAAQABCAAkABwAGgAaABoBAAEQAAIAIgAAABQAEgAEAAAAAgAAABgABAAWAAQAAAAYAAQAFgAAAAIACgASAAIAJgEAAQABAAEQABYABAEAARAABgEAAQABAAEGAQABBAAEABIAJAEAARIAAgAiAQEMAAEADAgALAAcABoBAAwUAQAMEAACACoBAAwAAQAMFAEADBgACgEADAABAAwCAQAREgAEABgABAAYAAABAAwCAAIALgECAQABAAEUAQABEgAEAQABAAEAAQIBAQwAAQAMEgAEAQAMEAAEAQARAAEAERIABAEAERIABAAAABgABAAYAAABAgECAAoBAAEQAAIAMgEAAQABAAEUAQABEgAEAQABAAEAAQIBAAECAAoBAAEQAAIANgEAAQABAAESABYABAEAARAABAEAARgABAEBDBAALAEADBIAAgAqAAAACAA0ABwAGgEADBQBAAwQAAIAMgAAABQAGAAKAAAAAgAYAAQBAAwSAAAAAgACADYBAAwAAQAMGgAWAAQBAAwSAAQBAAwQADQAEgACADIAAAAIADwAHAAaAQAMFAEADBAAAgA6AAAAFAAYAAoAAAACABgABAAYAAAAAgACAD4AAAAUABIABAAAAAIAAAAYAAQAGAAEAQAMAAEADBIABAEADBAAAAACAAoAEgACAEIBAAwAAQAMFAAWAAQBAAwQAAQBAAwYAAQAEgA8ABIAAgA6AAAACABEABwAGgEADBAAAgBCAAAAFAAYAAoAAAACABgABAAYAAAAAgACAEYAAAAUABIABAAAAAIAAAAYAAQAGAAEAAAAGAAEABgAAAACAAoAEgACAEoBAAwAAQAMFAAWAAQBAAwQAAQBAAwYAAQAEgBEABIAAgBCAAAACABMABwAFgACAEoAAAAUABgACgAAAAIAGAAAAAIAAgBOAQAMAAEADBoAFgBMABIAAgBKAQAMAAEADAgAVAAcABoAGgAaAQAMEAACAFIAAAAUABIABAAAAAIAAAAYAAQAFgAEAAAAGAAEABYAAAACAAoAEgACAFYAAAAUABIABAAAAAIAAAAYAAQAFgAAAAIACgASAAIAWgEADAABAAwcABYABAEADCAABAEADBAABAASAAQAEgBUAQAMEgACAFIBABEAAQARCABcABwAGgAaABoADgACAFoBABEAAQARFAEAERgACgEAEQABABECAQAREgAAAQARAgACAF4BAAwAAQAMFAEADBIABAEADAABAAwCAQARAAEAERIABAEAERIABAAAABgABAAWAAQAAAAYAAQAFgAAAQAMAgAKAQAMEAACAGIBAAwAAQAMFAEADBIABAEADAABAAwCAQAMAgAKAQAMEAACAGYBAAwAAQAMEgAWAAQBAAwQAAQBAAwWAAQBAAwOAFwBABESAAIAWgEoBAABAAQIAGQAHAAaABQABAEGAQABAAEWABYABgEAAQABAAEGAQABBABkAQUEEgACAGIBAAQAAQAECABsABwAGgAaABoAEAACAGoBAAQAAQAEFAEABBgACgEABAABAAQCAQAEEgAAAQAEAgACAG4BAAQAAQAEFAAWAAQBAAQWAGwBAAQSAAIAagAAAAgAdAAcABYABAFJKQABACkQABYAdAASAAIAcgAAAAgAfAAcABYAAgB6AAAAFAAYAAoAAAACAUoEEgAEABYABAFJKRIAAAACAAIAfgAAABQAEgAEAAAAAgACAAoAEgACAIIBAQApAAEAKRQAFgAEAQApFgAEABIABAEAKRIAfAASAAIAegEAKQABACkIAIQBABwAGgAYAQApEAACAIIBAQApAAEAKRQBACkYAAoBACkAAQApAgFKBBIABAEnERIAAAEhKQIAAgCGAQAAABQAEgAEAAAAAgFKBAABAAQSAAQBAAQSAAQAAAAWAAQAFAAEAUkpAAEAKRIABAEAKRAAAAACAAoAEgACAIoBAQApAAEAKRQAFgAEAQApFAAEABIABAEAKRAAhAEBACkSAAIAggEAAAAIAIwBABwAGgEOAQ4AAgCKAQAAABQAGAAKAAAAAgENKRYAAAACAAIAjgEBIhEAAQARFAEAERIABAEAEQABABECAQARAgAKAQAREAACAJIBAQARAAEAERQBABESAAQBABEAAQARAgEAEQABABESAAQBABEQAAABABECAAoBABEQAAIAlgEBKAQAAQAEFAEABBIABAEABAABAAQCAQAEAgAKAQAEEAACAJoBAQAEAAEABBQBAAQSAAQBAAQAAQAEAgEABAABAAQSAAQBAAQQAAABAAQCAAoBAAQQAAIAngEBSSkAAQApFAEAKRIABAEAKQABACkCAUoEAAEABBIABAEABBAABAEnEQABABESAAQBABEQAAABISkCAAoBACkSAAIAogEBACkAAQApFAAWAAQBACkWAAQBDgEOAIwBABIAAgCKAQAAAAgAlAEAHAAaAQYCDgACAJIBAAAAFAAYAAoAAAACARMpFgAAAAIAAgCWAQAAABQAEgAEAAAAAgEAKQABACkWAAQBACkWAAAAAgAKABIAAgCaAQEOAQABAAEcABYABgEAAQABAAEGAQABBAAEAQYCDgAEABIAlAEAEgACAJIBARMpAAEAKSQBACkaAQApEgACAJYBAAAAFAASAAQAAAACAQApAAEAKRYABAEAKRIAAAACAAoAEgACAJoBARQCAAEAAhwAFgAGAQACAAEAAgYBAAIGAAQBBwcAAQAHAgEABwIABAA
 
 test 'match — rec literal guard', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     match {kind: 1, val: 42}:
       {kind: 1, val}: val
       _: 0
@@ -1313,7 +1311,7 @@ test 'match — rec literal guard', fn:
 
 
 test 'top-level seq destructure with literal rhs — lift non-convergence', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     [a, b] = [1, 2]
 
   | equals ƒink:
@@ -1385,7 +1383,7 @@ test 'top-level seq destructure with literal rhs — lift non-convergence', fn:
 
 
 test 'top-level rec destructure with literal rhs — lift non-convergence', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     {x} = {x: 1}
 
   | equals ƒink:
@@ -1436,7 +1434,7 @@ test 'top-level rec destructure with literal rhs — lift non-convergence', fn:
 
 
 test 'top-level destructure with call rhs — lift non-convergence', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     [a, b] = some_call x
 
   | equals ƒink:
@@ -1502,7 +1500,7 @@ test 'top-level destructure with call rhs — lift non-convergence', fn:
 
 
 test 'top-level destructure with import rhs — lift non-convergence', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     {foo} = import './bar.fnk'
 
   | equals ƒink:
@@ -1563,7 +1561,7 @@ extraction, regardless of whether the val aliases a hoisted fn.
 ---
 
 test 'multiple top-level fns with bound call results', fn:
-  expect cps_hoisted ƒink:
+  cps_hoisted ƒink:
     add = fn a, b:
       a + b
 
@@ -1607,6 +1605,3 @@ test 'multiple top-level fns with bound call results', fn:
                               ·closure ·ƒv_115, {·ƒslot_104: ·s_1, ·ƒslot_105: ·mul_2, ·ƒslot_106: ·p_3, ·ƒret_107: ·ƒret_8}, fn ·ƒv_85:
                                 ·add_0 ·ƒctx_68, ·ƒv_85, (i8 1), (i8 2)
     # sm:mwIAAQwQAAEAEAgADAAcABgBFgUYAQ8BDgEGAQoABAEKBQABAAUUABQABAEAAQoABAEIAQoABAEHBRQADAEVEBIAAgAKAUwQAAEAEAgAFAAaABgBFgUYAQ8BDgEGAQoABAEKBQABAAUSABQABAEAAQoABAEIAQoABAEHBRQAFAEVEBIAAgASAAAACAAcABoAGAEsCBAAAgAaAAAAFAAWAAoAAAACAQcBFgAEAQAMFAAAAAIAAgAeAQAMAAEADAwBAAEWAAQBCAgQAAgAAgAiAQcBAAEAARAAFAAEAQABCgAKABQAAgAmAQABAAEAARYAFAAEAQABFgAcABAAAgAaAAAACAAkABwAGAFDCBAAAgAiAAAAFAAYAAoAAAACAQcBGAAEARwDGAAEATABGAAEAQAMFgAAAAIAAgAmAUsMAAEADAwBAAEYAAQBCAgQAAgAAgAqAQcBAAEAARAAFAAEAQABCgAKABQAAgAuASgQAAEAEBQBABASAAQBABAAAQAQAgEAEAIACgEAEBAAAgAyAQsWAAEAFgwBAAMYAAQBDBAQAAgAAgA2AQsDAAEAAxAAFAAEAQADDgAKABQAAgA6AAAAFAAQAAQAAAACATABAAEAARYABAEAARgABAEADAABAAwUAAQBAAwWAAAAAgAKABAAAgA-AQgIAAEAAxoAFAAEABAABAEIARgABgEGAQABAAEGAQABBAAkABIAAgAiAZEBSgABAEokAQBKGAF8DBIAAgAmAXtKAAEAShgBAAMSATABDgEcAxIBMAEKAAIAKgFvEAABABAUAQAQEgAEAQAQAAEAEAIBABACAAoBABAOAAIALgELFgABABYMAQADDgAEAQwQDgAIAAIAMgELAwABAAMQABQABAEAAw4ACgAUAAIANgAAABQAEgAEAAAAAgEwAQABAAEYAAQBAAEKAAQBHAMAAQADGAAEAQADDgAEATABAAEAARgABAEAAQoABAEADAABAAwWAAQBAAwSAAAAAgAKABAAAgA6AUMIAAEAAxAAFAAEABAABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAE
-AEAAxoAFAAEABAABAEIARgABgEGAQABAAEGAQABBAAkABIAAgAiAZEBSgABAEokAQBKGAF8DBIAAgAmAXtKAAEAShgBAAMSATABDgEcAxIBMAEKAAIAKgFvEAABABAUAQAQEgAEAQAQAAEAEAIBABACAAoBABAOAAIALgELFgABABYMAQADDgAEAQwQDgAIAAIAMgELAwABAAMQABQABAEAAw4ACgAUAAIANgAAABQAEgAEAAAAAgEwAQABAAEYAAQBAAEKAAQBHAMAAQADGAAEAQADDgAEATABAAEAARgABAEAAQoABAEADAABAAwWAAQBAAwSAAAAAgAKABAAAgA6AUMIAAEAAxAAFAAEABAABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAE
-AGAQYBAAEAAQYBAAE
-AEAAxoAFAAEABAABAEIARgABgEGAQABAAEGAQABBAAkABIAAgAiAZEBSgABAEokAQBKGAF8DBIAAgAmAXtKAAEAShgBAAMSATABDgEcAxIBMAEKAAIAKgFvEAABABAUAQAQEgAEAQAQAAEAEAIBABACAAoBABAOAAIALgELFgABABYMAQADDgAEAQwQDgAIAAIAMgELAwABAAMQABQABAEAAw4ACgAUAAIANgAAABQAEgAEAAAAAgEwAQABAAEYAAQBAAEKAAQBHAMAAQADGAAEAQADDgAEATABAAEAARgABAEAAQoABAEADAABAAwWAAQBAAwSAAAAAgAKABAAAgA6AUMIAAEAAxAAFAAEABAABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAE

@@ -240,17 +240,3 @@ test 'try — result bound, code continues', fn:
                 ·op_plus ·ƒctx_23, ·ni_0, (i8 1), ·ƒret_1
           ·∅bar
     # sm:LwABABcAAQAXJAEAFxgBIgYSAAIABgEhFwABABcYAQACDAACAAoBEgcAAQADHgAoABgBAAcOAAIAEgEREAABABAMAQACDAAEARIHDgAIAAIAFgERAgABAAIQABQABAEAAgwACgAUAAIAGgEiBgABAAYUABQABAEAAgwABgEKAQABAAEGAQABBAAEAQkGIAEHAw
-
-
-
-
-
-
-
-
-
-
-
-
-
-

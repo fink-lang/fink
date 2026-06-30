@@ -94,7 +94,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply $cps_closures_apply $cps_hoisted_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -177,6 +177,18 @@
   ;; Compiler-as-host-service: lower the source to module-level CPS IR and
   ;; render it (with a # sm: source-map line). Same contract shape.
   (import "env" "host_cps_module" (func $host_cps_module
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: lower + closure-convert the source and render
+  ;; the converted CPS IR (with a # sm: line). Same contract shape.
+  (import "env" "host_cps_closures" (func $host_cps_closures
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: lower + convert + hoist the source and render
+  ;; the post-hoist CPS IR (with a # sm: line). Same contract shape.
+  (import "env" "host_cps_hoisted" (func $host_cps_hoisted
     (param $src (ref $ByteArray))
     (result (ref $ByteArray))))
 
@@ -593,6 +605,90 @@
   (func $cps_module (@pub) (@impl "interop.fnk:cps_module")
     (result (ref any))
     (global.get $cps_module_closure))
+
+
+  ;; -- cps_closures ------------------------------------------------------
+  ;; User-level call: `cps_closures src`. Same shape as cps_module.
+  (elem declare func $cps_closures_apply)
+
+  (func $cps_closures_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_cps_closures (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $cps_closures_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $cps_closures_apply)
+      (ref.null $Captures)))
+
+  (func $cps_closures (@pub) (@impl "interop.fnk:cps_closures")
+    (result (ref any))
+    (global.get $cps_closures_closure))
+
+
+  ;; -- cps_hoisted -------------------------------------------------------
+  ;; User-level call: `cps_hoisted src`. Same shape as cps_module.
+  (elem declare func $cps_hoisted_apply)
+
+  (func $cps_hoisted_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_cps_hoisted (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $cps_hoisted_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $cps_hoisted_apply)
+      (ref.null $Captures)))
+
+  (func $cps_hoisted (@pub) (@impl "interop.fnk:cps_hoisted")
+    (result (ref any))
+    (global.get $cps_hoisted_closure))
 
 
   ;; -- monotonic clock -------------------------------------------------

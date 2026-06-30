@@ -35,63 +35,46 @@ pub use cont_lift::cont_lift;
 pub use convert::convert;
 pub use hoist::hoist;
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
+/// Render the closure-converted CPS IR (CPS -> thread_ctx -> cont_lift ->
+/// convert) with a base64url source-map line. Backs the `cps_closures` host
+/// service (`fink/compile.fnk`) and the native cps_closures test file.
+pub fn cps_closures_debug(src: &str) -> String {
   use crate::passes::cps::fmt::Ctx;
-
-  /// Run CPS → thread_ctx → convert. Renders the convert-only shape.
-  fn cps_closures(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared, src);
-        let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
-        let lifted = super::cont_lift(threaded);
-        let result = super::convert(lifted);
-        let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
-        let ctx = Ctx {
-          origin: &result.origin,
-          ast: &desugared.ast,
-          captures: None,
-          param_info: None,
-          bind_kinds: Some(&bk),
-        };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
-        let b64 = srcmap.encode_base64url();
-        format!("{output}\n# sm:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
+  match crate::to_desugared(src, "test") {
+    Ok(desugared) => {
+      let cps = crate::passes::lower(&desugared, src);
+      let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+      let lifted = cont_lift(threaded);
+      let result = convert(lifted);
+      let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
+      let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
+      let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
+      let b64 = srcmap.encode_base64url();
+      format!("{output}\n# sm:{b64}")
     }
+    Err(e) => format!("ERROR: {e}"),
   }
-
-  /// Run CPS → thread_ctx → convert → hoist. Renders the post-hoist shape.
-  fn cps_hoisted(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared, src);
-        let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
-        let lifted = super::cont_lift(threaded);
-        let converted = super::convert(lifted);
-        let result = super::hoist(converted);
-        let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
-        let ctx = Ctx {
-          origin: &result.origin,
-          ast: &desugared.ast,
-          captures: None,
-          param_info: None,
-          bind_kinds: Some(&bk),
-        };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
-        let b64 = srcmap.encode_base64url();
-        format!("{output}\n# sm:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/closures/test_convert.fnk");
-  test_macros::include_fink_tests!("src/passes/closures/test_hoist.fnk");
 }
+
+/// Render the post-hoist CPS IR (CPS -> thread_ctx -> cont_lift -> convert ->
+/// hoist) with a base64url source-map line. Backs the `cps_hoisted` host
+/// service (`fink/compile.fnk`) and the native cps_hoisted test file.
+pub fn cps_hoisted_debug(src: &str) -> String {
+  use crate::passes::cps::fmt::Ctx;
+  match crate::to_desugared(src, "test") {
+    Ok(desugared) => {
+      let cps = crate::passes::lower(&desugared, src);
+      let threaded = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+      let lifted = cont_lift(threaded);
+      let converted = convert(lifted);
+      let result = hoist(converted);
+      let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
+      let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
+      let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
+      let b64 = srcmap.encode_base64url();
+      format!("{output}\n# sm:{b64}")
+    }
+    Err(e) => format!("ERROR: {e}"),
+  }
+}
+
