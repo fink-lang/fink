@@ -94,7 +94,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply $cps_closures_apply $cps_hoisted_apply $wat_apply $marks_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply $cps_closures_apply $cps_hoisted_apply $wat_apply $marks_apply $wat_pkg_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -201,6 +201,14 @@
   ;; Compiler-as-host-service: run the debug-marks analysis and render it
   ;; (with a # sm: line). Same contract shape.
   (import "env" "host_marks" (func $host_marks
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: multi-module WAT for an entry snippet rooted at
+  ;; a base dir (so its relative imports resolve on disk). Takes TWO byte
+  ;; arrays -- base dir, then entry source -- and returns rendered WAT bytes.
+  (import "env" "host_wat_pkg" (func $host_wat_pkg
+    (param $base (ref $ByteArray))
     (param $src (ref $ByteArray))
     (result (ref $ByteArray))))
 
@@ -785,6 +793,55 @@
   (func $marks (@pub) (@impl "interop.fnk:marks")
     (result (ref any))
     (global.get $marks_closure))
+
+
+  ;; -- wat_pkg -----------------------------------------------------------
+  ;; User-level call: `wat_pkg base, src`. CPS args = [k_caller, base, src].
+  ;; Two byte-array inputs -> rendered WAT bytes.
+  (elem declare func $wat_pkg_apply)
+
+  (func $wat_pkg_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $base (ref null any))
+    (local $src (ref null any))
+    (local $base_bytes (ref $ByteArray))
+    (local $src_bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $base (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $base_bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $base))))
+    (local.set $src_bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $src_bytes (call $host_wat_pkg (local.get $base_bytes) (local.get $src_bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $src_bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $wat_pkg_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $wat_pkg_apply)
+      (ref.null $Captures)))
+
+  (func $wat_pkg (@pub) (@impl "interop.fnk:wat_pkg")
+    (result (ref any))
+    (global.get $wat_pkg_closure))
 
 
   ;; -- monotonic clock -------------------------------------------------

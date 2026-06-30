@@ -209,6 +209,43 @@ fn wat_debug_inner(src: &str) -> String {
   format!("{}\n;; sm:{b64}", wat.trim())
 }
 
+/// Render the multi-module WAT (with a `;; sm:` line) for an entry snippet
+/// rooted at `base_dir`. Backs the `wat_pkg` host service (`fink/compile.fnk`)
+/// and the native linking test. The entry snippet is anchored at
+/// `<base_dir>/test.fnk` so its relative imports (`./test_link/...`) resolve
+/// against the fixture tree on disk via `FileSourceLoader`; the canonical entry
+/// URL stays `./test.fnk`, keeping emitted FQNs stable regardless of `base_dir`.
+#[cfg(feature = "compile")]
+pub fn wat_pkg_debug(base_dir: &str, src: &str) -> String {
+  let base = base_dir.to_string();
+  let src_owned = src.to_string();
+  match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wat_pkg_debug_inner(&base, &src_owned))) {
+    Ok(s) => s,
+    Err(e) => {
+      let msg = if let Some(s) = e.downcast_ref::<&str>() {
+        (*s).to_string()
+      } else if let Some(s) = e.downcast_ref::<String>() {
+        s.clone()
+      } else {
+        "<unknown panic>".to_string()
+      };
+      format!("PANIC: {msg}")
+    }
+  }
+}
+
+#[cfg(feature = "compile")]
+fn wat_pkg_debug_inner(base_dir: &str, src: &str) -> String {
+  use crate::passes::modules::{FileSourceLoader, OverlayLoader};
+  let entry_abs_path = std::path::Path::new(base_dir).join("test.fnk");
+  let mut loader = OverlayLoader::new(entry_abs_path.clone(), src.to_string(), FileSourceLoader::new());
+  let pkg = compile_package::compile_package(&entry_abs_path, &mut loader)
+    .unwrap_or_else(|e| panic!("compile_package: {e}"));
+  let (wat, sm) = fmt::fmt_fragment_with_sm(&pkg.fragment);
+  let b64 = sm.encode_base64url();
+  format!("{}\n;; sm:{b64}", wat.trim())
+}
+
 #[cfg(test)]
 mod tests {
   /// CPS → IR `Fragment` → WAT. No wasm-encoder, no linker, no runtime
@@ -256,65 +293,6 @@ mod tests {
   /// the FQN-prefix half of the multi-module pipeline. Once
   /// `compile_package` lands, this helper grows a `SourceLoader`
   /// and walks dep imports for real.
-  #[allow(dead_code)]
-  fn wat_pkg(src: &str) -> String {
-    let src_owned = src.to_string();
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wat_pkg_inner(&src_owned))) {
-      Ok(s) => s,
-      Err(e) => {
-        let msg = if let Some(s) = e.downcast_ref::<&str>() {
-          (*s).to_string()
-        } else if let Some(s) = e.downcast_ref::<String>() {
-          s.clone()
-        } else {
-          "<unknown panic>".to_string()
-        };
-        format!("PANIC: {msg}")
-      }
-    }
-  }
-
-  /// Inline-entry hybrid loader for `wat_pkg`. The entry source is
-  /// registered at a synthetic disk path (the test fixtures dir,
-  /// `src/passes/wasm/`) so dep imports from it can resolve to real
-  /// fixture files like `test_link/simple.fnk` via FileSourceLoader.
-  #[cfg(test)]
-  struct PkgTestLoader {
-    entry_abs_path: std::path::PathBuf,
-    entry_source: String,
-    disk: crate::passes::modules::FileSourceLoader,
-  }
-
-  #[cfg(test)]
-  impl crate::passes::modules::SourceLoader for PkgTestLoader {
-    fn load(&mut self, path: &std::path::Path) -> Result<String, String> {
-      if path == self.entry_abs_path {
-        Ok(self.entry_source.clone())
-      } else {
-        crate::passes::modules::SourceLoader::load(&mut self.disk, path)
-      }
-    }
-  }
-
-  fn wat_pkg_inner(src: &str) -> String {
-    // Anchor the entry at `src/passes/wasm/test.fnk` so relative
-    // imports like `./test_link/simple.fnk` reach the real fixture
-    // tree on disk.
-    let entry_abs_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-      .join("src/passes/wasm/test.fnk");
-    let mut loader = PkgTestLoader {
-      entry_abs_path: entry_abs_path.clone(),
-      entry_source: src.to_string(),
-      disk: crate::passes::modules::FileSourceLoader::new(),
-    };
-    let pkg = super::compile_package::compile_package(&entry_abs_path, &mut loader)
-      .unwrap_or_else(|e| panic!("compile_package: {e}"));
-    let (wat, sm) = super::fmt::fmt_fragment_with_sm(&pkg.fragment);
-    let b64 = sm.encode_base64url();
-    format!("{}\n;; sm:{b64}", wat.trim())
-  }
-
-
   /// Run the IR pipeline end-to-end and validate the emitted module.
   ///
   /// This is the tracer bullet for the new pipeline: the output is
@@ -409,6 +387,4 @@ add 3, 4
 
   // End-to-end execution tests live in `src/runner/mod.rs` test
   // module, driven by `test_*.fnk` fixtures.
-
-  test_macros::include_fink_tests!("src/passes/wasm/test_linking.fnk", skip-ir);
 }

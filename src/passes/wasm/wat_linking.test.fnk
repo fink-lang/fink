@@ -1,9 +1,19 @@
-{test, skip-ir, expect, equals, wat, wat_pkg, wat} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{wat_pkg: orig_wat_pkg} = import 'fink/compile.fnk'
 
+
+wat = fn src: src
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+base = 'src/passes/wasm/'
+wat_pkg = fn src:
+  orig_wat_pkg base, src
 
 test 'multi module import', fn:
-  expect wat_pkg ƒink:
+  wat_pkg ƒink:
     {shrub} = import './test_link/simple.fnk'
     shrub 21
   | equals wat":
@@ -408,7 +418,7 @@ common.fnk must be linked exactly once; both left_val and right_val
 must see the same `base = 10`, and the program must actually execute.
 ---
 test 'diamond with two paths to same dep', fn:
-  expect wat_pkg ƒink:
+  wat_pkg ƒink:
     {total} = import './test_link/diamond.fnk'
     total
   | equals wat":

@@ -563,6 +563,44 @@ pub fn run(
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
+        "host_wat_pkg" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [base_bytes, src_bytes]. Multi-module WAT rooted at base.
+            let read_bytes = |caller: &mut wasmtime::Caller<'_, _>, v: &Val| -> Vec<u8> {
+              let mut out = Vec::new();
+              if let Some(r) = v.unwrap_anyref()
+                && let Some(arr) = r.as_array(&*caller).ok().flatten()
+              {
+                let len = arr.len(&*caller).unwrap_or(0);
+                out.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut *caller, i) {
+                    out.push(b as u8);
+                  }
+                }
+              }
+              out
+            };
+            let base = read_bytes(&mut caller, &params[0]);
+            let src = read_bytes(&mut caller, &params[1]);
+            let base_str = String::from_utf8(base)
+              .map_err(|e| Error::msg(format!("host_wat_pkg: base not UTF-8: {e}")))?;
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_wat_pkg: source not UTF-8: {e}")))?;
+            let out = crate::passes::wasm::wat_pkg_debug(&base_str, &src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_wat_pkg byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
         _ => {
           let err_name = name.clone();
           linker.func_new("env", &name, ft, move |_caller, _params, _results| {
