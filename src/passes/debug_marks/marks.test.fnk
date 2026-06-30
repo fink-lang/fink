@@ -19,12 +19,17 @@ debug-marks pass tests
 # meaningful evaluation step. Leaning conservative: fewer is better —
 # we can widen when we step through code and see something missing.
 
-{test, expect, equals, marks} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{marks} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'int literal — single return stop', fn:
-  expect marks ƒink:
+  marks ƒink:
     42
   | equals ƒink:
     marks
@@ -33,7 +38,7 @@ test 'int literal — single return stop', fn:
 
 
 test 'binding + call — expr stops + returns', fn:
-  expect marks ƒink:
+  marks ƒink:
     add = fn a, b:
       a + b
     main = fn:

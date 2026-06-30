@@ -199,49 +199,39 @@ fn walk_cont(cont: &Cont, visit: &mut impl FnMut(&Expr)) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-  use test_macros::include_fink_tests;
-
-  #[allow(unused)]
-  fn marks(src: &str) -> String {
-    let src_owned = src.to_string();
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || marks_inner(&src_owned))) {
-      Ok(s) => s,
-      Err(e) => {
-        let msg = if let Some(s) = e.downcast_ref::<&str>() {
-          (*s).to_string()
-        } else if let Some(s) = e.downcast_ref::<String>() {
-          s.clone()
-        } else {
-          "<unknown panic>".to_string()
-        };
-        format!("PANIC: {msg}")
-      }
+/// Render the debug-marks analysis (with a base64url source-map line) for a
+/// source string. Backs the `marks` host service (`fink/compile.fnk`) and the
+/// native debug-marks test file. Pipeline panics are caught and rendered as
+/// `PANIC: <msg>`.
+pub fn marks_debug(src: &str) -> String {
+  let src_owned = src.to_string();
+  match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || marks_debug_inner(&src_owned))) {
+    Ok(s) => s,
+    Err(e) => {
+      let msg = if let Some(s) = e.downcast_ref::<&str>() {
+        (*s).to_string()
+      } else if let Some(s) = e.downcast_ref::<String>() {
+        s.clone()
+      } else {
+        "<unknown panic>".to_string()
+      };
+      format!("PANIC: {msg}")
     }
   }
+}
 
-  fn marks_inner(src: &str) -> String {
-    match crate::to_lifted(src, "test") {
-      Ok((lifted, desugared)) => {
-        let debug_marks = super::analyse(&lifted, &desugared);
-        let (output, srcmap) = super::fmt::render_mapped_native(&debug_marks, &lifted, &desugared);
-        let b64 = srcmap.encode_base64url();
-        if output.is_empty() {
-          // No stops yet — still emit the sm line (empty) so the
-          // harness's shape is stable once policy lands.
-          format!("# sm:{b64}")
-        } else {
-          format!("{output}\n# sm:{b64}")
-        }
+fn marks_debug_inner(src: &str) -> String {
+  match crate::to_lifted(src, "test") {
+    Ok((lifted, desugared)) => {
+      let debug_marks = analyse(&lifted, &desugared);
+      let (output, srcmap) = fmt::render_mapped_native(&debug_marks, &lifted, &desugared);
+      let b64 = srcmap.encode_base64url();
+      if output.is_empty() {
+        format!("# sm:{b64}")
+      } else {
+        format!("{output}\n# sm:{b64}")
       }
-      Err(e) => format!("ERROR: {e}"),
     }
+    Err(e) => format!("ERROR: {e}"),
   }
-
-  include_fink_tests!("src/passes/debug_marks/test_debug_marks.fnk");
 }
