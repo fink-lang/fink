@@ -207,6 +207,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
       ("rt/types.wat",     include_str!("../../runtime/types.wat")),
       ("rt/repr.wat",      include_str!("../../runtime/repr.wat")),
       ("rt/hashing.wat",   include_str!("../../runtime/hashing.wat")),
+      ("rt/start.wat",     include_str!("../../runtime/start.wat")),
     ];
     let result = crate::wat_linker::link(modules);
     let mut parser = wat_crate::Parser::new();
@@ -280,6 +281,11 @@ struct Runtime {
   /// Raw bytes of each local function's body as they appear in the
   /// code section (ready for `CodeSection::raw`).
   code_bodies_raw: Vec<Vec<u8>>,
+  /// The runtime's start function index, if it declares a `(start)`.
+  /// Runtime funcs keep their indices in the merged module (they are
+  /// emitted first, user funcs append after), so this index is
+  /// forwarded verbatim into the merged module's start section.
+  start_func: Option<u32>,
 }
 
 struct TypeGroup {
@@ -305,6 +311,7 @@ fn parse_runtime(bytes: &[u8], impls: &HashMap<String, String>) -> Runtime {
   let mut globals_body: Option<Vec<u8>> = None;
   let mut elements_body: Option<Vec<u8>> = None;
   let mut code_bodies_raw: Vec<Vec<u8>> = Vec::new();
+  let mut start_func: Option<u32> = None;
 
   for payload in wasmparser::Parser::new(0).parse_all(bytes) {
     let payload = payload.expect("runtime-ir.wasm: parse error");
@@ -405,6 +412,9 @@ fn parse_runtime(bytes: &[u8], impls: &HashMap<String, String>) -> Runtime {
           }
         }
       }
+      wasmparser::Payload::StartSection { func, .. } => {
+        start_func = Some(func);
+      }
       _ => {}
     }
   }
@@ -431,6 +441,7 @@ fn parse_runtime(bytes: &[u8], impls: &HashMap<String, String>) -> Runtime {
     globals_body,
     elements_body,
     code_bodies_raw,
+    start_func,
   }
 }
 
@@ -808,6 +819,13 @@ pub fn emit_with_offsets(frag: &Fragment, interop: Interop) -> EmitOutput {
     module.section(&wasm_encoder::RawSection { id: SECTION_GLOBAL, data: body });
   }
   module.section(&export_sec);
+  // Start section (id 8) sits between export and element. Runtime funcs
+  // keep their indices in the merged module, so the runtime's start func
+  // index is forwarded verbatim. Drives runtime bootstrap (e.g. built-in
+  // type registration) before the entry module body runs.
+  if let Some(func) = rt.start_func {
+    module.section(&wasm_encoder::StartSection { function_index: func });
+  }
   if let Some(body) = &combined_elements_body {
     module.section(&wasm_encoder::RawSection { id: SECTION_ELEMENT, data: body });
   }

@@ -71,7 +71,11 @@ pub fn link(modules: &[(&str, &str)]) -> LinkResult {
         .map(|(i, (url, _))| (*url, i))
         .collect();
 
-    // DFS the import graph from index 0 (the entry).
+    // DFS the import graph from index 0 (the entry), then from any
+    // module that declares a top-level `(start)`. A start module is an
+    // entry point by definition -- it runs at instantiation -- so it
+    // need not be reachable via imports; without this it would be
+    // dropped as unreferenced.
     let mut visit = Visit {
         modules,
         url_to_index: &url_to_index,
@@ -80,6 +84,11 @@ pub fn link(modules: &[(&str, &str)]) -> LinkResult {
         order: Vec::new(),
     };
     visit.dfs(0);
+    for (i, (_, src)) in modules.iter().enumerate() {
+        if has_top_level_start(src) {
+            visit.dfs(i);
+        }
+    }
 
     // For each visited module: rename first to produce internally-
     // consistent text, then extract type/body spans from the renamed
@@ -299,6 +308,33 @@ struct Spans {
     /// Real binary-level exports come from `@export` annotations
     /// (handled separately).
     export_spans: Vec<Span>,
+}
+
+/// True if `src` declares a top-level `(start ...)` form. Used to root
+/// the DFS at start-owning modules (which need not be import-reachable).
+fn has_top_level_start(src: &str) -> bool {
+    let lexer = Lexer::new(src);
+    let tokens: Vec<_> = lexer.iter(0).filter_map(Result::ok).filter(is_significant).collect();
+    let mut depth: usize = 0;
+    for (idx, tok) in tokens.iter().enumerate() {
+        match tok.kind {
+            TokenKind::LParen => {
+                depth += 1;
+                // A top-level form opens at depth 2 (depth 1 is the module).
+                // Its keyword is the very next significant token.
+                if depth == 2
+                    && let Some(head) = tokens.get(idx + 1)
+                    && head.kind == TokenKind::Keyword
+                    && slice(src, head) == "start"
+                {
+                    return true;
+                }
+            }
+            TokenKind::RParen => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Walk a (renamed) module text and record the byte ranges of every
