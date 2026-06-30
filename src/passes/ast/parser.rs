@@ -2123,9 +2123,8 @@ mod tests {
   }
 
   #[test]
-  // TODO: port to a .fnk test file (test_parser.fnk or test_functions.fnk) once
-  // the test macro supports asserting on seps, not just node shape.
-  // The real coverage for this fix lives in src/fmt/test_print.fnk (t_multi_arg_application etc).
+  // Stays a Rust test: it asserts on `args.seps` (comma tokens), which the
+  // native `.test.fnk` snapshot harness (node-shape only) cannot inspect.
   fn apply_args_preserve_comma_seps() {
     // collect_apply_or_block was dropping comma tokens from args.seps.
     // Commas between Apply args must be stored so the formatter can reproduce them.
