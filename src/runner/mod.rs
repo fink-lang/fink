@@ -3,6 +3,8 @@
 //! Wires the user program's IO channels (stdin/stdout/stderr) to host
 //! streams, sets up the scheduler, and returns the exit code from `main`.
 
+#[cfg(feature = "compile")]
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub mod wasmtime_runner;
@@ -91,6 +93,108 @@ pub fn run_file(
   }
 }
 
+/// Run fink source read from stdin. The entry source is `src`; its
+/// `import './...'` deps resolve off-disk relative to the current working
+/// directory, with embedded stdlib served as usual. Lets `fink run -`
+/// drive a real multi-module program (e.g. a generated test aggregator).
+#[cfg(feature = "compile")]
+pub fn run_stdin(
+  mut opts: RunOptions,
+  src: &str,
+  args: Vec<Vec<u8>>,
+  stdin: IoReadStream,
+  stdout: IoStream,
+  stderr: IoStream,
+) -> Result<i64, String> {
+  // Entry lives at `<cwd>/<stdin>.fnk` so deps resolve against the cwd.
+  let entry_path = std::env::current_dir()
+    .map_err(|e| format!("cannot read cwd: {e}"))?
+    .join("<stdin>.fnk");
+  if opts.source_label == "fink" {
+    opts.source_label = "<stdin>".to_string();
+  }
+  let mut loader = crate::passes::modules::StdlibLoader::new(
+    crate::passes::modules::OverlayLoader::new(
+      entry_path.clone(),
+      src.to_string(),
+      crate::passes::modules::FileSourceLoader::new(),
+    ),
+  );
+  let wasm = crate::compile_package(&entry_path, &mut loader, crate::passes::wasm::emit::Interop::Rust)?;
+  wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
+}
+
+/// Discover `*.test.fnk` files under the cwd, synthesize an aggregator that
+/// imports them all and calls `test_all`, and run it. Backs `fink test`.
+///
+/// `target` selects the files: `None` -> every `*.test.fnk`; a bare name
+/// `bool` -> `bool.test.fnk`; anything with `/` -> that exact relative path.
+/// Globs are resolved by the discovery walk, not the shell.
+#[cfg(feature = "compile")]
+pub fn run_tests(
+  opts: RunOptions,
+  target: Option<&str>,
+  args: Vec<Vec<u8>>,
+  stdin: IoReadStream,
+  stdout: IoStream,
+  stderr: IoStream,
+) -> Result<i64, String> {
+  let cwd = std::env::current_dir().map_err(|e| format!("cannot read cwd: {e}"))?;
+  let mut files: Vec<String> = Vec::new();
+  collect_test_files(&cwd, &cwd, &mut files)?;
+  files.sort();
+
+  let selected: Vec<String> = match target {
+    None => files,
+    Some(t) if t.contains('/') => files.into_iter().filter(|f| f == t).collect(),
+    Some(t) => {
+      let leaf = format!("{t}.test.fnk");
+      files.into_iter().filter(|f| f.ends_with(&leaf)).collect()
+    }
+  };
+
+  if selected.is_empty() {
+    return Err(format!("no test files match: {}", target.unwrap_or("*.test.fnk")));
+  }
+
+  let mut src = String::from("{test_all} = import 'std/testing.fnk'\n");
+  for f in &selected {
+    src.push_str(&format!("import './{f}'\n"));
+  }
+  src.push_str("main = fn ..args:\n  test_all _\n");
+
+  run_stdin(opts, &src, args, stdin, stdout, stderr)
+}
+
+/// Recursively collect repo-relative paths of `*.test.fnk` files under
+/// `dir`, skipping `target/` and hidden directories.
+#[cfg(feature = "compile")]
+fn collect_test_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), String> {
+  let entries = std::fs::read_dir(dir)
+    .map_err(|e| format!("cannot read dir {}: {e}", dir.display()))?;
+  for entry in entries {
+    let entry = entry.map_err(|e| e.to_string())?;
+    let path = entry.path();
+    let name = entry.file_name();
+    let name = name.to_string_lossy();
+    // Skip dot-files and dot-dirs (.git, .brain, ...) entirely.
+    if name.starts_with('.') {
+      continue;
+    }
+    if path.is_dir() {
+      if name == "target" {
+        continue;
+      }
+      collect_test_files(root, &path, out)?;
+    } else if name.ends_with(".test.fnk")
+      && let Ok(rel) = path.strip_prefix(root)
+    {
+      out.push(rel.to_string_lossy().into_owned());
+    }
+  }
+  Ok(())
+}
+
 #[cfg(test)]
 mod tests {
   use std::sync::{Arc, Mutex};
@@ -172,7 +276,7 @@ mod tests {
   ///
   /// Pure-value programs render as a single line (the value's textual
   /// representation), matching the existing test conventions.
-  #[allow(unused)]
+  ///
   /// Default test runner: asserts on the program's return value only.
   /// stdout/stderr are still captured internally (the host needs the
   /// IO channels) but are NOT rendered into the result, so incidental
@@ -515,18 +619,376 @@ mod tests {
                 None => return Err(Error::msg("host_write: null fd")),
               };
               let bytes_any = params[1].unwrap_anyref();
-              if let Some(r) = bytes_any {
-                if let Some(arr) = r.as_array(&caller).ok().flatten() {
-                  let len = arr.len(&caller).unwrap_or(0);
-                  let mut buf = Vec::with_capacity(len as usize);
-                  for i in 0..len {
-                    if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
-                      buf.push(b as u8);
-                    }
+              if let Some(r) = bytes_any
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                let mut buf = Vec::with_capacity(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    buf.push(b as u8);
                   }
-                  cap.lock().unwrap().append(fd, &buf);
+                }
+                cap.lock().unwrap().append(fd, &buf);
+              }
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_tokenize" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Read the ByteArray, run the lexer,
+              // return the rendered token dump as a ByteArray.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
                 }
               }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_tokenize: source not UTF-8: {e}")))?;
+              let out = crate::passes::ast::lexer::tokenize_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_tokenize byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_ast" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Parse + render the AST dump (or a
+              // caret diagnostic on parse error).
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_ast: source not UTF-8: {e}")))?;
+              let out = crate::passes::ast::parser::parse_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_ast byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_desugar" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Parse + desugar, render the AST dump.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_desugar: source not UTF-8: {e}")))?;
+              let out = crate::passes::ast_desugar::desugar_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_desugar byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_scope" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Parse + desugar + scope-analyse, render the scope tree.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_scope: source not UTF-8: {e}")))?;
+              let out = crate::passes::scopes::scope_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_scope byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_fmt" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Parse, render the AST pretty-printer output.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_fmt: source not UTF-8: {e}")))?;
+              let out = crate::passes::ast::fmt::fmt_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_fmt byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_cps_module" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Lower to module-level CPS IR, render it.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_cps_module: source not UTF-8: {e}")))?;
+              let out = crate::passes::cps::transform::cps_module_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_cps_module byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_cps_closures" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Lower + closure-convert, render the CPS IR.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_cps_closures: source not UTF-8: {e}")))?;
+              let out = crate::passes::closures::cps_closures_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_cps_closures byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_cps_hoisted" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Lower + convert + hoist, render the CPS IR.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_cps_hoisted: source not UTF-8: {e}")))?;
+              let out = crate::passes::closures::cps_hoisted_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_cps_hoisted byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_wat" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Lower through codegen to WAT text.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_wat: source not UTF-8: {e}")))?;
+              let out = crate::passes::wasm::wat_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_wat byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          "host_marks" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [src_bytes]. Run the debug-marks analysis, render it.
+              let mut src = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_marks: source not UTF-8: {e}")))?;
+              let out = crate::passes::debug_marks::marks_debug(&src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_marks byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          #[cfg(feature = "compile")]
+          "host_wat_pkg" => {
+            linker.func_new("env", &name, ft, move |mut caller, params, results| {
+              // params = [base_bytes, src_bytes]. Multi-module WAT rooted at base.
+              let mut base = Vec::new();
+              if let Some(r) = params[0].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                base.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    base.push(b as u8);
+                  }
+                }
+              }
+              let mut src = Vec::new();
+              if let Some(r) = params[1].unwrap_anyref()
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                src.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    src.push(b as u8);
+                  }
+                }
+              }
+              let base_str = String::from_utf8(base)
+                .map_err(|e| Error::msg(format!("host_wat_pkg: base not UTF-8: {e}")))?;
+              let src_str = String::from_utf8(src)
+                .map_err(|e| Error::msg(format!("host_wat_pkg: source not UTF-8: {e}")))?;
+              let out = crate::passes::wasm::wat_pkg_debug(&base_str, &src_str);
+
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_wat_pkg byte array: {e}")))?;
+              results[0] = Val::AnyRef(Some(array.to_anyref()));
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
@@ -825,8 +1287,75 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("std/math.test.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
+  // Runtime/compile error format tests. These execute the snippet and
+  // assert on the captured user-facing error string (source line + caret
+  // + plain-language description + url:line:col). They run the program,
+  // so they live here as plain Rust tests next to the `run` executor
+  // rather than as fink snapshot tests -- there is no fink-runs-fink host
+  // service yet.
+  fn assert_error(src: &str, expected: &str) {
+    assert_eq!(run(src), expected);
+  }
+
+  #[test]
+  fn error_irrefutable_match_no_arm() {
+    assert_error(
+      "match 'foo':\n  'bar': 1",
+      "match 'foo':\n^^^^^^^^^^^^\nmatch exhausted: no arm matched\n./test.fnk:1:1",
+    );
+  }
+
+  // Deeper inside the program -- the line points at the match, not the
+  // module wrapper.
+  #[test]
+  fn error_irrefutable_match_in_nested_fn() {
+    assert_error(
+      "f = fn x:\n  match x:\n    'bar': 1\nf 'foo'",
+      "f = fn x:\n  match x:\n  ^^^^^^^^\nmatch exhausted: no arm matched\n./test.fnk:2:3",
+    );
+  }
+
+  #[test]
+  fn error_rec_destructure_missing_field() {
+    assert_error(
+      "{a, b} = {x: 1}\na + 1",
+      "{a, b} = {x: 1}\n^^^^^^^^^^^^^^^\nirrefutable pattern failed\n./test.fnk:1:1",
+    );
+  }
+
+  #[test]
+  fn error_type_mismatch_on_plus() {
+    assert_error(
+      "1 + 'foo'",
+      "1 + 'foo'\n^\ntype mismatch\n./test.fnk:1:1",
+    );
+  }
+
+  #[test]
+  fn error_integer_divide_by_zero() {
+    assert_error(
+      "1 // 0",
+      "1 // 0\n^\ninteger divide by zero\n./test.fnk:1:1",
+    );
+  }
+
+  #[test]
+  fn error_unbound_name() {
+    assert_error(
+      "foo bar",
+      "foo bar\n^^^\nunbound name 'foo'\n./test.fnk:1:1",
+    );
+  }
+
+  // A trap inside a dependency module resolves to that module's source
+  // line, not the entry module's line 1.
+  #[test]
+  fn error_trap_inside_imported_module() {
+    assert_error(
+      "{boom} = import './test_modules/bad_destructure.fnk'\nboom {x: 1}",
+      "boom = fn rec:\n  {missing} = rec\n  ^^^^^^^^^^^^^^^\nirrefutable pattern failed\n./test_modules/bad_destructure.fnk:8:3",
+    );
+  }
 
 }
 
@@ -878,69 +1407,48 @@ mod cli_runner_tests {
     assert_eq!(err, "");
   }
 
-  /// Runs the fink-native test suite (`std/all.test.fnk`) through the
-  /// real file-based runner during `cargo test`. `test_all` returns a
-  /// non-zero exit code when any fink test fails, so this gates the
-  /// whole fink-native suite on `cargo test`. On failure, the captured
-  /// stderr (each test's SUCCESS/FAIL + diff) is surfaced in the panic.
+  /// Runs the whole native ƒink test suite during `cargo test`, the same
+  /// way `fink test` does: discover every `*.test.fnk` under the repo,
+  /// synthesize an aggregator, run it. `test_all` returns a non-zero exit
+  /// code when any ƒink test fails, gating the suite on `cargo test`. On
+  /// failure the captured stderr (each test's SUCCESS/FAIL + diff) is
+  /// surfaced in the panic.
   #[test]
-  fn fink_native_test_suite_runs() {
+  fn native_test_suite_runs() {
     use super::IoReadStream;
 
-    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
-    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stdout: IoStream = stdout_buf.clone();
-    let stderr: IoStream = stderr_buf.clone();
+    // The whole suite runs in one wasmtime instance; ƒink's deep
+    // cons-list recursion needs a larger stack than the ~2MB cargo test
+    // threads default to. Run the body on a dedicated 64MB-stack thread.
+    std::thread::Builder::new()
+      .stack_size(64 * 1024 * 1024)
+      .spawn(|| {
+        let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+        let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        let stdout: IoStream = stdout_buf.clone();
+        let stderr: IoStream = stderr_buf.clone();
 
-    let exit = super::run_file(
-      RunOptions::default(),
-      "std/all.test.fnk",
-      vec![],
-      stdin,
-      stdout,
-      stderr,
-    ).expect("run std/all.test.fnk");
+        let exit = super::run_tests(
+          RunOptions::default(),
+          None,
+          vec![b"test".to_vec()],
+          stdin,
+          stdout,
+          stderr,
+        ).expect("run native test suite");
 
-    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
-    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
-    assert_eq!(
-      exit, 0,
-      "fink-native test suite reported failures (exit {exit})\n\
-       --- stdout ---\n{out}\n--- stderr ---\n{err}",
-    );
-  }
-
-  /// Runs the runtime-adjacent fink test suite (`src/runtime/all.test.fnk`)
-  /// through the real file-based runner. Same gating as the std suite: behaviour
-  /// tests for the runtime substrate (rt/types.test.fnk etc.) live next to the
-  /// runtime and aggregate here, not in std/all.test.fnk.
-  #[test]
-  fn runtime_native_test_suite_runs() {
-    use super::IoReadStream;
-
-    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
-    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let stdout: IoStream = stdout_buf.clone();
-    let stderr: IoStream = stderr_buf.clone();
-
-    let exit = super::run_file(
-      RunOptions::default(),
-      "src/runtime/all.test.fnk",
-      vec![],
-      stdin,
-      stdout,
-      stderr,
-    ).expect("run src/runtime/all.test.fnk");
-
-    let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
-    let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
-    assert_eq!(
-      exit, 0,
-      "runtime-native test suite reported failures (exit {exit})\n\
-       --- stdout ---\n{out}\n--- stderr ---\n{err}",
-    );
+        let out = String::from_utf8_lossy(&stdout_buf.lock().unwrap()).into_owned();
+        let err = String::from_utf8_lossy(&stderr_buf.lock().unwrap()).into_owned();
+        assert_eq!(
+          exit, 0,
+          "native test suite reported failures (exit {exit})\n\
+           --- stdout ---\n{out}\n--- stderr ---\n{err}",
+        );
+      })
+      .expect("spawn test thread")
+      .join()
+      .expect("native test suite thread panicked");
   }
 
 }

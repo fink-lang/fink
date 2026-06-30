@@ -1,0 +1,639 @@
+{test, skip, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+test 'multiline function', fn:
+  ast ƒink:
+    fn a, b:
+      a + b
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
+
+test 'fn with params and colon on separate lines', fn:
+  ast ƒink:
+    fn
+      foo, bar
+      spam
+    :
+      spam
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+          Ident 'foo'
+          Ident 'bar'
+          Ident 'spam'
+        Ident 'spam'
+
+test 'single line function', fn:
+  ast ƒink:
+    fn a, b: a + b
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
+
+test 'named function binding', fn:
+  ast ƒink:
+    add = fn a, b:
+      result = a + b
+      result
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'add'
+        Fn ':',
+          Patterns
+            Ident 'a'
+            Ident 'b'
+          Bind '=',
+            Ident 'result'
+            InfixOp '+',
+              Ident 'a'
+              Ident 'b'
+          Ident 'result'
+
+test 'no-arg function', fn:
+  ast ƒink:
+    greet = fn: 'hello'
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'greet'
+        Fn ':',
+          Patterns
+          LitStr 'hello'
+
+test 'inline body comma separates expressions', fn:
+  ast ƒink:
+    fn: 1, 2
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        LitInt '2'
+
+test 'inline body comma equivalent to multiline block', fn:
+  ast ƒink:
+    fn a, b: a, b
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        Ident 'a'
+        Ident 'b'
+
+test 'block body comma separated expressions', fn:
+  ast ƒink:
+    fn:
+      1, foo, ni
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        Ident 'foo'
+        Ident 'ni'
+
+# TODO: semicolon in inline fn body inside application should return to outer
+# arg list (strong separator), but parse_inline_exprs greedily consumes it.
+# Needs context-aware ; parsing.
+# test 'semicolon in application with fn arg returns to outer', fn:
+#   ast ƒink:
+#     foo a, fn a: bar; spam
+#   | equals ƒink:
+#     Apply
+#       Ident 'foo'
+#       Ident 'a'
+#       Fn ':',
+#         Patterns
+#           Ident 'a'
+#         Ident 'bar'
+#       Ident 'spam'
+
+test 'block body semicolon separated expressions', fn:
+  ast ƒink:
+    fn:
+      1; foo; ni
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        Ident 'foo'
+        Ident 'ni'
+
+test 'block body semicolon after non-application', fn:
+  ast ƒink:
+    fn:
+      1; 2; 3
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+
+
+test 'function with default arg', fn:
+  ast ƒink:
+    greet = fn name='world':
+      'hello ${name}'
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'greet'
+        Fn ':',
+          Patterns
+            Bind '=',
+              Ident 'name'
+              LitStr 'world'
+          StrTempl
+            LitStr 'hello '
+            Ident 'name'
+
+test 'function with record pattern arg', fn:
+  ast ƒink:
+    foo = fn {x, y}: x + y
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'foo'
+        Fn ':',
+          Patterns
+            LitRec '{..}',
+              Ident 'x'
+              Ident 'y'
+          InfixOp '+',
+            Ident 'x'
+            Ident 'y'
+
+test 'function with sequence pattern arg', fn:
+  ast ƒink:
+    bar = fn [head, ..tail]: head
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'bar'
+        Fn ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'head'
+              Spread '..',
+                Ident 'tail'
+          Ident 'head'
+
+test 'function with rest args', fn:
+  ast ƒink:
+    baz = fn arg, ..rest: arg
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'baz'
+        Fn ':',
+          Patterns
+            Ident 'arg'
+            Spread '..',
+              Ident 'rest'
+          Ident 'arg'
+
+test 'spread in middle of params', fn:
+  ast ƒink:
+    baz = fn x, ..ys, z: x
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'baz'
+        Fn ':',
+          Patterns
+            Ident 'x'
+            Spread '..',
+              Ident 'ys'
+            Ident 'z'
+          Ident 'x'
+
+
+# ---
+# fn match sugar
+# ---
+
+test 'fn match single arg', fn:
+  ast ƒink:
+    classify = fn match n:
+      n > 0: 'positive'
+      n < 0: 'negative'
+      _: 'zero'
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'classify'
+        Fn ':',
+          Patterns
+            Ident 'n'
+          Match ':',
+            Ident 'n'
+            Arm ':',
+              Patterns
+                InfixOp '>',
+                  Ident 'n'
+                  LitInt '0'
+              LitStr 'positive'
+            Arm ':',
+              Patterns
+                InfixOp '<',
+                  Ident 'n'
+                  LitInt '0'
+              LitStr 'negative'
+            Arm ':',
+              Patterns
+                Wildcard
+              LitStr 'zero'
+
+test 'fn match multi arg', fn:
+  ast ƒink:
+    foo = fn match a, ..b:
+      1, ..: 1
+      2, x, ..y: 2
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'foo'
+        Fn ':',
+          Patterns
+            Ident 'a'
+            Spread '..',
+              Ident 'b'
+          Match ':',
+            Ident 'a'
+            Spread '..',
+              Ident 'b'
+            Arm ':',
+              Patterns
+                LitInt '1'
+                Spread '..'
+              LitInt '1'
+            Arm ':',
+              Patterns
+                LitInt '2'
+                Ident 'x'
+                Spread '..',
+                  Ident 'y'
+              LitInt '2'
+
+
+# ---
+# higher order
+# ---
+
+test 'returning a function', fn:
+  ast ƒink:
+    map = fn map_fn: fn match items:
+      []: []
+      [item, ..rest]:
+        [(map_fn item), ..(map map_fn rest)]
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'map'
+        Fn ':',
+          Patterns
+            Ident 'map_fn'
+          Fn ':',
+            Patterns
+              Ident 'items'
+            Match ':',
+              Ident 'items'
+              Arm ':',
+                Patterns
+                  LitSeq '[..]'
+                LitSeq '[..]'
+              Arm ':',
+                Patterns
+                  LitSeq '[..]',
+                    Ident 'item'
+                    Spread '..',
+                      Ident 'rest'
+                LitSeq '[..]',
+                  Group '(..)',
+                    Apply
+                      Ident 'map_fn'
+                      Ident 'item'
+                  Spread '..',
+                    Group '(..)',
+                      Apply
+                        Ident 'map'
+                        Apply
+                          Ident 'map_fn'
+                          Ident 'rest'
+
+
+---
+application
+---
+
+test 'simple application', fn:
+  ast ƒink:
+    log 'hello'
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'log'
+        LitStr 'hello'
+
+test 'multi-arg application', fn:
+  ast ƒink:
+    add 1, 2
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'add'
+        LitInt '1'
+        LitInt '2'
+
+test 'multiline args', fn:
+  ast ƒink:
+    add
+      mul 2, 3
+      mul 3, 4
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
+
+test 'semicolon grouped args', fn:
+  ast ƒink:
+    add mul 2, 3; mul 3, 4
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
+
+
+test 'trailing comma dedent error', fn:
+  ast ":
+    foo
+      bar,
+    spam
+  | equals ":
+    foo
+      bar,
+         ^
+    unexpected , followed by dedent
+    test.fnk:2:6
+
+
+test 'trailing semicolon dedent error', fn:
+  ast ":
+    foo
+      bar;
+    spam
+  | equals ":
+    foo
+      bar;
+         ^
+    unexpected ; followed by dedent
+    test.fnk:2:6
+
+
+test 'nested right-to-left application', fn:
+  ast ƒink:
+    foo bar spam ham
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Apply
+          Ident 'bar'
+          Apply
+            Ident 'spam'
+            Ident 'ham'
+
+test 'postfix tagged application', fn:
+  ast ƒink:
+    [1, 2, 3]foo
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+          LitInt '3'
+
+test 'partial application placeholder', fn:
+  ast ƒink:
+    add5 = add 5, ?
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'add5'
+        Apply
+          Ident 'add'
+          LitInt '5'
+          Partial
+
+test 'partial operator', fn:
+  ast ƒink:
+    add5 = ? + 5
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'add5'
+        InfixOp '+',
+          Partial
+          LitInt '5'
+
+
+# ---
+# pipes
+# ---
+
+test 'simple pipe', fn:
+  ast ƒink:
+    foo | bar | spam
+  | equals ƒink:
+    Module
+      Pipe
+        Ident 'foo'
+        Ident 'bar'
+        Ident 'spam'
+
+test 'multiline pipe', fn:
+  ast ƒink:
+    'hello'
+    | capitalize
+    | log
+  | equals ƒink:
+    Module
+      Pipe
+        LitStr 'hello'
+        Ident 'capitalize'
+        Ident 'log'
+
+test 'pipe with spread partial', fn:
+  ast ƒink:
+    [1, 2] | add ..?
+  | equals ƒink:
+    Module
+      Pipe
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+        Apply
+          Ident 'add'
+          Spread '..',
+            Partial
+
+# TODO: Jan, think about | precedence, should it be (foo (bar | (spam ham))?
+test 'pipe with apply in each stage', fn:
+  ast ƒink:
+    foo bar | spam ham
+  | equals ƒink:
+    Module
+      Pipe
+        Apply
+          Ident 'foo'
+          Ident 'bar'
+        Apply
+          Ident 'spam'
+          Ident 'ham'
+
+test 'fn literal as grouped arg', fn:
+  ast ƒink:
+    map (fn x: x + 1), items
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'map'
+        Group '(..)',
+          Fn ':',
+            Patterns
+              Ident 'x'
+            InfixOp '+',
+              Ident 'x'
+              LitInt '1'
+        Ident 'items'
+
+
+test 'inline body comma is arg separator inside application', fn:
+  ast ƒink:
+    fn: foo a, b
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+        Apply
+          Ident 'foo'
+          Ident 'a'
+          Ident 'b'
+
+test 'inline body comma after binding starts new expression', fn:
+  ast ƒink:
+    fn: a = 1, b
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+        Bind '=',
+          Ident 'a'
+          LitInt '1'
+        Ident 'b'
+
+# TODO, error during testing with ƒink: block
+test 'fn params multiline continuation', fn:
+  ast ":
+    fn a,
+      b: a + b
+  | equals ƒink:
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
+
+
+test 'multiline application', fn:
+  ast ƒink:
+    ni = foo
+      bar
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'ni'
+        Apply
+          Ident 'foo'
+          Ident 'bar'
+
+
+# ---
+# fn as infix operand
+# ---
+
+test 'fn as rhs of ==', fn:
+  ast ƒink:
+    [1, ?] == fn $: [1, $]
+  | equals ƒink:
+    Module
+      InfixOp '==',
+        LitSeq '[..]',
+          LitInt '1'
+          Partial
+        Fn ':',
+          Patterns
+            Ident '$'
+          LitSeq '[..]',
+            LitInt '1'
+            Ident '$'
+
+
+---
+inline fn body terminates apply arg list
+---
+
+# TODO: inline `fn:` body as last arg should not consume the next line.
+# `foo fn: 42` followed by `x` on the next line at the same indent
+# treats `x` as a second arg to `foo`. The fn body should terminate the
+# arg list. Workaround: use multiline `fn:` with indented body.
+#
+# Can't write this as a .fnk test — the test file parser has the same
+# bug, so the test source itself gets misparsed.

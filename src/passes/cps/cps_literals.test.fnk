@@ -1,0 +1,152 @@
+---
+cps_c IR — pretty-printer tests
+---
+
+# Input is a Fink expression; output is the synthesized CPS Fink source.
+# First-pass CPS — no ·load/·store/·scope synthesis (all names in scope by construction).
+#
+# Rendering conventions:
+#   ·let val, fn name:              — LetVal
+#   ·fn fn params: fn_body, fn name: — LetFn
+#   ·apply func, args, fn result: — App
+#   ·v_cont val             — Ret
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_module ƒink:
+#       <fink source>
+#
+#     | equals ƒink:
+#       <expected cps output>
+
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+---
+literals — tail position, no synthesis needed
+---
+
+test 'int literal', fn:
+  cps_module ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
+
+test 'int literal with underscores', fn:
+  cps_module ƒink:
+    1_000_000
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i32 1000000)
+    # sm:DQABAAkAAQAJJAEACRYBAAkSAAIABgEACQABAAkUABIABgEACQABAAkIAQAJ
+
+test 'negative int literal', fn:
+  cps_module ƒink:
+    -1_000
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i16 -1000)
+    # sm:DQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYUABIABgEABgABAAYIAQAG
+
+test 'negative zero literal', fn:
+  cps_module ƒink:
+    -0
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 0)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
+
+test 'hex int literal', fn:
+  cps_module ƒink:
+    0xFF_FF
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (u16 65535)
+    # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABgEABwABAAcIAQAH
+
+test 'octal int literal', fn:
+  cps_module ƒink:
+    0o7_7
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (u8 63)
+    # sm:DQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUABIABgEABQABAAUGAQAF
+
+test 'binary int literal', fn:
+  cps_module ƒink:
+    0b_1010_1111
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (u8 175)
+    # sm:DQABAAwAAQAMJAEADBYBAAwSAAIABgEADAABAAwUABIABgEADAABAAwGAQAM
+
+test 'float literal with exponent', fn:
+  cps_module ƒink:
+    1.5e1_0
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (f64 1.5e10)
+    # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABgEABwABAAcIAQAH
+
+test 'decimal literal', fn:
+  cps_module ƒink:
+    1.5_0d
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, 1.50d
+    # sm:CwABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYUABIABAEABg
+
+
+test 'bool literal', fn:
+  cps_module ƒink:
+    true
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, true
+    # sm:CwABAAQAAQAEJAEABBYBAAQSAAIABgEABAABAAQUABIABAEABA
+
+
+test 'string literal', fn:
+  cps_module ƒink:
+    'hello'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, 'hello'
+    # sm:DgABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABAEABwABAAcCAQAHCgEABw
+
+
+test 'fink block lowers to source string', fn:
+  cps_module ƒink:
+    {ƒink} = import 'fink/blocks.fnk'
+    ƒink:
+      foo
+        1 + 2
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_45, ·ƒret_2:
+      ·import ·ƒctx_45, 'fink/blocks.fnk', fn ·ƒctx_48, ·ƒv_5:
+        ·fn
+          fn ·ƒctx_49, ·ƒv_10:
+            ·let ·ƒv_10, fn ·ƒink_0:
+              ·ƒret_2 ·ƒctx_49, 'foo␊  1 + 2'
+          fn ·ƒv_33:
+            ·fn
+              fn ·ƒctx_51, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
+                ·guard_apply ·ƒctx_51, ·rec_protocol, ·ƒv_7,
+                  fn ·ƒctx_53, ·ƒv_15:
+                    ·rec_pop ·ƒctx_53, ·ƒv_15, ƒ'ƒink', ·ƒfail_9, fn ·ƒctx_55, ·ƒv_10, ·ƒv_14:
+                      ·ƒsucc_8 ·ƒctx_55, ·ƒv_10
+                  fn ·ƒctx_57: ·ƒfail_9 ·ƒctx_57
+              fn ·ƒv_25:
+                ·fn
+                  fn ·ƒctx_59: ·panic ·ƒctx_59
+                  fn ·ƒv_36: ·ƒv_25 ·ƒctx_48, ·ƒv_33, ·ƒv_36, ·ƒv_5
+    # sm:dQABADkAAQA5JAEAORgBRhYSAAIABgExGAABABgSABQABAEOEQABABECAQARHgEAEQIACgAYAQ0YDgACAAoBEyIAAQAiCAAUABgBACIQAAIAEgECBQABAAUMAQEiEAAKAQIFEgACABYBRBYAAQAWFAAUAAQBABYAAQAWAgEAFhoBABYCABQBRSIQAAIAEgEAIgABACIIABwAGAAYABgBACIOAAIAGgEAIgABACIcABQABAEAIhwABAEAIg4AAgAkABgBACIQAAIAIgEAIgABACIUABQABAEAIhAABAEAIhIABAEAIhQACgAYAQAiFAEAIhAAAgAmAQAiAAEAIhYAFAAEAQAiEAAkABQABAEAIgABACIWABQAHAEAIhAAAgAaAQAiAAEAIggAJAAUAAQBACIAAQAiEAAUACQBACIQAAQBACIAAQAiEgAUAAQBACIQAAQBACIQAAQBFBg
+

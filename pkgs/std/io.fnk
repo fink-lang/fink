@@ -1,0 +1,35 @@
+{suspend, init_ctx, get_ctx_for, with, unique} = import 'std/effects.fnk'
+
+{io_write, io_read} = import 'rt/interop.wat'
+
+stdin = 0
+stdout = 1
+stderr = 2
+
+
+io = unique _
+upd_io_ctx  = init_ctx io, {read: io_read, write: io_write}
+
+
+with_custom_io = fn read, write, body:
+  upd_io_ctx fn ctx:
+    {read, write}
+
+  rslt = body _
+
+  upd_io_ctx fn ctx:
+    {read: io_read, write: io_write}
+
+  rslt
+
+
+
+read = fn fd, size:
+  {read} = get_ctx_for io
+  read fd, size
+
+
+write = fn fd, bytes_or_str:
+  {write} = get_ctx_for io
+  write fd, bytes_or_str
+  fd

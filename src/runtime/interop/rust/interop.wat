@@ -94,7 +94,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply $cps_closures_apply $cps_hoisted_apply $wat_apply $marks_apply $wat_pkg_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -138,6 +138,79 @@
   ;; deltas. Impure -- exposed as a debug/perf primitive, not a pure
   ;; value.
   (import "env" "host_mono_ns" (func $host_mono_ns (result i64)))
+
+  ;; Compiler-as-host-service: the host runs a compiler pass over the
+  ;; source bytes and returns the rendered output bytes. Today the Rust
+  ;; host delegates to the in-process compiler (lexer/parser/...); a
+  ;; future self-hosted host backs the same contract differently. This
+  ;; is a step in strangling Rust out of the toolchain -- the fink-side
+  ;; primitive is host-agnostic.
+  (import "env" "host_tokenize" (func $host_tokenize
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: parse the source and render the AST dump
+  ;; (or a caret diagnostic on parse error). Same contract shape as
+  ;; host_tokenize -- bytes in, rendered bytes out.
+  (import "env" "host_ast" (func $host_ast
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: parse + desugar the source and render the
+  ;; result AST dump. Same contract shape as host_ast.
+  (import "env" "host_desugar" (func $host_desugar
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: parse + desugar + scope-analyse the source
+  ;; and render the nested scope tree. Same contract shape as host_desugar.
+  (import "env" "host_scope" (func $host_scope
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: parse the source and render the AST
+  ;; pretty-printer output (source round-trip). Same contract shape.
+  (import "env" "host_fmt" (func $host_fmt
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: lower the source to module-level CPS IR and
+  ;; render it (with a # sm: source-map line). Same contract shape.
+  (import "env" "host_cps_module" (func $host_cps_module
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: lower + closure-convert the source and render
+  ;; the converted CPS IR (with a # sm: line). Same contract shape.
+  (import "env" "host_cps_closures" (func $host_cps_closures
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: lower + convert + hoist the source and render
+  ;; the post-hoist CPS IR (with a # sm: line). Same contract shape.
+  (import "env" "host_cps_hoisted" (func $host_cps_hoisted
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: lower the source through codegen to WAT text
+  ;; (with a ;; sm: line). Same contract shape.
+  (import "env" "host_wat" (func $host_wat
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: run the debug-marks analysis and render it
+  ;; (with a # sm: line). Same contract shape.
+  (import "env" "host_marks" (func $host_marks
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
+
+  ;; Compiler-as-host-service: multi-module WAT for an entry snippet rooted at
+  ;; a base dir (so its relative imports resolve on disk). Takes TWO byte
+  ;; arrays -- base dir, then entry source -- and returns rendered WAT bytes.
+  (import "env" "host_wat_pkg" (func $host_wat_pkg
+    (param $base (ref $ByteArray))
+    (param $src (ref $ByteArray))
+    (result (ref $ByteArray))))
 
 
   ;; Host-callable entry point: fire a previously-yielded resume
@@ -293,6 +366,482 @@
   (func $io_read (@pub) (@impl "interop.fnk:io_read")
     (result (ref any))
     (global.get $io_read_closure))
+
+
+  ;; -- tokenize ----------------------------------------------------------
+  ;; User-level call: `tokenize src`. CPS args = [k_caller, src].
+  ;; Extracts the source ByteArray, hands it to the host's compiler-as-
+  ;; service, wraps the rendered bytes back as a $Str, tail-calls k_caller.
+  (elem declare func $tokenize_apply)
+
+  (func $tokenize_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_tokenize (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $tokenize_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $tokenize_apply)
+      (ref.null $Captures)))
+
+  (func $tokenize (@pub) (@impl "interop.fnk:tokenize")
+    (result (ref any))
+    (global.get $tokenize_closure))
+
+
+  ;; -- ast ---------------------------------------------------------------
+  ;; User-level call: `ast src`. CPS args = [k_caller, src]. Same shape as
+  ;; tokenize: source bytes in, rendered AST-dump bytes out.
+  (elem declare func $ast_apply)
+
+  (func $ast_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_ast (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $ast_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $ast_apply)
+      (ref.null $Captures)))
+
+  (func $ast (@pub) (@impl "interop.fnk:ast")
+    (result (ref any))
+    (global.get $ast_closure))
+
+
+  ;; -- desugar -----------------------------------------------------------
+  ;; User-level call: `desugar src`. CPS args = [k_caller, src]. Same shape
+  ;; as ast: source bytes in, rendered desugared-AST-dump bytes out.
+  (elem declare func $desugar_apply)
+
+  (func $desugar_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_desugar (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $desugar_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $desugar_apply)
+      (ref.null $Captures)))
+
+  (func $desugar (@pub) (@impl "interop.fnk:desugar")
+    (result (ref any))
+    (global.get $desugar_closure))
+
+
+  ;; -- scope -------------------------------------------------------------
+  ;; User-level call: `scope src`. CPS args = [k_caller, src]. Same shape
+  ;; as desugar: source bytes in, rendered scope-tree bytes out.
+  (elem declare func $scope_apply)
+
+  (func $scope_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_scope (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $scope_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $scope_apply)
+      (ref.null $Captures)))
+
+  (func $scope (@pub) (@impl "interop.fnk:scope")
+    (result (ref any))
+    (global.get $scope_closure))
+
+
+  ;; -- fmt ---------------------------------------------------------------
+  ;; User-level call: `fmt src`. CPS args = [k_caller, src]. Same shape as
+  ;; scope: source bytes in, rendered pretty-printer bytes out.
+  (elem declare func $fmt_apply)
+
+  (func $fmt_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_fmt (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $fmt_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $fmt_apply)
+      (ref.null $Captures)))
+
+  (func $fmt (@pub) (@impl "interop.fnk:fmt")
+    (result (ref any))
+    (global.get $fmt_closure))
+
+
+  ;; -- cps_module --------------------------------------------------------
+  ;; User-level call: `cps_module src`. CPS args = [k_caller, src]. Same
+  ;; shape as fmt: source bytes in, rendered CPS-dump bytes out.
+  (elem declare func $cps_module_apply)
+
+  (func $cps_module_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_cps_module (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $cps_module_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $cps_module_apply)
+      (ref.null $Captures)))
+
+  (func $cps_module (@pub) (@impl "interop.fnk:cps_module")
+    (result (ref any))
+    (global.get $cps_module_closure))
+
+
+  ;; -- cps_closures ------------------------------------------------------
+  ;; User-level call: `cps_closures src`. Same shape as cps_module.
+  (elem declare func $cps_closures_apply)
+
+  (func $cps_closures_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_cps_closures (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $cps_closures_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $cps_closures_apply)
+      (ref.null $Captures)))
+
+  (func $cps_closures (@pub) (@impl "interop.fnk:cps_closures")
+    (result (ref any))
+    (global.get $cps_closures_closure))
+
+
+  ;; -- cps_hoisted -------------------------------------------------------
+  ;; User-level call: `cps_hoisted src`. Same shape as cps_module.
+  (elem declare func $cps_hoisted_apply)
+
+  (func $cps_hoisted_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_cps_hoisted (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $cps_hoisted_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $cps_hoisted_apply)
+      (ref.null $Captures)))
+
+  (func $cps_hoisted (@pub) (@impl "interop.fnk:cps_hoisted")
+    (result (ref any))
+    (global.get $cps_hoisted_closure))
+
+
+  ;; -- wat ---------------------------------------------------------------
+  ;; User-level call: `wat src`. Same shape as cps_module.
+  (elem declare func $wat_apply)
+
+  (func $wat_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_wat (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $wat_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $wat_apply)
+      (ref.null $Captures)))
+
+  (func $wat (@pub) (@impl "interop.fnk:wat")
+    (result (ref any))
+    (global.get $wat_closure))
+
+
+  ;; -- marks -------------------------------------------------------------
+  ;; User-level call: `marks src`. Same shape as cps_module.
+  (elem declare func $marks_apply)
+
+  (func $marks_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $src (ref null any))
+    (local $bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $bytes (call $host_marks (local.get $bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $marks_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $marks_apply)
+      (ref.null $Captures)))
+
+  (func $marks (@pub) (@impl "interop.fnk:marks")
+    (result (ref any))
+    (global.get $marks_closure))
+
+
+  ;; -- wat_pkg -----------------------------------------------------------
+  ;; User-level call: `wat_pkg base, src`. CPS args = [k_caller, base, src].
+  ;; Two byte-array inputs -> rendered WAT bytes.
+  (elem declare func $wat_pkg_apply)
+
+  (func $wat_pkg_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $base (ref null any))
+    (local $src (ref null any))
+    (local $base_bytes (ref $ByteArray))
+    (local $src_bytes (ref $ByteArray))
+    (local $str (ref any))
+    (local $rest (ref null any))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $base (call $args_head (local.get $rest)))
+    (local.set $rest (call $args_tail (local.get $rest)))
+    (local.set $src (call $args_head (local.get $rest)))
+
+    (local.set $base_bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $base))))
+    (local.set $src_bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $src))))
+    (local.set $src_bytes (call $host_wat_pkg (local.get $base_bytes) (local.get $src_bytes)))
+    (local.set $str (call $str_wrap_bytes (local.get $src_bytes)))
+
+    (local.set $k_args (call $args_empty))
+    (local.set $k_args (call $args_prepend (local.get $str) (local.get $k_args)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $wat_pkg_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $wat_pkg_apply)
+      (ref.null $Captures)))
+
+  (func $wat_pkg (@pub) (@impl "interop.fnk:wat_pkg")
+    (result (ref any))
+    (global.get $wat_pkg_closure))
 
 
   ;; -- monotonic clock -------------------------------------------------

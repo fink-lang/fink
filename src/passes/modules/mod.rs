@@ -105,6 +105,33 @@ impl SourceLoader for InMemorySourceLoader {
   }
 }
 
+/// Wraps any `SourceLoader`, serving one pre-set entry path from an
+/// in-memory string and delegating everything else to the inner loader.
+/// Used for `fink run -` (stdin): the entry source comes from stdin, but
+/// its `import './...'` deps resolve off-disk via the inner loader, with
+/// the cwd as the base directory.
+pub struct OverlayLoader<L: SourceLoader> {
+  entry_path: PathBuf,
+  entry_source: String,
+  inner: L,
+}
+
+impl<L: SourceLoader> OverlayLoader<L> {
+  pub fn new(entry_path: impl Into<PathBuf>, entry_source: impl Into<String>, inner: L) -> Self {
+    Self { entry_path: entry_path.into(), entry_source: entry_source.into(), inner }
+  }
+}
+
+impl<L: SourceLoader> SourceLoader for OverlayLoader<L> {
+  fn load(&mut self, path: &Path) -> Result<String, String> {
+    if path == self.entry_path {
+      Ok(self.entry_source.clone())
+    } else {
+      self.inner.load(path)
+    }
+  }
+}
+
 /// Wraps any `SourceLoader` and intercepts requests for migrated stdlib
 /// `.fnk` files, serving them from sources embedded at compile time via
 /// `include_str!`. Anything else delegates to the inner loader.
@@ -124,20 +151,21 @@ impl<L: SourceLoader> StdlibLoader<L> {
   }
 }
 
-/// Migrated stdlib files embedded into the binary. Add one line per
-/// `MIGRATED_STDLIB_FNK` entry. Order: most-specific suffix first if
-/// there's any overlap risk.
+/// Stdlib `std/*.fnk` source files embedded into the binary so a
+/// deployed binary resolves them without disk access. Add one line per
+/// stdlib module that needs to ship embedded. Order: most-specific
+/// suffix first if there's any overlap risk.
 const STDLIB_EMBED: &[(&str, &str)] = &[
-  ("/std/effects.fnk", include_str!("../../../std/effects.fnk")),
-  ("/std/tasks.fnk",   include_str!("../../../std/tasks.fnk")),
-  ("/std/channels.fnk", include_str!("../../../std/channels.fnk")),
-  ("/std/testing.fnk", include_str!("../../../std/testing.fnk")),
-  ("/std/io.fnk",      include_str!("../../../std/io.fnk")),
-  ("/std/set.fnk",     include_str!("../../../std/set.fnk")),
-  ("/std/list.fnk",    include_str!("../../../std/list.fnk")),
-  ("/std/fmt.fnk",     include_str!("../../../std/fmt.fnk")),
-  ("/std/repr.fnk",    include_str!("../../../std/repr.fnk")),
-  ("/std/math.fnk",    include_str!("../../../std/math.fnk")),
+  ("/std/effects.fnk", include_str!("../../../pkgs/std/effects.fnk")),
+  ("/std/tasks.fnk",   include_str!("../../../pkgs/std/tasks.fnk")),
+  ("/std/channels.fnk", include_str!("../../../pkgs/std/channels.fnk")),
+  ("/std/testing.fnk", include_str!("../../../pkgs/std/testing.fnk")),
+  ("/std/io.fnk",      include_str!("../../../pkgs/std/io.fnk")),
+  ("/std/set.fnk",     include_str!("../../../pkgs/std/set.fnk")),
+  ("/std/list.fnk",    include_str!("../../../pkgs/std/list.fnk")),
+  ("/std/fmt.fnk",     include_str!("../../../pkgs/std/fmt.fnk")),
+  ("/std/repr.fnk",    include_str!("../../../pkgs/std/repr.fnk")),
+  ("/std/math.fnk",    include_str!("../../../pkgs/std/math.fnk")),
 ];
 
 impl<L: SourceLoader> SourceLoader for StdlibLoader<L> {

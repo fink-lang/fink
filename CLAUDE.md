@@ -6,7 +6,7 @@ Fink is a functional programming language and compiler toolchain, built in Rust.
 
 See [src/README.md](src/README.md) for the current source map — it's authoritative and easy to scan. This top-level file doesn't mirror it.
 
-High level: compiler implementation lives under [src/](src/) (per-subsystem READMEs next to the code, design contracts as sibling `*.md` files); the `include_fink_tests!` proc macro lives in [crates/test-macros/](crates/test-macros/); language-level docs live under [docs/](docs/); doc-writing conventions at [docs/docs-conventions.md](docs/docs-conventions.md); contributor entry point at [CONTRIBUTING.md](CONTRIBUTING.md).
+High level: compiler implementation lives under [src/](src/) (per-subsystem READMEs next to the code, design contracts as sibling `*.md` files); language-level docs live under [docs/](docs/); doc-writing conventions at [docs/docs-conventions.md](docs/docs-conventions.md); contributor entry point at [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Language Design Goals
 
@@ -50,7 +50,8 @@ See [docs/language.md](docs/language.md) for the authoritative user-facing synta
 
 ## Testing Conventions
 
-- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `test_macros::include_fink_tests!("path/to/tests.fnk")`.
+- Tests live either as Rust (`#[cfg(test)] mod tests` at the bottom of the file that implements the feature) or as a native `*.test.fnk` file discovered and run by `fink test`. Native tests import `test`/`equals` from `std/testing.fnk` and drive compiler passes through the host services re-exported from `fink/compile.fnk` (`tokenize`, `ast`, `desugar`, `scope`, `fmt`, `cps_module`, `cps_closures`, `cps_hoisted`, `wat`, `wat_pkg`, `marks`). Snapshot-style tests pipe a pass over a `ƒink:` source block and compare against an expected block (`| equals ƒink:` / `wat":`).
+- Tests that execute a program and assert on its runtime output or error string are Rust tests next to the runner, not native `.fnk` tests — there is no fink-runs-fink service.
 - Never put tests for module A inside module B.
 - **Bug workflow**: when investigating a bug, first write a failing test that reproduces it — don't dive into the code before you have a repro test.
 

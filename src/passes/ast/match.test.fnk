@@ -1,0 +1,548 @@
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+test 'match on literal values', fn:
+  ast ƒink:
+    match foo:
+      1: 'one'
+      2: 'two'
+      _: 'other'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            LitInt '1'
+          LitStr 'one'
+        Arm ':',
+          Patterns
+            LitInt '2'
+          LitStr 'two'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitStr 'other'
+
+test 'match with binding', fn:
+  ast ƒink:
+    match foo:
+      [head, ..tail]: head
+      []: 'empty'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'head'
+              Spread '..',
+                Ident 'tail'
+          Ident 'head'
+        Arm ':',
+          Patterns
+            LitSeq '[..]'
+          LitStr 'empty'
+
+test 'match with inline guard', fn:
+  ast ƒink:
+    match foo:
+      n > 0 and n < 10: 'small positive'
+      n > 0: 'large positive'
+      _: 'other'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            InfixOp 'and',
+              InfixOp '>',
+                Ident 'n'
+                LitInt '0'
+              InfixOp '<',
+                Ident 'n'
+                LitInt '10'
+          LitStr 'small positive'
+        Arm ':',
+          Patterns
+            InfixOp '>',
+              Ident 'n'
+              LitInt '0'
+          LitStr 'large positive'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitStr 'other'
+
+test 'match on type', fn:
+  ast ƒink:
+    match foo:
+      str s: 'its a string'
+      u8 n: 'its a u8'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'str'
+              Ident 's'
+          LitStr 'its a string'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'u8'
+              Ident 'n'
+          LitStr 'its a u8'
+
+
+test 'match string pattern', fn:
+  ast ƒink:
+    match s:
+      'hello ${rest}': rest
+      'a'...'z': 'lowercase letter'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 's'
+        Arm ':',
+          Patterns
+            StrTempl
+              LitStr 'hello '
+              Ident 'rest'
+          Ident 'rest'
+        Arm ':',
+          Patterns
+            InfixOp '...',
+              LitStr 'a'
+              LitStr 'z'
+          LitStr 'lowercase letter'
+
+
+test 'match sequence patterns', fn:
+  ast ƒink:
+    match items:
+      []: 'empty'
+      [x]: 'one element'
+      [x, y]: 'two elements'
+      [x, ..]: 'one or more'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]'
+          LitStr 'empty'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'x'
+          LitStr 'one element'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'x'
+              Ident 'y'
+          LitStr 'two elements'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'x'
+              Spread '..'
+          LitStr 'one or more'
+
+test 'match sequence bare spread pattern', fn:
+  ast ƒink:
+    match items:
+      [..]: 'non-empty'
+      []: 'empty'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Spread '..'
+          LitStr 'non-empty'
+        Arm ':',
+          Patterns
+            LitSeq '[..]'
+          LitStr 'empty'
+
+test 'match record bare spread pattern', fn:
+  ast ƒink:
+    match foobar:
+      {..}: 'non-empty'
+      {}: 'empty'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Spread '..'
+          LitStr 'non-empty'
+        Arm ':',
+          Patterns
+            LitRec '{..}'
+          LitStr 'empty'
+
+test 'match record patterns', fn:
+  ast ƒink:
+    match foobar:
+      {}: 'empty'
+      {foo: 1}: 'foo is 1'
+      {foo: 1, ..}: 'foo is 1 and more'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}'
+          LitStr 'empty'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+          LitStr 'foo is 1'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+              Spread '..'
+          LitStr 'foo is 1 and more'
+
+test 'match record exact - empty rest', fn:
+  ast ƒink:
+    match foobar:
+      {foo: 1, ..{}}: 'foo is 1 and nothing else'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+              Spread '..',
+                LitRec '{..}'
+          LitStr 'foo is 1 and nothing else'
+
+test 'match record with bound rest', fn:
+  ast ƒink:
+    match foobar:
+      {foo: 1, ..rest}: rest
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+              Spread '..',
+                Ident 'rest'
+          Ident 'rest'
+
+test 'match seq exact - empty rest', fn:
+  ast ƒink:
+    match items:
+      [a, ..[]]:'only a'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'a'
+              Spread '..',
+                LitSeq '[..]'
+          LitStr 'only a'
+
+test 'match nested record pattern', fn:
+  ast ƒink:
+    match foo:
+      {x: 1, y: {z}}: z
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'x'
+                LitInt '1'
+              Arm ':',
+                Ident 'y'
+                LitRec '{..}',
+                  Ident 'z'
+          Ident 'z'
+
+test 'inline match in application', fn:
+  ast ƒink:
+    log match a: x > 0: x
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'log'
+        Match ':',
+          Ident 'a'
+          Arm ':',
+            Patterns
+              InfixOp '>',
+                Ident 'x'
+                LitInt '0'
+            Ident 'x'
+
+test 'multi-subject match', fn:
+  ast ƒink:
+    match a, b:
+      1, 2: 'one two'
+      1, x: 'one other'
+      _, _: 'other'
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'a'
+        Ident 'b'
+        Arm ':',
+          Patterns
+            LitInt '1'
+            LitInt '2'
+          LitStr 'one two'
+        Arm ':',
+          Patterns
+            LitInt '1'
+            Ident 'x'
+          LitStr 'one other'
+        Arm ':',
+          Patterns
+            Wildcard
+            Wildcard
+          LitStr 'other'
+
+test 'guard combined with spread in match arm', fn:
+  ast ƒink:
+    match items:
+      [x > 0, ..rest]: rest
+      _: []
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              InfixOp '>',
+                Ident 'x'
+                LitInt '0'
+              Spread '..',
+                Ident 'rest'
+          Ident 'rest'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitSeq '[..]'
+
+test 'rec value with infix comparison guard', fn:
+  ast ƒink:
+    match r:
+      {foo: bar == 4}: bar
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'r'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                InfixOp '==',
+                  Ident 'bar'
+                  LitInt '4'
+          Ident 'bar'
+
+test 'rec value with predicate guard', fn:
+  ast ƒink:
+    match r:
+      {foo: is_even bar}: bar
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'r'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                Apply
+                  Ident 'is_even'
+                  Ident 'bar'
+          Ident 'bar'
+
+test 'list of rec with predicate guard and spread', fn:
+  ast ƒink:
+    match items:
+      [{k: is_even v}, ..]: v
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              LitRec '{..}',
+                Arm ':',
+                  Ident 'k'
+                  Apply
+                    Ident 'is_even'
+                    Ident 'v'
+              Spread '..'
+          Ident 'v'
+
+
+test 'nested pattern with guard in binding', fn:
+  ast ƒink:
+    [[x, y], z > 0] = foo
+  | equals ƒink:
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          LitSeq '[..]',
+            Ident 'x'
+            Ident 'y'
+          InfixOp '>',
+            Ident 'z'
+            LitInt '0'
+        Ident 'foo'
+
+test 'multiline arm body', fn:
+  ast ƒink:
+    match n:
+      n > 0:
+        x = n * 2
+        x + 1
+      _: 0
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'n'
+        Arm ':',
+          Patterns
+            InfixOp '>',
+              Ident 'n'
+              LitInt '0'
+          Bind '=',
+            Ident 'x'
+            InfixOp '*',
+              Ident 'n'
+              LitInt '2'
+          InfixOp '+',
+            Ident 'x'
+            LitInt '1'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitInt '0'
+
+test 'wildcard arm body as application', fn:
+  ast ƒink:
+    match n:
+      0: true
+      _: is_odd n - 1
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'n'
+        Arm ':',
+          Patterns
+            LitInt '0'
+          LitBool true
+        Arm ':',
+          Patterns
+            Wildcard
+          Apply
+            Ident 'is_odd'
+            InfixOp '-',
+              Ident 'n'
+              LitInt '1'
+
+test 'Ok and Err patterns in match', fn:
+  ast ƒink:
+    match bar result:
+      Ok x: x + 1
+      Err err: log err
+  | equals ƒink:
+    Module
+      Match ':',
+        Apply
+          Ident 'bar'
+          Ident 'result'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'Ok'
+              Ident 'x'
+          InfixOp '+',
+            Ident 'x'
+            LitInt '1'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'Err'
+              Ident 'err'
+          Apply
+            Ident 'log'
+            Ident 'err'
+
+test 'error chaining', fn:
+  ast ƒink:
+    Err e, 'foo failed'
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'Err'
+        Ident 'e'
+        LitStr 'foo failed'
+
+test 'match arm with nested right-hand binding', fn:
+  ast ƒink:
+    match foobar:
+      {foo: f |= {bar}}: bar
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                BindRight '|=',
+                  Ident 'f'
+                  LitRec '{..}',
+                    Ident 'bar'
+          Ident 'bar'

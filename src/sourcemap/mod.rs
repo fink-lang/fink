@@ -7,7 +7,7 @@
 //! [`MappedWriter`] is the shared output-tracking writer. `mark` records
 //! a `Loc` at the current output byte position; `finish_native` hands
 //! back the accumulated mappings. The writer also tracks line/col for
-//! consumers (such as [`crate::fmt::print`]) that need to know where the
+//! consumers (the per-pass formatters) that need to know where the
 //! cursor sits relative to line boundaries.
 
 pub mod native;

@@ -1,7 +1,6 @@
 [workspace]
 members = [
   ".",
-  "crates/test-macros",
 ]
 resolver = "2"
 
@@ -60,7 +59,6 @@ name = "interop_js"
 path = "src/runtime/interop/js/test_interop.rs"
 
 [dev-dependencies]
-test-macros = { path = "crates/test-macros" }
 tempfile = "3"
 wat-crate = { package = "wat", version = "1" }
 assert_cmd = "2"

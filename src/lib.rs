@@ -19,7 +19,6 @@
 //! contract.
 
 pub mod errors;
-pub mod fmt;
 #[cfg(feature = "compile")]
 pub mod compile;
 pub mod wat_linker;
@@ -108,7 +107,7 @@ pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::D
   if let Some(diag) = first_unresolved_diagnostic(&desugared, url) {
     return Err(diag);
   }
-  let cps = passes::lower(&desugared);
+  let cps = passes::lower(&desugared, src);
   Ok((cps, desugared))
 }
 
@@ -210,6 +209,32 @@ pub fn run(
   stderr: runner::IoStream,
 ) -> Result<i64, String> {
   runner::run_source(Default::default(), src, path, args, stdin, stdout, stderr)
+}
+
+/// Compile and run fink source from stdin. Multi-module — `import './...'`
+/// deps resolve off-disk relative to the cwd. Used by `fink run -`.
+#[cfg(feature = "run")]
+pub fn run_stdin(
+  src: &str,
+  args: Vec<Vec<u8>>,
+  stdin: runner::IoReadStream,
+  stdout: runner::IoStream,
+  stderr: runner::IoStream,
+) -> Result<i64, String> {
+  runner::run_stdin(Default::default(), src, args, stdin, stdout, stderr)
+}
+
+/// Discover and run the native ƒink test suite under the cwd. `target`
+/// selects files (see `runner::run_tests`). Used by `fink test`.
+#[cfg(feature = "run")]
+pub fn run_tests(
+  target: Option<&str>,
+  args: Vec<Vec<u8>>,
+  stdin: runner::IoReadStream,
+  stdout: runner::IoStream,
+  stderr: runner::IoStream,
+) -> Result<i64, String> {
+  runner::run_tests(Default::default(), target, args, stdin, stdout, stderr)
 }
 
 /// Compile and run a `.fnk` (or `.wasm`) file from disk. Multi-module —

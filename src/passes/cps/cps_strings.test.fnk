@@ -1,0 +1,94 @@
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+---
+string templates
+---
+
+test 'str templ', fn:
+  cps_module ƒink:
+    'hello ${name}'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
+      ·str_fmt ·ƒctx_6, 'hello ', ·∅name, ·ƒret_0
+    # sm:EgABAA8AAQAPJAEADxYBAA8SAAIABgEADwABAA8UABIABAECBgABAAYCAQAGDAEABgIABAEQBBIABAERDw
+
+
+test 'str templ two exprs', fn:
+  cps_module ƒink:
+    '${a} and ${b}'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_7, ·ƒret_0:
+      ·str_fmt ·ƒctx_7, ·∅a, ' and ', ·∅b, ·ƒret_0
+    # sm:FAABAA8AAQAPJAEADxYBAA8SAAIABgEADwABAA8UABIABAEGAQwABAEEBQABAAUCAQAFCgEABQIABAEOAQwABAEXDw
+
+
+test 'str tagged template', fn:
+  cps_module ƒink:
+    foo'1\n2
+      3'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
+      ·seq_prepend ·ƒctx_11, '1⧵n2␊3', [], fn ·ƒctx_14, ·ƒv_4:
+        ·∅foo ·ƒctx_14, ·ƒret_0, ..·ƒv_4
+    # sm:IAABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0cABQABAEICAABAAgCAQAIFAEACAIABAEHDQABAA0CAQANAgAKABgBAA0OAAIACgEADQABAAMSABQABAEADRIABAEADQABAA0EAQAN
+
+
+test 'str tagged template escape handling', fn:
+  cps_module ƒink:
+    foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_21, ·ƒret_0:
+      ·seq_prepend ·ƒctx_21, '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·ƒctx_24, ·ƒv_4:
+        ·seq_prepend ·ƒctx_24, ·∅bar, ·ƒv_4, fn ·ƒctx_26, ·ƒv_7:
+          ·seq_prepend ·ƒctx_26, '⧵n⧵r⧵t⧵f', ·ƒv_7, fn ·ƒctx_28, ·ƒv_10:
+            ·∅foo ·ƒctx_28, ·ƒret_0, ..·ƒv_10
+    # sm:OwABAC4AAQAuJAEALhgBAC4SAAIABgEALgABAC4cABQABAEkGwABABsCAQAbYgEAGwIABAEjLgABAC4CAQAuAgAKABgBAC4OAAIACgEALgABAC4cABQABAEcAxAABAEbLg4ACgAYAQAuDgACAA4BAC4AAQAuHAAUAAQBCAgAAQAIAgEACCABAAgCAAQBBy4OAAoAGAEALhAAAgASAQAuAAEAAxIAFAAEAQAuEgAEAQAuAAEALgQBAC4
+
+
+test 'str implicit formatting handling', fn:
+  cps_module ƒink:
+    '1\n2
+      3'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, '1␊2␊3'
+    # sm:DgABAAoAAQAKJAEAChYBAAoSAAIABgEACgABAAoUABIABAEACgABAAoCAQAKEgEACg
+
+
+test 'str implicit formatting escapes', fn:
+  cps_module ƒink:
+    '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, '␊␍␉␌␈␋＄′⧵é語'
+    # sm:DgABACUAAQAlJAEAJRYBACUSAAIABgEAJQABACUUABIABAEAJQABACUCAQAlQAEAJQ
+
+
+test 'str templ escape handling', fn:
+  cps_module ƒink:
+    '\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_7, ·ƒret_0:
+      ·str_fmt ·ƒctx_7, '␊␍␉␌', ·∅bar, '␈␋＄′⧵é語', ·ƒret_0
+    # sm:FwABACsAAQArJAEAKxYBACsSAAIABgEAKwABACsUABIABAECCAABAAgCAQAIGAEACAIABAEUAxAABAEIGwABABsCAQAbKAEAGwIABAEdKw
+
+
+test 'str templ implicit formatting handling', fn:
+  cps_module ƒink:
+    '1\n${bar}
+      3'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_7, ·ƒret_0:
+      ·str_fmt ·ƒctx_7, '1␊', ·∅bar, '␊3', ·ƒret_0
+    # sm:FwABAA8AAQAPJAEADxYBAA8SAAIABgEADwABAA8UABIABAECAwABAAMCAQADCAEAAwIABAEKAxAABAEIBAABAAQCAQAECAEABAIABAETDw
+
+
+
+
+

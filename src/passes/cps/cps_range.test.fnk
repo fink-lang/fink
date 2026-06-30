@@ -1,0 +1,38 @@
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+---
+range
+---
+
+test 'range excl', fn:
+  cps_module ƒink:
+    0..10
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
+      ·op_rngex ·ƒctx_6, (i8 0), (i8 10), ·ƒret_0
+    # sm:EwABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUWABIABgEAAQABAAEGAQABBAAGAQYCAAEAAgYBAAIGAAQBBQU
+
+
+test 'range incl', fn:
+  cps_module ƒink:
+    0...10
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
+      ·op_rngin ·ƒctx_6, (i8 0), (i8 10), ·ƒret_0
+    # sm:EwABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYWABIABgEAAQABAAEGAQABBAAGAQgCAAEAAgYBAAIGAAQBBwY
+
+
+test 'open range excl', fn:
+  cps_module ƒink:
+    0..
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
+      ·op_rngfrom ·ƒctx_5, (i8 0), ·ƒret_0
+    # sm:DwABAAMAAQADJAEAAxYBAAMSAAIABgEAAwABAAMaABIABgEAAQABAAEGAQABBAAEAQAD

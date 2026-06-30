@@ -51,10 +51,13 @@ pub struct Gen<'scope, 'src> {
   /// The current continuation — the `·ƒ_cont` in scope for the current function body.
   /// Set to the module-level cont at transform start; swapped per LetFn scope.
   cont: CpsId,
+  /// The original module source. Needed to recover the verbatim body text of
+  /// `ƒink:` blocks (lowered to a string literal of their source slice).
+  src: &'src str,
 }
 
 impl<'scope, 'src> Gen<'scope, 'src> {
-  pub fn new(ast: &'scope Ast<'src>, scope: &'scope ScopeResult) -> Self {
+  pub fn new(ast: &'scope Ast<'src>, scope: &'scope ScopeResult, src: &'src str) -> Self {
     let n = scope.binds.len();
     let mut origin: PropGraph<CpsId, Option<AstId>> = PropGraph::with_size(n, None);
     let mut bind_to_cps: PropGraph<BindId, CpsId> = PropGraph::new();
@@ -85,7 +88,7 @@ impl<'scope, 'src> Gen<'scope, 'src> {
       _ => ast.root,
     };
     let cont_id: CpsId = origin.push(Some(ret_origin));
-    Gen { ast, origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, binds: &scope.binds, cont: cont_id }
+    Gen { ast, origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, binds: &scope.binds, cont: cont_id, src }
   }
 
   /// Look up a node in the AST.
@@ -338,7 +341,15 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     }
 
     // ---- block: `name params: body` ----
-    NodeKind::Block { name, params, body, .. } => {
+    NodeKind::Block { name, params, body, sep } => {
+      // A `ƒink:` block lowers to a string literal of its verbatim source
+      // text (dedented + trimmed) — the parsed body subtree is kept for
+      // scope/tooling but ignored here. This is the native equivalent of the
+      // `include_fink_tests!` macro's `extract_block_body_text`.
+      if matches!(g.node(name).kind, NodeKind::Ident("ƒink")) {
+        let text = fink_block_text(g.src, sep, g.node(id).loc.end.idx);
+        return (lit_val(g, Lit::Str(text.into_bytes()), o), vec![]);
+      }
       let body_items: Vec<AstId> = body.items.to_vec();
       lower_block(g, name, params, &body_items, o)
     }
@@ -1176,6 +1187,22 @@ fn wrap_decl_in_params_fn(
   (ref_val(g, rk, ri, origin), pending)
 }
 
+// Mint a bare unit `$Type` value: a single `·new_type` seed carrying `name`
+// (null when anonymous), with no fields accreted. This is what the unit form
+// `type _` lowers to, and what an inferred type position (`_`) reuses.
+fn mint_unit_type(g: &mut Gen, name: Option<&str>, origin: Option<AstId>) -> Lower {
+  let seed = g.fresh_result(origin);
+  let (sk, si) = (seed.kind, seed.id);
+  let name_val = type_name_val(g, name, origin);
+  let pending = vec![Pending::App {
+    func: Callable::BuiltIn(BuiltIn::NewType),
+    args: args_val(vec![name_val]),
+    result: seed,
+    origin,
+  }];
+  (ref_val(g, sk, si, origin), pending)
+}
+
 // Lower an expression in TYPE position (a field type, a positional type, a
 // result type). Most type expressions are ordinary values -- a type reference
 // (`u8`, `Foo`) resolves in scope to its `$Type` value, so `lower` suffices. The
@@ -1192,6 +1219,15 @@ fn lower_type_expr(g: &mut Gen, id: AstId) -> Lower {
 // (the bind LHS when `Foo = type: fn ...: R` declares the fn type directly).
 // For a non-`fn` type expression the name is irrelevant and ignored.
 fn lower_type_expr_named(g: &mut Gen, id: AstId, name: Option<&str>) -> Lower {
+  // `_` in type position means "inferred" -- the field/positional exists, its
+  // type is left to inference. Lower it to a bare anonymous `$Type` (a unit
+  // type, the same value `type _` mints) so it is a real type value rather than
+  // the wildcard scope-ref placeholder. No checker reads it yet, so this is the
+  // accepted-any-shape slot; a dedicated `$Inferred` sentinel can replace this
+  // when inference lands.
+  if matches!(g.node(id).kind, NodeKind::Wildcard) {
+    return mint_unit_type(g, None, Some(id));
+  }
   let NodeKind::Fn { params, body, .. } = g.node(id).kind.clone() else {
     return lower(g, id);
   };
@@ -1822,6 +1858,35 @@ fn lower_match_arm(g: &mut Gen, arm: AstId, _origin: Option<AstId>) -> ArmCps {
 // Block: `name params: body`
 // ---------------------------------------------------------------------------
 
+/// Recover the verbatim source text of a `ƒink:` block: the slice from the
+/// separator's end to the block node's end, dedented and trimmed.
+///
+/// Mirrors `extract_block_body_text` + `dedent_str` in the `include_fink_tests!`
+/// macro so a `ƒink:` block lowered natively produces byte-identical text to one
+/// extracted by the macro.
+fn fink_block_text(src: &str, sep: crate::ast::lexer::Token, node_end: u32) -> String {
+  let body_start = sep.loc.end.idx as usize;
+  let body_end = node_end as usize;
+  if body_start >= body_end {
+    return String::new();
+  }
+  dedent_str(&src[body_start..body_end]).trim().to_string()
+}
+
+/// Strip the common leading-whitespace prefix from every non-blank line.
+fn dedent_str(s: &str) -> String {
+  let indent = s
+    .lines()
+    .filter(|l| !l.trim().is_empty())
+    .map(|l| l.len() - l.trim_start().len())
+    .min()
+    .unwrap_or(0);
+  s.lines()
+    .map(|l| if l.len() >= indent { &l[indent..] } else { l })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
 fn lower_block(
   g: &mut Gen,
   name: AstId,
@@ -2431,8 +2496,8 @@ fn walk_bind_lhs(
   }
 }
 
-pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeResult) -> CpsResult {
-  let mut g = Gen::new(ast, scope);
+pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeResult, src: &'src str) -> CpsResult {
+  let mut g = Gen::new(ast, scope, src);
 
   // The module-level continuation — ƒret. Pre-allocated by Gen::new.
   // The module body forwards its last expression's result to ƒret,
@@ -2752,8 +2817,8 @@ fn rewrite_lets_to_sets_cont(
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
-pub fn lower_expr<'src>(ast: &'src Ast<'src>, id: AstId, scope: &ScopeResult) -> CpsResult {
-  let mut g = Gen::new(ast, scope);
+pub fn lower_expr<'src>(ast: &'src Ast<'src>, id: AstId, scope: &ScopeResult, src: &'src str) -> CpsResult {
+  let mut g = Gen::new(ast, scope, src);
   let (val, pending) = lower(&mut g, id);
   let cont = g.cont;
   let root = if pending.is_empty() {
@@ -4041,46 +4106,28 @@ fn unwrap_modifier_lhs(ast: &Ast<'_>, id: AstId) -> AstId {
   id
 }
 
+/// Render the module-level CPS IR (with a base64url source-map line) for a
+/// source string. Backs the `cps_module` host service (`fink/compile.fnk`)
+/// and the native cps_module test files. Mirrors the `module_tests::cps_module`
+/// renderer: desugar, lower, thread ctx, then `fmt_with_mapped_native` plus the
+/// `# sm:<b64>` source-map line.
+pub fn cps_module_debug(src: &str) -> String {
+  use crate::passes::cps::fmt::Ctx;
+  match crate::to_desugared(src, "test") {
+    Ok(desugared) => {
+      let cps = crate::passes::lower(&desugared, src);
+      let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
+      let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
+      let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
+      let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
+      let b64 = srcmap.encode_base64url();
+      format!("{output}\n# sm:{b64}")
+    }
+    Err(e) => format!("ERROR: {e}"),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
-mod module_tests {
-  use crate::passes::cps::fmt::Ctx;
-
-  fn cps_module(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = crate::passes::lower(&desugared);
-        let result = crate::passes::cps::thread_ctx::thread_ctx(cps.result);
-        let bk = crate::passes::cps::ir::collect_bind_kinds(&result.root);
-        let ctx = Ctx { origin: &result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
-        let _ = src;
-        let b64 = srcmap.encode_base64url();
-        format!("{output}\n# sm:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/cps/test_module.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_letrec.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_literals.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_functions.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_operators.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_range.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_dict.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_types.fnk");
-}

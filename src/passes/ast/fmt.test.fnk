@@ -1,0 +1,511 @@
+
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{fmt} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+---
+AST → Fink pretty-printer tests
+---
+
+
+
+---
+Atoms
+---
+
+test 'ident', fn:
+  fmt ƒink:
+    foo
+
+  | equals ƒink:
+    foo
+
+test 'int literal', fn:
+  fmt ƒink:
+    42
+
+  | equals ƒink:
+    42
+
+test 'float literal', fn:
+  fmt ƒink:
+    3.14
+
+  | equals ƒink:
+    3.14
+
+test 'bool literal true', fn:
+  fmt ƒink:
+    true
+
+  | equals ƒink:
+    true
+
+test 'bool literal false', fn:
+  fmt ƒink:
+    false
+
+  | equals ƒink:
+    false
+
+test 'string literal', fn:
+  fmt ƒink:
+    'hello'
+
+  | equals ƒink:
+    'hello'
+
+test 'empty seq literal', fn:
+  fmt ƒink:
+    []
+
+  | equals ƒink:
+    []
+
+test 'empty rec literal', fn:
+  fmt ƒink:
+    {}
+
+  | equals ƒink:
+    {}
+
+
+---
+Tagged string literals
+---
+
+test 'tagged string — id', fn:
+  fmt ƒink:
+    id'foo'
+
+  | equals ƒink:
+    id'foo'
+
+test 'tagged string — op', fn:
+  fmt ƒink:
+    op'+'
+
+  | equals ƒink:
+    op'+'
+
+test 'tagged string — str_fink', fn:
+  fmt ƒink:
+    str_fink'hello '
+
+  | equals ƒink:
+    str_fink'hello '
+
+test 'tagged template — interpolation', fn:
+  fmt ƒink:
+    fmt'hello ${1 + 2} world'
+
+  | equals ƒink:
+    fmt'hello \${1 + 2} world'
+
+test 'tagged template — interpolation only expr', fn:
+  fmt ƒink:
+    fmt'${x}'
+
+  | equals ƒink:
+    fmt'\${x}'
+
+test 'tagged template — multiple interpolations', fn:
+  fmt ƒink:
+    fmt'${a} and ${b}'
+
+  | equals ƒink:
+    fmt'\${a} and \${b}'
+
+
+---
+Apply
+---
+
+test 'apply — single arg', fn:
+  fmt ƒink:
+    foo bar
+
+  | equals ƒink:
+    foo bar
+
+test 'apply — multiple args', fn:
+  fmt ƒink:
+    foo a, b, c
+
+  | equals ƒink:
+    foo a, b, c
+
+test 'apply — trailing fn arg breaks to next line', fn:
+  fmt ƒink:
+    foo a, b, fn x:
+      bar x
+
+  | equals ƒink:
+    foo a, b, fn x:
+      bar x
+
+test 'apply — fn arg inline single atom', fn:
+  fmt ƒink:
+    foo a, fn x: x
+
+  | equals ƒink:
+    foo a, fn x: x
+
+test 'apply — no args', fn:
+  fmt ƒink:
+    foo
+
+  | equals ƒink:
+    foo
+
+
+---
+Fn
+---
+
+test 'fn — no params, single expr body', fn:
+  fmt ƒink:
+    fn: foo
+
+  | equals ƒink:
+    fn: foo
+
+test 'fn — single param, single expr body inline', fn:
+  fmt ƒink:
+    fn x: x
+
+  | equals ƒink:
+    fn x: x
+
+test 'fn — multi param', fn:
+  fmt ƒink:
+    fn a, b: a
+
+  | equals ƒink:
+    fn a, b: a
+
+test 'fn — body is apply, inline', fn:
+  fmt ƒink:
+    fn x: foo x
+
+  | equals ƒink:
+    fn x: foo x
+
+test 'fn — multi-statement body', fn:
+  fmt ƒink:
+    fn x:
+      foo x
+      bar x
+
+  | equals ƒink:
+    fn x:
+      foo x
+      bar x
+
+test 'fn — spread param', fn:
+  fmt ƒink:
+    fn a, ..rest: rest
+
+  | equals ƒink:
+    fn a, ..rest: rest
+
+
+---
+Bind
+---
+
+test 'bind — simple', fn:
+  fmt ƒink:
+    foo = bar
+
+  | equals ƒink:
+    foo = bar
+
+test 'bind — rhs is apply', fn:
+  fmt ƒink:
+    foo = bar baz
+
+  | equals ƒink:
+    foo = bar baz
+
+
+---
+Nested / chained (CPS-style)
+---
+
+test 'chained apply with fn continuations', fn:
+  fmt ƒink:
+    load env, id'x', fn ·x, env:
+      apply foo, ·x, state, fn v_result, state:
+        ƒ_cont v_result, state
+
+  | equals ƒink:
+    load env, id'x', fn ·x, env:
+      apply foo, ·x, state, fn v_result, state:
+        ƒ_cont v_result, state
+
+test 'fn body is chained apply', fn:
+  fmt ƒink:
+    fn x:
+      load env, id'x', fn ·x, env:
+        ƒ_cont ·x, state
+
+  | equals ƒink:
+    fn x:
+      load env, id'x', fn ·x, env:
+        ƒ_cont ·x, state
+
+test 'module wrapper', fn:
+  fmt ƒink:
+    module fn {load, apply, id}, env, state, ƒ_cont:
+      load env, id'x', fn ·x, env:
+        ƒ_cont ·x, state
+
+  | equals ƒink:
+    module fn {load, apply, id}, env, state, ƒ_cont:
+      load env, id'x', fn ·x, env:
+        ƒ_cont ·x, state
+
+
+---
+Multiple trailing fn args — stacked at same indent
+---
+
+test 'apply — two trailing fn args', fn:
+  fmt ƒink:
+    match_done m, state,
+      fn m, state: ƒ_err state
+      fn m, state: ƒ_ok m, state
+
+  | equals ƒink:
+    match_done m, state,
+      fn m, state: ƒ_err state
+      fn m, state: ƒ_ok m, state
+
+test 'apply — three trailing fn args', fn:
+  fmt ƒink:
+    match_bind val, state,
+      fn v, state, ƒ_err, ƒ_ok:
+        store env, id'foo', v, fn ·foo, env:
+          ƒ_ok env, state
+      fn state: panic 'no match', state
+      fn v_result, state: ƒ_cont v_result, state
+
+  | equals ƒink:
+    match_bind val, state,
+      fn v, state, ƒ_err, ƒ_ok:
+        store env, id'foo', v, fn ·foo, env:
+          ƒ_ok env, state
+      fn state: panic 'no match', state
+      fn v_result, state: ƒ_cont v_result, state
+
+test 'apply — non-fn arg followed by fn arg as positional arg', fn:
+  # match_branch is itself an arg (not a trailing fn), followed by more fn args
+  fmt ƒink:
+    match_block n, state,
+      match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
+        ƒ_ok v, state
+      fn state:
+        panic 'no match', state
+      fn match_result, state:
+        ƒ_cont match_result, state
+
+  | equals ƒink:
+    match_block n, state,
+      match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
+        ƒ_ok v, state
+      fn state: panic 'no match', state
+      fn match_result, state: ƒ_cont match_result, state
+
+
+---
+Operators
+---
+
+test 'unary minus', fn:
+  fmt ƒink:
+    -a
+
+  | equals ƒink:
+    -a
+
+test 'unary not', fn:
+  fmt ƒink:
+    not a
+
+  | equals ƒink:
+    not a
+
+test 'infix add', fn:
+  fmt ƒink:
+    a + b
+
+  | equals ƒink:
+    a + b
+
+test 'infix multiply', fn:
+  fmt ƒink:
+    a * b
+
+  | equals ƒink:
+    a * b
+
+test 'chained comparison', fn:
+  fmt ƒink:
+    a > b > c
+
+  | equals ƒink:
+    a > b > c
+
+
+---
+Member access
+---
+
+test 'member — simple', fn:
+  fmt ƒink:
+    foo.bar
+
+  | equals ƒink:
+    foo.bar
+
+test 'member — chained', fn:
+  fmt ƒink:
+    foo.bar.spam
+
+  | equals ƒink:
+    foo.bar.spam
+
+
+---
+Pipe
+---
+
+test 'pipe — simple', fn:
+  fmt ƒink:
+    foo | bar | spam
+
+  | equals ƒink:
+    foo | bar | spam
+
+test 'pipe — with block string arg', fn:
+  fmt ƒink:
+    foo ":
+      bar
+    | spam
+  | equals ƒink:
+    foo ":
+      bar
+    | spam
+
+
+---
+Match
+---
+
+test 'match — simple arms', fn:
+  fmt ƒink:
+    match foo:
+      1: 'one'
+      2: 'two'
+      _: 'other'
+
+  | equals ƒink:
+    match foo:
+      1: 'one'
+      2: 'two'
+      _: 'other'
+
+test 'match — binding arm', fn:
+  fmt ƒink:
+    match foo:
+      [head, ..tail]: head
+      []: 'empty'
+
+  | equals ƒink:
+    match foo:
+      [head, ..tail]: head
+      []: 'empty'
+
+
+---
+Bind right
+---
+
+test 'bind right — simple', fn:
+  fmt ƒink:
+    123 |= b
+
+  | equals ƒink:
+    123 |= b
+
+
+---
+Try
+---
+
+test 'try — simple', fn:
+  fmt ƒink:
+    try foo bar
+
+  | equals ƒink:
+    try foo bar
+
+
+---
+Group
+---
+
+test 'group — parens', fn:
+  fmt ƒink:
+    (a + b) * c
+
+  | equals ƒink:
+    (a + b) * c
+
+
+---
+Partial
+---
+
+test 'partial — hole', fn:
+  fmt ƒink:
+    add 5, ?
+
+  | equals ƒink:
+    add 5, ?
+
+
+---
+Seq and Rec with items
+---
+
+test 'seq literal with items', fn:
+  fmt ƒink:
+    [1, 2, 3]
+
+  | equals ƒink:
+    [1, 2, 3]
+
+test 'rec literal with items', fn:
+  fmt ƒink:
+    {foo, bar}
+
+  | equals ƒink:
+    {foo, bar}
+
+
+---
+Decimal literal
+---
+
+test 'decimal literal', fn:
+  fmt ƒink:
+    1.0d
+
+  | equals ƒink:
+    1.0d

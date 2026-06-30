@@ -186,7 +186,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
     // imported by other WAT and by the compiler via `import_key`. The source
     // files live flat under `runtime/`; interop stays nested (target-selected).
     let modules: &[(&str, &str)] = &[
-      ("interop.wat",      interop_src),
+      ("rt/interop.wat",   interop_src),
       ("rt/apply.wat",     include_str!("../../runtime/apply.wat")),
       ("rt/trace.wat",     include_str!("../../runtime/trace.wat")),
       ("rt/opaque.wat",    include_str!("../../runtime/opaque.wat")),
@@ -639,15 +639,9 @@ pub fn emit_with_offsets(frag: &Fragment, interop: Interop) -> EmitOutput {
     func_sec.function(resolve_type(rt, f.sig, &type_remap));
   }
 
-  // Memory: runtime has none; user fragment brings one page.
-  let mut mem_sec = MemorySection::new();
-  mem_sec.memory(MemoryType {
-    minimum: 1,
-    maximum: None,
-    memory64: false,
-    shared: false,
-    page_size_log2: None,
-  });
+  // Memory section is built below, after the data pool size is known
+  // (the page count must cover the static literal blob, which can exceed
+  // one page). See the `mem_sec` construction near the data section.
 
   // Globals: runtime entries are raw-spliced (init_exprs use struct.new
   // etc. which wasm-encoder's ConstExpr API can't construct); user
@@ -754,15 +748,43 @@ pub fn emit_with_offsets(frag: &Fragment, interop: Interop) -> EmitOutput {
     data_blob.extend_from_slice(&d.bytes);
   }
 
-  // The data pool must not grow into the host-IO scratch window. Data
-  // size is fully known here, so this is a hard compile-time invariant.
+  // Linear-memory layout (memory 0):
+  //   [0, RING_BYTES)            trace activation-stack ring
+  //   [RING_BYTES, data_top)     static literal data pool (compile-time)
+  //
+  // The data pool is write-once at compile time; runtime strings are GC
+  // arrays, not linear memory, so nothing grows the pool at runtime.
+  //
+  // The JS interop bounces host bytes through a fixed scratch window whose
+  // base its WAT hardcodes at SCRATCH_BASE -- so under `Interop::Js` the
+  // pool MUST stay below it (a hard compile-time invariant). The Rust host
+  // uses GC ByteArray objects, never a linear-memory window, so its pool
+  // has no such ceiling: it just grows the memory (in whole 64 KiB pages)
+  // to fit the literals -- which is what lets a big program (e.g. the
+  // aggregated test suite) compile.
   let data_top = RING_BYTES + data_blob.len() as u32;
-  assert!(
-    data_top <= SCRATCH_BASE,
-    "literal data pool ({} bytes ending at {data_top:#x}) overflows into \
-     the host-IO scratch window at {SCRATCH_BASE:#x}",
-    data_blob.len(),
-  );
+  const PAGE: u32 = 64 * 1024;
+  let mem_min_pages = match interop {
+    Interop::Js => {
+      assert!(
+        data_top <= SCRATCH_BASE,
+        "literal data pool ({} bytes ending at {data_top:#x}) overflows into \
+         the host-IO scratch window at {SCRATCH_BASE:#x}",
+        data_blob.len(),
+      );
+      1
+    }
+    Interop::Rust => data_top.div_ceil(PAGE).max(1),
+  };
+
+  let mut mem_sec = MemorySection::new();
+  mem_sec.memory(MemoryType {
+    minimum: mem_min_pages as u64,
+    maximum: None,
+    memory64: false,
+    shared: false,
+    page_size_log2: None,
+  });
 
   // Code: runtime's bodies raw, then user's bodies encoded.
   let mut code_sec = CodeSection::new();

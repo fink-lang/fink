@@ -1,0 +1,13 @@
+{test, equals} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{tokenize} = import 'fink/compile.fnk'
+
+
+test 'tokenize exposes the lexer as a host service', fn:
+  equals
+    tokenize ƒink:
+      foo
+    ƒink:
+      BlockStart loc [0, 1, 0], [0, 1, 0]
+      Ident 'foo', loc [0, 1, 0], [3, 1, 3]
+      BlockEnd loc [3, 1, 3], [3, 1, 3]

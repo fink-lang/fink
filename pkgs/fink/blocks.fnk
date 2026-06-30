@@ -1,0 +1,16 @@
+---
+fink/blocks -- block-syntax definitions.
+
+Importing this module is what tells the parser to treat `ƒink:` and
+`ƒtok:` as block forms (it keys block-mode registration off this import
+URL). The blocks themselves are SYNTACTIC: a `ƒink:` block lowers to a
+string literal of its verbatim source text at compile time, so the
+imported names are never called at runtime.
+
+The bindings below exist only so `{ƒink, ƒtok} = import 'fink/blocks.fnk'`
+resolves. They become real quote / source-as-data constructors when
+code-as-data lands.
+---
+
+ƒink = fn src: src
+ƒtok = fn src: src

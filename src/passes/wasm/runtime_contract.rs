@@ -603,8 +603,8 @@ impl Runtime {
 pub(super) fn import_key(sym: Sym) -> &'static str {
   match sym {
 
-    Sym::Panic           => "interop.wat:panic",
-    Sym::PanicApply      => "interop.wat:panic_apply",
+    Sym::Panic           => "rt/interop.wat:panic",
+    Sym::PanicApply      => "rt/interop.wat:panic_apply",
 
     Sym::Fn3             => "rt/apply.wat:Fn3",
     Sym::Closure         => "rt/apply.wat:Closure",
