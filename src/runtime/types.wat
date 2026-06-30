@@ -586,12 +586,12 @@
 
   ;; -- hash_i31 --------------------------------------------------------
   ;;
-  ;; $Type identity hash. Returns 0 for now (runtime-first): the set HAMT
-  ;; degrades to one bucket, ref.eq disambiguates within it -- correct, slow,
-  ;; optimize later (cf. closure-hash). Needed so $Type values can be $Set
-  ;; members (union members). Covers all $Type subtypes.
+  ;; $Type identity hash. A type's identity IS its dense arena `$id` (the same
+  ;; key `type_id_eq` compares on), so the hash is just that id: small,
+  ;; non-negative, and well-distributed across the HAMT trie. Needed so $Type
+  ;; values can be $Set members (union members). Covers all $Type subtypes.
   (func $hash_i31 (@pub) (param $t (ref $Type)) (result i32)
-    (i32.const 0))
+    (struct.get $Type $id (local.get $t)))
 
 
   ;; -- $Enum -----------------------------------------------------------
