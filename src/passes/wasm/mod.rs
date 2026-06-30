@@ -178,6 +178,37 @@ fn wat_window_at_offset(bytes: &[u8], target: usize) -> Option<String> {
   Some(window)
 }
 
+/// Render the tracer-phase WAT (CPS -> IR Fragment -> link -> WAT) with a
+/// base64url source-map line for a source string. Backs the `wat` host service
+/// (`fink/compile.fnk`) and the native wat test files. Panics in the pipeline
+/// are caught and rendered as `PANIC: <msg>` so a bad input yields a comparable
+/// string rather than aborting the host.
+pub fn wat_debug(src: &str) -> String {
+  let src_owned = src.to_string();
+  match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wat_debug_inner(&src_owned))) {
+    Ok(s) => s,
+    Err(e) => {
+      let msg = if let Some(s) = e.downcast_ref::<&str>() {
+        (*s).to_string()
+      } else if let Some(s) = e.downcast_ref::<String>() {
+        s.clone()
+      } else {
+        "<unknown panic>".to_string()
+      };
+      format!("PANIC: {msg}")
+    }
+  }
+}
+
+fn wat_debug_inner(src: &str) -> String {
+  let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
+  let user_frag = lower::lower(&lifted.result, &desugared.ast, "test:", ir::ModuleId(0));
+  let linked = link::link(&[user_frag]);
+  let (wat, sm) = fmt::fmt_fragment_with_sm(&linked);
+  let b64 = sm.encode_base64url();
+  format!("{}\n;; sm:{b64}", wat.trim())
+}
+
 #[cfg(test)]
 mod tests {
   /// CPS → IR `Fragment` → WAT. No wasm-encoder, no linker, no runtime
@@ -379,17 +410,5 @@ add 3, 4
   // End-to-end execution tests live in `src/runner/mod.rs` test
   // module, driven by `test_*.fnk` fixtures.
 
-  test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_range.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_functions.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_linking.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_io.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_sets.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_effects.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_collections.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/passes/wasm/test_types.fnk", skip-ir);
 }

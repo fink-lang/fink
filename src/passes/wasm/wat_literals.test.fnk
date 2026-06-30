@@ -1,9 +1,16 @@
-{skip, skip-ir, test, expect, equals, wat, wat} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{wat: cwat} = import 'fink/compile.fnk'
+
+
+wat = fn src: src
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'literal bool', fn:
-  expect wat ƒink:
+  cwat ƒink:
     true
   | equals wat":
     (module
@@ -36,7 +43,7 @@ test 'literal bool', fn:
 
 
 test 'literal bool false', fn:
-  expect wat ƒink:
+  cwat ƒink:
     false
   | equals wat":
     (module
@@ -69,7 +76,7 @@ test 'literal bool false', fn:
 
 
 test 'literal int', fn:
-  expect wat ƒink:
+  cwat ƒink:
     42
   | equals wat":
     (module
@@ -102,7 +109,7 @@ test 'literal int', fn:
 
 
 test 'literal neg 0', fn:
-  expect wat ƒink:
+  cwat ƒink:
     -0
   | equals wat":
     (module
@@ -136,7 +143,7 @@ test 'literal neg 0', fn:
 
 
 test 'literal float', fn:
-  expect wat ƒink:
+  cwat ƒink:
     1.234e+5
   | equals wat":
     (module
@@ -169,7 +176,7 @@ test 'literal float', fn:
 
 
 test 'literal decimal', fn:
-  expect wat ƒink:
+  cwat ƒink:
     1.0d
   | equals wat":
     (module

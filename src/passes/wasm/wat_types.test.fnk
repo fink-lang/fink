@@ -1,12 +1,19 @@
-{test, expect, equals, wat} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{wat: cwat} = import 'fink/compile.fnk'
+
+
+wat = fn src: src
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 type declaration codegen (WASM)
 ---
 
 test 'unit type declaration', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Foo = type _
   | equals wat":
     (module
@@ -77,7 +84,7 @@ test 'unit type declaration', fn:
 
 
 test 'record type with one field', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Foo = type _
     Bar = type:
       x: Foo
@@ -222,7 +229,7 @@ test 'record type with one field', fn:
 
 
 test 'generic type with one param', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Foo = type T:
       bar: T
   | equals wat":
@@ -365,7 +372,7 @@ test 'generic type with one param', fn:
 
 
 test 'tuple type with positional fields', fn:
-  expect wat ƒink:
+  cwat ƒink:
     A = type _
     B = type _
     Ni = type: A, B
@@ -585,7 +592,7 @@ test 'tuple type with positional fields', fn:
 
 
 test 'subtype with base spread', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Foo = type _
     Bar = type:
       ..Foo
@@ -756,7 +763,7 @@ test 'subtype with base spread', fn:
 
 
 test 'subtype with applied generic base', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Bit = type _
     Foo = type T:
       bar: T
@@ -1061,7 +1068,7 @@ test 'subtype with applied generic base', fn:
 
 
 test 'union of existing types', fn:
-  expect wat ƒink:
+  cwat ƒink:
     A = type _
     B = type _
     U = union:
@@ -1283,7 +1290,7 @@ test 'union of existing types', fn:
 
 
 test 'enum with nullary cases', fn:
-  expect wat ƒink:
+  cwat ƒink:
     E = enum:
       Red
       Green
@@ -1448,7 +1455,7 @@ test 'enum with nullary cases', fn:
 
 
 test 'tuple subtype positional before base', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Foo = type _
     Nu = type:
       Foo
@@ -1613,7 +1620,7 @@ test 'tuple subtype positional before base', fn:
 
 
 test 'tuple subtype base before positional', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Foo = type _
     Nu = type:
       ..Foo
@@ -1778,7 +1785,7 @@ test 'tuple subtype base before positional', fn:
 
 
 test 'fn type instance construction', fn:
-  expect wat ƒink:
+  cwat ƒink:
     Bit = type _
     Foo = type: fn Bit: Bit
     add = Foo fn a: a

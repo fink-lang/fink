@@ -1,4 +1,4 @@
-{tokenize: rt_tokenize, ast: rt_ast, desugar: rt_desugar, scope: rt_scope, fmt: rt_fmt, cps_module: rt_cps_module, cps_closures: rt_cps_closures, cps_hoisted: rt_cps_hoisted} = import 'rt/interop.wat'
+{tokenize: rt_tokenize, ast: rt_ast, desugar: rt_desugar, scope: rt_scope, fmt: rt_fmt, cps_module: rt_cps_module, cps_closures: rt_cps_closures, cps_hoisted: rt_cps_hoisted, wat: rt_wat} = import 'rt/interop.wat'
 
 
 tokenize = rt_tokenize
@@ -9,3 +9,4 @@ fmt = rt_fmt
 cps_module = rt_cps_module
 cps_closures = rt_cps_closures
 cps_hoisted = rt_cps_hoisted
+wat = rt_wat

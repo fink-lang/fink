@@ -1,10 +1,17 @@
-{skip, test, skip-ir, expect, equals, wat, wat} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{wat: cwat} = import 'fink/compile.fnk'
+
+
+wat = fn src: src
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 
 test 'add two literals', fn:
-  expect wat ƒink:
+  cwat ƒink:
     2 + 3
   | equals wat":
     (module
@@ -37,7 +44,7 @@ test 'add two literals', fn:
 
 
 test 'chained arithmetic', fn:
-  expect wat ƒink:
+  cwat ƒink:
     2 * 3 + 4
   | equals wat":
     (module
@@ -84,7 +91,7 @@ test 'chained arithmetic', fn:
 
 
 test 'unary not', fn:
-  expect wat ƒink:
+  cwat ƒink:
     not true
   | equals wat":
     (module
@@ -114,7 +121,7 @@ test 'unary not', fn:
 
 
 test 'comparison eq', fn:
-  expect wat ƒink:
+  cwat ƒink:
     2 == 3
   | equals wat":
     (module
@@ -146,7 +153,7 @@ test 'comparison eq', fn:
 
 
 test 'comparison lt', fn:
-  expect wat ƒink:
+  cwat ƒink:
     2 < 3
   | equals wat":
     (module
@@ -178,7 +185,7 @@ test 'comparison lt', fn:
 
 
 test 'logical and', fn:
-  expect wat ƒink:
+  cwat ƒink:
     true and false
   | equals wat":
     (module
@@ -210,7 +217,7 @@ test 'logical and', fn:
 
 
 test 'logical or', fn:
-  expect wat ƒink:
+  cwat ƒink:
     true or false
   | equals wat":
     (module
@@ -242,7 +249,7 @@ test 'logical or', fn:
 
 
 test 'power', fn:
-  expect wat ƒink:
+  cwat ƒink:
     2 ** 8
   | equals wat":
     (module
@@ -274,7 +281,7 @@ test 'power', fn:
 
 
 test 'power float', fn:
-  expect wat ƒink:
+  cwat ƒink:
     2.0 ** 0.5
   | equals wat":
     (module
@@ -306,7 +313,7 @@ test 'power float', fn:
 
 
 test 'divmod', fn:
-  expect wat ƒink:
+  cwat ƒink:
     10 /% 3
   | equals wat":
     (module
@@ -338,7 +345,7 @@ test 'divmod', fn:
 
 
 test 'rotate left', fn:
-  expect wat ƒink:
+  cwat ƒink:
     1 <<< 4
   | equals wat":
     (module
@@ -370,7 +377,7 @@ test 'rotate left', fn:
 
 
 test 'rotate right', fn:
-  expect wat ƒink:
+  cwat ƒink:
     16 >>> 4
   | equals wat":
     (module

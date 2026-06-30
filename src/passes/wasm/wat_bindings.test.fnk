@@ -1,11 +1,18 @@
-{test, skip-ir, expect, equals, wat, wat} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{wat: cwat} = import 'fink/compile.fnk'
+
+
+wat = fn src: src
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 
 
 test 'single binding export', fn:
-  expect wat ƒink:
+  cwat ƒink:
     foo = 1
   | equals wat":
     (module
@@ -59,7 +66,7 @@ test 'single binding export', fn:
 
 
 test 'let binding', fn:
-  expect wat ƒink:
+  cwat ƒink:
     x = 42
     x
   | equals wat":
@@ -114,7 +121,7 @@ test 'let binding', fn:
 
 
 test 'multiple let bindings used', fn:
-  expect wat ƒink:
+  cwat ƒink:
     x = 2
     y = 3
     x + y
@@ -188,7 +195,7 @@ test 'multiple let bindings used', fn:
 
 
 test 'binding rhs is a call', fn:
-  expect wat ƒink:
+  cwat ƒink:
     add = fn a, b: a + b
     x = add 1, 2
   | equals wat":
@@ -303,7 +310,7 @@ test 'binding rhs is a call', fn:
 
 
 test 'top-level rec destructure then fn using binding', fn:
-  expect wat ƒink:
+  cwat ƒink:
     {x} = {x: 42}
     foo = fn a: x + a
   | equals wat":

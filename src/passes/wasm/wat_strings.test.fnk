@@ -1,9 +1,16 @@
-{test, expect, equals, wat, wat} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{wat: cwat} = import 'fink/compile.fnk'
+
+
+wat = fn src: src
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'empty string literal', fn:
-  expect wat ƒink:
+  cwat ƒink:
     ''
   | equals wat":
     (module
@@ -37,7 +44,7 @@ test 'empty string literal', fn:
 
 
 test 'string literal', fn:
-  expect wat ƒink:
+  cwat ƒink:
     'hello'
   | equals wat":
     (module
@@ -71,7 +78,7 @@ test 'string literal', fn:
 
 
 test 'string literal dedup', fn:
-  expect wat ƒink:
+  cwat ƒink:
     x = 'hello'
     y = 'hello'
   | equals wat":
@@ -144,7 +151,7 @@ test 'string literal dedup', fn:
 
 
 test 'str templ two exprs', fn:
-  expect wat ƒink:
+  cwat ƒink:
     a = 1
     b = 2
     '${a} and ${b}'
@@ -221,7 +228,7 @@ test 'str templ two exprs', fn:
 
 
 test 'str tagged template', fn:
-  expect wat ƒink:
+  cwat ƒink:
     foo = fn ..parts: parts
     foo'1\n2'
   | equals wat":
@@ -315,7 +322,7 @@ test 'str tagged template', fn:
 
 
 test 'str tagged template escape handling', fn:
-  expect wat ƒink:
+  cwat ƒink:
     foo = fn ..parts: parts
     bar = 1
     foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
@@ -474,7 +481,7 @@ test 'str tagged template escape handling', fn:
 
 
 test 'str implicit formatting handling', fn:
-  expect wat ƒink:
+  cwat ƒink:
     ":
       1\n2
       3
@@ -510,7 +517,7 @@ test 'str implicit formatting handling', fn:
 
 
 test 'str implicit formatting escapes', fn:
-  expect wat ƒink:
+  cwat ƒink:
     '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals wat":
     (module
@@ -544,7 +551,7 @@ test 'str implicit formatting escapes', fn:
 
 
 test 'empty string eq', fn:
-  expect wat ƒink:
+  cwat ƒink:
     '' == ''
   | equals wat":
     (module
@@ -577,7 +584,7 @@ test 'empty string eq', fn:
 
 # TODO: move to ./test_patterns.fnk
 test 'match empty string', fn:
-  expect wat ƒink:
+  cwat ƒink:
     main = fn x:
       match x:
         '': 0
@@ -836,7 +843,7 @@ test 'match empty string', fn:
 
 
 test 'empty string eq template', fn:
-  expect wat ƒink:
+  cwat ƒink:
     '' == '${''}'
   | equals wat":
     (module
@@ -868,7 +875,7 @@ test 'empty string eq template', fn:
 
 
 test 'str eq', fn:
-  expect wat ƒink:
+  cwat ƒink:
     'hello' == 'hello'
   | equals wat":
     (module
@@ -902,7 +909,6 @@ test 'str eq', fn:
 
 
 
-eQAQEVEtQFAHoA5gEAjAEA
 
 
 
