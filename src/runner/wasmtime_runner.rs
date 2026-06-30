@@ -563,6 +563,7 @@ pub fn run(
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
+        #[cfg(feature = "compile")]
         "host_wat_pkg" => {
           linker.func_new("env", &name, ft, move |mut caller, params, results| {
             // params = [base_bytes, src_bytes]. Multi-module WAT rooted at base.

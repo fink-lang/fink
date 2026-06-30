@@ -3,6 +3,7 @@
 //! Wires the user program's IO channels (stdin/stdout/stderr) to host
 //! streams, sets up the scheduler, and returns the exit code from `main`.
 
+#[cfg(feature = "compile")]
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -96,6 +97,7 @@ pub fn run_file(
 /// `import './...'` deps resolve off-disk relative to the current working
 /// directory, with embedded stdlib served as usual. Lets `fink run -`
 /// drive a real multi-module program (e.g. a generated test aggregator).
+#[cfg(feature = "compile")]
 pub fn run_stdin(
   mut opts: RunOptions,
   src: &str,
@@ -128,6 +130,7 @@ pub fn run_stdin(
 /// `target` selects the files: `None` -> every `*.test.fnk`; a bare name
 /// `bool` -> `bool.test.fnk`; anything with `/` -> that exact relative path.
 /// Globs are resolved by the discovery walk, not the shell.
+#[cfg(feature = "compile")]
 pub fn run_tests(
   opts: RunOptions,
   target: Option<&str>,
@@ -165,6 +168,7 @@ pub fn run_tests(
 
 /// Recursively collect repo-relative paths of `*.test.fnk` files under
 /// `dir`, skipping `target/` and hidden directories.
+#[cfg(feature = "compile")]
 fn collect_test_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), String> {
   let entries = std::fs::read_dir(dir)
     .map_err(|e| format!("cannot read dir {}: {e}", dir.display()))?;
@@ -182,10 +186,10 @@ fn collect_test_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<
         continue;
       }
       collect_test_files(root, &path, out)?;
-    } else if name.ends_with(".test.fnk") {
-      if let Ok(rel) = path.strip_prefix(root) {
-        out.push(rel.to_string_lossy().into_owned());
-      }
+    } else if name.ends_with(".test.fnk")
+      && let Ok(rel) = path.strip_prefix(root)
+    {
+      out.push(rel.to_string_lossy().into_owned());
     }
   }
   Ok(())
@@ -272,7 +276,7 @@ mod tests {
   ///
   /// Pure-value programs render as a single line (the value's textual
   /// representation), matching the existing test conventions.
-  #[allow(unused)]
+  ///
   /// Default test runner: asserts on the program's return value only.
   /// stdout/stderr are still captured internally (the host needs the
   /// IO channels) but are NOT rendered into the result, so incidental
@@ -615,17 +619,17 @@ mod tests {
                 None => return Err(Error::msg("host_write: null fd")),
               };
               let bytes_any = params[1].unwrap_anyref();
-              if let Some(r) = bytes_any {
-                if let Some(arr) = r.as_array(&caller).ok().flatten() {
-                  let len = arr.len(&caller).unwrap_or(0);
-                  let mut buf = Vec::with_capacity(len as usize);
-                  for i in 0..len {
-                    if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
-                      buf.push(b as u8);
-                    }
+              if let Some(r) = bytes_any
+                && let Some(arr) = r.as_array(&caller).ok().flatten()
+              {
+                let len = arr.len(&caller).unwrap_or(0);
+                let mut buf = Vec::with_capacity(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                    buf.push(b as u8);
                   }
-                  cap.lock().unwrap().append(fd, &buf);
                 }
+                cap.lock().unwrap().append(fd, &buf);
               }
               Ok(())
             }).map_err(|e| e.to_string())?;
@@ -942,6 +946,7 @@ mod tests {
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
+          #[cfg(feature = "compile")]
           "host_wat_pkg" => {
             linker.func_new("env", &name, ft, move |mut caller, params, results| {
               // params = [base_bytes, src_bytes]. Multi-module WAT rooted at base.
