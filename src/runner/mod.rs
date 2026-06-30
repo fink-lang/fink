@@ -1282,7 +1282,75 @@ mod tests {
     Ok(())
   }
 
-  test_macros::include_fink_tests!("src/runner/test_errors.fnk", skip-ir);
+  // Runtime/compile error format tests. These execute the snippet and
+  // assert on the captured user-facing error string (source line + caret
+  // + plain-language description + url:line:col). They run the program,
+  // so they live here as plain Rust tests next to the `run` executor
+  // rather than as fink snapshot tests -- there is no fink-runs-fink host
+  // service yet.
+  fn assert_error(src: &str, expected: &str) {
+    assert_eq!(run(src), expected);
+  }
+
+  #[test]
+  fn error_irrefutable_match_no_arm() {
+    assert_error(
+      "match 'foo':\n  'bar': 1",
+      "match 'foo':\n^^^^^^^^^^^^\nmatch exhausted: no arm matched\n./test.fnk:1:1",
+    );
+  }
+
+  // Deeper inside the program -- the line points at the match, not the
+  // module wrapper.
+  #[test]
+  fn error_irrefutable_match_in_nested_fn() {
+    assert_error(
+      "f = fn x:\n  match x:\n    'bar': 1\nf 'foo'",
+      "f = fn x:\n  match x:\n  ^^^^^^^^\nmatch exhausted: no arm matched\n./test.fnk:2:3",
+    );
+  }
+
+  #[test]
+  fn error_rec_destructure_missing_field() {
+    assert_error(
+      "{a, b} = {x: 1}\na + 1",
+      "{a, b} = {x: 1}\n^^^^^^^^^^^^^^^\nirrefutable pattern failed\n./test.fnk:1:1",
+    );
+  }
+
+  #[test]
+  fn error_type_mismatch_on_plus() {
+    assert_error(
+      "1 + 'foo'",
+      "1 + 'foo'\n^\ntype mismatch\n./test.fnk:1:1",
+    );
+  }
+
+  #[test]
+  fn error_integer_divide_by_zero() {
+    assert_error(
+      "1 // 0",
+      "1 // 0\n^\ninteger divide by zero\n./test.fnk:1:1",
+    );
+  }
+
+  #[test]
+  fn error_unbound_name() {
+    assert_error(
+      "foo bar",
+      "foo bar\n^^^\nunbound name 'foo'\n./test.fnk:1:1",
+    );
+  }
+
+  // A trap inside a dependency module resolves to that module's source
+  // line, not the entry module's line 1.
+  #[test]
+  fn error_trap_inside_imported_module() {
+    assert_error(
+      "{boom} = import './test_modules/bad_destructure.fnk'\nboom {x: 1}",
+      "boom = fn rec:\n  {missing} = rec\n  ^^^^^^^^^^^^^^^\nirrefutable pattern failed\n./test_modules/bad_destructure.fnk:8:3",
+    );
+  }
 
 }
 
