@@ -1,8 +1,13 @@
-{test, equals, expect, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 test 'match block bind', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       1: 2
       x: x
@@ -51,7 +56,7 @@ match block — simple arms
 ---
 
 test 'match wildcard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       _: 42
   | equals ƒink:
@@ -74,7 +79,7 @@ test 'match wildcard', fn:
 
 
 test 'match bind', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       x: x
   | equals ƒink:
@@ -96,7 +101,7 @@ test 'match bind', fn:
     # sm:RQABABEAAQARJAEAERgBABESAAIABgEaBAABAAQIABAAGAAWAQABCgAEAQYBAAEAARQAFAAEAQABCgAQAQUEEAACAA4BAAQAAQAECAAYABgAGAAYAA4ABAEABAABAAQSABQABAEABBQABAEAAQ4AGAEABBAAAgAWARkRAAEAEQgAIAAYABgBABEQAAIAHgEAEQABABEyADYBABE8ABQABAEAEQABABEQADYBABEQACABABEQAAQBABEAAQAREgAUAAQBABESAAQBDAM
 
 test 'match literal arms', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       1: 'one'
       2: 'two'
@@ -163,7 +168,7 @@ test 'match literal arms', fn:
 
 
 test 'match — expression in arm', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match x:
       true: y + 1
       false: y
@@ -218,7 +223,7 @@ test 'match — expression in arm', fn:
 
 
 test 'match child ·scope — binding in arm body', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match n:
       a > 1:
         ni = a
@@ -260,7 +265,7 @@ match block — seq/rec pattern arms
 ---
 
 test 'match — seq pattern arm', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       [a, b]: a
   | equals ƒink:
@@ -300,7 +305,7 @@ test 'match — seq pattern arm', fn:
     # sm:wQEAAQAWAAEAFiQBABYYAQAWEgACAAYBGgkAAQAJCAAQABgAGAECAQ4BBgEKAAQBCAEAAQABFgAUAAQBAAEKABABDwkQAAIADgEACQABAAkIABgAGAAYABgADgACABYBAAYAAQAGCAAgABgBAAYUAQAGEAACAB4BAgEAAQABDAEBBhAACgECAQoAAgAiAQYBAAEAAQwBBwYQAAoBCAEKAAIAJgEHCQABAAkSABQABAEACRQABAEABhAABAEABhAAIAEABhAAAgAeAQAGAAEABggAKAAYABgAGgEABg4AAgAmAQAGAAEABhwAFAAEAQAGIAAEAQAGDgACADAAGAEABhAAAgAuAQAGAAEABhQAFAAEAQAGEAAEAQAGFgAKABgBAAYUAQAGEAACADIBAAYAAQAGFAAUAAQBAAYQAAQBAAYWAAoAGAEABhQBAAYQAAIANgEABgABAAYQABQABAEABhAACgAYAQAGEAACADoBAAYAAQAGCgEABhAAAgBCAAQBAAYAAQAGFgAUAAQBAAYQAAQBAAYQAEIABAEABgABAAYYABQAMAAWAAQBAAYAAQAGGAAWACgBAAYQAAQBAAYAAQAGEgAUAAQBAAYQAAQBAAYUAAQBAAYOABgBAAkQAAIAFgEZFgABABYIACAAGgAYAQAWEAACAB4BABYAAQAWMgA4AQAWPAAWAAQBABYAAQAWEAA4AQAWEAAgAQAWEAAEAQAWAAEAFhIAFAAEAQAWEgAEAQwD
 
 test 'match — rec pattern arm', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       {bar}: bar
   | equals ƒink:
@@ -335,7 +340,7 @@ test 'match — rec pattern arm', fn:
     # sm:lAEAAQAXAAEAFyQBABcYAQAXEgACAAYBGgoAAQAKCAAQABgAGAECAw4ABAEMAwABAAMWABQABAEAAw4AEAENChAAAgAOAQAKAAEACggAGAAYABgAGAAOAAIAFgEABQABAAUIACAAGAEABRAAAgAeAQIDAAEAAwwBAQUQAAoBAgMOAAIAIgEBCgABAAoSABQABAEAChQABAEABRAAIAEABRAAAgAeAQAFAAEABQgAKAAYABgAGAEABQ4AAgAmAQAFAAEABRwAFAAEAQAFHAAEAQAFDgACADAAGAEABRAAAgAuAQAFAAEABRQAFAAEAQAFEAAEAQAFDgAEAQAFFAAKABgBAAUUAQAFEAACADIBAAUAAQAFFgAUAAQBAAUQADAAFAAEAQAFAAEABRYAFAAoAQAFEAAEAQAFAAEABRIAFAAEAQAFEAAEAQAFFAAEAQAFDgAYAQAKEAACABYBGRcAAQAXCAAgABgAGAEAFxAAAgAeAQAXAAEAFzIANgEAFzwAFAAEAQAXAAEAFxAANgEAFxAAIAEAFxAABAEAFwABABcSABQABAEAFxIABAEMAw
 
 test 'match — seq literal guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match items:
       [1, val, ..]: val
       _: 0
@@ -394,7 +399,7 @@ test 'match — seq literal guard', fn:
 
 
 test 'match — rec literal guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match r:
       {kind: 1, val}: val
       _: 0
@@ -452,7 +457,7 @@ test 'match — rec literal guard', fn:
     # sm:iwIAAQAlAAEAJSQBACUaAQAlEgACAAYBFhMAAQATCAAQABoAGAEUAw4ABAEMAwABAAMWABYABAEAAw4AEAEfExAAAgAOAQATAAEAEwgAGAAaABgAGAAOAAIAFgEADgABAA4IACAAGgEADhQBAA4QAAIAHgECBAABAAQIACgAFgACACYBEgMAAQADDAETDhAACgEUAw4AAgAqARMTAAEAExIAFgAEAQATFAAEAQAOEAAoAQIEEAACACYBAAQAAQAECAAwABoAGgAaAQAEEAACAC4BAAQAAQAEEAAWAAQBAAQQAAYBAAQAAQAEBgEABAQACgAaAQAEEAACADIBAAQAAQAECgEABBAAAgA6AAQBAAQAAQAEGAAWADoABAEABAABAAQYABYAMAEABBAABAEABAABAAQSABYABAEABBAABAEABBQABAEBDhAAIAEADhAAAgAeAQAOAAEADggAKAAaABgAGAEADg4AAgAmAQAOAAEADhwAFgAEAQAOHAAEAQAODgACADAAGgEADhAAAgAuAQAOAAEADhQAFgAEAQAOEAAEAQAOEAAEAQAOFAAKABoBAA4UAQAOEAACADIBAA4AAQAOFAAWAAQBAA4QAAQBAA4OAAQBAA4UAAoAGgEADhQBAA4QAAIANgEADgABAA4WABYABAEADhAABAEADhAAMAAWAAQBAA4AAQAOFgAWACgBAA4QAAQBAA4AAQAOEgAWAAQBAA4QAAQBAA4UAAQBAA4OABgBABMQAAIAFgEsBAABAAQIACAAGgAUAAQBBgEAAQABFgAWAAYBAAEAAQABBgEAAQQAIAEFBBAAAgAeAQAEAAEABAgAKAAaABoAGgAQAAQBAAQAAQAEEgAWAAQBAAQWACgBAAQQAAIAJgFBJQABACUIADAAGgAYAQAlEAACAC4BACUAAQAlQgBIAQAlTAAWAAIANgEAJQABACVKAFABACVUABYABAEAJQABACUQAFABACVCAQAlEAAwAQAlEgAEAQAlAAEAJRQAFgAEAQAlEgAEAQwB
 
 test 'multi-arm match', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match foo:
       [a]: a
       [a, b]: a
@@ -521,7 +526,7 @@ test 'multi-arm match', fn:
 
 
 test 'multi-arg match', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match a, b:
       x, y: x
   | equals ƒink:

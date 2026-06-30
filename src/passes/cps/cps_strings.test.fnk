@@ -1,12 +1,17 @@
-{test, skip, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 string templates
 ---
 
 test 'str templ', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     'hello ${name}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -15,7 +20,7 @@ test 'str templ', fn:
 
 
 test 'str templ two exprs', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '${a} and ${b}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_7, ·ƒret_0:
@@ -24,7 +29,7 @@ test 'str templ two exprs', fn:
 
 
 test 'str tagged template', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo'1\n2
       3'
   | equals ƒink:
@@ -35,7 +40,7 @@ test 'str tagged template', fn:
 
 
 test 'str tagged template escape handling', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_21, ·ƒret_0:
@@ -47,7 +52,7 @@ test 'str tagged template escape handling', fn:
 
 
 test 'str implicit formatting handling', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '1\n2
       3'
   | equals ƒink:
@@ -57,7 +62,7 @@ test 'str implicit formatting handling', fn:
 
 
 test 'str implicit formatting escapes', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -66,7 +71,7 @@ test 'str implicit formatting escapes', fn:
 
 
 test 'str templ escape handling', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_7, ·ƒret_0:
@@ -75,7 +80,7 @@ test 'str templ escape handling', fn:
 
 
 test 'str templ implicit formatting handling', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '1\n${bar}
       3'
   | equals ƒink:

@@ -1,12 +1,17 @@
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 infix operators — op ·load + ·apply synthesis
 ---
 
 test 'infix add', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a + b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -15,7 +20,7 @@ test 'infix add', fn:
 
 
 test 'infix literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -29,7 +34,7 @@ unary ops
 ---
 
 test 'unary not', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     not x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
@@ -38,7 +43,7 @@ test 'unary not', fn:
 
 
 test 'unary minus', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     -x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_5, ·ƒret_0:
@@ -50,7 +55,7 @@ chained comparisons
 ---
 
 test 'chained cmp', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a < b < c
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_15, ·ƒret_0:
@@ -60,7 +65,7 @@ test 'chained cmp', fn:
     # sm:JwABAAkAAQAJJAEACRgBAAkSAAIABgEACQABAAkQABQABAEAAQwABAEIAQwACgAYAQcJDgACAAoBAAkAAQAJEAAUAAQBCAEMAAQBCAEMAAoAGAEPCQ4AAgAOAQAJAAEACRIAFAAEAQAJDgAEAQAJDgAEAQAJ
 
 test 'infix pow', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a ** b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -69,7 +74,7 @@ test 'infix pow', fn:
 
 
 test 'infix divmod', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a /% b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -78,7 +83,7 @@ test 'infix divmod', fn:
 
 
 test 'infix rotl', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a <<< b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -87,7 +92,7 @@ test 'infix rotl', fn:
 
 
 test 'infix rotr', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a >>> b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:

@@ -1,12 +1,17 @@
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 type declaration lowering (CPS level 0)
 ---
 
 test 'unit type declaration', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Foo = type _
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_15, ·ƒret_1:
@@ -19,7 +24,7 @@ test 'unit type declaration', fn:
 
 
 test 'record type with one field', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Foo = type:
       shrub: u8
   | equals ƒink:
@@ -34,7 +39,7 @@ test 'record type with one field', fn:
 
 
 test 'subtype with base spread and field', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Bar = type:
       ..Foo
       ni: u8
@@ -52,7 +57,7 @@ test 'subtype with base spread and field', fn:
 
 
 test 'tuple type with two positional fields', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Ni = type: u8, i8
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_25, ·ƒret_1:
@@ -66,7 +71,7 @@ test 'tuple type with two positional fields', fn:
     # sm:QwABABEAAQARJAEAERgBABESAAIABgEAEQABABEYAQACDAACAAoBCgwAAQAMFgAUAAQBAAwMAAoAGAEADA4AAgAOAQwCAAEAAhgAFAAEAQsMDgAEAQwCDgAKABgBAAIOAAIAEgEIAgABAAIYABQABAEHAg4ABAEIAg4ACgAYAQACDgACABYBHREAAQARDAEAAgwABAEeAg4ACAACABoBHQIAAQACEAAUAAQBAAIMAAoAFAACAB4BAAIAAQACFAAUAAQBAAI
 
 test 'tuple subtype base spread before positional', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Nu = type:
       ..Ni
       u8
@@ -83,7 +88,7 @@ test 'tuple subtype base spread before positional', fn:
 
 
 test 'tuple subtype positional before base spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Nu = type:
       u8
       ..Ni
@@ -99,7 +104,7 @@ test 'tuple subtype positional before base spread', fn:
     # sm:QwABABYAAQAWJAEAFhgBABYSAAIABgEAFgABABYYAQACDAACAAoBChEAAQARFgAUAAQBABEMAAoAGAEAEQ4AAgAOARACAAEAAhgAFAAEAQ8RDgAEARACDgAKABgBAAIOAAIAEgEKBAABAAQeABQABAEJAg4ABAEOAg4ACgAYAQMEDgACABYBIxYAAQAWDAEAAgwABAEkBA4ACAACABoBIwIAAQACEAAUAAQBAAIMAAoAFAACAB4BAAIAAQACFAAUAAQBAAI
 
 test 'generic type with one param', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Spam = type T:
       ham: T
   | equals ƒink:
@@ -119,7 +124,7 @@ test 'generic type with one param', fn:
     # sm:YAABABcAAQAXJAEAFxgBABcSAAIABgEAFwABABcYAQAEEAACAAoBDhAAAQAQCAAUABgBABAWAQoBCgACABIBCRAAAQAQFgAUAAQBABAQAAoAGAEAEA4AAgAWARQGAAEABiIAFAAEARMQDgAEARQDDgAEAQoBCgAKABgBCQYQAAIAGgETEAABABAUABQABAEUBhAAFAETEA4AAgASAQAQAAEAEBYAFAAEAQAQEAAKABgBABAQAAIAFgEAEAABABAeABQABAEAEBAABAEAEA4ACgAYAQAQEAACABoBDRcAAQAXDAEABBAABAEOEBAACAACAB4BDQQAAQAEEAAUAAQBAAQQAAoAFAACACIBAAQAAQAEFAAUAAQBAAQ
 
 test 'generic type with two params', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     P = type T1, T2:
       a: T1
       b: T2
@@ -143,7 +148,7 @@ test 'generic type with two params', fn:
 
 
 test 'union of two existing types', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Num = union:
       Int
       Float
@@ -160,7 +165,7 @@ test 'union of two existing types', fn:
 
 
 test 'generic union applies referenced constructor', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     U = union T:
       Foo T
       Bar
@@ -187,7 +192,7 @@ test 'generic union applies referenced constructor', fn:
 
 
 test 'enum with mixed member payloads', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Light = enum:
       Red {foo: u8}
       Green u8, u16
@@ -211,7 +216,7 @@ test 'enum with mixed member payloads', fn:
     # sm:mQEAAQA0AAEANCQBADQYAQA0EgACAAYBADQAAQA0GAEABRIAAgAKARAsAAEALBYAFAAEAQAsEgAKABgBACwOAAIADgEQDQABAA0WABQABAEADQ4ACgAYAQANDgACABIBCgcAAQAHIgAUAAQBCQ0OAAQBCgMOAAQBCgIOAAoAGAEJBxAAAgAWAQkNAAEADRYAFAAEAQ8sDgAEARADDgAEAQoHEAAKABgBCQ0QAAIAGgEgDQABAA0WABQABAEADRIACgAYAQANEAACAB4BDAIAAQACGAAUAAQBCw0QAAQBDAIOAAoAGAEAAhAAAgAiAQgDAAEAAxgAFAAEAQcCEAAEAQgDEAAKABgBAAMQAAIAJgETDQABAA0WABQABAEfDRAABAEgBRIABAEUAxAACgAYARMNEAACACoBIAQAAQAEFgAUAAQBAAQQAAoAGAEABBAAAgAuAQAEAAEABBYAFAAEAR8NEAAEASAEEAAEAQAEEAAKABgBAAQQAAIAMgFfNAABADQMAQAFEgAEAWAEEAAIAAIANgFfBQABAAUQABQABAEABRIACgAUAAIAOgEABQABAAUUABQABAEABQ
 
 test 'generic enum with param', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Option = enum T:
       Some T
       None
@@ -239,7 +244,7 @@ test 'generic enum with param', fn:
 --- a fn-type declaration: new_fn_type seeds, fn_type_param cons-prepends each
     arg type, fn_type_result sets the result. ---
 test 'function type declaration', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Foo = type: fn u8, u8: u8
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
@@ -257,7 +262,7 @@ test 'function type declaration', fn:
 --- constructing a fn-type instance: build the closure, then APPLY the fn-type
     `Foo` to it (apply routes to type_apply's $FnType arm -> $FnInst). ---
 test 'function type instance construction', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     Foo = type: fn u8, u8: u8
     add = Foo fn a, b: a
   | equals ƒink:

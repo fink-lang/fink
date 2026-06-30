@@ -1,9 +1,14 @@
-{test, skip, equals, expect, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 test 'dict — field rename', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {'foo bar': z} = {'foo bar': 42}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_43, ·ƒret_1:
@@ -29,7 +34,7 @@ test 'dict — field rename', fn:
 
 
 test 'dict — runtime key', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = 'foobar'
     {(x): val} = {'foobar': 42}
   | equals ƒink:

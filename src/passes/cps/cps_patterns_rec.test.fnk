@@ -1,12 +1,17 @@
-{test, skip, equals, expect, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 rec patterns
 ---
 
 test 'rec — empty', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_40, ·ƒret_0:
@@ -31,7 +36,7 @@ test 'rec — empty', fn:
 
 
 test 'rec — non-empty', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {..} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_40, ·ƒret_0:
@@ -56,7 +61,7 @@ test 'rec — non-empty', fn:
 
 
 test 'rec — partial match', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {x, y} = point
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_49, ·ƒret_2:
@@ -83,7 +88,7 @@ test 'rec — partial match', fn:
 
 
 test 'rec — field rename', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {x, y: z} = point
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_49, ·ƒret_2:
@@ -111,7 +116,7 @@ test 'rec — field rename', fn:
 
 
 test 'rec — open rest discarded', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {bar, ..} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_45, ·ƒret_1:
@@ -139,7 +144,7 @@ test 'rec — open rest discarded', fn:
 
 
 test 'rec — open rest bound', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {bar, ..rest} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_46, ·ƒret_2:
@@ -166,7 +171,7 @@ test 'rec — open rest bound', fn:
 
 
 test 'rec — closed exact', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {bar, ..{}} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_45, ·ƒret_1:
@@ -194,7 +199,7 @@ test 'rec — closed exact', fn:
 
 
 test 'rec — predicate guard in value position', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {k: is_even v} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_44, ·ƒret_1:
@@ -221,7 +226,7 @@ test 'rec — predicate guard in value position', fn:
 
 
 test 'rec — type guard around patterns', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {k: Foo foo} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_44, ·ƒret_1:
@@ -248,7 +253,7 @@ test 'rec — type guard around patterns', fn:
 
 
 test 'rec — type guard around nested patterns', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {k: Foo {bar}} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_76, ·ƒret_1:
@@ -289,7 +294,7 @@ test 'rec — type guard around nested patterns', fn:
 
 
 test 'rec — guard around nested patterns', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {k: is_foo {bar}} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_76, ·ƒret_1:
@@ -330,7 +335,7 @@ test 'rec — guard around nested patterns', fn:
 
 
 test 'rec — infix comparison guard in value position', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {k: v == 4} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_65, ·ƒret_1:
@@ -366,7 +371,7 @@ test 'rec — infix comparison guard in value position', fn:
 
 
 test 'rec — closed with sub-pattern', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {foo, ..{bar, spam}} = x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_89, ·ƒret_3:
@@ -410,7 +415,6 @@ test 'rec — closed with sub-pattern', fn:
 
 
 
-AGBAABAEuAQ
 
 
 

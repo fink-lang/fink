@@ -1,12 +1,17 @@
-{test, equals, expect, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 seq patterns
 ---
 
 test 'seq — empty', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_39, ·ƒret_0:
@@ -31,7 +36,7 @@ test 'seq — empty', fn:
 
 
 test 'seq — nested empty', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, []] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_88, ·ƒret_1:
@@ -76,7 +81,7 @@ test 'seq — nested empty', fn:
 
 
 test 'seq — exact two elements', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, b] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_54, ·ƒret_2:
@@ -107,7 +112,7 @@ test 'seq — exact two elements', fn:
 
 
 test 'seq — lone spread non-empty discard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [..] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_32, ·ƒret_0:
@@ -129,7 +134,7 @@ test 'seq — lone spread non-empty discard', fn:
 
 
 test 'seq — spread non-empty bound', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [..rest] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_38, ·ƒret_1:
@@ -155,7 +160,7 @@ test 'seq — spread non-empty bound', fn:
 
 
 test 'seq — head then spread discard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [head, ..] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_37, ·ƒret_1:
@@ -180,7 +185,7 @@ test 'seq — head then spread discard', fn:
 
 
 test 'seq — head then spread bound', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [head, ..tail] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_45, ·ƒret_2:
@@ -207,7 +212,7 @@ test 'seq — head then spread bound', fn:
 
 
 test 'seq — rest in middle', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [head, ..middle, end] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_55, ·ƒret_3:
@@ -236,7 +241,7 @@ test 'seq — rest in middle', fn:
 
 
 test 'seq — literal element', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, 1] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_80, ·ƒret_1:
@@ -277,7 +282,7 @@ test 'seq — literal element', fn:
 
 
 test 'seq — infix guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [x, y >= 2] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_82, ·ƒret_2:
@@ -319,7 +324,7 @@ test 'seq — infix guard', fn:
 
 
 test 'seq — predicate guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [x, is_even y] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_61, ·ƒret_2:
@@ -352,7 +357,7 @@ test 'seq — predicate guard', fn:
 
 
 test 'seq — constructor guard with payload', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [x, Ok b] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_61, ·ƒret_2:
@@ -385,7 +390,7 @@ test 'seq — constructor guard with payload', fn:
 
 
 test 'seq — constructor predicate with wildcard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [x, is_none _] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_60, ·ƒret_1:
@@ -416,7 +421,7 @@ test 'seq — constructor predicate with wildcard', fn:
 
 
 test 'seq — multi-arg guard with bound element', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [1, foo 2, a, 3; 4] = bar
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_121, ·ƒret_1:
@@ -474,7 +479,7 @@ test 'seq — multi-arg guard with bound element', fn:
 
 
 test 'seq — nested', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, [b, c]] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_102, ·ƒret_3:
@@ -522,7 +527,7 @@ test 'seq — nested', fn:
     # sm:kwIAAQARAAEAESQBABEaAQAREgACAAYBABEAAQARGAECAQ4BCAEOAQYBCgACAAoBDxEAAQARCAAUABoBABESAQARDgACABIBAgEAAQABDAEBEQ4ACgECAQoAAgAWAQYGAAEABggAIAAaAQAGFAEABhAAAgAeAQIBAAEAAQwBAQYQAAoBAgEKAAIAIgEGAQABAAEMAQcGEAAKAQgBCgACACYBDxEAAQARFAEAERYABAEQAQoAIAEHBhAAAgAeAQAGAAEABggAKAAaABoAGgEABhAAAgAmAQAGAAEABhwAFgAEAQAGIAAEAQAGEAACADAAGgEABhAAAgAuAQAGAAEABhQAFgAEAQAGEAAEAQAGFgAKABoBAAYUAQAGEAACADIBAAYAAQAGFAAWAAQBAAYQAAQBAAYWAAoAGgEABhQBAAYQAAIANgEABgABAAYQABYABAEABhAACgAaAQAGEAACADoBAAYAAQAGCgEABhAAAgBCAAQBAAYAAQAGGAAWAAQBAAYQAAQBAAYQAEIABAEABgABAAYYABYAMAAWAAQBAAYAAQAGGAAWACgBAAYQAAIAJgEABgABAAYIADAAFgAEAQAGAAEABhAAFgAwAQAGEAAEAQAGAAEABhIAFgAEAQAGEAAEAQAGEAAEAQcRDgAUAQAREAACABIBABEAAQARCAAcABoAGAAYAQARDgACABoBABEAAQARHAAWAAQBABEgAAQBABEOAAIAJAAaAQAREAACACIBABEAAQARFAAWAAQBABEQAAQBABEUAAoAGgEAERIBABEQAAIAJgEAEQABABEUABYABAEAERAABAEAERQACgAaAQAREgEAERAAAgAqAQARAAEAERAAFgAEAQAREAAKABoBABEQAAIALgEAEQABABEKAQAREAACADYABAEAEQABABEWABYABAEAEQ4ABAEAEQ4ANgAEAQARAAEAERYAFgAkABYABAEAEQABABEWABYAHAEAERAAAgAaAQARAAEAEQgAJAAWAAQBABEAAQAREAAWACQBABEQAAQBABEAAQAREgAWAAQBABEQAAQBABEQAAQBHAM
 
 test 'seq — nested with bind-right', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, [b, c] |= d] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_105, ·ƒret_4:

@@ -1,12 +1,17 @@
-{test, skip, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 function definition — ·closure synthesis
 ---
 
 test 'fn one param', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn a: a
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
@@ -17,7 +22,7 @@ test 'fn one param', fn:
 
 
 test 'fn two params', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn a, b: a
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_10, ·ƒret_2:
@@ -28,7 +33,7 @@ test 'fn two params', fn:
 
 
 test 'named fn', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     double = fn a: a
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_19, ·ƒret_2:
@@ -48,7 +53,7 @@ ported from test_cps — functions and closures
 ---
 
 test 'function binding', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     inc = fn x: x + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_21, ·ƒret_2:
@@ -63,7 +68,7 @@ test 'function binding', fn:
 
 
 test 'closure over outer variable', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = fn a:
       ni = fn b:
         a + b
@@ -88,7 +93,7 @@ test 'closure over outer variable', fn:
 
 
 test 'higher order function', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = fn: fn: 1234
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_22, ·ƒret_1:
@@ -106,7 +111,7 @@ test 'higher order function', fn:
 
 
 test 'three sequential bindings', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a = 1
     b = 2
     c = a + b
@@ -130,7 +135,7 @@ ported from test_cps — forward refs and mutual recursion
 ---
 
 test 'forward ref', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = fn a: foo a + 1
     foo 1
   | equals ƒink:
@@ -148,7 +153,7 @@ test 'forward ref', fn:
 
 
 test 'mutual recursion', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     ping = fn x: pong x
     pong = fn x: ping x
   | equals ƒink:
@@ -174,7 +179,7 @@ varargs functions
 ---
 
 test 'multi-param function', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn x, y: x + y
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_12, ·ƒret_2:
@@ -185,7 +190,7 @@ test 'multi-param function', fn:
 
 
 test 'varargs — collect rest', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn a, ..rest: rest
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_10, ·ƒret_2:
@@ -201,7 +206,7 @@ functions — additional
 ---
 
 test 'identity function', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn x: x
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
@@ -211,7 +216,7 @@ test 'identity function', fn:
     # sm:GgABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcIABAAGAEMARYBBQEKAAQBBgEAAQABFAAUAAQBAAEKABABCwcOAAQBAAcAAQAHFAEABxIABAEABw
 
 test 'function with operator in body', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn x: x + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
@@ -221,7 +226,7 @@ test 'function with operator in body', fn:
     # sm:IAABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsIABAAGAEMBRYBBQEKAAQBBgUAAQAFFAAUAAQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCw4ABAEACwABAAsUAQALFAAEAQAL
 
 test 'try — result bound, code continues', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     ni = try foo bar
     ni + 1
   | equals ƒink:
@@ -242,7 +247,6 @@ test 'try — result bound, code continues', fn:
 
 
 
-AEgEAAgABAAIQABQABAEAAgwACgAUAAIAFgEiBgABAAYUABQABAEAAgwABgEKAQABAAEGAQABBAAEAQkGHAEHAw
 
 
 

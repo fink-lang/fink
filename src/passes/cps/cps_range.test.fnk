@@ -1,5 +1,10 @@
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -7,7 +12,7 @@ range
 ---
 
 test 'range excl', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0..10
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -16,7 +21,7 @@ test 'range excl', fn:
 
 
 test 'range incl', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0...10
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -25,7 +30,7 @@ test 'range incl', fn:
 
 
 test 'open range excl', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0..
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_5, ·ƒret_0:

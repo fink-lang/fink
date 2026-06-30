@@ -23,8 +23,13 @@ Three motivations:
 Test format mirrors test_module.fnk.
 ---
 
-{test, skip, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -35,7 +40,7 @@ chain becomes `·letrec fn ·foo_0: ·set ·foo_0, (i8 1); ...`.
 ---
 
 test 'letrec single binding', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
@@ -52,7 +57,7 @@ Pub side effects interleave naturally.
 ---
 
 test 'letrec two bindings', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
     bar = 2
   | equals ƒink:
@@ -73,7 +78,7 @@ is filled by `·set` in source order.
 ---
 
 test 'letrec mutual recursion', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     ping = fn x: pong x
     pong = fn x: ping x
   | equals ƒink:
@@ -100,7 +105,7 @@ call to it can occur.
 ---
 
 test 'letrec self-recursion', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fib = fn n: fib n - 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_26, ·ƒret_2:
@@ -125,7 +130,7 @@ straight-line tests.
 ---
 
 test 'letrec fn val mixed', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = fn x: x
     spam = 1234
     bar = fn y: foo y
@@ -155,7 +160,7 @@ beyond pairs without special-casing.
 ---
 
 test 'letrec three-way mutual rec', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a = fn: b
     b = fn: c
     c = fn: a
@@ -188,7 +193,7 @@ The inner letrec declares `x, y` as slots; the outer declares
 ---
 
 test 'letrec nested fn body', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = fn:
       x = 1
       y = 2
@@ -216,7 +221,7 @@ each closure can capture the other's slot.
 ---
 
 test 'letrec nested mutual rec', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = fn:
       inner-a = fn: inner-b
       inner-b = fn: inner-a
@@ -252,7 +257,7 @@ in real code (not just the trivial infinite-loop ping/pong).
 ---
 
 test 'letrec is-even is-odd', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     is-even = fn n:
       match n:
         0: true
@@ -361,7 +366,7 @@ NOT a module slot (correctly excluded from the letrec list).
 ---
 
 test 'letrec with import binding', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {foo} = import './bar.fnk'
     main = fn:
       foo 1
@@ -407,7 +412,7 @@ encouraged. A future lint could flag avoidable forward refs.)
 ---
 
 test 'letrec closure forward ref', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = fn: foo 5
     foo = fn n: n + 1
   | equals ƒink:
@@ -436,7 +441,7 @@ machinery.
 ---
 
 test 'letrec with seq destructure', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, b] = [1, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_64, ·ƒret_2:

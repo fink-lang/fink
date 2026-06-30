@@ -1,12 +1,17 @@
-{test, equals, expect, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 pattern bindings (bind-lhs, outside match)
 ---
 
 test 'irrefutable binding with guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x > 2 = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_34, ·ƒret_1:
@@ -29,7 +34,7 @@ test 'irrefutable binding with guard', fn:
 
 
 test 'bind right — seq pattern', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, b] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_54, ·ƒret_2:
@@ -59,7 +64,7 @@ test 'bind right — seq pattern', fn:
 
 
 test 'bind right — rec pattern', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {bar} = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_38, ·ƒret_1:
@@ -84,7 +89,7 @@ test 'bind right — rec pattern', fn:
 
 
 test 'seq pattern', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, 1] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_80, ·ƒret_1:
@@ -124,7 +129,7 @@ test 'seq pattern', fn:
     # sm:0wEAAQAMAAEADCQBAAwYAQAMEgACAAYBAAwAAQAMGAECAQoAAgAKAQEMAAEADAgAFAAYAQAMEgEADA4AAgASAQIBAAEAAQwBAQwOAAoBAgEKAAIAFgEGAQABAAEIACAAFAAEAQABAAEAARQAFAAEAQABDgAgAQABEAACAB4BAAEAAQABCAAoABgAGgAaAQABEAACACYBAAEAAQABEAAUAAQBAAEQAAYBAAEAAQABBgEAAQQACgAYAQABEAACACoBAAEAAQABCgEAARAAAgAyAAQBAAEAAQABGAAUADIABAEAAQABAAEYABQAKAEAARAAAgAmAQABAAEAAQgAMAAUAAQBAAEAAQABEAAUADABAAEQAAQBAAEAAQABEgAUAAQBAAEQAAQBAAEQAAQBBwwOABQBAAwQAAIAEgEADAABAAwIABwAGAAYABgBAAwOAAIAGgEADAABAAwcABQABAEADCAABAEADA4AAgAkABgBAAwQAAIAIgEADAABAAwUABQABAEADBAABAEADBQACgAYAQAMEgEADBAAAgAmAQAMAAEADBQAFAAEAQAMEAAEAQAMFAAKABgBAAwSAQAMEAACACoBAAwAAQAMEAAUAAQBAAwQAAoAGgEADBAAAgAuAQAMAAEADAoBAAwQAAIANgAEAQAMAAEADBYAFgAEAQAMDgAEAQAMDgA2AAQBAAwAAQAMFgAWACQAFgAEAQAMAAEADBYAFgAcAQAMEAACABoBAAwAAQAMCAAkABYABAEADAABAAwQABYAJAEADBAABAEADAABAAwSABQABAEADBAABAEADBAABAESAw
 
 test 'seq pattern with non-empty rest', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, ..] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_37, ·ƒret_1:
@@ -148,7 +153,7 @@ test 'seq pattern with non-empty rest', fn:
     # sm:aAABAA0AAQANJAEADRgBAA0SAAIABgEADQABAA0YAQIBCgACAAoBAQ0AAQANCAAUABgBAA0OAAIAEgECAQABAAEMAQENDgAKAQIBCgACABYBAQ0AAQANFAEADRQABAECAQoAFAEBDRAAAgASAQANAAEADQgAHAAYABgAGAEADQ4AAgAaAQANAAEADRwAFAAEAQANIAAEAQANDgACACQAGAEADRAAAgAiAQANAAEADRQAFAAEAQANEAAEAQANFAAKABgBAA0SAQANEAACACYBAA0AAQANFgAUAAQBAA0OACQAFAAEAQANAAEADRYAFAAcAQANEAACABoBAA0AAQANCAAkABQABAEADQABAA0QABQAJAEADRAABAEADQABAA0SABQABAEADRAABAEADRAABAEUAw
 
 test 'seq pattern with bound rest', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [a, ..rest] = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_45, ·ƒret_2:
@@ -179,7 +184,7 @@ range patterns
 ---
 
 test 'range — exclusive in match arm', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match x:
       0..10: 'low'
   | equals ƒink:
@@ -213,7 +218,7 @@ test 'range — exclusive in match arm', fn:
 
 
 test 'range — inclusive in match arm', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match x:
       0...10: 'low'
   | equals ƒink:
@@ -247,7 +252,7 @@ test 'range — inclusive in match arm', fn:
 
 
 test 'range — bind-lhs check', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0..10 = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_36, ·ƒret_0:
@@ -273,7 +278,7 @@ fn params (·v_fail = unreachable, type checker guarantees)
 ---
 
 test 'fn — seq destructuring param', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn [a, b]: a
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_61, ·ƒret_2:
@@ -304,7 +309,7 @@ test 'fn — seq destructuring param', fn:
     # sm:nwEAAQAMAAEADCQBAAwYAQAMEgACAAYBAAwAAQAMCAAQABgBFgEYAQ8GDgACAA4BAAYAAQAGCAAYABgBAAYSAQAGEAACABYBAgEAAQABDAEBBg4ACgECAQoAAgAaAQYBAAEAAQwBBwYQAAoBCAEKAAIAHgEIAQABAAEWABQABAEAAQoAGAEPBhAAAgAWAQAGAAEABggAIAAYABgAGAEABg4AAgAeAQAGAAEABhwAFAAEAQAGIAAEAQAGDgACACgAGAEABhAAAgAmAQAGAAEABhQAFAAEAQAGEAAEAQAGFAAKABgBAAYSAQAGEAACACoBAAYAAQAGFAAUAAQBAAYQAAQBAAYUAAoAGAEABhQBAAYQAAIALgEABgABAAYQABQABAEABhAACgAYAQAGEAACADIBAAYAAQAGCgEABhAAAgA6AAQBAAYAAQAGFgAUAAQBAAYOAAQBAAYQADoABAEABgABAAYWABQAKAAUAAQBAAYAAQAGFgAUACABAAYQAAIAHgEABgABAAYIACgAFAAEAQAGAAEABhAAFAAoAQAGEAAEAQAGAAEABhIAFAAEAQAGEAAEAQAGEAAEAQAGDgAQAQUMDgAEAQAMAAEADBQBAAwUAAQBAAw
 
 test 'fn — seq destructuring param with rest', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn [a, ..rest]: rest
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_52, ·ƒret_2:
@@ -333,7 +338,7 @@ test 'fn — seq destructuring param with rest', fn:
 
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn a, [1, ..b]: b
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_76, ·ƒret_2:

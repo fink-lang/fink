@@ -19,16 +19,20 @@ cps_c IR — pretty-printer tests
 #     | equals ƒink:
 #       <expected cps output>
 
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{·ƒink_module} = import '@fink/compile/builtins'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 literals — tail position, no synthesis needed
 ---
 
 test 'int literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -36,7 +40,7 @@ test 'int literal', fn:
     # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
 
 test 'int literal with underscores', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     1_000_000
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -44,7 +48,7 @@ test 'int literal with underscores', fn:
     # sm:DQABAAkAAQAJJAEACRYBAAkSAAIABgEACQABAAkUABIABgEACQABAAkIAQAJ
 
 test 'negative int literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     -1_000
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -52,7 +56,7 @@ test 'negative int literal', fn:
     # sm:DQABAAYAAQAGJAEABhYBAAYSAAIABgEABgABAAYUABIABgEABgABAAYIAQAG
 
 test 'negative zero literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     -0
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -60,7 +64,7 @@ test 'negative zero literal', fn:
     # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
 
 test 'hex int literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0xFF_FF
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -68,7 +72,7 @@ test 'hex int literal', fn:
     # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABgEABwABAAcIAQAH
 
 test 'octal int literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0o7_7
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -76,7 +80,7 @@ test 'octal int literal', fn:
     # sm:DQABAAUAAQAFJAEABRYBAAUSAAIABgEABQABAAUUABIABgEABQABAAUGAQAF
 
 test 'binary int literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     0b_1010_1111
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -84,7 +88,7 @@ test 'binary int literal', fn:
     # sm:DQABAAwAAQAMJAEADBYBAAwSAAIABgEADAABAAwUABIABgEADAABAAwGAQAM
 
 test 'float literal with exponent', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     1.5e1_0
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -92,7 +96,7 @@ test 'float literal with exponent', fn:
     # sm:DQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcUABIABgEABwABAAcIAQAH
 
 test 'decimal literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     1.5_0d
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -101,7 +105,7 @@ test 'decimal literal', fn:
 
 
 test 'bool literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     true
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -110,7 +114,7 @@ test 'bool literal', fn:
 
 
 test 'string literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     'hello'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -119,7 +123,7 @@ test 'string literal', fn:
 
 
 test 'fink block lowers to source string', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {ƒink} = import 'fink/blocks.fnk'
     ƒink:
       foo

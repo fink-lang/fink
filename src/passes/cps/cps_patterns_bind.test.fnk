@@ -27,8 +27,13 @@ CPS pattern lowering tests
 # Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
 # Wildcard (_): discard; no binding, temp passed directly to next primitive
 
-{test, equals, expect, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -36,7 +41,7 @@ bind
 ---
 
 test 'plain bind', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
@@ -48,7 +53,7 @@ test 'plain bind', fn:
 
 
 test 'simple guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a > 0 = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_34, ·ƒret_1:
@@ -71,7 +76,7 @@ test 'simple guard', fn:
 
 
 test 'nested guard', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     a > 0 or a < 9 = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_38, ·ƒret_1:

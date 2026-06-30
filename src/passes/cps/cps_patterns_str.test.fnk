@@ -1,5 +1,10 @@
-{test, skip, expect, equals, cps_module} = import 'fake!'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 
 ---
@@ -7,7 +12,7 @@ string template patterns
 ---
 
 test 'str templ pattern: capture all', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '${foo}' = val
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
@@ -27,7 +32,7 @@ test 'str templ pattern: capture all', fn:
     # sm:WQABAA4AAQAOJAEADhgBAA4SAAIABgEADgABAA4IABAAGAEADg4AAgAOAQYDAAEAAwwBBQ4OAAoBBgMOAAIAEgEFDgABAA4UAQAOFAAEAQYDDgAQAQUOEAACAA4BAA4AAQAOCAAYABgAGAAYAQAODgACABYBAA4AAQAOGAAUAAQBAA4OAAQBAA4AAQAOAgEADgABAA4CAAQBAA4AAQAOAgEADgABAA4CAAQBAA4UAAoAGAEADg4AAgAaAQAOAAEADhYAFAAEAQAODgAYAQAOEAACABYBAA4AAQAOCAAgABQABAEADgABAA4QABQAIAEADhAABAEADgABAA4SABQABAEADhAABAEADhAABAEWAw
 
 test 'str templ pattern: prefix and suffix', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     'foo${bar}spam' = val
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
@@ -47,7 +52,7 @@ test 'str templ pattern: prefix and suffix', fn:
     # sm:WQABABUAAQAVJAEAFRgBABUSAAIABgEAFQABABUIABAAGAEAFQ4AAgAOAQwDAAEAAwwBCxUOAAoBDAMOAAIAEgELFQABABUUAQAVFAAEAQwDDgAQAQsVEAACAA4BABUAAQAVCAAYABgAGAAYAQAVDgACABYBABUAAQAVGAAUAAQBABUOAAQBABUAAQAVAgEAFQYBABUCAAQBABUAAQAVAgEAFQgBABUCAAQBABUUAAoAGAEAFQ4AAgAaAQAVAAEAFRYAFAAEAQAVDgAYAQAVEAACABYBABUAAQAVCAAgABQABAEAFQABABUQABQAIAEAFRAABAEAFQABABUSABQABAEAFRAABAEAFRAABAEkAw
 
 test 'str templ pattern: capture at start', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     '${foo}bar' = val
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
@@ -67,7 +72,7 @@ test 'str templ pattern: capture at start', fn:
     # sm:WQABABEAAQARJAEAERgBABESAAIABgEAEQABABEIABAAGAEAEQ4AAgAOAQYDAAEAAwwBBREOAAoBBgMOAAIAEgEFEQABABEUAQARFAAEAQYDDgAQAQUREAACAA4BABEAAQARCAAYABgAGAAYAQARDgACABYBABEAAQARGAAUAAQBABEOAAQBABEAAQARAgEAEQABABECAAQBABEAAQARAgEAEQYBABECAAQBABEUAAoAGAEAEQ4AAgAaAQARAAEAERYAFAAEAQARDgAYAQAREAACABYBABEAAQARCAAgABQABAEAEQABABEQABQAIAEAERAABAEAEQABABESABQABAEAERAABAEAERAABAEcAw
 
 test 'str templ pattern: capture at end', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     'foo${bar}' = val
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_30, ·ƒret_1:
@@ -87,7 +92,7 @@ test 'str templ pattern: capture at end', fn:
     # sm:WQABABEAAQARJAEAERgBABESAAIABgEAEQABABEIABAAGAEAEQ4AAgAOAQwDAAEAAwwBCxEOAAoBDAMOAAIAEgELEQABABEUAQARFAAEAQwDDgAQAQsREAACAA4BABEAAQARCAAYABgAGAAYAQARDgACABYBABEAAQARGAAUAAQBABEOAAQBABEAAQARAgEAEQYBABECAAQBABEAAQARAgEAEQABABECAAQBABEUAAoAGAEAEQ4AAgAaAQARAAEAERYAFAAEAQARDgAYAQAREAACABYBABEAAQARCAAgABQABAEAEQABABEQABQAIAEAERAABAEAEQABABESABQABAEAERAABAEAERAABAEcAw
 
 test 'str templ pattern: match arm', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     match val:
       'foo${x}bar': x
       _: 0

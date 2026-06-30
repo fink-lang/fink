@@ -1,12 +1,17 @@
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 binding — ·match_store synthesis
 ---
 
 test 'bind literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = 42
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
@@ -18,7 +23,7 @@ test 'bind literal', fn:
 
 
 test 'bind ident', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
@@ -35,7 +40,7 @@ identifier reference — synthesize ·load
 ---
 
 test 'ident ref', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -48,7 +53,7 @@ block — statement sequences
 ---
 
 test 'block two stmts', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = 1
     x
   | equals ƒink:
@@ -61,7 +66,7 @@ test 'block two stmts', fn:
 
 
 test 'block bind then ·apply', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     x = 42
     foo x
   | equals ƒink:
@@ -74,7 +79,7 @@ test 'block bind then ·apply', fn:
 
 
 test 'fn body with bind', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     fn a:
       x = a + 1
       x
@@ -95,7 +100,7 @@ scoping and sequential bindings
 ---
 
 test 'calling a local — still goes through ·load', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     inc = fn x: x + 1
     inc 5
   | equals ƒink:
@@ -111,7 +116,7 @@ test 'calling a local — still goes through ·load', fn:
 
 
 test 'chained binding is sequential ·match_store', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = spam = 1
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_15, ·ƒret_2:
@@ -126,7 +131,7 @@ test 'chained binding is sequential ·match_store', fn:
 # NOTE: Group with binding becomes an immediately-invoked zero-param ·closure;
 # old IR used a `·scope` primitive. Result of the call is bound to spam.
 test 'group with binding — immediately-invoked ·closure', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     spam = (
       ni = ham 1
       ni
@@ -156,7 +161,7 @@ ported from test_cps — sequential and module-level
 ---
 
 test 'sequential bindings', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
     bar = foo + 1
   | equals ƒink:
@@ -172,7 +177,7 @@ test 'sequential bindings', fn:
 
 
 test 'binding rhs is a call', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = add 1, 2
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_17, ·ƒret_1:
@@ -189,7 +194,7 @@ test 'binding rhs is a call', fn:
 
 
 test 'expression result discarded', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo 1
     bar
   | equals ƒink:
@@ -204,7 +209,7 @@ test 'expression result discarded', fn:
 
 
 test 'chained member access', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo.bar.baz
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
@@ -219,7 +224,7 @@ module level
 ---
 
 test 'two bindings at module level', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo = 1
     bar = 2
   | equals ƒink:
@@ -234,7 +239,7 @@ test 'two bindings at module level', fn:
 
 
 test 'two fns at module level — main calls add', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     add = fn a, b:
       a + b
     main = fn:
@@ -256,7 +261,7 @@ test 'two fns at module level — main calls add', fn:
     # sm:XwABACwAAQAsJAEALBgBLhUSAAIABgEtLAABACwYAQADEgEuBBAAAgAKASEQAAEAEAgAFAAYARYFFgEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUSABQBFRAOAAIAEgELFgABABYMAQADDgAEAQwQDgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE8DgABAA4IACQAGAEMCBQABAEACAABAAMQABQABAEACBQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEACQBGQ4QAAIAIgENFQABABUMAQAEEAAEAQ4OEAAIAAIAJgENBAABAAQQABQABAEABBAACgAUAAIAKgEABAABAAQUABQABAEABA
 
 test 'shadowed binding — inner add does not affect outer', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     add = fn a, b:
       a + b
     sub = fn a, b:

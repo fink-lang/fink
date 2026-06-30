@@ -1,12 +1,17 @@
-{test, expect, equals, cps_module} = import '!fake'
+{test, equals: eq} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
 
 ---
 sequence and record literals
 ---
 
 test 'seq literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [1, 2, 3]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_0:
@@ -17,7 +22,7 @@ test 'seq literal', fn:
 
 
 test 'empty seq literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     []
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -26,7 +31,7 @@ test 'empty seq literal', fn:
 
 
 test 'rec literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {x: 1, y: 2}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_13, ·ƒret_0:
@@ -36,7 +41,7 @@ test 'rec literal', fn:
 
 
 test 'empty rec literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
@@ -45,7 +50,7 @@ test 'empty rec literal', fn:
 
 
 test 'rec shorthand', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {x, y}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_13, ·ƒret_0:
@@ -60,7 +65,7 @@ member access
 ---
 
 test 'member static', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo.bar
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -69,7 +74,7 @@ test 'member static', fn:
 
 
 test 'member dynamic get', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo.(key)
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -78,7 +83,7 @@ test 'member dynamic get', fn:
 
 
 test 'member dynamic key', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     key = 'foo'
     {(key): 42}
   | equals ƒink:
@@ -91,7 +96,7 @@ test 'member dynamic key', fn:
 
 
 test 'member string key shorthand', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     foo.'bar baz'
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -105,7 +110,7 @@ spreads in seq and rec literals
 ---
 
 test 'seq spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [..xs, 1]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
@@ -115,7 +120,7 @@ test 'seq spread', fn:
 
 
 test 'rec spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {..base, x: 1}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_12, ·ƒret_0:
@@ -130,7 +135,7 @@ tagged literals
 ---
 
 test 'tagged literal', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     10sec
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_6, ·ƒret_0:
@@ -146,7 +151,7 @@ seq/rec literals with spreads
 # NOTE: ·seq_prepend/·seq_concat/·rec_put/·rec_merge are loaded from ·scope (not primitives)
 # in cps_c — they're treated as regular identifier references.
 test 'seq literal with spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [1, ..a, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_16, ·ƒret_0:
@@ -156,7 +161,7 @@ test 'seq literal with spread', fn:
     # sm:LQABAAsAAQALJAEACxgBAAsSAAIABgESAQABAAEcABQABgEAAQABAAEGAQABBAAEARELAAEACwIBAAsCAAoAGAESAQ4AAgAKAQkDAAEAAxoAFAAEAQQBDAAEAQYBDgAKABgBCQMOAAIADgEFAQABAAEcABQABgEAAQABAAEGAQABBAAEAQYDDgAEAQUB
 
 test 'seq literal leading spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     [..a, ..b]
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
@@ -165,7 +170,7 @@ test 'seq literal leading spread', fn:
     # sm:HQABAAoAAQAKJAEAChgBAAoSAAIABgEMAwABAAMaABQABAEEAQwABAEPCgABAAoCAQAKAgAKABgBDAMOAAIACgEJAwABAAMaABQABAEEAQwABAEGAw4ABAEJAw
 
 test 'rec literal with spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {foo: a, ..b}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_12, ·ƒret_0:
@@ -174,7 +179,7 @@ test 'rec literal with spread', fn:
     # sm:HwABAA0AAQANJAEADRgBAA0SAAIABgECBgABAAYUABQABAEBDQABAA0CAQANAgAEAQIDDgAEAQoBDAAKABgBCQYOAAIACgEQAwABAAMYABQABAEPBg4ABAEUAQwABAEDAw
 
 test 'rec literal leading spread', fn:
-  expect cps_module ƒink:
+  cps_module ƒink:
     {..a, ..b}
   | equals ƒink:
     ·ƒink_module fn ·ƒctx_11, ·ƒret_0:
