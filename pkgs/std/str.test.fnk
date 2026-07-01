@@ -261,8 +261,8 @@ test 'str type', fn:
 test 'str type on templ str', fn:
   foo = 42
   equals
-    match '${foo}':
+    match 'foo ${foo}':
       str s: s
       _: 'no match'
-    '42'
+    'foo 42'
 

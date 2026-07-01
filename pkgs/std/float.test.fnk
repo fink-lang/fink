@@ -1,4 +1,20 @@
 {test, equals, not_equals} = import 'std/testing.fnk'
+{float} = import 'std/float.fnk'
+
+
+test 'float type guard matches a float', fn:
+  equals
+    match 3.14:
+      float f: f
+      _: 'no match'
+    3.14
+
+test 'float type guard rejects an integer', fn:
+  equals
+    match 42:
+      float f: f
+      _: 'no match'
+    'no match'
 
 
 # Float literals. A decimal-point literal is the implicit float

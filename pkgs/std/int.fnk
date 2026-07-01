@@ -1,4 +1,5 @@
-# TODO re-export types from wat
-# TODO {rt_u8} = import 'rt/int.wat'
+# The built-in `int` type, reified as a first-class value: usable as a
+# match/guard arm (`match x: int i: ...`). Matches any integer ($I64 / $U64).
+{IntType: rt_int_type} = import 'rt/int.wat'
 
-u8 = type _ #TODO rt_u8
+int = rt_int_type

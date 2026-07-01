@@ -39,6 +39,12 @@
   ;; the cycle -- runtime wat "imports" are link-time cross-refs.)
   (import "rt/str.wat" "Str" (type $Str (sub any)))
   (import "rt/str.wat" "StrType" (func $str_type (result (ref $Type))))
+  ;; The numeric intrinsics, bridged the same way: `int` -> ref.test (ref $Int)
+  ;; (matches $I64/$U64 via subtyping), `float` -> ref.test (ref $F64).
+  (import "rt/int.wat" "Int" (type $Int (sub any)))
+  (import "rt/int.wat" "IntType" (func $int_type (result (ref $Type))))
+  (import "rt/float.wat" "F64" (type $F64 (sub any)))
+  (import "rt/float.wat" "FloatType" (func $float_type (result (ref $Type))))
   (import "rt/dict.wat" "Dict" (type $Dict (sub any)))
   ;; Direct-style dict helpers: build an empty fields dict and add entries.
   (import "rt/dict.wat" "_rec_new"
@@ -769,10 +775,14 @@
     (local $t (ref null $Type))
     ;; Intrinsic bridge: an intrinsic type keeps its native WASM rep (no $Inst
     ;; wrapper), so membership is a `ref.test` against that rep, selected by the
-    ;; intrinsic singleton's identity. `str` so far; add a `ref.eq` arm per
-    ;; intrinsic as they land.
+    ;; intrinsic singleton's identity. One `ref.eq` arm per intrinsic. `int`
+    ;; tests $Int (matches $I64/$U64 via subtyping); `float` tests $F64.
     (if (ref.eq (ref.cast (ref eq) (local.get $type)) (call $str_type))
       (then (return (ref.test (ref $Str) (local.get $val)))))
+    (if (ref.eq (ref.cast (ref eq) (local.get $type)) (call $int_type))
+      (then (return (ref.test (ref $Int) (local.get $val)))))
+    (if (ref.eq (ref.cast (ref eq) (local.get $type)) (call $float_type))
+      (then (return (ref.test (ref $F64) (local.get $val)))))
     ;; Non-instances are never an instance of any type.
     (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
       (then (return (i32.const 0))))

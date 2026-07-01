@@ -664,12 +664,17 @@ fn remap_operand(op: &Operand, off: &Offsets) -> Operand {
 mod tests {
   use super::*;
 
-  // The runtime bakes the `str` symbol word as a literal in rt/str.wat (it never
-  // runs resolve_symbols). This pins the value the wat literal must match; if the
-  // reserved order changes, this fails and flags the wat literal to update too.
+  // Each intrinsic runtime file bakes its type name's symbol word as a literal
+  // (it never runs resolve_symbols). These pin the values the wat literals must
+  // match; if the reserved order changes, they fail and flag the wat to update.
+  //   str   -> rt/str.wat
+  //   int   -> rt/int.wat
+  //   float -> rt/float.wat
   #[test]
-  fn str_reserved_word_matches_runtime_literal() {
+  fn intrinsic_reserved_words_match_runtime_literals() {
     assert_eq!(reserved_symbol_word("str"), Some(2));
+    assert_eq!(reserved_symbol_word("int"), Some(26));
+    assert_eq!(reserved_symbol_word("float"), Some(34));
   }
 
   #[test]
