@@ -94,7 +94,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply $cps_closures_apply $cps_hoisted_apply $wat_apply $marks_apply $wat_pkg_apply)
+  (elem declare func $host_cont_adapter_3 $panic_apply $interop_yield_apply $io_write_apply $io_read_apply $interop_now_apply $tokenize_apply $ast_apply $desugar_apply $scope_apply $fmt_apply $cps_module_apply $cps_closures_apply $cps_hoisted_apply $wat_apply $marks_apply $wat_pkg_apply $bless_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -211,6 +211,16 @@
     (param $base (ref $ByteArray))
     (param $src (ref $ByteArray))
     (result (ref $ByteArray))))
+
+  ;; Bless: rewrite failing snapshot expectations in place. `blessables` is a
+  ;; $List of `[[mid, cid], actual]` records (one per failed snapshot). The host
+  ;; resolves each `mid` to a source file, `[mid, cid]` to the expectation's
+  ;; span, and splices `actual` in. Returns the count applied. Unlike the other
+  ;; services (bytes in / bytes out), this takes a structured value the host
+  ;; walks directly.
+  (import "env" "host_bless" (func $host_bless
+    (param $blessables (ref null any))
+    (result i32)))
 
 
   ;; Host-callable entry point: fire a previously-yielded resume
@@ -877,6 +887,49 @@
   (func $interop_now (@pub) (@impl "interop.fnk:now")
     (result (ref any))
     (global.get $interop_now_closure))
+
+
+  ;; -- bless -----------------------------------------------------------
+  ;;
+  ;; User-level call: `bless blessables`. CPS args = [k_caller, blessables].
+  ;; Hands the structured list straight to the host (which walks it), boxes the
+  ;; applied-count as $I64, tail-calls k_caller with it.
+  (elem declare func $bless_apply)
+
+  (func $bless_apply (type $Fn3)
+    (param $_caps (ref null any))
+    (param $ctx (ref null any))
+    (param $args (ref null any))
+
+    (local $k_caller (ref any))
+    (local $rest (ref null any))
+    (local $blessables (ref null any))
+    (local $count (ref $I64))
+    (local $k_args (ref any))
+
+    (local.set $k_caller (ref.as_non_null (call $args_head (local.get $args))))
+    (local.set $rest (call $args_tail (local.get $args)))
+    (local.set $blessables (call $args_head (local.get $rest)))
+
+    (local.set $count
+      (call $_box_i64
+        (i64.extend_i32_s (call $host_bless (local.get $blessables)))))
+
+    (local.set $k_args
+      (call $args_prepend (local.get $count) (call $args_empty)))
+    (return_call $apply_3
+      (local.get $k_args)
+      (local.get $ctx)
+      (local.get $k_caller)))
+
+  (global $bless_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $bless_apply)
+      (ref.null $Captures)))
+
+  (func $bless (@pub) (@impl "interop.fnk:bless")
+    (result (ref any))
+    (global.get $bless_closure))
 
 
   ;; -- Host callable (inbound contract) --------------------------------------

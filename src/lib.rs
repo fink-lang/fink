@@ -229,12 +229,13 @@ pub fn run_stdin(
 #[cfg(feature = "run")]
 pub fn run_tests(
   target: Option<&str>,
+  bless: bool,
   args: Vec<Vec<u8>>,
   stdin: runner::IoReadStream,
   stdout: runner::IoStream,
   stderr: runner::IoStream,
 ) -> Result<i64, String> {
-  runner::run_tests(Default::default(), target, args, stdin, stdout, stderr)
+  runner::run_tests(Default::default(), target, bless, args, stdin, stdout, stderr)
 }
 
 /// Compile and run a `.fnk` (or `.wasm`) file from disk. Multi-module —

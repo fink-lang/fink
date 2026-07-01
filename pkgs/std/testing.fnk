@@ -2,6 +2,7 @@
 {write, stderr} = import 'std/io.fnk'
 {suspend, init_ctx} = import 'std/effects.fnk'
 {get_trace, get_module_url, get_loc} = import 'std/trace.fnk'
+{bless: rt_bless} = import 'rt/interop.wat'
 
 
 TestResult = enum:
@@ -110,7 +111,20 @@ gen_test_report = fn results, passed, failed, skipped:
         Failure _: gen_test_report rest, passed, failed + 1, skipped
 
 
-test_all = fn:
+get_blessables = fn results, blessings:
+  match results:
+    []: blessings
+    [result, ..rest]:
+
+      match result:
+        Failure {actual, expected: Snapshot {src}}:
+          get_blessables rest, [..blessings, [src, actual]]
+        _:
+          get_blessables rest, blessings
+
+
+
+test_all = fn bless:
   tests = upd_tests fn {tests}:
     [tests, {tests: []}]
 
@@ -120,12 +134,32 @@ test_all = fn:
   total = passed + failed + skipped
   write stderr, '\nTotal: ${total}, Passed: ${passed}, Failed: ${failed} Skipped: ${skipped}\n'
 
+  match bless:
+    true:
+      write stderr, 'Blessing ...'
+      blessables = get_blessables results, []
+      cnt = rt_bless blessables
+      write stderr, '${cnt} blessed.\n'
+    _: true
+
   failed
 
 
+Snapshot = type:
+  value: _
+  src: _
+
+snapshot = fn value:
+  [_, [mid, cid]] = get_trace 2
+  Snapshot {value, src: [mid, cid]}
+
 
 equals = fn actual, expected:
-  match actual == expected:
+  exp = match expected:
+    Snapshot {value}: value
+    value: value
+
+  match actual == exp:
     true: true
     false: fail
       'act: ${actual}\n  ==\n  exp: ${expected}'

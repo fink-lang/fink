@@ -1,0 +1,13 @@
+{test, equals: eq, snapshot} = import 'std/testing.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+test 'snapshots', fn:
+  '42'
+  | equals snapshot ":
+    42
+
+
