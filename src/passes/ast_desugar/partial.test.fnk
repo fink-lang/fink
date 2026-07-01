@@ -1,0 +1,397 @@
+{test, equals: eq} = import 'std/testing.fnk'
+{desugar} = import 'fink/compile.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+---
+no change in AST
+---
+test 'AST remains the same', fn:
+  desugar ƒink:
+    5 + 5
+  | equals ":
+    No Change
+
+
+
+---
+statement-level partial
+---
+
+test 'partial in infix rhs', fn:
+  desugar ƒink:
+    ? + 5
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      InfixOp '+',
+        SynthIdent '·$_0'
+        LitInt '5'
+
+
+test 'partial in infix lhs', fn:
+  desugar ƒink:
+    1 + ?
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      InfixOp '+',
+        LitInt '1'
+        SynthIdent '·$_0'
+
+
+test 'partial used twice - single param', fn:
+  desugar ƒink:
+    ? + ?
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      InfixOp '+',
+        SynthIdent '·$_0'
+        SynthIdent '·$_0'
+
+
+test 'partial in apply arg', fn:
+  desugar ƒink:
+    add 5, ?
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      Apply
+        Ident 'add'
+        LitInt '5'
+        SynthIdent '·$_0'
+
+
+test 'partial in unary', fn:
+  desugar ƒink:
+    -?
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      UnaryOp '-',
+        SynthIdent '·$_0'
+
+
+test 'partial in member access', fn:
+  desugar ƒink:
+    ?.foo
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      Member '.',
+        SynthIdent '·$_0'
+        Ident 'foo'
+
+
+test 'partial in computed member access', fn:
+  desugar ƒink:
+    ?.(0)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      Member '.',
+        SynthIdent '·$_0'
+        Group '(..)',
+          LitInt '0'
+
+
+test 'partial in range', fn:
+  desugar ƒink:
+    (1..?)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      InfixOp '..',
+        LitInt '1'
+        SynthIdent '·$_0'
+
+
+test 'partial in open range', fn:
+  desugar ƒink:
+    (?..)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      PostfixOp '..',
+        SynthIdent '·$_0'
+
+
+test 'partial in spread', fn:
+  desugar ƒink:
+    [..?]
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      LitSeq '[..]',
+        Spread '..',
+          SynthIdent '·$_0'
+
+
+test 'bare partial - identity function', fn:
+  desugar ƒink:
+    (?)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      SynthIdent '·$_0'
+
+
+test 'partial in binding rhs', fn:
+  desugar ƒink:
+    add5 = add 5, ?
+  | equals ƒink:
+    Bind '=',
+      Apply
+        Ident 'pub'
+        Ident 'add5'
+      Fn ':',
+        Patterns
+          SynthIdent '·$_0'
+        Apply
+          Ident 'add'
+          LitInt '5'
+          SynthIdent '·$_0'
+
+
+---
+group as explicit scope boundary
+---
+
+test 'group narrows scope - member expr key preserves group', fn:
+  desugar ƒink:
+    foo.(?)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      Member '.',
+        Ident 'foo'
+        Group '(..)',
+          SynthIdent '·$_0'
+
+
+test 'group with multiple partial refs - same param', fn:
+  desugar ƒink:
+    (foo ?.(1), ?.(2))
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      Apply
+        Ident 'foo'
+        Member '.',
+          SynthIdent '·$_0'
+          Group '(..)',
+            LitInt '1'
+        Member '.',
+          SynthIdent '·$_0'
+          Group '(..)',
+            LitInt '2'
+
+
+test 'nested groups - each is its own scope', fn:
+  desugar ƒink:
+    (foo (bar ?) ?)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_1'
+      Apply
+        Ident 'foo'
+        Fn ':',
+          Patterns
+            SynthIdent '·$_0'
+          Apply
+            Ident 'bar'
+            SynthIdent '·$_0'
+        SynthIdent '·$_1'
+
+
+---
+transparent containers - partial bubbles through
+---
+
+test 'partial in seq literal - seq is transparent', fn:
+  desugar ƒink:
+    [?, ?]
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      LitSeq '[..]',
+        SynthIdent '·$_0'
+        SynthIdent '·$_0'
+
+
+test 'partial with member projection in seq', fn:
+  desugar ƒink:
+    [?.(0), ?.(1)]
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      LitSeq '[..]',
+        Member '.',
+          SynthIdent '·$_0'
+          Group '(..)',
+            LitInt '0'
+        Member '.',
+          SynthIdent '·$_0'
+          Group '(..)',
+            LitInt '1'
+
+
+test 'partial in rec literal - rec is transparent', fn:
+  desugar ƒink:
+    {foo: ?, bar: ?}
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      LitRec '{..}',
+        Arm ':',
+          Ident 'foo'
+          SynthIdent '·$_0'
+        Arm ':',
+          Ident 'bar'
+          SynthIdent '·$_0'
+
+
+test 'partial in nested seq - all same param', fn:
+  desugar ƒink:
+    [?, [?, ?]]
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      LitSeq '[..]',
+        SynthIdent '·$_0'
+        LitSeq '[..]',
+          SynthIdent '·$_0'
+          SynthIdent '·$_0'
+
+
+test 'partial in spread apply', fn:
+  desugar ƒink:
+    foo ..?
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      Apply
+        Ident 'foo'
+        Spread '..',
+          SynthIdent '·$_0'
+
+
+---
+pipe segments as scope boundaries
+---
+
+test 'partial in pipe segment', fn:
+  desugar ƒink:
+    items
+    | filter ? % 2 == 0
+  | equals ƒink:
+    Pipe
+      Ident 'items'
+      Fn ':',
+        Patterns
+          SynthIdent '·$_0'
+        Apply
+          Ident 'filter'
+          InfixOp '==',
+            InfixOp '%',
+              SynthIdent '·$_0'
+              LitInt '2'
+            LitInt '0'
+
+
+test 'partial in multiple pipe segments', fn:
+  desugar ƒink:
+    items
+    | filter is_even ?
+    | map ? * 2
+  | equals ƒink:
+    Pipe
+      Ident 'items'
+      Fn ':',
+        Patterns
+          SynthIdent '·$_0'
+        Apply
+          Ident 'filter'
+          Apply
+            Ident 'is_even'
+            SynthIdent '·$_0'
+      Fn ':',
+        Patterns
+          SynthIdent '·$_1'
+        Apply
+          Ident 'map'
+          InfixOp '*',
+            SynthIdent '·$_1'
+            LitInt '2'
+
+
+test 'partial in pipe inside fn body', fn:
+  desugar ƒink:
+    main = fn:
+      2
+      | add 3, ?
+  | equals ƒink:
+    Bind '=',
+      Apply
+        Ident 'pub'
+        Ident 'main'
+      Fn ':',
+        Patterns
+        Pipe
+          LitInt '2'
+          Fn ':',
+            Patterns
+              SynthIdent '·$_0'
+            Apply
+              Ident 'add'
+              LitInt '3'
+              SynthIdent '·$_0'
+
+
+
+test 'partial in pipe with ident', fn:
+  desugar ƒink:
+    main = fn:
+      x
+      | add 3, ?
+  | equals ƒink:
+    Bind '=',
+      Apply
+        Ident 'pub'
+        Ident 'main'
+      Fn ':',
+        Patterns
+        Pipe
+          Ident 'x'
+          Fn ':',
+            Patterns
+              SynthIdent '·$_0'
+            Apply
+              Ident 'add'
+              LitInt '3'
+              SynthIdent '·$_0'
+

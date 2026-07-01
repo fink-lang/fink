@@ -1,0 +1,101 @@
+---
+CPS pattern lowering tests
+---
+
+# Expected CPS expansion for every pattern form.
+#
+# All patterns lower to PatternMatch — a matcher function applied to the subject:
+#   ·fn
+#     fn <binds>: <body>                                      — body receives matched values
+#     fn ·v_N:
+#       ·fn
+#         fn ·v_subj, ·v_succ, ·v_fail: <matcher_body>       — matcher tests, calls succ/fail
+#         fn ·v_M: ·v_M subject, ·v_N, ·panic                — matcher(subject, body, panic)
+#
+# Failure continuation convention:
+#   ·panic   — default; pattern mismatch is a compile/runtime error
+#   ·v_fail  — inside a match arm; failure tries the next arm
+#
+# Collection primitives (used inside matcher bodies):
+#   ·seq_pop seq, ·fail, fn head, tail: …   — pop head element; fail if empty
+#   ·rec_pop rec, ƒ'name', ·fail, fn val, rest: …  — extract named field; fail if missing
+#   ·empty   collection, fn bool: …         — predicate; caller branches with If
+#
+# Literal/guard/range patterns use ·op_eq, ·op_gt, etc. inside the matcher.
+# Match blocks use a fail-chain: mp_1(subj, k, fn: mp_2(subj, k, fn: panic))
+#
+# Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
+# Wildcard (_): discard; no binding, temp passed directly to next primitive
+
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+---
+bind
+---
+
+test 'plain bind', fn:
+  cps_module ƒink:
+    x = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
+      ·letrec fn ·x_0:
+        ·set ·x_0, ·∅foo, fn:
+          ·ƒpub ·ƒctx_11, ·x_0, fn ·ƒctx_14:
+            ·ƒret_1 ·ƒctx_14, ·x_0
+    # sm:IQABAAcAAQAHJAEABxgBAAcSAAIABgEABwABAAcYAQABCgACAAoBAAcAAQAHDAEAAQoABAEIAxAACAACAA4BBwEAAQABEAAUAAQBAAEKAAoAFAACABIBAAEAAQABFAAUAAQBAAE
+
+
+test 'simple guard', fn:
+  cps_module ƒink:
+    a > 0 = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_34, ·ƒret_1:
+      ·letrec fn ·a_0:
+        ·set ·a_0, ·∅foo, fn:
+          ·fn
+            fn ·ƒctx_36, ·a_0: ·ƒret_1 ·ƒctx_36, ·a_0
+            fn ·ƒv_18:
+              ·fn
+                fn ·ƒctx_38, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
+                  ·op_gt ·ƒctx_38, ·ƒv_3, (i8 0), fn ·ƒctx_40, ·ƒv_8:
+                    ·if ·ƒv_8,
+                      fn: ·ƒsucc_4 ·ƒctx_40, ·ƒv_3
+                      fn: ·ƒfail_5 ·ƒctx_40
+                fn ·ƒv_16:
+                  ·fn
+                    fn ·ƒctx_43: ·panic ·ƒctx_43
+                    fn ·ƒv_21: ·ƒv_16 ·ƒctx_34, ·ƒv_18, ·ƒv_21, ·∅foo
+    # sm:YQABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsYAQABCgACAAoBAAsAAQALDAEAAQoABAEQAxAACAACAA4BDwsAAQALCAAYABgBAAEKAAQBAAsAAQALFAAUAAQBAAsKABgBAAsQAAIAFgEACwABAAsIACAAGAAYABgBAAsOAAIAHgEABQABAAUQABQABAEACw4ABgEIAQABAAEGAQABBAAKABgBBwUOAAIAIgEABQABAAUKAQAFDgACACoABAEACwABAAsWABQABAEACw4AKgAEAQALAAEACxYAFAAgAQALEAACAB4BAAsAAQALCAAoABQABAEACwABAAsQABQAKAEACxAABAEACwABAAsSABQABAEACxAABAEACxAABAEQAw
+
+
+test 'nested guard', fn:
+  cps_module ƒink:
+    a > 0 or a < 9 = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_38, ·ƒret_1:
+      ·letrec fn ·a_0:
+        ·set ·a_0, ·∅foo, fn:
+          ·fn
+            fn ·ƒctx_40, ·a_0: ·ƒret_1 ·ƒctx_40, ·a_0
+            fn ·ƒv_22:
+              ·fn
+                fn ·ƒctx_42, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
+                  ·op_lt ·ƒctx_42, ·a_0, (i8 9), fn ·ƒctx_44, ·ƒv_8:
+                    ·op_or ·ƒctx_44, ·ƒv_3, ·ƒv_8, fn ·ƒctx_46, ·ƒv_11:
+                      ·if ·ƒv_11,
+                        fn: ·ƒsucc_4 ·ƒctx_46, ·ƒv_3
+                        fn: ·ƒfail_5 ·ƒctx_46
+                fn ·ƒv_20:
+                  ·fn
+                    fn ·ƒctx_49: ·panic ·ƒctx_49
+                    fn ·ƒv_25: ·ƒv_20 ·ƒctx_38, ·ƒv_22, ·ƒv_25, ·∅foo
+    # sm:bQABABQAAQAUJAEAFBgBABQSAAIABgEAFAABABQYAQABCgACAAoBABQAAQAUDAEAAQoABAEiAxAACAACAA4BIRQAAQAUCAAYABgBAAEKAAQBABQAAQAUFAAUAAQBABQKABgBABQQAAIAFgEAFAABABQIACAAGAAYABgBABQOAAIAHgESBQABAAUQABQABAEAAQoABgEIAQABAAEGAQABBAAKABgBBwUOAAIAIgERDgABAA4QABQABAEAFA4ABAESBQ4ACgAYAREOEAACACYBAA4AAQAOCgEADhAAAgAuAAQBABQAAQAUFgAUAAQBABQOAC4ABAEAFAABABQWABQAIAEAFBAAAgAeAQAUAAEAFAgAKAAUAAQBABQAAQAUEAAUACgBABQQAAQBABQAAQAUEgAUAAQBABQQAAQBABQQAAQBIgM
+
+

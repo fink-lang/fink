@@ -24,6 +24,28 @@ pub fn fmt(ast: &Ast<'_>) -> String {
   out.finish_string()
 }
 
+/// Render the AST pretty-printer output for a source string. Backs the
+/// `fmt` host service (`fink/compile.fnk`) and the native fmt test file.
+/// Parses with the `test_block` AST-mode trigger (mirroring `parse_debug`),
+/// then formats via `fmt`.
+pub fn fmt_debug(src: &str) -> String {
+  use crate::ast::parser::{parse_with_blocks, BlockMode};
+  let url = "test.fnk";
+  match parse_with_blocks(src, url, &[("test_block", BlockMode::Ast)]) {
+    Ok(ast) => fmt(&ast),
+    Err(e) => {
+      let diag = crate::errors::Diagnostic {
+        url: url.to_string(),
+        message: e.message,
+        loc: e.loc,
+        hint: None,
+      };
+      let provider = crate::errors::SingleSource { url, src };
+      crate::errors::format_diagnostic(&provider, &diag, &crate::errors::FormatOptions::default())
+    }
+  }
+}
+
 /// Format an AST back to Fink source with fn bodies always on new lines (for CPS output).
 pub fn fmt_block(ast: &Ast<'_>) -> String {
   FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
@@ -687,8 +709,6 @@ mod tests {
     let ast = parse(src, "test").expect("parse failed");
     ast_fmt(&ast)
   }
-
-  test_macros::include_fink_tests!("src/passes/ast/test_fmt.fnk");
 
   // --- multiline string indentation tests ---
 

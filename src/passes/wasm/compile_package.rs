@@ -263,11 +263,10 @@ fn enqueue_dep(
   queue: &mut VecDeque<(String, PathBuf)>,
   visited: &BTreeSet<String>,
 ) {
-  // Skip non-relative imports unless they're in the migrated stdlib
-  // list. Bare identifiers, future remote schemes, and unmigrated
-  // virtual stdlib URLs aren't user fragments and don't need
-  // package-compile.
-  if !is_relative_url(raw_url) && !is_migrated_stdlib_fnk(raw_url) {
+  // Skip non-relative imports that aren't package-source modules.
+  // Bare identifiers, future remote schemes, and `.wat` runtime modules
+  // aren't user fragments and don't need package-compile.
+  if !is_relative_url(raw_url) && !is_pkg_source_url(raw_url) {
     return;
   }
 
@@ -325,32 +324,19 @@ pub fn finalize_marks(
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Stdlib migration list
+// Stdlib URL recognition
 // ──────────────────────────────────────────────────────────────────
 
-/// Stdlib `.fnk` URLs that have a real ƒink-source file at
-/// `<repo>/std/<...>.fnk`. These compile through the user-fragment
-/// path; everything else under `std/` keeps its current virtual-rec
-/// + @impl alias resolution. Hand-maintained during migration.
-pub const MIGRATED_STDLIB_FNK: &[&str] = &[
-  "std/effects.fnk",
-  "std/tasks.fnk",
-  "std/channels.fnk",
-  "std/testing.fnk",
-  "std/io.fnk",
-  "std/iter.fnk",
-  "std/trace.fnk",
-  "std/int.fnk",
-  "std/set.fnk",
-  "std/list.fnk",
-  "std/fmt.fnk",
-  "std/repr.fnk",
-  "std/math.fnk",
-];
-
-#[cfg(feature = "compile")]
-fn is_migrated_stdlib_fnk(url: &str) -> bool {
-  MIGRATED_STDLIB_FNK.contains(&url)
+/// A package-source URL: a non-relative `<pkg>/**.fnk` import naming a
+/// real ƒink-source module that lives under `pkgs/<pkg>/`. These compile
+/// through the user-fragment path (real fragment, disk-resolved).
+///
+/// All non-relative imports share the `<pkg>/**` grammar; the file kind
+/// splits the backing: `.fnk` = a package source fragment (this
+/// predicate), `.wat` = an intrinsic `rt/*` runtime module (virtual-rec,
+/// not fink source, never under `pkgs/`).
+pub fn is_pkg_source_url(url: &str) -> bool {
+  !is_relative_url(url) && url.ends_with(".fnk")
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -365,8 +351,10 @@ fn is_migrated_stdlib_fnk(url: &str) -> bool {
 /// the result themselves.
 #[cfg(feature = "compile")]
 pub fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
-  if is_migrated_stdlib_fnk(canonical_url) {
-    return Path::new(env!("CARGO_MANIFEST_DIR")).join(canonical_url);
+  // Package-source URLs (`<pkg>/**.fnk`) live under `<repo>/pkgs/`; the
+  // URL is namespace-relative, the `pkgs/` root is the disk mapping.
+  if is_pkg_source_url(canonical_url) {
+    return Path::new(env!("CARGO_MANIFEST_DIR")).join("pkgs").join(canonical_url);
   }
   let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);
   entry_dir.join(rest)

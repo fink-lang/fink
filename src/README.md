@@ -17,7 +17,6 @@ Details, stage contracts, and per-stage READMEs in [passes/README.md](passes/REA
 - [runner/](runner/) — the `fink run` command. Executes a compiled WASM binary under wasmtime with IO channels wired to stdin/stdout/stderr.
 - [dap/](dap/) — the debug adapter protocol server behind `fink dap`.
 - [compile/](compile/) — compile-side entry behind the `compile` feature.
-- [fmt/](fmt/) — the Stage-2 source-code formatter (`fink fmt2`).
 - [errors/](errors/) — diagnostic formatting.
 - [strings/](strings/) — escape-sequence handling (bytes, not codepoints).
 - [sourcemap/](sourcemap/) — `MappedWriter` (the accumulator used by `ast::fmt` and the WAT formatter), plus the native byte-offset source-map codec.

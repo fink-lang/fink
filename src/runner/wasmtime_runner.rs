@@ -250,6 +250,358 @@ pub fn run(
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
+        "host_tokenize" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Read the source ByteArray, run the
+            // lexer, return the rendered token dump as a ByteArray. The
+            // host backs the compiler-as-service contract; see interop.wat.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_tokenize: source not UTF-8: {e}")))?;
+            let out = crate::passes::ast::lexer::tokenize_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_tokenize byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_ast" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Parse + render the AST dump (or a caret
+            // diagnostic on parse error). See interop.wat.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_ast: source not UTF-8: {e}")))?;
+            let out = crate::passes::ast::parser::parse_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_ast byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_desugar" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Parse + desugar, render the AST dump.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_desugar: source not UTF-8: {e}")))?;
+            let out = crate::passes::ast_desugar::desugar_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_desugar byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_scope" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Parse + desugar + scope-analyse, render the scope tree.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_scope: source not UTF-8: {e}")))?;
+            let out = crate::passes::scopes::scope_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_scope byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_fmt" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Parse, render the AST pretty-printer output.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_fmt: source not UTF-8: {e}")))?;
+            let out = crate::passes::ast::fmt::fmt_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_fmt byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_cps_module" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Lower to module-level CPS IR, render it.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_cps_module: source not UTF-8: {e}")))?;
+            let out = crate::passes::cps::transform::cps_module_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_cps_module byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_cps_closures" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Lower + closure-convert, render the CPS IR.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_cps_closures: source not UTF-8: {e}")))?;
+            let out = crate::passes::closures::cps_closures_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_cps_closures byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_cps_hoisted" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Lower + convert + hoist, render the CPS IR.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_cps_hoisted: source not UTF-8: {e}")))?;
+            let out = crate::passes::closures::cps_hoisted_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_cps_hoisted byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_wat" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Lower through codegen to WAT text.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_wat: source not UTF-8: {e}")))?;
+            let out = crate::passes::wasm::wat_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_wat byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_marks" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [src_bytes]. Run the debug-marks analysis, render it.
+            let mut src = Vec::new();
+            if let Some(r) = params[0].unwrap_anyref()
+              && let Some(arr) = r.as_array(&caller).ok().flatten()
+            {
+              let len = arr.len(&caller).unwrap_or(0);
+              src.reserve(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  src.push(b as u8);
+                }
+              }
+            }
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_marks: source not UTF-8: {e}")))?;
+            let out = crate::passes::debug_marks::marks_debug(&src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_marks byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        #[cfg(feature = "compile")]
+        "host_wat_pkg" => {
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            // params = [base_bytes, src_bytes]. Multi-module WAT rooted at base.
+            let read_bytes = |caller: &mut wasmtime::Caller<'_, _>, v: &Val| -> Vec<u8> {
+              let mut out = Vec::new();
+              if let Some(r) = v.unwrap_anyref()
+                && let Some(arr) = r.as_array(&*caller).ok().flatten()
+              {
+                let len = arr.len(&*caller).unwrap_or(0);
+                out.reserve(len as usize);
+                for i in 0..len {
+                  if let Ok(Val::I32(b)) = arr.get(&mut *caller, i) {
+                    out.push(b as u8);
+                  }
+                }
+              }
+              out
+            };
+            let base = read_bytes(&mut caller, &params[0]);
+            let src = read_bytes(&mut caller, &params[1]);
+            let base_str = String::from_utf8(base)
+              .map_err(|e| Error::msg(format!("host_wat_pkg: base not UTF-8: {e}")))?;
+            let src_str = String::from_utf8(src)
+              .map_err(|e| Error::msg(format!("host_wat_pkg: source not UTF-8: {e}")))?;
+            let out = crate::passes::wasm::wat_pkg_debug(&base_str, &src_str);
+
+            let array_ty = wasmtime::ArrayType::new(
+              caller.engine(),
+              wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+            );
+            let alloc = wasmtime::ArrayRefPre::new(&mut caller, array_ty);
+            let elems: Vec<Val> = out.bytes().map(|b| Val::I32(b as i32)).collect();
+            let array = wasmtime::ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+              .map_err(|e| Error::msg(format!("host_wat_pkg byte array: {e}")))?;
+            results[0] = Val::AnyRef(Some(array.to_anyref()));
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
         _ => {
           let err_name = name.clone();
           linker.func_new("env", &name, ft, move |_caller, _params, _results| {

@@ -1772,9 +1772,10 @@ fn lower_import(
     other => panic!("lower: BuiltIn::Import missing cont (got {:?})", other),
   };
 
-  if crate::passes::wasm::compile_package::MIGRATED_STDLIB_FNK.contains(&url) {
-    lower_import_user_fragment(lcx, ctx, url, cont_id);
-  } else if is_virtual_stdlib_path(url) || url.ends_with(".wat") {
+  // `.wat` runtime modules resolve via the virtual-rec path (per-name
+  // runtime accessors). Everything else -- `std/*.fnk` stdlib modules and
+  // relative user fragments alike -- is a real compiled fragment.
+  if url.ends_with(".wat") {
     lower_import_virtual_stdlib(lcx, ctx, url, cont_id);
   } else {
     lower_import_user_fragment(lcx, ctx, url, cont_id);
@@ -1925,14 +1926,6 @@ fn lower_import_user_fragment(
   let i_imp = push_return_call(lcx.frag, lcx.rt.modules_import(),
     vec![op_local(ctx_local), op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
   ctx.instrs.push(i_imp);
-}
-
-/// Recognise virtual stdlib namespace paths. Today only `std/*.fnk`,
-/// but the predicate is named generically so future virtual namespaces
-/// (`@fink/meta`, language-version-locked stdlib variants) extend the
-/// same matcher.
-fn is_virtual_stdlib_path(url: &str) -> bool {
-  url.starts_with("std/") && url.ends_with(".fnk")
 }
 
 

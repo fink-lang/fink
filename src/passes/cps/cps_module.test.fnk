@@ -1,0 +1,364 @@
+---
+module-level CPS — lower_module produces flat chain + export terminal
+---
+
+# Module CPS: flat LetFn/LetVal chain ending with ·v_0 ·export_0, ·export_1, ...
+# No outer ·fn wrapper. Only simple name = expr bindings are exported.
+# Pattern destructures and imports are excluded from exports.
+#
+# Test format:
+#   test 'name', fn:
+#     cps_module ƒink:
+#       <fink source>
+#     | equals ƒink:
+#       <expected cps output>
+
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{cps_module} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+
+test 'single module expr', fn:
+  cps_module ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_4, ·ƒret_0:
+      ·ƒret_0 ·ƒctx_4, (i8 42)
+    # sm:DQABAAIAAQACJAEAAhYBAAISAAIABgEAAgABAAIUABIABgEAAgABAAIGAQAC
+
+
+---
+single binding
+---
+
+test 'single binding export', fn:
+  cps_module ƒink:
+    foo = 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
+      ·letrec fn ·foo_0:
+        ·set ·foo_0, (i8 1), fn:
+          ·ƒpub ·ƒctx_11, ·foo_0, fn ·ƒctx_14:
+            ·ƒret_1 ·ƒctx_14, ·foo_0
+    # sm:IwABAAcAAQAHJAEABxgBAAcSAAIABgEABwABAAcYAQADDgACAAoBAAcAAQAHDAEAAw4ABgEMAQABAAEGAQABBAAIAAIADgELAwABAAMQABQABAEAAw4ACgAUAAIAEgEAAwABAAMUABQABAEAAw
+
+
+test 'single binding export with trailing expr', fn:
+  cps_module ƒink:
+    foo = 1
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_10, ·ƒret_1:
+      ·letrec fn ·foo_0:
+        ·set ·foo_0, (i8 1), fn:
+          ·ƒpub ·ƒctx_10, ·foo_0, fn ·ƒctx_13:
+            ·ƒret_1 ·ƒctx_13, (i8 42)
+    # sm:JQABAAoAAQAKJAEAChgBEAISAAIABgEPCgABAAoYAQADDgACAAoBAAcAAQAHDAEAAw4ABgEMAQABAAEGAQABBAAIAAIADgELAwABAAMQABQABAEAAw4ACgAUAAIAEgEQAgABAAIUABQABgEAAgABAAIGAQAC
+
+
+---
+multiple bindings
+---
+
+test 'two bindings export', fn:
+  cps_module ƒink:
+    foo = 1
+    bar = 2
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_17, ·ƒret_2:
+      ·letrec fn ·foo_0, ·bar_1:
+        ·set ·foo_0, (i8 1), fn:
+          ·ƒpub ·ƒctx_17, ·foo_0, fn ·ƒctx_20:
+            ·set ·bar_1, (i8 2), fn:
+              ·ƒpub ·ƒctx_20, ·bar_1, fn ·ƒctx_22:
+                ·ƒret_2 ·ƒctx_22, ·bar_1
+    # sm:NwABAA8AAQAPJAEADxgBEAcSAAIABgEPDwABAA8YAQADEgEQAw4AAgAKAQ8HAAEABwwBAAMOAAYBDAEAAQABBgEAAQQACAACAA4BCwMAAQADEAAUAAQBAAMOAAoAFAACABIBEAcAAQAHDAEAAw4ABgEMAQABAAEGAQABBAAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgEAAwABAAMUABQABAEAAw
+
+
+test 'two fns export', fn:
+  cps_module ƒink:
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_38, ·ƒret_4:
+      ·letrec fn ·add_0, ·main_1:
+        ·fn
+          fn ·ƒctx_40, ·ƒret_6, ·a_2, ·b_3: ·op_plus ·ƒctx_40, ·a_2, ·b_3, ·ƒret_6
+          fn ·ƒv_5:
+            ·set ·add_0, ·ƒv_5, fn:
+              ·ƒpub ·ƒctx_38, ·add_0, fn ·ƒctx_43:
+                ·fn
+                  fn ·ƒctx_44, ·ƒret_14: ·add_0 ·ƒctx_44, ·ƒret_14, (i8 3), (i8 4)
+                  fn ·ƒv_13:
+                    ·set ·main_1, ·ƒv_13, fn:
+                      ·ƒpub ·ƒctx_43, ·main_1, fn ·ƒctx_47:
+                        ·ƒret_4 ·ƒctx_47, ·main_1
+    # sm:XwABAC0AAQAtJAEALRgBMBUSAAIABgEvLQABAC0YAQADEgEwBBAAAgAKASMQAAEAEAgAFAAYARYFFgEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUSABQBFRAOAAIAEgELFgABABYMAQADDgAEAQwQDgAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE-DgABAA4IACQAGAEMCBQABAEACAABAAMQABQABAEACBQABgEIAQABAAEGAQABBAAGAQYBAAEAAQYBAAEEACQBGQ4QAAIAIgENFQABABUMAQAEEAAEAQ4OEAAIAAIAJgENBAABAAQQABQABAEABBAACgAUAAIAKgEABAABAAQUABQABAEABA
+
+
+---
+imports excluded from exports
+---
+
+test 'import not in exports', fn:
+  cps_module ƒink:
+    {foo} = import './bar.fnk'
+    main = fn:
+      foo 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_62, ·ƒret_3:
+      ·letrec fn ·main_1:
+        ·import ·ƒctx_62, './bar.fnk', fn ·ƒctx_65, ·ƒv_6:
+          ·fn
+            fn ·ƒctx_66, ·ƒv_11:
+              ·let ·ƒv_11, fn ·foo_0:
+                ·fn
+                  fn ·ƒctx_67, ·ƒret_30: ·foo_0 ·ƒctx_67, ·ƒret_30, (i8 1)
+                  fn ·ƒv_29:
+                    ·let ·ƒv_29, fn ·main_1:
+                      ·ƒpub ·ƒctx_66, ·main_1, fn ·ƒctx_70:
+                        ·ƒret_3 ·ƒctx_70, ·main_1
+            fn ·ƒv_44:
+              ·fn
+                fn ·ƒctx_72, ·ƒsucc_9, ·ƒfail_10, ·ƒv_8:
+                  ·guard_apply ·ƒctx_72, ·rec_protocol, ·ƒv_8,
+                    fn ·ƒctx_74, ·ƒv_16:
+                      ·rec_pop ·ƒctx_74, ·ƒv_16, ƒ'foo', ·ƒfail_10, fn ·ƒctx_76, ·ƒv_11, ·ƒv_15:
+                        ·ƒsucc_9 ·ƒctx_76, ·ƒv_11
+                    fn ·ƒctx_78: ·ƒfail_10 ·ƒctx_78
+                fn ·ƒv_26:
+                  ·fn
+                    fn ·ƒctx_80: ·panic ·ƒctx_80
+                    fn ·ƒv_47: ·ƒv_26 ·ƒctx_65, ·ƒv_44, ·ƒv_47, ·ƒv_6
+    # sm:mgEAAQAtAAEALSQBAC0YATYSEgACAAYBNS0AAQAtGAE2BBAAAgAKASUSAAEAEhIAFAAEAQ4LAAEACwIBAAsSAQALAgAKABgBDRIOAAIADgEPGgABABoIABgAGAEAGhAAAgAWAQIDAAEAAwwBARoQAAoBAgMOAAIAGgFCCwABAAsIACQAGAEMBRQABAEABQABAAMQABQABAEABRQABgEIAQABAAEGAQABBAAkARMLEAACACIBAwEAAQABDAEECxAACgENBBAAAgAmAQAEAAEABBAAFAAEAQAEEAAKABQAAgAqAQAEAAEABBQAFAAEAQAEEAAYATUaEAACABYBABoAAQAaCAAgABgAGAAaAQAaDgACAB4BABoAAQAaHAAUAAQBABocAAQBABoOAAIAKAAYAQAaEAACACYBABoAAQAaFAAUAAQBABoQAAQBABoOAAQBABoWAAoAGAEAGhQBABoQAAIAKgEAGgABABoWABQABAEAGhAAKAAUAAQBABoAAQAaGAAUACABABoQAAIAHgEAGgABABoIACgAFAAEAQAaAAEAGhAAFAAoAQAaEAAEAQAaAAEAGhIAFAAEAQAaEAAEAQAaEAAEARAS
+
+
+---
+pattern bindings excluded from exports
+---
+
+test 'destructure not in exports', fn:
+  cps_module ƒink:
+    [a, b] = [1, 2]
+    foo = fn: a
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_80, ·ƒret_3:
+      ·letrec fn ·a_0, ·b_1, ·foo_2:
+        ·seq_prepend ·ƒctx_80, (i8 2), [], fn ·ƒctx_83, ·ƒv_7:
+          ·seq_prepend ·ƒctx_83, (i8 1), ·ƒv_7, fn ·ƒctx_85, ·ƒv_9:
+            ·fn
+              fn ·ƒctx_86, ·ƒv_14, ·ƒv_15:
+                ·let ·ƒv_14, fn ·a_0:
+                  ·let ·ƒv_15, fn ·b_1:
+                    ·fn
+                      fn ·ƒctx_87, ·ƒret_46: ·ƒret_46 ·ƒctx_87, ·a_0
+                      fn ·ƒv_45:
+                        ·let ·ƒv_45, fn ·foo_2:
+                          ·ƒpub ·ƒctx_86, ·foo_2, fn ·ƒctx_90:
+                            ·ƒret_3 ·ƒctx_90, ·foo_2
+              fn ·ƒv_60:
+                ·fn
+                  fn ·ƒctx_92, ·ƒsucc_12, ·ƒfail_13, ·ƒv_11:
+                    ·guard_apply ·ƒctx_92, ·tuple_protocol, ·ƒv_11,
+                      fn ·ƒctx_94, ·ƒv_28:
+                        ·seq_pop ·ƒctx_94, ·ƒv_28, ·ƒfail_13, fn ·ƒctx_96, ·ƒv_14, ·ƒv_29:
+                          ·seq_pop ·ƒctx_96, ·ƒv_29, ·ƒfail_13, fn ·ƒctx_98, ·ƒv_15, ·ƒv_20:
+                            ·empty ·ƒctx_98, ·ƒv_20, fn ·ƒctx_100, ·ƒv_23:
+                              ·if ·ƒv_23,
+                                fn: ·ƒsucc_12 ·ƒctx_100, ·ƒv_14, ·ƒv_15
+                                fn: ·ƒfail_13 ·ƒctx_100
+                      fn ·ƒctx_103: ·ƒfail_13 ·ƒctx_103
+                  fn ·ƒv_41:
+                    ·fn
+                      fn ·ƒctx_105: ·panic ·ƒctx_105
+                      fn ·ƒv_63: ·ƒv_41 ·ƒctx_85, ·ƒv_60, ·ƒv_63, ·ƒv_9
+    # sm:0wEAAQAbAAEAGyQBABsYASALEgACAAYBHxsAAQAbGAECAQ4BBgEOARgDDgACAAoBBQEAAQABHAAUAAYBAAEAAQABBgEAAQQABAEHBgABAAYCAQAGAgAKABgBCAEOAAIADgEFAQABAAEcABQABgEAAQABAAEGAQABBAAEAQYBDgAKABgBBQEOAAIAEgETDwABAA8IABwAGAEADxQBAA8QAAIAGgECAQABAAEMAQEPEAAKAQIBCgACAB4BBgEAAQABDAEHDxAACgEIAQoAAgAiASQFAAEABQgALAAYAQgBFAAEAQABAAEAARYAFAAEAQABCgAsAQcFEAACACoBAwEAAQABDAEEBRAACgELAw4AAgAuAQADAAEAAxAAFAAEAQADDgAKABQAAgAyAQADAAEAAxQAFAAEAQADDgAcAR8PEAACABoBAA8AAQAPCAAkABgAGgAaAQAPEAACACIBAA8AAQAPHAAUAAQBAA8gAAQBAA8QAAIALAAYAQAPEAACACoBAA8AAQAPFAAUAAQBAA8QAAQBAA8WAAoAGAEADxQBAA8QAAIALgEADwABAA8UABQABAEADxAABAEADxYACgAYAQAPFAEADxAAAgAyAQAPAAEADxAAFAAEAQAPEAAKABoBAA8QAAIANgEADwABAA8KAQAPEAACAD4ABAEADwABAA8YABYABAEADxAABAEADxAAPgAEAQAPAAEADxgAFgAsABYABAEADwABAA8YABYAJAEADxAAAgAiAQAPAAEADwgALAAWAAQBAA8AAQAPEAAWACwBAA8QAAQBAA8AAQAPEgAUAAQBAA8QAAQBAA8QAAQBFAE
+
+
+---
+standalone top-level destructures — no trailing binding
+---
+
+# These pin the exact CPS shape that lifting fails to converge on.
+# Mirrors the 4 failing repros in lifting/test_lifting.fnk.
+
+test 'standalone top-level seq destructure with literal rhs', fn:
+  cps_module ƒink:
+    [a, b] = [1, 2]
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_64, ·ƒret_2:
+      ·letrec fn ·a_0, ·b_1:
+        ·seq_prepend ·ƒctx_64, (i8 2), [], fn ·ƒctx_67, ·ƒv_6:
+          ·seq_prepend ·ƒctx_67, (i8 1), ·ƒv_6, fn ·ƒctx_69, ·ƒv_8:
+            ·fn
+              fn ·ƒctx_70, ·ƒv_13, ·ƒv_14:
+                ·let ·ƒv_13, fn ·a_0:
+                  ·let ·ƒv_14, fn ·b_1:
+                    ·ƒret_2 ·ƒctx_70, ·b_1
+              fn ·ƒv_49:
+                ·fn
+                  fn ·ƒctx_71, ·ƒsucc_11, ·ƒfail_12, ·ƒv_10:
+                    ·guard_apply ·ƒctx_71, ·tuple_protocol, ·ƒv_10,
+                      fn ·ƒctx_73, ·ƒv_27:
+                        ·seq_pop ·ƒctx_73, ·ƒv_27, ·ƒfail_12, fn ·ƒctx_75, ·ƒv_13, ·ƒv_28:
+                          ·seq_pop ·ƒctx_75, ·ƒv_28, ·ƒfail_12, fn ·ƒctx_77, ·ƒv_14, ·ƒv_19:
+                            ·empty ·ƒctx_77, ·ƒv_19, fn ·ƒctx_79, ·ƒv_22:
+                              ·if ·ƒv_22,
+                                fn: ·ƒsucc_11 ·ƒctx_79, ·ƒv_13, ·ƒv_14
+                                fn: ·ƒfail_12 ·ƒctx_79
+                      fn ·ƒctx_82: ·ƒfail_12 ·ƒctx_82
+                  fn ·ƒv_40:
+                    ·fn
+                      fn ·ƒctx_84: ·panic ·ƒctx_84
+                      fn ·ƒv_52: ·ƒv_40 ·ƒctx_69, ·ƒv_49, ·ƒv_52, ·ƒv_8
+    # sm:swEAAQAPAAEADyQBAA8YAQAPEgACAAYBAA8AAQAPGAECAQ4BBgEKAAIACgESAQABAAEcABQABgEAAQABAAEGAQABBAAEAQcGAAEABgIBAAYCAAoAGAEIAQ4AAgAOAQUBAAEAARwAFAAGAQABAAEAAQYBAAEEAAQBBgEOAAoAGAEFAQ4AAgASARMPAAEADwgAHAAYAQAPFAEADxAAAgAaAQIBAAEAAQwBAQ8QAAoBAgEKAAIAHgEGAQABAAEMAQcPEAAKAQgBCgACACIBBw8AAQAPFAEADxQABAEIAQoAHAEHDxAAAgAaAQAPAAEADwgAJAAYABoAGgEADxAAAgAiAQAPAAEADxwAFAAEAQAPIAAEAQAPEAACACwAGAEADxAAAgAqAQAPAAEADxQAFAAEAQAPEAAEAQAPFgAKABgBAA8UAQAPEAACAC4BAA8AAQAPFAAUAAQBAA8QAAQBAA8WAAoAGAEADxQBAA8QAAIAMgEADwABAA8QABQABAEADxAACgAYAQAPEAACADYBAA8AAQAPCgEADxAAAgA-AAQBAA8AAQAPGAAUAAQBAA8QAAQBAA8QAD4ABAEADwABAA8YABQALAAUAAQBAA8AAQAPGAAUACQBAA8QAAIAIgEADwABAA8IACwAFAAEAQAPAAEADxAAFAAsAQAPEAAEAQAPAAEADxIAFAAEAQAPEAAEAQAPEAAEARQB
+
+
+test 'standalone top-level rec destructure with literal rhs', fn:
+  cps_module ƒink:
+    {x} = {x: 1}
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_44, ·ƒret_1:
+      ·letrec fn ·x_0:
+        ·rec_put ·ƒctx_44, {}, ƒ'x', (i8 1), fn ·ƒctx_47, ·ƒv_5:
+          ·fn
+            fn ·ƒctx_48, ·ƒv_10:
+              ·let ·ƒv_10, fn ·x_0:
+                ·ƒret_1 ·ƒctx_48, ·x_0
+            fn ·ƒv_31:
+              ·fn
+                fn ·ƒctx_49, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
+                  ·guard_apply ·ƒctx_49, ·rec_protocol, ·ƒv_7,
+                    fn ·ƒctx_51, ·ƒv_15:
+                      ·rec_pop ·ƒctx_51, ·ƒv_15, ƒ'x', ·ƒfail_9, fn ·ƒctx_53, ·ƒv_10, ·ƒv_14:
+                        ·ƒsucc_8 ·ƒctx_53, ·ƒv_10
+                    fn ·ƒctx_55: ·ƒfail_9 ·ƒctx_55
+                fn ·ƒv_25:
+                  ·fn
+                    fn ·ƒctx_57: ·panic ·ƒctx_57
+                    fn ·ƒv_34: ·ƒv_25 ·ƒctx_47, ·ƒv_31, ·ƒv_34, ·ƒv_5
+    # sm:fAABAAwAAQAMJAEADBgBAAwSAAIABgEADAABAAwYAQIBCgACAAoBDAQAAQAEFAAUAAQBAQYAAQAGAgEABgIABAECAQoABgEGAQABAAEGAQABBAAKABgBBQQOAAIADgENDAABAAwIABgAGAEADBAAAgAWAQIBAAEAAQwBAQwQAAoBAgEKAAIAGgEBDAABAAwUAQAMFAAEAQIBCgAYAQEMEAACABYBAAwAAQAMCAAgABgAGAAYAQAMDgACAB4BAAwAAQAMHAAUAAQBAAwcAAQBAAwOAAIAKAAYAQAMEAACACYBAAwAAQAMFAAUAAQBAAwQAAQBAAwKAAQBAAwUAAoAGAEADBQBAAwQAAIAKgEADAABAAwWABQABAEADBAAKAAUAAQBAAwAAQAMFgAUACABAAwQAAIAHgEADAABAAwIACgAFAAEAQAMAAEADBAAFAAoAQAMEAAEAQAMAAEADBIAFAAEAQAMEAAEAQAMEAAEAQ4E
+
+
+test 'standalone top-level destructure with call rhs', fn:
+  cps_module ƒink:
+    [a, b] = some_call x
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_59, ·ƒret_2:
+      ·letrec fn ·a_0, ·b_1:
+        ·∅some_call
+          ·ƒctx_59
+          fn ·ƒctx_62, ·ƒv_5:
+            ·fn
+              fn ·ƒctx_63, ·ƒv_10, ·ƒv_11:
+                ·let ·ƒv_10, fn ·a_0:
+                  ·let ·ƒv_11, fn ·b_1:
+                    ·ƒret_2 ·ƒctx_63, ·b_1
+              fn ·ƒv_46:
+                ·fn
+                  fn ·ƒctx_64, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
+                    ·guard_apply ·ƒctx_64, ·tuple_protocol, ·ƒv_7,
+                      fn ·ƒctx_66, ·ƒv_24:
+                        ·seq_pop ·ƒctx_66, ·ƒv_24, ·ƒfail_9, fn ·ƒctx_68, ·ƒv_10, ·ƒv_25:
+                          ·seq_pop ·ƒctx_68, ·ƒv_25, ·ƒfail_9, fn ·ƒctx_70, ·ƒv_11, ·ƒv_16:
+                            ·empty ·ƒctx_70, ·ƒv_16, fn ·ƒctx_72, ·ƒv_19:
+                              ·if ·ƒv_19,
+                                fn: ·ƒsucc_8 ·ƒctx_72, ·ƒv_10, ·ƒv_11
+                                fn: ·ƒfail_9 ·ƒctx_72
+                      fn ·ƒctx_75: ·ƒfail_9 ·ƒctx_75
+                  fn ·ƒv_37:
+                    ·fn
+                      fn ·ƒctx_77: ·panic ·ƒctx_77
+                      fn ·ƒv_49: ·ƒv_37 ·ƒctx_62, ·ƒv_46, ·ƒv_49, ·ƒv_5
+          ·∅x
+    # sm:nQEAAQAUAAEAFCQBABQYAQAUEgACAAYBABQAAQAUGAECAQ4BBgEKAAIACgEKCwABAAkqACgAGAEACw4AAgASAREUAAEAFAgAHAAYAQAUFAEAFBAAAgAaAQIBAAEAAQwBARQQAAoBAgEKAAIAHgEGAQABAAEMAQcUEAAKAQgBCgACACIBBxQAAQAUFAEAFBQABAEIAQoAHAEHFBAAAgAaAQAUAAEAFAgAJAAYABgAGAEAFA4AAgAiAQAUAAEAFBwAFAAEAQAUIAAEAQAUDgACACwAGAEAFBAAAgAqAQAUAAEAFBQAFAAEAQAUEAAEAQAUFAAKABgBABQUAQAUEAACAC4BABQAAQAUFAAUAAQBABQQAAQBABQUAAoAGAEAFBQBABQQAAIAMgEAFAABABQQABQABAEAFBAACgAYAQAUEAACADYBABQAAQAUCgEAFBAAAgA-AAQBABQAAQAUFgAUAAQBABQQAAQBABQQAD4ABAEAFAABABQWABQALAAUAAQBABQAAQAUFgAUACQBABQQAAIAIgEAFAABABQIACwAFAAEAQAUAAEAFBAAFAAsAQAUEAAEAQAUAAEAFBIAFAAEAQAUEAAEAQAUEAAEARILHAEUAQ
+
+
+test 'standalone top-level destructure with import rhs', fn:
+  cps_module ƒink:
+    {foo} = import './bar.fnk'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_43, ·ƒret_2:
+      ·import ·ƒctx_43, './bar.fnk', fn ·ƒctx_46, ·ƒv_5:
+        ·fn
+          fn ·ƒctx_47, ·ƒv_10:
+            ·let ·ƒv_10, fn ·foo_0:
+              ·ƒret_2 ·ƒctx_47, ·foo_0
+          fn ·ƒv_31:
+            ·fn
+              fn ·ƒctx_48, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
+                ·guard_apply ·ƒctx_48, ·rec_protocol, ·ƒv_7,
+                  fn ·ƒctx_50, ·ƒv_15:
+                    ·rec_pop ·ƒctx_50, ·ƒv_15, ƒ'foo', ·ƒfail_9, fn ·ƒctx_52, ·ƒv_10, ·ƒv_14:
+                      ·ƒsucc_8 ·ƒctx_52, ·ƒv_10
+                  fn ·ƒctx_54: ·ƒfail_9 ·ƒctx_54
+              fn ·ƒv_25:
+                ·fn
+                  fn ·ƒctx_56: ·panic ·ƒctx_56
+                  fn ·ƒv_34: ·ƒv_25 ·ƒctx_46, ·ƒv_31, ·ƒv_34, ·ƒv_5
+    # sm:cgABABoAAQAaJAEAGhgBABoSAAIABgEQEgABABISABQABAEOCwABAAsCAQALEgEACwIACgAYAQ0SDgACAAoBDxoAAQAaCAAUABgBABoQAAIAEgECAwABAAMMAQEaEAAKAQIDDgACABYBARoAAQAaFAEAGhQABAECAw4AFAEBGhAAAgASAQAaAAEAGggAHAAYABgAGAEAGg4AAgAaAQAaAAEAGhwAFAAEAQAaHAAEAQAaDgACACQAGAEAGhAAAgAiAQAaAAEAGhQAFAAEAQAaEAAEAQAaDgAEAQAaFAAKABgBABoUAQAaEAACACYBABoAAQAaFgAUAAQBABoQACQAFAAEAQAaAAEAGhYAFAAcAQAaEAACABoBABoAAQAaCAAkABQABAEAGgABABoQABQAJAEAGhAABAEAGgABABoSABQABAEAGhAABAEAGhAABAEQEg
+
+
+---
+·export should only carry binding names — call args must not leak in.
+Repro for the fooobar bug: module with multiple top-level fns + calls
+whose results are bound to names. Yesterday the ·export terminal was
+rendered as `·export ·add_0, ·s_1, ·mul_2, ·p_3, ·s_1, 3, 1, 2` — the
+trailing `·s_1, 3, 1, 2` are args from the two call sites leaking in.
+---
+
+test 'export args do not leak call args', fn:
+  cps_module ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      ni = a * b
+      ni
+
+    p = mul s, 3
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_70, ·ƒret_9:
+      ·letrec fn ·add_0, ·s_1, ·mul_2, ·p_3:
+        ·fn
+          fn ·ƒctx_72, ·ƒret_11, ·a_4, ·b_5: ·op_plus ·ƒctx_72, ·a_4, ·b_5, ·ƒret_11
+          fn ·ƒv_10:
+            ·set ·add_0, ·ƒv_10, fn:
+              ·ƒpub ·ƒctx_70, ·add_0, fn ·ƒctx_75:
+                ·add_0
+                  ·ƒctx_75
+                  fn ·ƒctx_77, ·ƒv_21:
+                    ·set ·s_1, ·ƒv_21, fn:
+                      ·ƒpub ·ƒctx_77, ·s_1, fn ·ƒctx_79:
+                        ·fn
+                          fn ·ƒctx_80, ·ƒret_24, ·a_6, ·b_7:
+                            ·letrec fn ·ni_8:
+                              ·op_mul ·ƒctx_80, ·a_6, ·b_7, fn ·ƒctx_82, ·ƒv_27:
+                                ·set ·ni_8, ·ƒv_27, fn:
+                                  ·ƒret_24 ·ƒctx_82, ·ni_8
+                          fn ·ƒv_23:
+                            ·set ·mul_2, ·ƒv_23, fn:
+                              ·ƒpub ·ƒctx_79, ·mul_2, fn ·ƒctx_85:
+                                ·mul_2
+                                  ·ƒctx_85
+                                  fn ·ƒctx_87, ·ƒv_40:
+                                    ·set ·p_3, ·ƒv_40, fn:
+                                      ·ƒpub ·ƒctx_87, ·p_3, fn ·ƒctx_89:
+                                        ·ƒret_9 ·ƒctx_89, ·p_3
+                                  ·s_1
+                                  i8 3
+                  i8 1
+                  i8 2
+    # sm:rwEAAQBUAAEAVCQBAFQYAZABDBIAAgAGAY8BVAABAFQYAQADEgEwAQ4BHAMSAUQBCgACAAoBgwEQAAEAEAgAFAAYARYFGAEPAQ4BBgEKAAQBCgUAAQAFFAAUAAQBAAEKAAQBCAEKAAQBBwUUABQBFRAQAAIAEgELFgABABYMAQADDgAEAQwQEAAIAAIAFgELAwABAAMQABQABAEAAw4ACgAUAAIAGgE4CAABAAMsADgAGAEACBAAAgAiAQcMAAEADAwBAAEKAAQBCAgQAAgAAgAmAQcBAAEAARAAFAAEAQABCgAKABQAAgAqASgaAAEAGggANAAYATACGAEpAQ4BBgEKAAIAMgELGgABABoYARYCDAACADYBCgUAAQAFEgAUAAQBAAEKAAQBCAEKAAoAGAEHBRAAAgA6AQkKAAEACgwBAAIMAAQBCgUQAAgAAgA-ARACAAEAAhYAFAAEAQACDAA0AS8aEAACADIBCyAAAQAgDAEAAw4ABAEMGhAACAACADYBCwMAAQADEAAUAAQBAAMOAAoAFAACADoBTAgAAQADTABYABgBAAgQAAIAQgEHDAABAAwMAQABCgAEAQgIEAAIAAIARgEHAQABAAEQABQABAEAAQoACgAUAAIASgEAAQABAAEUABQABAEAAUgBEAFIAQYBAAEAAQYBAAEgAWUBAAEAAQYBAAEgAQYBAAEAAQYBAAE
+
+

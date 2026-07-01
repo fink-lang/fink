@@ -56,6 +56,35 @@ pub fn apply(ast: Ast<'_>) -> Result<Ast<'_>, TransformError> {
   Ok(builder.finish(new_root))
 }
 
+/// Parse `src`, run the desugar pass, and render the result as text --
+/// or "No Change" if desugaring left the AST untouched. For a single
+/// top-level statement the Module wrapper is elided. Backs the `desugar`
+/// compiler-as-host-service primitive (and the desugar snapshot tests).
+pub fn desugar_debug(src: &str) -> String {
+  use crate::ast::parser::{parse_with_blocks, BlockMode};
+  let ast = match parse_with_blocks(src, "test.fnk", &[("test_block", BlockMode::Ast)]) {
+    Ok(ast) => ast,
+    Err(e) => return format!("PARSE ERROR: {}", e.message),
+  };
+  let before = ast.print();
+  match apply(ast) {
+    Ok(new_ast) => {
+      let after = new_ast.print();
+      if before == after {
+        return "No Change".to_string();
+      }
+      let root = new_ast.nodes.get(new_ast.root);
+      if let NodeKind::Module { exprs, .. } = &root.kind
+        && exprs.items.len() == 1
+      {
+        return new_ast.print_subtree(exprs.items[0]);
+      }
+      after
+    }
+    Err(e) => format!("ERROR: {}", e.message),
+  }
+}
+
 /// Walk the Module root and, for each top-level `Bind` whose LHS is a
 /// plain `Ident(name)` and whose RHS is not an `import ...` call,
 /// rewrite the LHS to `Apply(Ident "pub", Ident name)`. This makes the
@@ -124,6 +153,14 @@ fn maybe_wrap_top_bind<'src>(
 fn rhs_is_import_call(src: &Ast<'_>, rhs: AstId) -> bool {
   let NodeKind::Apply { func, .. } = &src.nodes.get(rhs).kind else { return false };
   matches!(src.nodes.get(*func).kind, NodeKind::Ident("import"))
+}
+
+/// A source block (`ƒink:` / `ƒtok:`) — its body is opaque source text
+/// (lowered to a string literal of its verbatim source), not live code.
+/// No desugaring descends into it: a `?` inside is quoted source, not a
+/// partial to lift. Mirrors the scope pass, which also skips these bodies.
+fn is_source_block(ast: &Ast<'_>, name: AstId) -> bool {
+  matches!(ast.nodes.get(name).kind, NodeKind::Ident("ƒink") | NodeKind::Ident("ƒtok"))
 }
 
 /// Pre-pass: rewrite `Apply(f, [Wildcard])` -> `Apply(f, [])`.
@@ -348,6 +385,10 @@ fn rewrite_wildcard_call<'src>(
       }
     }
     NodeKind::Block { name, params, sep, body } => {
+      // Source blocks (ƒink:/ƒtok:) are opaque -- never rewrite their body.
+      if is_source_block(src, name) {
+        return id;
+      }
       let new_items: Vec<AstId> = body.items.iter()
         .map(|&i| rewrite_wildcard_call(builder, src, i))
         .collect();
@@ -443,6 +484,11 @@ fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
       has_partial(ast, *lhs) || body.items.iter().any(|&id| has_partial(ast, id))
     }
     NodeKind::Block { name, params, body, .. } => {
+      // Source blocks (ƒink:/ƒtok:) are opaque -- a `?` inside is quoted
+      // source, not a partial. Don't look into the body.
+      if is_source_block(ast, *name) {
+        return has_partial(ast, *name) || has_partial(ast, *params);
+      }
       has_partial(ast, *name) || has_partial(ast, *params)
         || body.items.iter().any(|&id| has_partial(ast, id))
     }
@@ -893,6 +939,10 @@ fn has_partial_builder(builder: &AstBuilder<'_>, id: AstId) -> bool {
       has_partial_builder(builder, *lhs) || body.items.iter().any(|&id| has_partial_builder(builder, id))
     }
     NodeKind::Block { name, params, body, .. } => {
+      // Source blocks (ƒink:/ƒtok:) are opaque -- skip their body.
+      if matches!(builder.read(*name).kind, NodeKind::Ident("ƒink") | NodeKind::Ident("ƒtok")) {
+        return has_partial_builder(builder, *name) || has_partial_builder(builder, *params);
+      }
       has_partial_builder(builder, *name) || has_partial_builder(builder, *params)
         || body.items.iter().any(|&id| has_partial_builder(builder, id))
     }
@@ -1065,38 +1115,3 @@ impl<'src> Transform<'src> for PartialPass {
   }
 }
 
-// --- test runner ---
-
-#[cfg(test)]
-mod tests {
-  fn partial(src: &str) -> String {
-    use crate::ast::NodeKind;
-    match crate::parser::parse(src, "test") {
-      Err(e) => format!("PARSE ERROR: {}", e.message),
-      Ok(ast) => {
-        let before = ast.print();
-        match super::apply(ast) {
-          Ok(new_ast) => {
-            let after = new_ast.print();
-            if before == after {
-              return "No Change".to_string();
-            }
-            // For a single-stmt module, print just the stmt to match the
-            // old pre-flatten test expectations (which didn't include
-            // the Module wrapper).
-            let root = new_ast.nodes.get(new_ast.root);
-            if let NodeKind::Module { exprs, .. } = &root.kind
-              && exprs.items.len() == 1 {
-                return new_ast.print_subtree(exprs.items[0]);
-              }
-            after
-          }
-          Err(e) => format!("ERROR: {}", e.message),
-        }
-      }
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/ast_desugar/test_partial.fnk");
-  test_macros::include_fink_tests!("src/passes/ast_desugar/test_pub.fnk");
-}

@@ -1,0 +1,146 @@
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+test 'block with no args and expression body', fn:
+  ast ":
+    test_block: 'hello'
+  | equals ƒink:
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+        LitStr 'hello'
+
+test 'block with patterns and expression body', fn:
+  ast ":
+    test_block a, b: a + b
+  | equals ƒink:
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
+
+test 'block with patterns and multiline body', fn:
+  ast ":
+    test_block a, b:
+      x = a + b
+      x * 2
+  | equals ƒink:
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        Bind '=',
+          Ident 'x'
+          InfixOp '+',
+            Ident 'a'
+            Ident 'b'
+        InfixOp '*',
+          Ident 'x'
+          LitInt '2'
+
+test 'block with arms', fn:
+  ast ":
+    test_block a:
+      1: 'one'
+      2: 'two'
+  | equals ƒink:
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          Ident 'a'
+        Arm ':',
+          LitInt '1'
+          LitStr 'one'
+        Arm ':',
+          LitInt '2'
+          LitStr 'two'
+
+test 'block bound to name', fn:
+  ast ":
+    result = test_block a, b:
+      a + b
+  | equals ƒink:
+    Module
+      Bind '=',
+        Ident 'result'
+        Block ':',
+          Ident 'test_block'
+          Patterns
+            Ident 'a'
+            Ident 'b'
+          InfixOp '+',
+            Ident 'a'
+            Ident 'b'
+
+test 'inline block in application', fn:
+  ast ":
+    log test_block: 'hello'
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'log'
+        Block ':',
+          Ident 'test_block'
+          Patterns
+          LitStr 'hello'
+
+test 'block with sequence destructure param', fn:
+  ast ":
+    test_block [a, b]: a + b
+  | equals ƒink:
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          LitSeq '[..]',
+            Ident 'a'
+            Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
+
+test 'block with record destructure param', fn:
+  ast ":
+    test_block {x, y}: x + y
+  | equals ƒink:
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          LitRec '{..}',
+            Ident 'x'
+            Ident 'y'
+        InfixOp '+',
+          Ident 'x'
+          Ident 'y'
+
+
+test 'inline fn arg followed by trailing call', fn:
+  ast ƒink:
+    foo fn: 123
+    bar _
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Fn ':',
+          Patterns
+          LitInt '123'
+      Apply
+        Ident 'bar'
+        Wildcard

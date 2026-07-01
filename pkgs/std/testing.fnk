@@ -1,0 +1,141 @@
+
+{write, stderr} = import 'std/io.fnk'
+{suspend, init_ctx} = import 'std/effects.fnk'
+{get_trace, get_module_url, get_loc} = import 'std/trace.fnk'
+
+
+TestResult = enum:
+  Failure {msg: _, actual: _, expected: _, trace: _}
+  Success
+  Skipped
+
+{Failure, Success, Skipped} = TestResult
+
+
+skip = fn _:
+  upd_tests fn {tests}:
+    [..rest, prev] = tests
+    test_case = {..prev, skip: true}
+    [test_case, {tests: [..rest, test_case]}]
+
+
+test = fn name, body:
+  [_, [mid, cid]] = get_trace 2
+  url = '${get_module_url mid}:${get_loc mid, cid}'
+  test_case = {name, body, url, skip: false}
+  add_test test_case
+
+
+upd_tests = init_ctx test, {tests: [], curr: {}}
+
+
+upd_curr_test = fn upd_fn:
+  upd_tests fn {curr: test_case}:
+    [r, upd] = upd_fn test_case
+    [r, {curr: {..test_case, ..upd}}]
+
+
+set_curr_test = fn test_case:
+  upd_tests fn _:
+    [test_case, {curr: test_case}]
+
+
+add_test = fn test_case:
+  upd_tests fn {tests}:
+    [test_case, {tests: [..tests, test_case]}]
+
+
+run_test = fn test_case:
+  set_curr_test test_case
+
+  run_result = suspend fn resume:
+    {body, skip} = upd_curr_test fn t:
+      [t, {abort: resume}]
+
+    result = match skip:
+      true:
+        Skipped _
+      false:
+        body _
+        Success _
+
+    resume result
+
+  run_result
+
+
+trace_to_str = fn t, s:
+  match t:
+    []: s
+    [[mid, cid], ..rest]:
+      murl = get_module_url mid
+      trace_to_str rest, '${s}  ${murl}:${get_loc mid, cid} (${mid}:${cid})\n'
+
+
+
+fail = fn msg, actual, expected:
+  trace = get_trace 5
+
+  traceback = trace_to_str trace, ''
+  failure = '${msg}\nTraceback:\n${traceback}'
+
+  abort = upd_curr_test fn {abort}:
+    [abort, {result: {failure}}]
+
+  abort Failure {msg: failure, actual, expected, trace}
+
+
+
+run_tests = fn tests, results:
+  match tests:
+    []: results
+    [test, ..rest]:
+      write stderr, '${test.url} ${test.name} ... '
+      result = run_test test
+      match result:
+        Skipped _: write stderr, 'SKIPPED\n'
+        Success _: write stderr, 'SUCCESS\n'
+        Failure {msg}: write stderr, 'FAIL\n  ${msg}\n\n'
+
+      run_tests rest, [..results, result]
+
+
+gen_test_report = fn results, passed, failed, skipped:
+  match results:
+    []: [passed, failed, skipped]
+    [result, ..rest]:
+      match result:
+        Skipped _: gen_test_report rest, passed, failed, skipped + 1
+        Success _: gen_test_report rest, passed + 1, failed, skipped
+        Failure _: gen_test_report rest, passed, failed + 1, skipped
+
+
+test_all = fn:
+  tests = upd_tests fn {tests}:
+    [tests, {tests: []}]
+
+  results = run_tests tests, []
+
+  [passed, failed, skipped] = gen_test_report results, 0, 0, 0
+  total = passed + failed + skipped
+  write stderr, '\nTotal: ${total}, Passed: ${passed}, Failed: ${failed} Skipped: ${skipped}\n'
+
+  failed
+
+
+
+equals = fn actual, expected:
+  match actual == expected:
+    true: true
+    false: fail
+      'act: ${actual}\n  ==\n  exp: ${expected}'
+      actual, expected
+
+
+not_equals = fn actual, expected:
+  match actual != expected:
+    true: true
+    false: fail
+      'act: ${actual}\n  !=\n  exp: ${expected}'
+      actual, expected
+

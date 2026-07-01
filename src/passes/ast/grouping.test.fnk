@@ -1,0 +1,168 @@
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{ast} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+---
+parentheses
+---
+
+test 'grouping preserves Group node in arithmetic', fn:
+  ast ƒink:
+    (1 + 2) * (2 + 3)
+  | equals ƒink:
+    Module
+      InfixOp '*',
+        Group '(..)',
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
+        Group '(..)',
+          InfixOp '+',
+            LitInt '2'
+            LitInt '3'
+
+test 'grouping application args without comma', fn:
+  ast ƒink:
+    [(add 1, 2), (add 3, 4)]
+  | equals ƒink:
+    Module
+      LitSeq '[..]',
+        Group '(..)',
+          Apply
+            Ident 'add'
+            LitInt '1'
+            LitInt '2'
+        Group '(..)',
+          Apply
+            Ident 'add'
+            LitInt '3'
+            LitInt '4'
+
+test 'grouping to override right-to-left application', fn:
+  ast ƒink:
+    foo (bar spam) ham
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Group '(..)',
+          Apply
+            Ident 'bar'
+            Ident 'spam'
+        Ident 'ham'
+
+
+---
+comma vs semicolon
+---
+
+test 'comma separates args weakly', fn:
+  ast ƒink:
+    add mul 2, 3, mul 3, 4
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+          Apply
+            Ident 'mul'
+            LitInt '3'
+            LitInt '4'
+
+test 'semicolon groups strongly', fn:
+  ast ƒink:
+    add mul 2, 3; mul 3, 4
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
+
+
+---
+newline as separator
+---
+
+test 'multiline args - same AST as inline with semicolons', fn:
+  ast ƒink:
+    add
+      mul 2, 3
+      mul 3, 4
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
+
+test 'trailing comma continues onto next line', fn:
+  ast ƒink:
+    foo bar,
+      spam
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Ident 'bar'
+        Ident 'spam'
+
+
+---
+disambiguation with semicolon
+---
+
+test 'semicolon makes spread guard boundary explicit', fn:
+  ast ƒink:
+    [is_odd head; ..tail] = [3, 4, 5]
+  | equals ƒink:
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Apply
+            Ident 'is_odd'
+            Ident 'head'
+          Spread '..',
+            Ident 'tail'
+        LitSeq '[..]',
+          LitInt '3'
+          LitInt '4'
+          LitInt '5'
+
+
+test 'semicolon separates seq elements when both are non-spread', fn:
+  ast ƒink:
+    [1, foo 1, 2; bar 3] = xs
+  | equals ƒink:
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          LitInt '1'
+          Apply
+            Ident 'foo'
+            LitInt '1'
+            LitInt '2'
+          Apply
+            Ident 'bar'
+            LitInt '3'
+        Ident 'xs'

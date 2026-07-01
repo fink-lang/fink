@@ -66,7 +66,7 @@ fn missing_file_errors_with_path() {
 }
 
 // ---------------------------------------------------------------------------
-// Read-only commands: tokens, ast, fmt, fmt2, cps, marks.
+// Read-only commands: tokens, ast, fmt, cps, marks.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -117,19 +117,6 @@ fn fmt_round_trips_source() {
 #[test]
 fn fmt_source_map_appends_sm_line() {
   fink().args(["fmt", "--source-map", &fixture_str("hello.fnk")]).assert().success()
-    .stdout(predicate::str::contains("# sm:"));
-}
-
-#[test]
-fn fmt2_round_trips_source() {
-  fink().args(["fmt2", &fixture_str("hello.fnk")]).assert().success()
-    .stdout(predicate::str::contains("main = fn"))
-    .stdout(predicate::str::contains("'hello'"));
-}
-
-#[test]
-fn fmt2_source_map_appends_sm_line() {
-  fink().args(["fmt2", "--source-map", &fixture_str("hello.fnk")]).assert().success()
     .stdout(predicate::str::contains("# sm:"));
 }
 

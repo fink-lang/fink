@@ -1,0 +1,564 @@
+---
+scope analysis tests
+---
+
+# AST-level scope analysis — resolves identifiers to bindings.
+#
+# Output: nested scope tree with bindings and references in source order.
+# Scopes nest to show parent-child relationships. Bindings and references
+# appear in the scope where they are defined/used, in source order.
+#
+# Scope kinds:
+#   module  — all bindings mutually recursive (forward refs allowed)
+#   fn      — sequential (binding visible to subsequent siblings)
+#   match   — per-arm, pattern bindings visible in arm body
+#
+# Reference kinds:
+#   ref 'name', 'B0'             — normal ref to binding B0
+#   ref 'name', 'B0', depth 1    — captured from parent scope (1 level up)
+#   fwd_ref 'name', 'B0'         — forward ref in module scope (mutual recursion)
+#   self_ref 'name', 'B0'        — recursive self-reference
+#
+# Example output:
+#   scope 'S0', 'module',
+#     bind 'add', 'B0'
+#     bind 'main', 'B1'
+#
+#     scope 'S1', 'fn add',
+#       bind 'a', 'B2'
+#       bind 'b', 'B3'
+#       ref 'a', 'B2'
+#       ref 'b', 'B3'
+#
+#     scope 'S2', 'fn main',
+#       ref 'add', 'B0', depth 1
+
+
+{test, equals: eq} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
+{scope} = import 'fink/compile.fnk'
+
+
+equals = fn expected: fn actual:
+  eq actual, expected
+
+
+---
+basic bindings
+---
+
+test 'single binding', fn:
+  scope ƒink:
+    x = 1
+  | equals ƒink:
+    scope 7, 'module',
+      bind 0, 'x'
+
+
+test 'nested bind in rhs is sequential', fn:
+  scope ƒink:
+    foo = spam = 1
+  | equals ƒink:
+    scope 9, 'module',
+      bind 1, 'spam'
+      bind 0, 'foo'
+
+
+test 'guard pattern bind', fn:
+  scope ƒink:
+    a > 0 = foo
+  | equals ƒink:
+    scope 5, 'module',
+      unresolved 'foo'
+      bind 0, 'a'
+      ref 'a', 0
+
+
+test 'fn params in scope', fn:
+  scope ƒink:
+    f = fn a, b:
+      a + b
+  | equals ƒink:
+    scope 13, 'module',
+
+      scope 7, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
+      bind 0, 'f'
+
+
+test 'partial application', fn:
+  scope ƒink:
+    foo = 2 + ?
+  | equals ƒink:
+    scope 17, 'module',
+
+      scope 15, 'fn',
+        bind 13, '·$_0'
+        ref '·$_0', 13
+      bind 0, 'foo'
+
+
+test 'multiple partials — same param', fn:
+  scope ƒink:
+    foo = ? + ?
+  | equals ƒink:
+    scope 18, 'module',
+
+      scope 16, 'fn',
+        bind 14, '·$_0'
+        ref '·$_0', 14
+        ref '·$_0', 14
+      bind 0, 'foo'
+
+
+test 'wildcard _ does not bind', fn:
+  scope ƒink:
+    f = fn _: 42
+  | equals ƒink:
+    scope 10, 'module',
+
+      scope 4, 'fn'
+      bind 0, 'f'
+
+
+test 'wildcard in destructure', fn:
+  scope ƒink:
+    [_, b] = [1, 2]
+    b
+  | equals ƒink:
+    scope 8, 'module',
+      bind 1, 'b'
+      ref 'b', 1
+
+
+test 'wildcard in match arm', fn:
+  scope ƒink:
+    f = fn x:
+      match x:
+        _: 42
+  | equals ƒink:
+    scope 16, 'module',
+
+      scope 10, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
+
+        scope 8, 'arm'
+      bind 0, 'f'
+
+
+test 'sequential bindings in fn body', fn:
+  scope ƒink:
+    f = fn:
+      x = 1
+      y = x + 1
+      y
+  | equals ƒink:
+    scope 17, 'module',
+
+      scope 11, 'fn',
+        bind 2, 'x'
+        ref 'x', 2
+        bind 5, 'y'
+        ref 'y', 5
+      bind 0, 'f'
+
+
+test 'self-recursion', fn:
+  scope ƒink:
+    fib = fn n:
+      fib n - 1
+  | equals ƒink:
+    scope 14, 'module',
+
+      scope 8, 'fn',
+        bind 1, 'n'
+        self_ref 'fib', 0, depth 1
+        ref 'n', 1
+      bind 0, 'fib'
+
+
+test 'nested fn — closure depth', fn:
+  scope ƒink:
+    f = fn a:
+      fn b:
+        a + b
+  | equals ƒink:
+    scope 15, 'module',
+
+      scope 9, 'fn',
+        bind 1, 'a'
+
+        scope 8, 'fn',
+          bind 3, 'b'
+          ref 'a', 1, depth 1
+          ref 'b', 3
+      bind 0, 'f'
+
+
+---
+unresolved
+---
+
+test 'unresolved ref', fn:
+  scope ƒink:
+    ni = spam
+    spam = ni
+    bar = spam
+
+    main = fn:
+      foo 1
+
+  | equals ƒink:
+    scope 29, 'module',
+      unresolved 'spam'
+      bind 0, 'ni'
+      ref 'ni', 0
+      bind 3, 'spam'
+      ref 'spam', 3
+      bind 6, 'bar'
+
+      scope 14, 'fn',
+        unresolved 'foo'
+      bind 9, 'main'
+
+
+
+---
+module level — mutual recursion
+---
+
+test 'two fns — main refs add', fn:
+  scope ƒink:
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+
+  | equals ƒink:
+    scope 24, 'module',
+
+      scope 7, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
+      bind 0, 'add'
+
+      scope 15, 'fn',
+        ref 'add', 0, depth 1
+      bind 9, 'main'
+
+
+test 'mutual recursion — is-even refs is-odd', fn:
+  scope ƒink:
+    is-even = fn n:
+      match n:
+        0: true
+        _: is-odd n - 1
+
+    is-odd = fn n:
+      match n:
+        0: false
+        _: is-even n - 1
+
+  | equals ƒink:
+    scope 47, 'module',
+
+      scope 18, 'fn',
+        bind 1, 'n'
+        ref 'n', 1
+
+        scope 8, 'arm'
+
+        scope 16, 'arm',
+          fwd_ref 'is-odd', 20, depth 2
+          ref 'n', 1, depth 1
+      bind 0, 'is-even'
+
+      scope 38, 'fn',
+        bind 21, 'n'
+        ref 'n', 21
+
+        scope 28, 'arm'
+
+        scope 36, 'arm',
+          ref 'is-even', 0, depth 2
+          ref 'n', 21, depth 1
+      bind 20, 'is-odd'
+
+
+test 'match with binding in arm', fn:
+  scope ƒink:
+    f = fn x:
+      match x:
+        0: 42
+        n: n + 1
+  | equals ƒink:
+    scope 22, 'module',
+
+      scope 16, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
+
+        scope 8, 'arm'
+
+        scope 14, 'arm',
+          bind 9, 'n'
+          ref 'n', 9
+      bind 0, 'f'
+
+
+test 'pipe — refs to fns', fn:
+  scope ƒink:
+    double = fn x: x * 2
+    inc = fn x: x + 1
+    main = fn: 5 | double | inc
+  | equals ƒink:
+    scope 34, 'module',
+
+      scope 6, 'fn',
+        bind 1, 'x'
+        ref 'x', 1
+      bind 0, 'double'
+
+      scope 14, 'fn',
+        bind 9, 'x'
+        ref 'x', 9
+      bind 8, 'inc'
+
+      scope 22, 'fn',
+        ref 'double', 0, depth 1
+        ref 'inc', 8, depth 1
+      bind 16, 'main'
+
+
+---
+shadowing
+---
+
+test 'inner binding shadows outer', fn:
+  scope ƒink:
+    add = fn a, b:
+      a + b
+
+    sub = fn a, b:
+      add = fn foo:
+        foo
+      a - add b
+
+    main = fn: add 3, 4
+
+  | equals ƒink:
+    scope 44, 'module',
+
+      scope 7, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
+      bind 0, 'add'
+
+      scope 24, 'fn',
+        bind 10, 'a'
+        bind 11, 'b'
+
+        scope 17, 'fn',
+          bind 14, 'foo'
+          ref 'foo', 14
+        bind 13, 'add'
+        ref 'a', 10
+        ref 'add', 13
+        ref 'b', 11
+      bind 9, 'sub'
+
+      scope 32, 'fn',
+        ref 'add', 0, depth 1
+      bind 26, 'main'
+
+
+---
+destructuring
+---
+
+test 'seq destructure', fn:
+  scope ƒink:
+    [a, b] = [1, 2]
+    a + b
+  | equals ƒink:
+    scope 10, 'module',
+      bind 0, 'a'
+      bind 1, 'b'
+      ref 'a', 0
+      ref 'b', 1
+
+
+test 'nested seq destructure', fn:
+  scope ƒink:
+    [a, [b, c]] = [1, [2, 3]]
+    a + b + c
+  | equals ƒink:
+    scope 16, 'module',
+      bind 0, 'a'
+      bind 1, 'b'
+      bind 2, 'c'
+      ref 'a', 0
+      ref 'b', 1
+      ref 'c', 2
+
+
+test 'record destructure', fn:
+  scope ƒink:
+    {x, y} = {x: 1, y: 2}
+    x + y
+  | equals ƒink:
+    scope 14, 'module',
+      bind 0, 'x'
+      bind 1, 'y'
+      ref 'x', 0
+      ref 'y', 1
+
+
+test 'fn with destructured params', fn:
+  scope ƒink:
+    f = fn [a, b]: a + b
+  | equals ƒink:
+    scope 14, 'module',
+
+      scope 8, 'fn',
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
+      bind 0, 'f'
+
+
+test 'spread in seq destructure', fn:
+  scope ƒink:
+    [a, ..rest] = [1, 2, 3]
+    a + rest
+  | equals ƒink:
+    scope 12, 'module',
+      bind 0, 'a'
+      bind 1, 'rest'
+      ref 'a', 0
+      ref 'rest', 1
+
+
+test 'bind-right destructure in seq pattern', fn:
+  scope ƒink:
+    [foo |= [bar, spam]] = [[1, 2]]
+    foo + bar + spam
+  | equals ƒink:
+    scope 16, 'module',
+      bind 0, 'foo'
+      bind 1, 'bar'
+      bind 2, 'spam'
+      ref 'foo', 0
+      ref 'bar', 1
+      ref 'spam', 2
+
+# TODO
+test 'bind-right at statement top', fn:
+  scope ƒink:
+    foo arg1
+      arg2
+    |= result
+    result
+  | equals ƒink:
+    scope 8, 'module',
+      unresolved 'foo'
+      unresolved 'arg1'
+      unresolved 'arg2'
+      bind 5, 'result'
+      ref 'result', 5
+
+
+test 'record destructure with field rename', fn:
+  scope ƒink:
+    {x, y: z} = point
+  | equals ƒink:
+    scope 7, 'module',
+      bind 0, 'x'
+      bind 2, 'z'
+      unresolved 'point'
+
+
+test 'predicate guard in seq pattern', fn:
+  scope ƒink:
+    [a, is_even b] = foo
+  | equals ƒink:
+    scope 7, 'module',
+      bind 0, 'a'
+      bind 2, 'b'
+      unresolved 'foo'
+      unresolved 'is_even'
+
+
+test 'str templ pattern', fn:
+  scope ƒink:
+    'foo${bar}spam' = val
+    bar
+  | equals ƒink:
+    scope 9, 'module',
+      unresolved 'val'
+      ref 'bar', 2
+
+test 'str templ pattern capture all', fn:
+  scope ƒink:
+    '${x}' = val
+    x
+  | equals ƒink:
+    scope 5, 'module',
+      unresolved 'val'
+      ref 'x', 0
+
+test 'str templ pattern in match', fn:
+  scope ƒink:
+    match val:
+      'foo${x}bar': x
+      _: 0
+  | equals ƒink:
+    scope 16, 'module',
+      unresolved 'val'
+
+      scope 10, 'arm',
+        bind 4, 'x'
+        ref 'x', 4
+
+      scope 14, 'arm'
+
+
+---
+member access
+---
+
+test 'member dynamic key resolves rhs binding', fn:
+  scope ƒink:
+    r = {a: 42}
+    k = 'a'
+    r.(k)
+  | equals ƒink:
+    scope 22, 'module',
+      bind 0, 'r'
+      bind 6, 'k'
+      ref 'r', 0
+      ref 'k', 6
+
+
+---
+prelude
+---
+
+test 'import resolves to prelude', fn:
+  scope ƒink:
+    {foo} = import './bar.fnk'
+  | equals ƒink:
+    scope 8, 'module',
+      bind 0, 'foo'
+      ref 'import', builtin 0
+

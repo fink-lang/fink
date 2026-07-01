@@ -46,9 +46,28 @@ fn main() {
   // Subcommand keywords; anything else in the first positional slot is
   // treated as a file path with the implicit `run` command.
   const COMMANDS: &[&str] = &[
-    "tokens", "ast", "fmt", "fmt2", "cps", "marks",
+    "tokens", "ast", "fmt", "cps", "marks",
     "wat", "wasm", "compile", "run", "dap", "decode-sm",
   ];
+
+  // `fink test [target]` — discover and run the native ƒink test suite.
+  // Handled before the path/source-reading flow: it takes an optional
+  // file-selector, not a source file to read.
+  if positional.first() == Some(&"test") {
+    #[cfg(not(feature = "run"))]
+    { eprintln!("error: 'test' command requires the 'run' feature"); process::exit(1); }
+    #[cfg(feature = "run")]
+    {
+      use std::sync::{Arc, Mutex};
+      let target = positional.get(1).copied();
+      let stdin: fink::runner::IoReadStream = Arc::new(Mutex::new(std::io::stdin()));
+      let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
+      let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
+      let exit_code = fink::run_tests(target, vec![b"test".to_vec()], stdin, stdout, stderr)
+        .unwrap_or_else(|e| die(&e));
+      process::exit(exit_code as i32);
+    }
+  }
 
   let (cmd, path) = match positional.as_slice() {
     // `fink <cmd> <path> [..]` — explicit subcommand. Extra positionals
@@ -58,13 +77,13 @@ fn main() {
     // source file; the rest become argv for the user's main.
     [path, ..] => ("run", *path),
     _ => {
-      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap|decode-sm>] [options] <file>");
+      eprintln!("usage: fink [<tokens|ast|fmt|cps|marks|wat|wasm|compile|run|dap|decode-sm>] [options] <file>");
       eprintln!("       fink <file> [args..]    (implicit `run`)");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted]               CPS transform (optionally closure-converted + hoisted)");
       eprintln!("  marks                        debugger step-stops (per-CpsId markers + source map)");
-      eprintln!("  ast/fmt/fmt2/cps [--source-map]  append embedded source map comment");
+      eprintln!("  ast/fmt/cps [--source-map]  append embedded source map comment");
       eprintln!("  wat                          emit WAT text from IR fragment to stdout");
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wasm [-O|-O1..4|-Os|-Oz]     run wasm-opt (default -O)");
@@ -124,21 +143,9 @@ fn main() {
       }
     }
 
-    "fmt2" => {
-      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
-      let cfg = fink::fmt::FmtConfig::default();
-      let laid_out = fink::fmt::layout::layout(&ast, &cfg);
-      if source_map {
-        let (output, srcmap) = fink::fmt::print::print_mapped_native(&laid_out);
-        println!("{output}\n# sm:{}", srcmap.encode_base64url());
-      } else {
-        println!("{}", fink::fmt::print::print(&laid_out));
-      }
-    }
-
     "cps" => {
       let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die_diag(&src, &e));
-      let cps = fink::passes::lower(&desugared);
+      let cps = fink::passes::lower(&desugared, &src);
 
       let result = if lifted {
         fink::passes::lift(cps, &desugared).result
@@ -280,7 +287,7 @@ fn main() {
         // `run` path is reserved for `-` (stdin) where there's no
         // filesystem entry to resolve imports against.
         let exit_code = if path == "-" {
-          fink::run(&src, path, cli_args, stdin, stdout, stderr)
+          fink::run_stdin(&src, cli_args, stdin, stdout, stderr)
         } else {
           fink::run_file(path, cli_args, stdin, stdout, stderr)
         }.unwrap_or_else(|e| die(&e));
