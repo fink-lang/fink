@@ -33,6 +33,12 @@
     (func $make_type_stamp_cont
       (param (ref null any)) (param (ref null any)) (param (ref null any))
       (result (ref null any))))
+  ;; The `str` intrinsic: its native WASM type + its reified $Type singleton.
+  ;; is_instance bridges a $Str VALUE to the `str` guard via `ref.eq $StrType ->
+  ;; ref.test (ref $Str)`. (str.wat imports types.wat too; the linker resolves
+  ;; the cycle -- runtime wat "imports" are link-time cross-refs.)
+  (import "rt/str.wat" "Str" (type $Str (sub any)))
+  (import "rt/str.wat" "StrType" (func $str_type (result (ref $Type))))
   (import "rt/dict.wat" "Dict" (type $Dict (sub any)))
   ;; Direct-style dict helpers: build an empty fields dict and add entries.
   (import "rt/dict.wat" "_rec_new"
@@ -234,6 +240,21 @@
     (array.set $TypeTable (local.get $tbl) (local.get $id) (local.get $t))
     (global.set $type_count (i32.add (local.get $id) (i32.const 1)))
     (local.get $t))
+
+  ;; new_unit_type(name) -> a fresh registered unit $Type carrying `name`.
+  ;; Direct-style (no ctx/cont), for runtime bootstrap that mints intrinsic type
+  ;; singletons before any user code (e.g. str.wat's $StrType, registered in the
+  ;; module (start)). `new_type` is the CPS user-facing mint; this is its
+  ;; direct-style core, callable outside a continuation. Owns the `struct.new
+  ;; $Type` (the struct is private to this module), so intrinsic modules mint
+  ;; through here rather than reaching into the layout.
+  (func $new_unit_type (@pub) (param $name (ref i31)) (result (ref $Type))
+    (call $register_type
+      (struct.new $Type
+        (local.get $name)
+        (i32.const 0)                    ;; $id (stamped by register_type)
+        (ref.null none) (ref.null none)  ;; $type, $new
+        (ref.null none))))               ;; $base
 
   ;; type_table_get(id) -> the $Type at `id`, or null if out of range.
   (func $type_table_get (@pub)
@@ -746,6 +767,12 @@
   (func $is_instance (@pub)
     (param $val (ref null any)) (param $type (ref null any)) (result i32)
     (local $t (ref null $Type))
+    ;; Intrinsic bridge: an intrinsic type keeps its native WASM rep (no $Inst
+    ;; wrapper), so membership is a `ref.test` against that rep, selected by the
+    ;; intrinsic singleton's identity. `str` so far; add a `ref.eq` arm per
+    ;; intrinsic as they land.
+    (if (ref.eq (ref.cast (ref eq) (local.get $type)) (call $str_type))
+      (then (return (ref.test (ref $Str) (local.get $val)))))
     ;; Non-instances are never an instance of any type.
     (if (i32.eqz (ref.test (ref $Inst) (local.get $val)))
       (then (return (i32.const 0))))

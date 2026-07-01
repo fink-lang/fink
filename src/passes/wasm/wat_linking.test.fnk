@@ -1,12 +1,7 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat_pkg: orig_wat_pkg} = import 'fink/compile.fnk'
+{wat, wat_pkg: orig_wat_pkg} = import 'fink/compile.fnk'
 
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
 
 base = 'src/passes/wasm/'
 wat_pkg = fn src:
@@ -16,7 +11,7 @@ test 'multi module import', fn:
   wat_pkg ƒink:
     {shrub} = import './test_link/simple.fnk'
     shrub 21
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $./test.fnk::Fn_host_wrapper (func (param (ref null any))))
@@ -70,7 +65,7 @@ test 'multi module import', fn:
         (local.set $:fail_94 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_93)))
         (local.set $:v_65 (struct.new $rt/apply.wat:Closure (ref.func $./test.fnk::v_82) (local.get $:caps_arg)))
-        (local.set $:sym_17 (ref.i31 (i32.const 2)))
+        (local.set $:sym_17 (ref.i31 (i32.const 178)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_15) (local.get $:sym_17) (local.get $:fail_94) (local.get $:v_65))
       )
       (func $./test.fnk::v_90 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -144,7 +139,7 @@ test 'multi module import', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 5)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_1 10)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -204,7 +199,7 @@ test 'multi module import', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $./test_link/simple.fnk:shrub) (local.get $:v_30))
         (local.set $:pub_shrub_1 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/simple.fnk:shrub)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_3 22)))
-        (local.set $:pub_name_shrub_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_shrub_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_shrub_1) (local.get $:pub_shrub_1))
         (local.set $:unwrap_shrub_1 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/simple.fnk:shrub)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -240,7 +235,7 @@ test 'multi module import', fn:
         (local.set $:fail_121 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_120)))
         (local.set $:v_84 (struct.new $rt/apply.wat:Closure (ref.func $./test_link/simple.fnk::v_109) (local.get $:caps_arg)))
-        (local.set $:sym_19 (ref.i31 (i32.const 10)))
+        (local.set $:sym_19 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_17) (local.get $:sym_19) (local.get $:fail_121) (local.get $:v_84))
       )
       (func $./test_link/simple.fnk::v_117 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -315,10 +310,10 @@ test 'multi module import', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_5 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_6 5)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_3 22)))
         (call $rt/modules.wat:register_module (i32.const 1) (local.get $:mod_reg_url))
@@ -366,7 +361,7 @@ test 'multi module import', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_8 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_7 27)))
         (call $rt/modules.wat:register_module (i32.const 2) (local.get $:mod_reg_url))
@@ -378,7 +373,7 @@ test 'multi module import', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $./test_link/foobar/spam.fnk:foo) (local.get $:v_3))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/foobar/spam.fnk:foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_7 27)))
-        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $:unwrap_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/foobar/spam.fnk:foo)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -406,7 +401,7 @@ test 'multi module import', fn:
       (data $d_7 "./test_link/foobar/spam.fnk")
       (data $d_8 "foo")
     )
-    ;; sm:xAHiCwCWAQC6AQDGAQECBVgBXgKKAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEA0AgAlgEAugEAxgEAxgEAuAEA3AEBXyliAQApygYAugEAxgEAbgCaCQCaAQCaAQCaAQCaAQCUAQDgAQDeAQC2AQDcAQBmAQAp7AQAXgCwCQCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA3gEAbgC8AQC-AQC-AQCaCgCcAQBuAMIBAJwBAKYBAJgBALQBAN4BAJQBAIIBAJoCAIYGAHoA8gEAjAEAoAcAmgEAmgEAlgEAhAEAugEAwgEAbgC-AQDCAQCCAQCgCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlAEAdgDcAQDcAQBuANIBAKAHAJYBAJoBAJYBALoBAMgBAG4AvgEA7ggAlgEAugEAyAEAyAEAugEA9gEBASJkAQAi6AYAugEAyAEAbgC4CQCcAQCaAQCcAQCaAQCUAQDkAQD2AQC4AQD2AQBmAQAihAUAXgDICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCkCwCcAQBwAMIBAJwBAG4AwgEAnAEApgEAmAEAnAEAlAEAtAEA9gEAlAEAggEApAIAzgYAegCKAgCMAQCABgCYAQCaAQCUAQCCAQEoAYYBAQkGvAwAnAEAcADCAQCcAQCmAQCYAQCYAQCWAQB6APwBAMwBANgBAJQBAHQA1AEA3gEAbgDOAQCwBgB6AJQCAIwBAA
+    ;; sm:xAHiCwCWAQC6AQDGAQECBVgBXgKKAQBuAMIBAMQBAIIBAIIHAJYBAJoBAJYBALoBAMYBAG4AvgEA0AgAlgEAugEAxgEAxgEAuAEA3AEBXylmAQApygYAugEAxgEAbgCaCQCaAQCaAQCaAQCaAQCUAQDgAQDeAQC2AQDcAQBmAQAp7AQAXgCwCQCUAQC6AQDGAQC4AQDeAQB6AN4BAHoA3gEAbgC8AQC-AQC-AQCaCgCcAQByAMIBAJwBAKYBAJgBALQBAN4BAJQBAIIBAJoCAIYGAHoA8gEAjAEAoAcAmgEAmgEAlgEAhAEAugEAwgEAbgC-AQDCAQCCAQCgCwCWAQC6AQDGAQECA1QAsgEA9gEAyAEA1gEAlAEAegDcAQDcAQBuANIBAKAHAJYBAJoBAJYBALoBAMgBAG4AvgEA7ggAlgEAugEAyAEAyAEAugEA9gEBASJmAQAi6AYAugEAyAEAbgC4CQCcAQCaAQCcAQCaAQCUAQDkAQD2AQC4AQD2AQBmAQAihAUAXgDICQCUAQC6AQDGAQC4AQD2AQB6APYBAHoA9gEAbgC8AQC-AQC-AQCkCwCcAQByAMIBAJwBAHIAwgEAnAEApgEAmAEAnAEAlAEAtAEA9gEAlAEAggEApAIAzgYAegCKAgCMAQCABgCYAQCaAQCUAQCCAQEoAYYBAQkGvAwAnAEAcgDCAQCcAQCmAQCYAQCYAQCWAQB6APwBAMwBANgBAJQBAHYA1AEA3gEAbgDOAQCwBgB6AJQCAIwBAA
 
 
 ---
@@ -421,7 +416,7 @@ test 'diamond with two paths to same dep', fn:
   wat_pkg ƒink:
     {total} = import './test_link/diamond.fnk'
     total
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $./test.fnk::Fn_host_wrapper (func (param (ref null any))))
@@ -475,7 +470,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:fail_91 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_90)))
         (local.set $:v_62 (struct.new $rt/apply.wat:Closure (ref.func $./test.fnk::v_79) (local.get $:caps_arg)))
-        (local.set $:sym_17 (ref.i31 (i32.const 2)))
+        (local.set $:sym_17 (ref.i31 (i32.const 178)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_15) (local.get $:sym_17) (local.get $:fail_91) (local.get $:v_62))
       )
       (func $./test.fnk::v_87 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -549,7 +544,7 @@ test 'diamond with two paths to same dep', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 5)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_1 10)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -585,7 +580,7 @@ test 'diamond with two paths to same dep', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $./test_link/diamond.fnk:total) (local.get $:v_86))
         (local.set $:pub_total_3 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/diamond.fnk:total)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_3 23)))
-        (local.set $:pub_name_total_3 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_total_3 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_total_3) (local.get $:pub_total_3))
         (local.set $:unwrap_total_3 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/diamond.fnk:total)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -655,7 +650,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:fail_273 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_272)))
         (local.set $:v_202 (struct.new $rt/apply.wat:Closure (ref.func $./test_link/diamond.fnk::v_261) (local.get $:caps_arg)))
-        (local.set $:sym_70 (ref.i31 (i32.const 10)))
+        (local.set $:sym_70 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_68) (local.get $:sym_70) (local.get $:fail_273) (local.get $:v_202))
       )
       (func $./test_link/diamond.fnk::v_269 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -774,7 +769,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:fail_335 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_334)))
         (local.set $:v_214 (struct.new $rt/apply.wat:Closure (ref.func $./test_link/diamond.fnk::v_323) (local.get $:caps_arg)))
-        (local.set $:sym_45 (ref.i31 (i32.const 18)))
+        (local.set $:sym_45 (ref.i31 (i32.const 194)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_43) (local.get $:sym_45) (local.get $:fail_335) (local.get $:v_214))
       )
       (func $./test_link/diamond.fnk::v_331 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -889,7 +884,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:fail_393 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_392)))
         (local.set $:v_226 (struct.new $rt/apply.wat:Closure (ref.func $./test_link/diamond.fnk::v_381) (local.get $:caps_arg)))
-        (local.set $:sym_20 (ref.i31 (i32.const 26)))
+        (local.set $:sym_20 (ref.i31 (i32.const 202)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_18) (local.get $:sym_20) (local.get $:fail_393) (local.get $:v_226))
       )
       (func $./test_link/diamond.fnk::v_389 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -964,16 +959,16 @@ test 'diamond with two paths to same dep', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_7 4)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_8 8)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 26)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 202)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_9 9)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_10 5)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_3 23)))
         (call $rt/modules.wat:register_module (i32.const 1) (local.get $:mod_reg_url))
@@ -1009,7 +1004,7 @@ test 'diamond with two paths to same dep', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_12 4)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_11 26)))
         (call $rt/modules.wat:register_module (i32.const 2) (local.get $:mod_reg_url))
@@ -1020,7 +1015,7 @@ test 'diamond with two paths to same dep', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $./test_link/sub/common.fnk:base) (local.get $base_0))
         (local.set $:pub_base_0 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/sub/common.fnk:base)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_11 26)))
-        (local.set $:pub_name_base_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_base_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_base_0) (local.get $:pub_base_0))
         (local.set $:unwrap_base_0 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/sub/common.fnk:base)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1051,7 +1046,7 @@ test 'diamond with two paths to same dep', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $./test_link/sub/left.fnk:left_val) (local.get $:v_31))
         (local.set $:pub_left_val_1 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/sub/left.fnk:left_val)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_13 24)))
-        (local.set $:pub_name_left_val_1 (ref.i31 (i32.const 26)))
+        (local.set $:pub_name_left_val_1 (ref.i31 (i32.const 202)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_left_val_1) (local.get $:pub_left_val_1))
         (local.set $:unwrap_left_val_1 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/sub/left.fnk:left_val)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1104,7 +1099,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:fail_119 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_118)))
         (local.set $:v_82 (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/left.fnk::v_107) (local.get $:caps_arg)))
-        (local.set $:sym_18 (ref.i31 (i32.const 10)))
+        (local.set $:sym_18 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_16) (local.get $:sym_18) (local.get $:fail_119) (local.get $:v_82))
       )
       (func $./test_link/sub/left.fnk::v_115 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1179,10 +1174,10 @@ test 'diamond with two paths to same dep', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_15 4)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_16 8)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 26)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 202)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_13 24)))
         (call $rt/modules.wat:register_module (i32.const 3) (local.get $:mod_reg_url))
@@ -1220,7 +1215,7 @@ test 'diamond with two paths to same dep', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $./test_link/sub/right.fnk:right_val) (local.get $:v_31))
         (local.set $:pub_right_val_1 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/sub/right.fnk:right_val)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_17 25)))
-        (local.set $:pub_name_right_val_1 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_right_val_1 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_right_val_1) (local.get $:pub_right_val_1))
         (local.set $:unwrap_right_val_1 (struct.get $rt/apply.wat:Cell 0 (global.get $./test_link/sub/right.fnk:right_val)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1273,7 +1268,7 @@ test 'diamond with two paths to same dep', fn:
         (local.set $:fail_119 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_118)))
         (local.set $:v_82 (struct.new $rt/apply.wat:Closure (ref.func $./test_link/sub/right.fnk::v_107) (local.get $:caps_arg)))
-        (local.set $:sym_18 (ref.i31 (i32.const 10)))
+        (local.set $:sym_18 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_16) (local.get $:sym_18) (local.get $:fail_119) (local.get $:v_82))
       )
       (func $./test_link/sub/right.fnk::v_115 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1348,10 +1343,10 @@ test 'diamond with two paths to same dep', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_19 4)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_20 9)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_17 25)))
         (call $rt/modules.wat:register_module (i32.const 4) (local.get $:mod_reg_url))
@@ -1400,4 +1395,4 @@ test 'diamond with two paths to same dep', fn:
       (data $d_19 "base")
       (data $d_20 "right_val")
     )
-    ;; sm:6APkDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqYgEAKsoGALoBAMYBAG4AmgkAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEAZgEAKuwEAF4AsAkAlAEAugEAxgEAuAEA3gEAegDeAQB6AN4BAG4AvAEAvgEAvgEAmgoAnAEAbgDCAQCcAQCmAQCYAQC0AQDeAQCUAQCCAQCcAgCGBgB6APIBAIwBAK4JAJYBALoBAMYBAMoBANgBAJQBAHYA3AEA3gEAbgDSAQCuCACWAQC6AQDGAQDQAQC4AQD6AQGACRuACgCWAQC6AQDGAQDQAQDOAQGrAwRWAO4BAPoBAawDD9wHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBrQMiZAEAIuwGALoBAMgBAG4AwAkAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEAZgEAIowFAF4A9AoAlgEAugEAxgEA0AEAzgEAogIA-AEAegD4AQB6APoBAG4AvgEAwAEAvgEAjgsAlgEAugEAxgEAzgEBSwlgAJ4CAPoBAJQBAIIBAKICANwHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBASZkAQAm7AYAugEAyAEAbgDACQCcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQBmAQAmjAUAXgCiCgCWAQC6AQDGAQDOAQDsAQD6AQB6APgBAHoA-gEAbgC-AQDAAQDAAQC6CgCWAQC6AQDGAQFHCF4A6AEA-gEAlAEAggEAoAIA3AcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQEBJGQBACTsBgC6AQDIAQBuAMAJAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAGYBACSMBQBeAM4JAJQBALoBAMYBALgBAPoBAHoA-AEAegD6AQBuALwBAMABAMABAKgLAJwBAHAAwgEAnAEAcADCAQCcAQBwAMIBAJ4BAG4AwgEAnAEApgEAmAEAnAEAlgEAtAEA-gEAlAEAggEAngIA1gYAegCMAgCMAQCuCwCeAQBwAMIBAJ4BAKYBAJgBAJoBAJgBAbkEBIgBANABANoBAJYBAHYA2AEA4AEAbgDQAQCqBgB6AJICAI4BAL4JAJYBALoBAMQBANIBAOYBAJYBAH4A6AEA7AEAbgDYAQDmCACWAQC6AQDGAQHuAQRWALgBAPgBAWIBiAEBDQjSBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPIIAJYBALoBAMgBAMgBALoBAPoBAVUeZAEAHuwGALoBAMgBAG4AugkAmgEAmgEAnAEAmgEAlAEA4gEA-gEAuAEA-gEAZgEAHogFAF4AzAkAlAEAugEAxgEAuAEA-gEAegD6AQB6APoBAG4AvAEAvgEAvgEArgsAngEAcADCAQCeAQBwAMIBAJ4BAKYBAJgBAKIBAKQBALQBAPoBAJYBAIIBAKICANoGAHoAjgIAjgEAxgkAlgEAugEAxAEA1gEA7AEAlgEAgAEA7AEA8gEAbgDaAQDoCACWAQC6AQDGAQGMAwRWALgBAPoBAW4BiAEBDQjUBwCWAQCaAQCWAQC6AQDIAQBuAL4BAPQIAJYBALoBAMgBAMgBALoBAPwBAWEjZAEAI-4GALoBAMgBAG4AvAkAmgEAmgEAnAEAmgEAlAEA4gEA_AEAuAEA_AEAZgEAI4oFAF4AzgkAlAEAugEAxgEAuAEA_AEAegD8AQB6APwBAG4AvAEAvgEAvgEAsgsAngEAcADCAQCeAQBwAMIBAJ4BAKYBAJgBAKQBAKoBALQBAPwBAJYBAIIBAKICAOAGAHoAkAIAjgEA
+    ;; sm:6APkDwCWAQC6AQDGAQECBVgAbgDCAQCEBwCWAQCaAQCWAQC6AQDGAQBuAL4BAM4IAJYBALoBAMYBAMYBALgBANwBAQEqZgEAKsoGALoBAMYBAG4AmgkAmgEAmgEAmgEAmgEAlAEA4AEA3AEAtgEA3AEAZgEAKuwEAF4AsAkAlAEAugEAxgEAuAEA3gEAegDeAQB6AN4BAG4AvAEAvgEAvgEAmgoAnAEAcgDCAQCcAQCmAQCYAQC0AQDeAQCUAQCCAQCcAgCGBgB6APIBAIwBAK4JAJYBALoBAMYBAMoBANgBAJQBAHoA3AEA3gEAbgDSAQCuCACWAQC6AQDGAQDQAQC4AQD6AQGACRuACgCWAQC6AQDGAQDQAQDOAQGrAwRWAO4BAPoBAawDD9wHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBrQMiZgEAIuwGALoBAMgBAG4AwAkAnAEAmgEAnAEAmgEAlgEA5AEA-gEAuAEA-gEAZgEAIowFAF4A9AoAlgEAugEAxgEA0AEAzgEAogIA-AEAegD4AQB6APoBAG4AvgEAwAEAvgEAjgsAlgEAugEAxgEAzgEBSwlgAJ4CAPoBAJQBAIIBAKICANwHAJYBAJoBAJYBALoBAMgBAG4AvgEA8ggAlgEAugEAyAEAyAEAugEA-gEBASZmAQAm7AYAugEAyAEAbgDACQCcAQCaAQCcAQCaAQCWAQDkAQD6AQC4AQD6AQBmAQAmjAUAXgCiCgCWAQC6AQDGAQDOAQDsAQD6AQB6APgBAHoA-gEAbgC-AQDAAQDAAQC6CgCWAQC6AQDGAQFHCF4A6AEA-gEAlAEAggEAoAIA3AcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQEBJGYBACTsBgC6AQDIAQBuAMAJAJwBAJoBAJwBAJoBAJYBAOQBAPoBALgBAPoBAGYBACSMBQBeAM4JAJQBALoBAMYBALgBAPoBAHoA-AEAegD6AQBuALwBAMABAMABAKgLAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJ4BAHIAwgEAnAEApgEAmAEAnAEAlgEAtAEA-gEAlAEAggEAngIA1gYAegCMAgCMAQCuCwCeAQByAMIBAJ4BAKYBAJgBAJoBAJgBAbkEBIgBANABANoBAJYBAHgA2AEA4AEAbgDQAQCqBgB6AJICAI4BAL4JAJYBALoBAMQBANIBAOYBAJYBAIABAOgBAOwBAG4A2AEA5ggAlgEAugEAxgEB7gEEVgC4AQD4AQFiAYgBAQ0I0gcAlgEAmgEAlgEAugEAyAEAbgC-AQDyCACWAQC6AQDIAQDIAQC6AQD6AQFVHmYBAB7sBgC6AQDIAQBuALoJAJoBAJoBAJwBAJoBAJQBAOIBAPoBALgBAPoBAGYBAB6IBQBeAMwJAJQBALoBAMYBALgBAPoBAHoA-gEAegD6AQBuALwBAL4BAL4BAK4LAJ4BAHIAwgEAngEAcgDCAQCeAQCmAQCYAQCiAQCkAQC0AQD6AQCWAQCCAQCiAgDaBgB6AI4CAI4BAMYJAJYBALoBAMQBANYBAOwBAJYBAIIBAOwBAPIBAG4A2gEA6AgAlgEAugEAxgEBjAMEVgC4AQD6AQFuAYgBAQ0I1AcAlgEAmgEAlgEAugEAyAEAbgC-AQD0CACWAQC6AQDIAQDIAQC6AQD8AQFhI2YBACPuBgC6AQDIAQBuALwJAJoBAJoBAJwBAJoBAJQBAOIBAPwBALgBAPwBAGYBACOKBQBeAM4JAJQBALoBAMYBALgBAPwBAHoA_AEAegD8AQBuALwBAL4BAL4BALILAJ4BAHIAwgEAngEAcgDCAQCeAQCmAQCYAQCkAQCqAQC0AQD8AQCWAQCCAQCiAgDgBgB6AJACAI4BAA

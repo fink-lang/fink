@@ -1,6 +1,8 @@
 {test, skip, equals, not_equals} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
 
+{str} = import 'std/str.fnk'
+
 
 test 'string literal', fn:
   equals
@@ -247,3 +249,20 @@ test 'str templ pattern: match arm fallthrough', fn:
       'hello ${name}': name
       _: 'no match'
     'no match'
+
+
+test 'str type', fn:
+  equals
+    match 'foobar':
+      str s: s
+      _: 'no match'
+    'foobar'
+
+test 'str type on templ str', fn:
+  foo = 42
+  equals
+    match '${foo}':
+      str s: s
+      _: 'no match'
+    '42'
+
