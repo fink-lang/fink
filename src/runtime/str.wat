@@ -165,6 +165,16 @@
     (return_call $from_bytes
       (ref.cast (ref $ByteArray) (local.get $bytes))))
 
+  ;; _str_read_bytes : (ref null any) -> (ref any)
+  ;; Host-facing inverse of _str_wrap_bytes: a $Str in, its $ByteArray out.
+  ;; Used by the bless host service to read a snapshot's actual value.
+  (func $_str_read_bytes (@pub) (export "env:_str_read_bytes")
+    (param $str (ref null any))
+    (result (ref any))
+
+    (return_call $bytes
+      (ref.cast (ref $Str) (local.get $str))))
+
 
   ;; ---- Access ----
 

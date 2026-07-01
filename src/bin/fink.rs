@@ -59,11 +59,14 @@ fn main() {
     #[cfg(feature = "run")]
     {
       use std::sync::{Arc, Mutex};
+      // `fink test [target] [--bless]`: `--bless` rewrites failing snapshots in
+      // place. Flags are stripped from `positional`, so read it off raw `args`.
+      let bless = args.iter().any(|a| a == "--bless");
       let target = positional.get(1).copied();
       let stdin: fink::runner::IoReadStream = Arc::new(Mutex::new(std::io::stdin()));
       let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
       let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
-      let exit_code = fink::run_tests(target, vec![b"test".to_vec()], stdin, stdout, stderr)
+      let exit_code = fink::run_tests(target, bless, vec![b"test".to_vec()], stdin, stdout, stderr)
         .unwrap_or_else(|e| die(&e));
       process::exit(exit_code as i32);
     }

@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 pub mod wasmtime_runner;
 #[cfg(feature = "runtime")]
 pub mod trap;
+#[cfg(feature = "compile")]
+pub mod bless;
 
 /// Shared, thread-safe write stream (stdout or stderr).
 pub type IoStream = Arc<Mutex<dyn std::io::Write + Send>>;
@@ -134,6 +136,7 @@ pub fn run_stdin(
 pub fn run_tests(
   opts: RunOptions,
   target: Option<&str>,
+  bless: bool,
   args: Vec<Vec<u8>>,
   stdin: IoReadStream,
   stdout: IoStream,
@@ -161,7 +164,10 @@ pub fn run_tests(
   for f in &selected {
     src.push_str(&format!("import './{f}'\n"));
   }
-  src.push_str("main = fn ..args:\n  test_all _\n");
+  // `test_all` takes an explicit bless flag (a bool), not the CLI argv -- the
+  // aggregator translates `--bless` intent into the literal.
+  let bless_lit = if bless { "true" } else { "false" };
+  src.push_str(&format!("main = fn ..args:\n  test_all {bless_lit}\n"));
 
   run_stdin(opts, &src, args, stdin, stdout, stderr)
 }
@@ -1432,6 +1438,7 @@ mod cli_runner_tests {
         let exit = super::run_tests(
           RunOptions::default(),
           None,
+          false,
           vec![b"test".to_vec()],
           stdin,
           stdout,

@@ -1,18 +1,12 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
-
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
+{wat, compile_wat} = import 'fink/compile.fnk'
 
 
 test 'rec literal', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a: 1, b: 2}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -72,10 +66,10 @@ test 'rec literal', fn:
 
 
 test 'rec destructure', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a, b: c} = {a: 1, b: 2}
     a + c
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -274,10 +268,10 @@ test 'rec destructure', fn:
     ;; sm:YYoIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfgHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRhiAQAYmAkAlgEAugEAyAEAyAEA6AEA0gEBABhkAQAYxAYAugEAyAEAbgCWCQCcAQCaAQCcAQCaAQCWAQDkAQDSAQC4AQDSAQBmAQAY4gQAXgCmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAWABBgGGAQEFBIALAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmALQBANQBAQ0MagECAWIBBgGGAQEFBPYFAHoA5gEAigEA
 
 test 'rec spread', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     r = {a: 1, b: 2}
     {..r, c: 3}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -400,9 +394,9 @@ test 'rec spread', fn:
     ;; sm:OsIHAJYBALoBAMQBAS4BYgEGAYgBAQUEuAwAlAEAugEAzgEAugEAxAEAnAEAogEAkgEAcADMAQC2AQDQAQELC2wArAEBAgOmCgCUAQC6AQDOAQC6AQDEAQDiAQDQAQENAWIBBgGGAQEFBP4KAJwBAHAAwgEAnAEAcADCAQCcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAYADeAQDQAQENDGoBAgFiAQYBhgEBBQT0BQB6AOYBAIoBAA
 
 test 'rec empty literal', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -433,9 +427,9 @@ test 'rec empty literal', fn:
     ;; sm:C-IGAJoBAKYBAJgBAQACagBuAMABAKYFAHoA5gEAigEA
 
 test 'rec single field', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a: 1}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -473,11 +467,11 @@ test 'rec single field', fn:
     ;; sm:DtIIAJwBAG4AwgEAmgEApgEAmAEBAAZqAQIBYAEGAYYBAQUE9gUAegDmAQCKAQA
 
 test 'rec nested destructure', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a} = {a: {b: 42}}
     {b} = a
     b
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -750,11 +744,11 @@ test 'rec nested destructure', fn:
     ;; sm:hwHABwCWAQC6AQDGAQCiAQCuAQBuAMoBAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBJgdiAQAHxgYAugEAyAEAbgCaCQCcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQBmAQAH5gQAXgD2CQCWAQC6AQDGAQCiAQC4AQDSAQB6ANIBAHoA0gEArgEAbgDKAQC-AQC-AQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBASUSZAEAEsYGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAEuYEAF4ApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxqAQIBYgEACuwLAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdqAQIBYAEGAogBAQUF9gUAegDmAQCKAQA
 
 test 'rec spread merge two', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     r1 = {a: 1}
     r2 = {b: 2}
     {..r1, ..r2}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -905,9 +899,9 @@ test 'rec spread merge two', fn:
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     'got: ${{a: 1}}'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -963,11 +957,11 @@ test 'rec format template', fn:
     ;; sm:FuQHAJQBALoBAMQBAQIFjgEA1AEBARDUCQCcAQBuAMIBAJoBAKYBAJgBALQBANABARAGagECAWABBgGGAQEFBPQFAHoA5gEAigEA
 
 test 'dict dot dynamic key', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     r = {'a': 42}
     k = 'a'
     r.(k)
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))

@@ -1,4 +1,5 @@
 {test, skip, equals, not_equals} = import 'std/testing.fnk'
+{ƒink} = import 'fink/blocks.fnk'
 
 
 test 'string literal', fn:
