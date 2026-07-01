@@ -78,7 +78,7 @@ fail = fn msg, actual, expected:
   trace = get_trace 5
 
   traceback = trace_to_str trace, ''
-  failure = '${msg}\nTraceback:\n${traceback}'
+  failure = '${msg}\n\nTraceback:\n${traceback}'
 
   abort = upd_curr_test fn {abort}:
     [abort, {result: {failure}}]
@@ -96,7 +96,7 @@ run_tests = fn tests, results:
       match result:
         Skipped _: write stderr, 'SKIPPED\n'
         Success _: write stderr, 'SUCCESS\n'
-        Failure {msg}: write stderr, 'FAIL\n  ${msg}\n\n'
+        Failure {msg}: write stderr, 'FAIL - expected\n${msg}\n\n'
 
       run_tests rest, [..results, result]
 
@@ -162,8 +162,15 @@ equals = fn actual, expected:
   match actual == exp:
     true: true
     false: fail
-      'act: ${actual}\n  ==\n  exp: ${expected}'
+      'act: ${actual}\n  ==\nexp: ${exp}'
       actual, expected
+
+
+# Pipe-shaped equality: `actual | matches expected`. Curried expected-first so
+# the piped `actual` binds last, giving natural `cwat ... | matches snapshot ":`
+# without a per-file flip wrapper.
+matches = fn expected: fn actual:
+  equals actual, expected
 
 
 not_equals = fn actual, expected:

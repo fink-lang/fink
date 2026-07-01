@@ -1,12 +1,6 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
-
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
+{wat, compile_wat} = import 'fink/compile.fnk'
 
 
 # WAT-snapshot tests for list construction with spread. The CPS layer
@@ -15,10 +9,10 @@ equals = fn expected: fn actual:
 # locked down.
 
 test 'list with spread at tail', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     xs = [1, 2]
     [..xs, 3]
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_55 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -128,10 +122,10 @@ test 'list with spread at tail', fn:
 
 
 test 'list with spread at head', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     xs = [2, 3]
     [1, ..xs]
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_53 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -236,11 +230,11 @@ test 'list with spread at head', fn:
 
 
 test 'list with two spreads', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     a = [1, 2]
     b = [3, 4]
     [..a, ..b]
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_83 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))

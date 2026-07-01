@@ -9,6 +9,8 @@ fmt = rt_fmt
 cps_module = rt_cps_module
 cps_closures = rt_cps_closures
 cps_hoisted = rt_cps_hoisted
-wat = rt_wat
+compile_wat = rt_wat
 marks = rt_marks
 wat_pkg = rt_wat_pkg
+
+wat = fn src: src
