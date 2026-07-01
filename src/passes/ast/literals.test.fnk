@@ -261,6 +261,56 @@ test 'tagged template string in argument position', fn:
             LitStr 'foo'
         Ident 'v'
 
+test 'tagged template as the sole nested-apply argument', fn:
+  ast ƒink:
+    foo bar'spam'
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Apply
+          Ident 'bar'
+          StrRawTempl
+            LitStr 'spam'
+
+test 'tagged block-string as the sole nested-apply argument', fn:
+  ast ƒink:
+    foo bar":
+      spam
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Apply
+          Ident 'bar'
+          StrRawTempl
+            LitStr 'spam'
+
+--- A tagged block-string stays raw even when it is the SECOND block-string
+    argument in a multi-line arg list. The second one degraded to a plain
+    (cooked) LitStr instead of StrRawTempl. ---
+test 'second tagged block-string arg stays raw', fn:
+  ast ƒink:
+    equals
+      bar":
+        spam
+      foo bar":
+        spam
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'equals'
+        Apply
+          Ident 'bar'
+          StrRawTempl
+            LitStr 'spam'
+        Apply
+          Ident 'foo'
+          Apply
+            Ident 'bar'
+            StrRawTempl
+              LitStr 'spam'
+
 test 'rendered template string', fn:
   ast ƒink:
     fmt 'hello ${1 + 2}'

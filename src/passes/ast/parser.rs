@@ -816,6 +816,18 @@ impl<'src> Parser<'src> {
       // Bump the ident directly so that `..` after it is not consumed as a range operator.
       self.bump();
       let func = self.node(NodeKind::Ident(name_tok.src), name_tok.loc);
+      // Tagged template string: ident immediately adjacent to StrStart -> raw
+      // template (mirrors parse_apply / parse_apply_no_block). Without this, a
+      // tag reached via the nested-arg path (e.g. `foo bar":`) parses `bar` as
+      // an ordinary call on a COOKED string instead of a raw StrRawTempl.
+      if self.at(TokenKind::StrStart) && self.peek().loc.start.idx == name_tok.loc.end.idx {
+        let raw_str = self.parse_string(true)?;
+        let end = self.loc_of(raw_str).end;
+        return Ok(self.node(
+          NodeKind::Apply { func, args: Exprs { items: Box::new([raw_str]), seps: vec![] } },
+          Loc { start: name_tok.loc.start, end },
+        ));
+      }
       let result = if no_block {
         self.collect_apply_args(func, true)?
       } else {
