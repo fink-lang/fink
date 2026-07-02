@@ -1,0 +1,8 @@
+{test, equals, snapshot} = import 'std/testing.fnk'
+
+
+test 'snapshots', fn:
+  '42'
+  | equals ?, snapshot ":
+    42
+

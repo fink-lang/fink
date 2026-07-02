@@ -1,1 +1,5 @@
-# TODO re-export types from wat
+# The built-in `float` type, reified as a first-class value: usable as a
+# match/guard arm (`match x: float f: ...`).
+{FloatType: rt_float_type} = import 'rt/float.wat'
+
+float = rt_float_type

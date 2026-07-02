@@ -13,10 +13,33 @@
   (import "rt/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
   (import "rt/str.wat" "from_bytes"
     (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
+  (import "rt/types.wat" "new_unit_type"
+    (func $new_unit_type (param (ref i31)) (result (ref $Type))))
 
   ;; $F64 — IEEE 754 binary64. Subtype of $Num; for now shares $Num's
   ;; `f64 $val` slot.
   (type $F64 (@pub) (sub final $Num (struct (field $val f64))))
+
+
+  ;; ---- Intrinsic type singleton ----
+  ;;
+  ;; `$FloatType` reifies the built-in `float` as a first-class `$Type` (guard /
+  ;; match arm). `is_instance` bridges a value via `ref.test (ref $F64)`. Mirrors
+  ;; the `str` intrinsic (rt/str.wat). Registered in the module (start).
+  ;;
+  ;; NAME: the reserved `float` symbol -- id 4 -> word (4 << 3) | 0b010 = 34. MUST
+  ;; equal reserved_symbol_word("float") in src/passes/wasm/link.rs.
+  (global $_float_type (mut (ref null $Type)) (ref.null none))
+
+  (func $register_float_type (@pub)
+    (if (ref.is_null (global.get $_float_type))
+      (then
+        (global.set $_float_type
+          (call $new_unit_type (ref.i31 (i32.const 34)))))))
+
+  (func $FloatType (@pub) (result (ref $Type))
+    (ref.as_non_null (global.get $_float_type)))
 
   ;; -- Arithmetic ------------------------------------------------------
 

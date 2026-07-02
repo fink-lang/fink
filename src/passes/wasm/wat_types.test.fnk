@@ -1,21 +1,16 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
+{wat, compile_wat} = import 'fink/compile.fnk'
 
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
 
 ---
 type declaration codegen (WASM)
 ---
 
 test 'unit type declaration', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Foo = type _
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_32 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -37,7 +32,7 @@ test 'unit type declaration', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_25) (local.get $:v_2))
         (local.set $:pub_Foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_0) (local.get $:pub_Foo_0))
         (local.set $:unwrap_Foo_25 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_25)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -54,7 +49,7 @@ test 'unit type declaration', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -63,7 +58,7 @@ test 'unit type declaration', fn:
         (global.set $test:Foo (local.get $:cell_Foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:Foo) (local.get $:ret_1)))
         (local.set $:v_22 (struct.new $rt/apply.wat:Closure (ref.func $test::v_32) (local.get $:caps_arg)))
-        (local.set $:sym_3 (ref.i31 (i32.const 2)))
+        (local.set $:sym_3 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_3) (local.get $:v_22))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -80,15 +75,15 @@ test 'unit type declaration', fn:
       (data $d_0 "test")
       (data $d_1 "Foo")
     )
-    ;; sm:HuoJAJQBALoBAM4BALoBAMQBAJwBAKoBAJIBAHIA1AEAsAEAbgDQAQCuCQCcAQBuAMIBAJoBAKYBAJgBAJgBAGgA4gEA0AEBDAZgAQAGqAUAegDmAQCKAQA
+    ;; sm:HuoJAJQBALoBAM4BALoBAMQBAJwBAKoBAJIBAHYA1AEAsAEAbgDQAQCuCQCcAQByAMIBAJoBAKYBAJgBAJgBAGgA4gEA0AEBDAZkAQAGqAUAegDmAQCKAQA
 
 
 test 'record type with one field', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Foo = type _
     Bar = type:
       x: Foo
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_60 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -110,7 +105,7 @@ test 'record type with one field', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_53) (local.get $:v_11))
         (local.set $:pub_Bar_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Bar)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Bar_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_Bar_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Bar_1) (local.get $:pub_Bar_1))
         (local.set $:unwrap_Bar_53 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_53)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -138,7 +133,7 @@ test 'record type with one field', fn:
         (local.set $:slot_65 (ref.cast (ref null $rt/apply.wat:Cell) (local.get $:slot_65_raw)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_63) (local.get $:ret_64)))
         (local.set $:v_44 (struct.new $rt/apply.wat:Closure (ref.func $test::v_60) (local.get $:caps_arg)))
-        (local.set $:sym_9 (ref.i31 (i32.const 10)))
+        (local.set $:sym_9 (ref.i31 (i32.const 186)))
         (local.set $:unwrap_Foo_65 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_65)))
         (return_call $rt/types.wat:type_set_field (local.get $:ctx_param) (local.get $:v_6) (local.get $:sym_9) (local.get $:unwrap_Foo_65) (local.get $:v_44))
       )
@@ -166,11 +161,11 @@ test 'record type with one field', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_75) (local.get $:v_3))
         (local.set $:pub_Foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_0) (local.get $:pub_Foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_76) (local.get $:ret_77) (local.get $:slot_75)))
         (local.set $:v_47 (struct.new $rt/apply.wat:Closure (ref.func $test::v_72) (local.get $:caps_arg)))
-        (local.set $:sym_7 (ref.i31 (i32.const 2)))
+        (local.set $:sym_7 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_7) (local.get $:v_47))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -184,13 +179,13 @@ test 'record type with one field', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -201,7 +196,7 @@ test 'record type with one field', fn:
         (global.set $test:Bar (local.get $:cell_Bar_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:Foo) (global.get $test:Bar) (local.get $:ret_2)))
         (local.set $:v_50 (struct.new $rt/apply.wat:Closure (ref.func $test::v_84) (local.get $:caps_arg)))
-        (local.set $:sym_4 (ref.i31 (i32.const 18)))
+        (local.set $:sym_4 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_4) (local.get $:v_50))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -225,14 +220,14 @@ test 'record type with one field', fn:
       (data $d_2 "Foo")
       (data $d_3 "x")
     )
-    ;; sm:QuwJAJYBALoBAM4BALoBAMQBAJ4BAKoBAJIBAHIA1AEAsAEAbgDQAQC6CwCUAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQE2AWIAsAEBAAa8DQCUAQC6AQDOAQC6AQDOAQC6AQDEAQCcAQCqAQCSAQB0ANQBAI4CANABAQ8OYAEADpwKAJwBAG4AwgEAnAEAcADCAQCcAQBwAMIBAJoBAKYBAJgBAJgBAGgAmAEAaACQAgDQAQEZBmIBAAaoBQB6AOYBAIoBAA
+    ;; sm:QuwJAJYBALoBAM4BALoBAMQBAJ4BAKoBAJIBAHYA1AEAsAEAbgDQAQC6CwCUAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQE2AWQAsAEBAAa8DQCUAQC6AQDOAQC6AQDOAQC6AQDEAQCcAQCqAQCSAQB2ANQBAI4CANABAQ8OZAEADpwKAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJgBAGgAmAEAaACQAgDQAQEZBmQBAAaoBQB6AOYBAIoBAA
 
 
 test 'generic type with one param', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Foo = type T:
       bar: T
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_69 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -261,7 +256,7 @@ test 'generic type with one param', fn:
         (local.set $T_73 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_72)))
         (local.set $:v_52 (struct.new $rt/apply.wat:Closure (ref.func $test::v_69) (local.get $:caps_arg)))
-        (local.set $:sym_8 (ref.i31 (i32.const 2)))
+        (local.set $:sym_8 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:type_set_field (local.get $:ctx_param) (local.get $:v_5) (local.get $:sym_8) (local.get $T_73) (local.get $:v_52))
       )
       (func $test::v_107 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -275,7 +270,7 @@ test 'generic type with one param', fn:
         (local.set $T_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:ret_4) (local.get $T_1)))
         (local.set $:v_55 (struct.new $rt/apply.wat:Closure (ref.func $test::v_79) (local.get $:caps_arg)))
-        (local.set $:sym_6 (ref.i31 (i32.const 10)))
+        (local.set $:sym_6 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_6) (local.get $:v_55))
       )
       (func $test::v_89 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -297,7 +292,7 @@ test 'generic type with one param', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_82) (local.get $:v_21))
         (local.set $:pub_Foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_0) (local.get $:pub_Foo_0))
         (local.set $:unwrap_Foo_82 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_82)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -335,10 +330,10 @@ test 'generic type with one param', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -349,7 +344,7 @@ test 'generic type with one param', fn:
         (local.set $:v_3 (struct.new $rt/apply.wat:Closure (ref.func $test::v_107) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:Foo) (local.get $:ret_2) (local.get $:v_3)))
         (local.set $:v_61 (struct.new $rt/apply.wat:Closure (ref.func $test::v_101) (local.get $:caps_arg)))
-        (local.set $:sym_19 (ref.i31 (i32.const 10)))
+        (local.set $:sym_19 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_19) (local.get $:v_61))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -368,15 +363,15 @@ test 'generic type with one param', fn:
       (data $d_1 "Foo")
       (data $d_2 "bar")
     )
-    ;; sm:QewFAJYBALoBAMQBAG4AvgEAsggAlAEAugEAxAEAvgEAtgEA0AEBIANgAQAG2AcAmAEAmgEAkgEA1gEA0AEBExBiAQAQsAoAlgEAugEAzgEAugEAxAEAngEAqgEAkgEAdADUAQCwAQBuANABAKwJAJYBALoBAM4BALoBAMQBAMABAOIBANABAQAQkAsAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBAJgBAGgAegDQAQCGAgDSAQEAEGQBABCqBQB6AOYBAIoBAA
+    ;; sm:QewFAJYBALoBAMQBAG4AvgEAsggAlAEAugEAxAEAvgEAtgEA0AEBIANkAQAG2AcAmAEAmgEAkgEA1gEA0AEBExBkAQAQsAoAlgEAugEAzgEAugEAxAEAngEAqgEAkgEAdgDUAQCwAQBuANABAKwJAJYBALoBAM4BALoBAMQBAMABAOIBANABAQAQkAsAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJgBAGgAegDQAQCGAgDSAQEAEGYBABCqBQB6AOYBAIoBAA
 
 
 test 'tuple type with positional fields', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     A = type _
     B = type _
     Ni = type: A, B
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_86 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -398,7 +393,7 @@ test 'tuple type with positional fields', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_79) (local.get $:v_17))
         (local.set $:pub_Ni_2 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Ni)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Ni_2 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_Ni_2 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Ni_2) (local.get $:pub_Ni_2))
         (local.set $:unwrap_Ni_79 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_79)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -483,11 +478,11 @@ test 'tuple type with positional fields', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_115) (local.get $:v_7))
         (local.set $:pub_B_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:B)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_B_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_B_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_B_1) (local.get $:pub_B_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (local.get $:slot_116) (local.get $:ret_117) (local.get $:slot_115) (local.get $:slot_118)))
         (local.set $:v_70 (struct.new $rt/apply.wat:Closure (ref.func $test::v_112) (local.get $:caps_arg)))
-        (local.set $:sym_11 (ref.i31 (i32.const 2)))
+        (local.set $:sym_11 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_11) (local.get $:v_70))
       )
       (func $test::v_140 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -518,11 +513,11 @@ test 'tuple type with positional fields', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_129) (local.get $:v_4))
         (local.set $:pub_A_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:A)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_A_0 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_A_0 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_A_0) (local.get $:pub_A_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (local.get $:slot_130) (local.get $:slot_131) (local.get $:ret_132) (local.get $:slot_129)))
         (local.set $:v_73 (struct.new $rt/apply.wat:Closure (ref.func $test::v_126) (local.get $:caps_arg)))
-        (local.set $:sym_8 (ref.i31 (i32.const 10)))
+        (local.set $:sym_8 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_8) (local.get $:v_73))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -537,13 +532,13 @@ test 'tuple type with positional fields', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 2)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -556,7 +551,7 @@ test 'tuple type with positional fields', fn:
         (global.set $test:Ni (local.get $:cell_Ni_2))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (global.get $test:A) (global.get $test:B) (global.get $test:Ni) (local.get $:ret_3)))
         (local.set $:v_76 (struct.new $rt/apply.wat:Closure (ref.func $test::v_140) (local.get $:caps_arg)))
-        (local.set $:sym_5 (ref.i31 (i32.const 18)))
+        (local.set $:sym_5 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_5) (local.get $:v_76))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -588,16 +583,16 @@ test 'tuple type with positional fields', fn:
       (data $d_2 "B")
       (data $d_3 "Ni")
     )
-    ;; sm:ZOYJAJYBALoBAM4BALoBAMQBAJ4BAKYBAJIBAHAA0AEArgEAbgDOAQDyCgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCsAQFIAfIMAJYBALoBANABAL4BAMYBANABAL4BANABAL4BAJQCANABALABAQUBzg4AlAEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAngEAogEAkgEAcADMAQDCAgDSAQELCmIBAAqYDgCUAQC6AQDQAQC-AQDQAQC-AQDQAQC-AQDGAQCeAQCiAQCSAQBwAMwBAMICANIBARcGYgEABoALAJwBAHAAwgEAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBAJQBAGAAlAEAYACWAQBkALQCANIBARUGYgEABqgFAHoA5gEAigEA
+    ;; sm:ZOYJAJYBALoBAM4BALoBAMQBAJ4BAKYBAJIBAHQA0AEArgEAbgDOAQDyCgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCsAQFIAfIMAJYBALoBANABAL4BAMYBANABAL4BANABAL4BAJQCANABALABAQUBzg4AlAEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAngEAogEAkgEAcgDMAQDCAgDSAQELCmYBAAqYDgCUAQC6AQDQAQC-AQDQAQC-AQDQAQC-AQDGAQCeAQCiAQCSAQByAMwBAMICANIBARcGZAEABoALAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJQBAGAAlAEAYACWAQBkALQCANIBARUGZAEABqgFAHoA5gEAigEA
 
 
 test 'subtype with base spread', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Foo = type _
     Bar = type:
       ..Foo
       x: Foo
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_70 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -619,7 +614,7 @@ test 'subtype with base spread', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_63) (local.get $:v_14))
         (local.set $:pub_Bar_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Bar)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Bar_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_Bar_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Bar_1) (local.get $:pub_Bar_1))
         (local.set $:unwrap_Bar_63 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_63)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -647,7 +642,7 @@ test 'subtype with base spread', fn:
         (local.set $:slot_75 (ref.cast (ref null $rt/apply.wat:Cell) (local.get $:slot_75_raw)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_73) (local.get $:ret_74)))
         (local.set $:v_51 (struct.new $rt/apply.wat:Closure (ref.func $test::v_70) (local.get $:caps_arg)))
-        (local.set $:sym_12 (ref.i31 (i32.const 10)))
+        (local.set $:sym_12 (ref.i31 (i32.const 186)))
         (local.set $:unwrap_Foo_75 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_75)))
         (return_call $rt/types.wat:type_set_field (local.get $:ctx_param) (local.get $:v_10) (local.get $:sym_12) (local.get $:unwrap_Foo_75) (local.get $:v_51))
       )
@@ -698,11 +693,11 @@ test 'subtype with base spread', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_97) (local.get $:v_3))
         (local.set $:pub_Foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_0) (local.get $:pub_Foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_98) (local.get $:ret_99) (local.get $:slot_97)))
         (local.set $:v_57 (struct.new $rt/apply.wat:Closure (ref.func $test::v_94) (local.get $:caps_arg)))
-        (local.set $:sym_7 (ref.i31 (i32.const 2)))
+        (local.set $:sym_7 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_7) (local.get $:v_57))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -716,13 +711,13 @@ test 'subtype with base spread', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -733,7 +728,7 @@ test 'subtype with base spread', fn:
         (global.set $test:Bar (local.get $:cell_Bar_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:Foo) (global.get $test:Bar) (local.get $:ret_2)))
         (local.set $:v_60 (struct.new $rt/apply.wat:Closure (ref.func $test::v_106) (local.get $:caps_arg)))
-        (local.set $:sym_4 (ref.i31 (i32.const 18)))
+        (local.set $:sym_4 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_4) (local.get $:v_60))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -759,17 +754,17 @@ test 'subtype with base spread', fn:
       (data $d_2 "Foo")
       (data $d_3 "x")
     )
-    ;; sm:TewJAJYBALoBAM4BALoBAMQBAJ4BAKoBAJIBAHIA1AEAsAEAbgDQAQC-CwCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQFGAWQAsAEBAAbgCwCUAQC6AQDOAQC6AQDEAQDOAQC6AQCOAgDQAQCwAQEPBZINAJQBALoBAM4BALoBAM4BALoBAMQBAJwBAKoBAJIBAHQA1AEAjgIA0AEBDxZgAQAWnAoAnAEAbgDCAQCcAQBwAMIBAJwBAHAAwgEAmgEApgEAmAEAmAEAaACYAQBoAJACANIBARkGYgEABqgFAHoA5gEAigEA
+    ;; sm:TewJAJYBALoBAM4BALoBAMQBAJ4BAKoBAJIBAHYA1AEAsAEAbgDQAQC-CwCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQFGAWYAsAEBAAbgCwCUAQC6AQDOAQC6AQDEAQDOAQC6AQCOAgDQAQCwAQEPBZINAJQBALoBAM4BALoBAM4BALoBAMQBAJwBAKoBAJIBAHYA1AEAjgIA0AEBDxZkAQAWnAoAnAEAcgDCAQCcAQByAMIBAJwBAHIAwgEAmgEApgEAmAEAmAEAaACYAQBoAJACANIBARkGZAEABqgFAHoA5gEAigEA
 
 
 test 'subtype with applied generic base', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Bit = type _
     Foo = type T:
       bar: T
     FooBit = type:
       ..Foo Bit
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_123 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -798,7 +793,7 @@ test 'subtype with applied generic base', fn:
         (local.set $T_127 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_126)))
         (local.set $:v_94 (struct.new $rt/apply.wat:Closure (ref.func $test::v_123) (local.get $:caps_arg)))
-        (local.set $:sym_13 (ref.i31 (i32.const 2)))
+        (local.set $:sym_13 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:type_set_field (local.get $:ctx_param) (local.get $:v_10) (local.get $:sym_13) (local.get $T_127) (local.get $:v_94))
       )
       (func $test::v_205 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -812,7 +807,7 @@ test 'subtype with applied generic base', fn:
         (local.set $T_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:ret_9) (local.get $T_3)))
         (local.set $:v_97 (struct.new $rt/apply.wat:Closure (ref.func $test::v_133) (local.get $:caps_arg)))
-        (local.set $:sym_11 (ref.i31 (i32.const 10)))
+        (local.set $:sym_11 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_11) (local.get $:v_97))
       )
       (func $test::v_143 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -834,7 +829,7 @@ test 'subtype with applied generic base', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_136) (local.get $:v_35))
         (local.set $:pub_FooBit_2 (struct.get $rt/apply.wat:Cell 0 (global.get $test:FooBit)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_FooBit_2 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_FooBit_2 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_FooBit_2) (local.get $:pub_FooBit_2))
         (local.set $:unwrap_FooBit_136 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_136)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -922,11 +917,11 @@ test 'subtype with applied generic base', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_172) (local.get $:v_26))
         (local.set $:pub_Foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_Foo_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_1) (local.get $:pub_Foo_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (local.get $:slot_173) (local.get $:ret_174) (local.get $:slot_172) (local.get $:slot_175)))
         (local.set $:v_106 (struct.new $rt/apply.wat:Closure (ref.func $test::v_169) (local.get $:caps_arg)))
-        (local.set $:sym_29 (ref.i31 (i32.const 18)))
+        (local.set $:sym_29 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_29) (local.get $:v_106))
       )
       (func $test::v_199 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -986,13 +981,13 @@ test 'subtype with applied generic base', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_208) (local.get $:v_5))
         (local.set $:pub_Bit_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Bit)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Bit_0 (ref.i31 (i32.const 26)))
+        (local.set $:pub_name_Bit_0 (ref.i31 (i32.const 202)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Bit_0) (local.get $:pub_Bit_0))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:v_8 (struct.new $rt/apply.wat:Closure (ref.func $test::v_205) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 5 (local.get $:slot_209) (local.get $:slot_210) (local.get $:ret_211) (local.get $:slot_208) (local.get $:v_8)))
         (local.set $:v_112 (struct.new $rt/apply.wat:Closure (ref.func $test::v_199) (local.get $:caps_arg)))
-        (local.set $:sym_24 (ref.i31 (i32.const 10)))
+        (local.set $:sym_24 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_24) (local.get $:v_112))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1007,16 +1002,16 @@ test 'subtype with applied generic base', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 26)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 202)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 6)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_4 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1029,7 +1024,7 @@ test 'subtype with applied generic base', fn:
         (global.set $test:FooBit (local.get $:cell_FooBit_2))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (global.get $test:Bit) (global.get $test:Foo) (global.get $test:FooBit) (local.get $:ret_4)))
         (local.set $:v_115 (struct.new $rt/apply.wat:Closure (ref.func $test::v_219) (local.get $:caps_arg)))
-        (local.set $:sym_6 (ref.i31 (i32.const 26)))
+        (local.set $:sym_6 (ref.i31 (i32.const 202)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_6) (local.get $:v_115))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -1064,17 +1059,17 @@ test 'subtype with applied generic base', fn:
       (data $d_3 "FooBit")
       (data $d_4 "bar")
     )
-    ;; sm:jgHwBQCWAQC6AQDGAQBuAL4BAL4IAJYBALoBAMYBAMABALgBANIBAToDYgEABuAHAJgBAJoBAJIBANYBANIBARMQZAEAEM4KAJYBALoBANABAL4BAMYBAKABALYBAJIBAHoA4AEAugEAbgDYAQC4CQCWAQC6AQDQAQC-AQDGAQDCAQDmAQDUAQFECYYOAJYBALoBANABAL4BAMYBANABAL4BANABAL4BAIwCANQBALQBALQBAG4A0gEAwAEAggEAtA4AlgEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAoAEAqgEAkgEAdADUAQDCAgDUAQEPEWQBABG2DACWAQC6AQDQAQC-AQDQAQC-AQDGAQDQAQC-AQDCAQDCAgDUAQEzEIYQAJQBALoBANABAL4BANABAL4BANABAL4BAMYBAJ4BAKoBAJIBAHQA1AEAegDQAQDmAgDUAQEAEGQBABCWCwCcAQBwAMIBAJwBAHAAwgEAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBAJgBAGgAmAEAaACeAQB0AMQCANQBARkGYgEABqoFAHoA5gEAigEA
+    ;; sm:jgHwBQCWAQC6AQDGAQBuAL4BAL4IAJYBALoBAMYBAMABALgBANIBAToDZgEABuAHAJgBAJoBAJIBANYBANIBARMQZgEAEM4KAJYBALoBANABAL4BAMYBAKABALYBAJIBAHwA4AEAugEAbgDYAQC4CQCWAQC6AQDQAQC-AQDGAQDCAQDmAQDUAQFECYYOAJYBALoBANABAL4BAMYBANABAL4BANABAL4BAIwCANQBALQBALQBAG4A0gEAwAEAggEAtA4AlgEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAoAEAqgEAkgEAdgDUAQDCAgDUAQEPEWYBABG2DACWAQC6AQDQAQC-AQDQAQC-AQDGAQDQAQC-AQDCAQDCAgDUAQEzEIYQAJQBALoBANABAL4BANABAL4BANABAL4BAMYBAJ4BAKoBAJIBAHYA1AEAegDQAQDmAgDUAQEAEGYBABCWCwCcAQByAMIBAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJgBAGgAmAEAaACeAQB0AMQCANQBARkGZAEABqoFAHoA5gEAigEA
 
 
 test 'union of existing types', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     A = type _
     B = type _
     U = union:
       A
       B
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_86 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1096,7 +1091,7 @@ test 'union of existing types', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_79) (local.get $:v_17))
         (local.set $:pub_U_2 (struct.get $rt/apply.wat:Cell 0 (global.get $test:U)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_U_2 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_U_2 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_U_2) (local.get $:pub_U_2))
         (local.set $:unwrap_U_79 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_79)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1181,11 +1176,11 @@ test 'union of existing types', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_115) (local.get $:v_7))
         (local.set $:pub_B_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:B)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_B_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_B_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_B_1) (local.get $:pub_B_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (local.get $:slot_116) (local.get $:ret_117) (local.get $:slot_115) (local.get $:slot_118)))
         (local.set $:v_70 (struct.new $rt/apply.wat:Closure (ref.func $test::v_112) (local.get $:caps_arg)))
-        (local.set $:sym_11 (ref.i31 (i32.const 2)))
+        (local.set $:sym_11 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_union (local.get $:ctx_param) (local.get $:sym_11) (local.get $:v_70))
       )
       (func $test::v_140 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1216,11 +1211,11 @@ test 'union of existing types', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_129) (local.get $:v_4))
         (local.set $:pub_A_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:A)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_A_0 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_A_0 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_A_0) (local.get $:pub_A_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (local.get $:slot_130) (local.get $:slot_131) (local.get $:ret_132) (local.get $:slot_129)))
         (local.set $:v_73 (struct.new $rt/apply.wat:Closure (ref.func $test::v_126) (local.get $:caps_arg)))
-        (local.set $:sym_8 (ref.i31 (i32.const 10)))
+        (local.set $:sym_8 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_8) (local.get $:v_73))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1235,13 +1230,13 @@ test 'union of existing types', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1254,7 +1249,7 @@ test 'union of existing types', fn:
         (global.set $test:U (local.get $:cell_U_2))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (global.get $test:A) (global.get $test:B) (global.get $test:U) (local.get $:ret_3)))
         (local.set $:v_76 (struct.new $rt/apply.wat:Closure (ref.func $test::v_140) (local.get $:caps_arg)))
-        (local.set $:sym_5 (ref.i31 (i32.const 18)))
+        (local.set $:sym_5 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_5) (local.get $:v_76))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -1286,15 +1281,15 @@ test 'union of existing types', fn:
       (data $d_2 "B")
       (data $d_3 "U")
     )
-    ;; sm:ZOAJAJYBALoBAM4BALoBAMQBAJ4BAKIBAJIBAG4AzAEArAEAbgDMAQDyCgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCsAQFOAfIMAJYBALoBANABAL4BAMYBANABAL4BANABAL4BAJQCANABALABAQcBzg4AlAEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAngEAogEAkgEAcADMAQDCAgDSAQERDmIBAA6aDgCUAQC6AQDQAQC-AQDQAQC-AQDQAQC-AQDGAQCeAQCiAQCSAQBwAMwBAMICANIBARUGYgEABv4KAJwBAHAAwgEAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBAJQBAGAAlAEAYACUAQBgALICANIBARUGYgEABqgFAHoA5gEAigEA
+    ;; sm:ZOAJAJYBALoBAM4BALoBAMQBAJ4BAKIBAJIBAHIAzAEArAEAbgDMAQDyCgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCsAQFOAfIMAJYBALoBANABAL4BAMYBANABAL4BANABAL4BAJQCANABALABAQcBzg4AlAEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAngEAogEAkgEAcgDMAQDCAgDSAQERDmYBAA6aDgCUAQC6AQDQAQC-AQDQAQC-AQDQAQC-AQDGAQCeAQCiAQCSAQByAMwBAMICANIBARUGZAEABv4KAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJQBAGAAlAEAYACUAQBgALICANIBARUGZAEABqgFAHoA5gEAigEA
 
 
 test 'enum with nullary cases', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     E = enum:
       Red
       Green
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_72 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1316,7 +1311,7 @@ test 'enum with nullary cases', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_65) (local.get $:v_15))
         (local.set $:pub_E_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:E)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_E_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_E_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_E_0) (local.get $:pub_E_0))
         (local.set $:unwrap_E_65 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_65)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1341,7 +1336,7 @@ test 'enum with nullary cases', fn:
         (local.set $:v_77 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 2)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_75) (local.get $:ret_76)))
         (local.set $:v_50 (struct.new $rt/apply.wat:Closure (ref.func $test::v_72) (local.get $:caps_arg)))
-        (local.set $:sym_14 (ref.i31 (i32.const 10)))
+        (local.set $:sym_14 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:enum_add (local.get $:ctx_param) (local.get $:v_77) (local.get $:sym_14) (local.get $:v_11) (local.get $:v_50))
       )
       (func $test::v_94 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1360,7 +1355,7 @@ test 'enum with nullary cases', fn:
         (local.set $:ret_88 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_87) (local.get $:ret_88) (local.get $:v_9)))
         (local.set $:v_53 (struct.new $rt/apply.wat:Closure (ref.func $test::v_84) (local.get $:caps_arg)))
-        (local.set $:sym_12 (ref.i31 (i32.const 10)))
+        (local.set $:sym_12 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_12) (local.get $:v_53))
       )
       (func $test::v_106 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1381,7 +1376,7 @@ test 'enum with nullary cases', fn:
         (local.set $:v_99 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 2)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_97) (local.get $:ret_98)))
         (local.set $:v_56 (struct.new $rt/apply.wat:Closure (ref.func $test::v_94) (local.get $:caps_arg)))
-        (local.set $:sym_8 (ref.i31 (i32.const 18)))
+        (local.set $:sym_8 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:enum_add (local.get $:ctx_param) (local.get $:v_99) (local.get $:sym_8) (local.get $:v_5) (local.get $:v_56))
       )
       (func $test::v_116 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1400,7 +1395,7 @@ test 'enum with nullary cases', fn:
         (local.set $:ret_110 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_109) (local.get $:ret_110) (local.get $:v_2)))
         (local.set $:v_59 (struct.new $rt/apply.wat:Closure (ref.func $test::v_106) (local.get $:caps_arg)))
-        (local.set $:sym_6 (ref.i31 (i32.const 18)))
+        (local.set $:sym_6 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_6) (local.get $:v_59))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1413,13 +1408,13 @@ test 'enum with nullary cases', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 5)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1428,7 +1423,7 @@ test 'enum with nullary cases', fn:
         (global.set $test:E (local.get $:cell_E_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:E) (local.get $:ret_1)))
         (local.set $:v_62 (struct.new $rt/apply.wat:Closure (ref.func $test::v_116) (local.get $:caps_arg)))
-        (local.set $:sym_3 (ref.i31 (i32.const 2)))
+        (local.set $:sym_3 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_enum (local.get $:ctx_param) (local.get $:sym_3) (local.get $:v_62))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -1451,16 +1446,16 @@ test 'enum with nullary cases', fn:
       (data $d_2 "Green")
       (data $d_3 "Red")
     )
-    ;; sm:SuAJAJYBALoBAM4BALoBAMQBAJ4BAKIBAJIBAG4AzAEArAEAbgDMAQDyCQCWAQC6AQDOAQC6AQDEAQDAAQDiAQDQAQEkBWQBAAX6CQCUAQC6AQDOAQC6AQDEAQCGAgDQAQEABWQBAAXyCQCUAQC6AQDOAQC6AQDEAQDAAQDiAQDQAQELA2IBAAP8CQCUAQC6AQDQAQC-AQDGAQCKAgDSAQEAA2IBAAOqCQCcAQBuAMIBAJwBAHAAwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgAN4BANIBAQ8TYAEAE6gFAHoA5gEAigEA
+    ;; sm:SuAJAJYBALoBAM4BALoBAMQBAJ4BAKIBAJIBAHIAzAEArAEAbgDMAQDyCQCWAQC6AQDOAQC6AQDEAQDAAQDiAQDQAQEkBWYBAAX6CQCUAQC6AQDOAQC6AQDEAQCGAgDQAQEABWYBAAXyCQCUAQC6AQDOAQC6AQDEAQDAAQDiAQDQAQELA2QBAAP8CQCUAQC6AQDQAQC-AQDGAQCKAgDSAQEAA2QBAAOqCQCcAQByAMIBAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCUAQBgAN4BANIBAQ8TZAEAE6gFAHoA5gEAigEA
 
 
 test 'tuple subtype positional before base', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Foo = type _
     Nu = type:
       Foo
       ..Foo
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_69 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1482,7 +1477,7 @@ test 'tuple subtype positional before base', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_62) (local.get $:v_13))
         (local.set $:pub_Nu_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Nu)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Nu_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_Nu_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Nu_1) (local.get $:pub_Nu_1))
         (local.set $:unwrap_Nu_62 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_62)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1559,11 +1554,11 @@ test 'tuple subtype positional before base', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_96) (local.get $:v_3))
         (local.set $:pub_Foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_0) (local.get $:pub_Foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_97) (local.get $:ret_98) (local.get $:slot_96)))
         (local.set $:v_56 (struct.new $rt/apply.wat:Closure (ref.func $test::v_93) (local.get $:caps_arg)))
-        (local.set $:sym_7 (ref.i31 (i32.const 2)))
+        (local.set $:sym_7 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_7) (local.get $:v_56))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1577,10 +1572,10 @@ test 'tuple subtype positional before base', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 2)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1591,7 +1586,7 @@ test 'tuple subtype positional before base', fn:
         (global.set $test:Nu (local.get $:cell_Nu_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:Foo) (global.get $test:Nu) (local.get $:ret_2)))
         (local.set $:v_59 (struct.new $rt/apply.wat:Closure (ref.func $test::v_105) (local.get $:caps_arg)))
-        (local.set $:sym_4 (ref.i31 (i32.const 10)))
+        (local.set $:sym_4 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_4) (local.get $:v_59))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -1616,16 +1611,16 @@ test 'tuple subtype positional before base', fn:
       (data $d_1 "Foo")
       (data $d_2 "Nu")
     )
-    ;; sm:SeYJAJYBALoBAM4BALoBAMQBAJ4BAKYBAJIBAHAA0AEArgEAbgDOAQD2CgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQFABbILAJQBALoBAM4BALoBAMQBAM4BALoBAI4CANABALABAQsDjA0AlAEAugEAzgEAugEAzgEAugEAxAEAnAEAqgEAkgEAdADUAQCOAgDQAQEPE2ABABOaCgCcAQBwAMIBAJwBAG4AwgEAmgEApgEAmAEAmAEAaACWAQBkAI4CANIBARcGYgEABqgFAHoA5gEAigEA
+    ;; sm:SeYJAJYBALoBAM4BALoBAMQBAJ4BAKYBAJIBAHQA0AEArgEAbgDOAQD2CgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQFABbILAJQBALoBAM4BALoBAMQBAM4BALoBAI4CANABALABAQsDjA0AlAEAugEAzgEAugEAzgEAugEAxAEAnAEAqgEAkgEAdgDUAQCOAgDQAQEPE2QBABOaCgCcAQByAMIBAJwBAHIAwgEAmgEApgEAmAEAmAEAaACWAQBkAI4CANIBARcGZAEABqgFAHoA5gEAigEA
 
 
 test 'tuple subtype base before positional', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Foo = type _
     Nu = type:
       ..Foo
       Foo
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_69 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1647,7 +1642,7 @@ test 'tuple subtype base before positional', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_62) (local.get $:v_13))
         (local.set $:pub_Nu_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Nu)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Nu_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_Nu_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Nu_1) (local.get $:pub_Nu_1))
         (local.set $:unwrap_Nu_62 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_62)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1724,11 +1719,11 @@ test 'tuple subtype base before positional', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_96) (local.get $:v_3))
         (local.set $:pub_Foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_Foo_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_0) (local.get $:pub_Foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_97) (local.get $:ret_98) (local.get $:slot_96)))
         (local.set $:v_56 (struct.new $rt/apply.wat:Closure (ref.func $test::v_93) (local.get $:caps_arg)))
-        (local.set $:sym_7 (ref.i31 (i32.const 2)))
+        (local.set $:sym_7 (ref.i31 (i32.const 178)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_7) (local.get $:v_56))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1742,10 +1737,10 @@ test 'tuple subtype base before positional', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 2)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1756,7 +1751,7 @@ test 'tuple subtype base before positional', fn:
         (global.set $test:Nu (local.get $:cell_Nu_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:Foo) (global.get $test:Nu) (local.get $:ret_2)))
         (local.set $:v_59 (struct.new $rt/apply.wat:Closure (ref.func $test::v_105) (local.get $:caps_arg)))
-        (local.set $:sym_4 (ref.i31 (i32.const 10)))
+        (local.set $:sym_4 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_4) (local.get $:v_59))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -1781,15 +1776,15 @@ test 'tuple subtype base before positional', fn:
       (data $d_1 "Foo")
       (data $d_2 "Nu")
     )
-    ;; sm:SeYJAJYBALoBAM4BALoBAMQBAJ4BAKYBAJIBAHAA0AEArgEAbgDOAQD2CgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQFEA6wLAJQBALoBAM4BALoBAMQBAM4BALoBAI4CANABALABAQ8Fkg0AlAEAugEAzgEAugEAzgEAugEAxAEAnAEAqgEAkgEAdADUAQCOAgDQAQEPE2ABABOaCgCcAQBwAMIBAJwBAG4AwgEAmgEApgEAmAEAmAEAaACWAQBkAI4CANIBARcGYgEABqgFAHoA5gEAigEA
+    ;; sm:SeYJAJYBALoBAM4BALoBAMQBAJ4BAKYBAJIBAHQA0AEArgEAbgDOAQD2CgCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQFEA6wLAJQBALoBAM4BALoBAMQBAM4BALoBAI4CANABALABAQ8Fkg0AlAEAugEAzgEAugEAzgEAugEAxAEAnAEAqgEAkgEAdgDUAQCOAgDQAQEPE2QBABOaCgCcAQByAMIBAJwBAHIAwgEAmgEApgEAmAEAmAEAaACWAQBkAI4CANIBARcGZAEABqgFAHoA5gEAigEA
 
 
 test 'fn type instance construction', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     Bit = type _
     Foo = type: fn Bit: Bit
     add = Foo fn a: a
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_103 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1824,7 +1819,7 @@ test 'fn type instance construction', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_90) (local.get $:v_24))
         (local.set $:pub_add_2 (struct.get $rt/apply.wat:Cell 0 (global.get $test:add)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_add_2 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_add_2 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_add_2) (local.get $:pub_add_2))
         (local.set $:unwrap_add_90 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_90)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -1858,7 +1853,7 @@ test 'fn type instance construction', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_106) (local.get $:v_15))
         (local.set $:pub_Foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Foo_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_Foo_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Foo_1) (local.get $:pub_Foo_1))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:v_18 (struct.new $rt/apply.wat:Closure (ref.func $test::v_103) (local.get $:caps_arg)))
@@ -1953,11 +1948,11 @@ test 'fn type instance construction', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_146) (local.get $:v_5))
         (local.set $:pub_Bit_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:Bit)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_Bit_0 (ref.i31 (i32.const 18)))
+        (local.set $:pub_name_Bit_0 (ref.i31 (i32.const 194)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_Bit_0) (local.get $:pub_Bit_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (local.get $:slot_147) (local.get $:slot_148) (local.get $:ret_149) (local.get $:slot_146)))
         (local.set $:v_84 (struct.new $rt/apply.wat:Closure (ref.func $test::v_143) (local.get $:caps_arg)))
-        (local.set $:sym_8 (ref.i31 (i32.const 10)))
+        (local.set $:sym_8 (ref.i31 (i32.const 186)))
         (return_call $rt/types.wat:new_fn_type (local.get $:ctx_param) (local.get $:sym_8) (local.get $:v_84))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -1972,13 +1967,13 @@ test 'fn type instance construction', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1991,7 +1986,7 @@ test 'fn type instance construction', fn:
         (global.set $test:add (local.get $:cell_add_2))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 4 (global.get $test:Bit) (global.get $test:Foo) (global.get $test:add) (local.get $:ret_4)))
         (local.set $:v_87 (struct.new $rt/apply.wat:Closure (ref.func $test::v_157) (local.get $:caps_arg)))
-        (local.set $:sym_6 (ref.i31 (i32.const 18)))
+        (local.set $:sym_6 (ref.i31 (i32.const 194)))
         (return_call $rt/types.wat:new_type (local.get $:ctx_param) (local.get $:sym_6) (local.get $:v_87))
       )
       (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
@@ -2023,4 +2018,4 @@ test 'fn type instance construction', fn:
       (data $d_2 "Foo")
       (data $d_3 "add")
     )
-    ;; sm:coAFAJoBAJoBAJIBAIQBAIIBAG4AugEAsAoAlgEAugEAzgEAugEAxAEAngEAqgEAkgEAcgDUAQCwAQBuANABAOQOAJYBALoBANABAL4BANABAL4BAMYBAKABAKoBAJIBAHQA1AEAegDSAQDmAQDQAQC0AQBuAL4BAL4BAIIBANIMAJYBALoBANABAL4BANABAL4BAMYBANABAL4BAJQCANIBALQBATILhA0AlAEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAwgIA0gEAtAEBAAveDgCUAQC6AQDQAQC-AQDQAQC-AQDQAQC-AQDGAQCeAQCqAQCSAQB0ANQBAMICANIBAQALYgEAC5ALAJwBAHAAwgEAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBAJgBAGgAmAEAaACYAQBoAL4CANIBASUGYgEABqgFAHoA5gEAigEA
+    ;; sm:coAFAJoBAJoBAJIBAIQBAIIBAG4AugEAsAoAlgEAugEAzgEAugEAxAEAngEAqgEAkgEAdgDUAQCwAQBuANABAOQOAJYBALoBANABAL4BANABAL4BAMYBAKABAKoBAJIBAHYA1AEAegDSAQDmAQDQAQC0AQBuAL4BAL4BAIIBANIMAJYBALoBANABAL4BANABAL4BAMYBANABAL4BAJQCANIBALQBATILhA0AlAEAugEA0AEAvgEA0AEAvgEAxgEA0AEAvgEAwgIA0gEAtAEBAAveDgCUAQC6AQDQAQC-AQDQAQC-AQDQAQC-AQDGAQCeAQCqAQCSAQB2ANQBAMICANIBAQALZAEAC5ALAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJgBAGgAmAEAaACYAQBoAL4CANIBASUGZAEABqgFAHoA5gEAigEA

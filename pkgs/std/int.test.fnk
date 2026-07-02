@@ -1,4 +1,27 @@
 {test, skip, equals, not_equals} = import 'std/testing.fnk'
+{int} = import 'std/int.fnk'
+
+
+test 'int type guard matches an integer', fn:
+  equals
+    match 42:
+      int i: i
+      _: 'no match'
+    42
+
+test 'int type guard rejects a float', fn:
+  equals
+    match 3.14:
+      int i: i
+      _: 'no match'
+    'no match'
+
+test 'int type guard rejects a string', fn:
+  equals
+    match 'hello':
+      int i: i
+      _: 'no match'
+    'no match'
 
 
 # Integer literals. A bare decimal is the implicit int constructor

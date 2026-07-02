@@ -1,18 +1,12 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
-
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
+{wat, compile_wat} = import 'fink/compile.fnk'
 
 
 test 'empty string literal', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     ''
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -44,9 +38,9 @@ test 'empty string literal', fn:
 
 
 test 'string literal', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     'hello'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -78,10 +72,10 @@ test 'string literal', fn:
 
 
 test 'string literal dedup', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     x = 'hello'
     y = 'hello'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -102,10 +96,10 @@ test 'string literal dedup', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -118,13 +112,13 @@ test 'string literal dedup', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:x) (local.get $x_0))
         (local.set $:pub_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_x_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_x_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_x_0) (local.get $:pub_x_0))
         (local.set $y_1 (call $rt/str.wat:from_data (data.ref $d_0 5)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:y) (local.get $y_1))
         (local.set $:pub_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_y_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_y_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_y_1) (local.get $:pub_y_1))
         (local.set $:unwrap_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -147,15 +141,15 @@ test 'string literal dedup', fn:
       (data $d_2 "x")
       (data $d_3 "y")
     )
-    ;; sm:Ia4NAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgAJQBAGABAAGIAQCYAQCiAQCSAQBuAMwBARgBiAEAmAEAogEAkgEAcADMAQCoAQBuAMoBAKYFAHoA5gEAigEA
+    ;; sm:Ia4NAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCUAQBgAJQBAGABAAGIAQCYAQCiAQCSAQByAMwBARgBiAEAmAEAogEAkgEAcgDMAQCoAQBuAMoBAKYFAHoA5gEAigEA
 
 
 test 'str templ two exprs', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     a = 1
     b = 2
     '${a} and ${b}'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -178,10 +172,10 @@ test 'str templ two exprs', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -194,13 +188,13 @@ test 'str templ two exprs', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:a) (local.get $a_0))
         (local.set $:pub_a_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:a)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_a_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_a_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_a_0) (local.get $:pub_a_0))
         (local.set $b_1 (struct.new $rt/int.wat:I64 (i64.const 2)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:b) (local.get $b_1))
         (local.set $:pub_b_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:b)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_b_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_b_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_b_1) (local.get $:pub_b_1))
         (local.set $:unwrap_a_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:a)))
         (local.set $:lit_6 (call $rt/str.wat:from_data (data.ref $d_1 5)))
@@ -224,14 +218,14 @@ test 'str templ two exprs', fn:
       (data $d_2 "a")
       (data $d_3 "b")
     )
-    ;; sm:IvgOAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgAJQBAGABAAGAAQCYAQCiAQCSAQBuAMwBAQwBgAEAmAEAogEAkgEAcADMAQCoAQEWBY4BAKgBAJQCAQkPrgUAegDmAQCKAQA
+    ;; sm:IvgOAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCUAQBgAJQBAGABAAGAAQCYAQCiAQCSAQByAMwBAQwBgAEAmAEAogEAkgEAcgDMAQCoAQEWBY4BAKgBAJQCAQkPrgUAegDmAQCKAQA
 
 
 test 'str tagged template', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     foo = fn ..parts: parts
     foo'1\n2'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_51 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -283,7 +277,7 @@ test 'str tagged template', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -295,7 +289,7 @@ test 'str tagged template', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_3))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:foo) (local.get $:ret_2)))
         (local.set $:v_35 (struct.new $rt/apply.wat:Closure (ref.func $test::v_45) (local.get $:caps_arg)))
@@ -318,15 +312,15 @@ test 'str tagged template', fn:
       (data $d_1 "1\\n2")
       (data $d_2 "foo")
     )
-    ;; sm:K4QFAJgBAJoBAFwAggEAgAEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBAKoNAJwBAG4AwgEAmgEApgEAmAEAmAEAaAB6AM4BAJ4BAKoBAJIBAHIA1AEA4gEA0AEBOASQAQEHCXIBAAniBQB6AOYBAIoBAA
+    ;; sm:K4QFAJgBAJoBAFwAggEAgAEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBAKoNAJwBAHIAwgEAmgEApgEAmAEAmAEAaAB6AM4BAJ4BAKoBAJIBAHYA1AEA4gEA0AEBOASQAQEHCXIBAAniBQB6AOYBAIoBAA
 
 
 test 'str tagged template escape handling', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     foo = fn ..parts: parts
     bar = 1
     foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_101 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -425,10 +419,10 @@ test 'str tagged template escape handling', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_4 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -442,13 +436,13 @@ test 'str tagged template escape handling', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_4))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $bar_1 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:bar) (local.get $bar_1))
         (local.set $:pub_bar_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:bar)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
-        (local.set $:pub_name_bar_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_bar_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_bar_1) (local.get $:pub_bar_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:foo) (local.get $:ret_3) (global.get $test:bar)))
         (local.set $:v_63 (struct.new $rt/apply.wat:Closure (ref.func $test::v_95) (local.get $:caps_arg)))
@@ -477,15 +471,15 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "bar")
       (data $d_4 "foo")
     )
-    ;; sm:SoYFAJgBAJoBAFwAhAEAggEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBALwJAJYBALoBAM4BALoBAMQBAOIBANABAUgIkAEBBy6sCwCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQEALoIRAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCYAQBoAJgBAGgAegDQAQCeAQCqAQCSAQByANQBAQ8DhAEAoAEAqgEAkgEAdADUAQCQAgDQAQE0G5IBASMucgEALuIFAHoA5gEAigEA
+    ;; sm:SoYFAJgBAJoBAFwAhAEAggEAbgDCAQC-CACWAQC6AQDOAQC6AQDEAQCwAQBuALwBAMIBAIIBALwJAJYBALoBAM4BALoBAMQBAOIBANABAUgIkAEBBy6sCwCWAQC6AQDOAQC6AQDEAQDOAQC6AQDiAQDQAQCwAQEALoIRAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCYAQBoAJgBAGgAegDQAQCeAQCqAQCSAQB2ANQBAQ8DhAEAoAEAqgEAkgEAdgDUAQCQAgDQAQE0G5IBASMucgEALuIFAHoA5gEAigEA
 
 
 test 'str implicit formatting handling', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     ":
       1\n2
       3
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -517,9 +511,9 @@ test 'str implicit formatting handling', fn:
 
 
 test 'str implicit formatting escapes', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -551,9 +545,9 @@ test 'str implicit formatting escapes', fn:
 
 
 test 'empty string eq', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     '' == ''
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -584,12 +578,12 @@ test 'empty string eq', fn:
 
 # TODO: move to ./test_patterns.fnk
 test 'match empty string', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     main = fn x:
       match x:
         '': 0
         _: 1
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_209 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -807,7 +801,7 @@ test 'match empty string', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 4)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -819,7 +813,7 @@ test 'match empty string', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:main) (local.get $:v_3))
         (local.set $:pub_main_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:main)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_main_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_main_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_main_0) (local.get $:pub_main_0))
         (local.set $:unwrap_main_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:main)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -839,13 +833,13 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:fYgFAJoBAUABiAEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJsAQAC1goAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBiAEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAF4AhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEA6AsAnAEAbgDCAQCaAQCmAQCYAQCaAQBsAHoA0AEAoAEArgEAkgEAdADYAQC0AQBuANABAKYFAHoA5gEAigEA
+    ;; sm:fYgFAJoBAUABiAEAbgDCAQC4BgC6AQDCAQDIAQBuAMYBALIIAJYBALoBAMgBAMgBAIYBAHwAyAwAnAEAmgEAnAEAmgEAlgEA5AEA1AEBBwJsAQAC1goAmgEAmgEAmgEAmgEAlAEAugEAwgEA3gEA0gEAegDSAQBuALwBAMIBAL4BAMgFAJoBARoBiAEAbgDCAQDEBwCcAQCaAQCcAQCaAQCWAQC6AQDCAQBuAMQBAIAEAF4AhAcAugEAwgEAxgEAwgEAegDUAQBuAMABAMABAMQBAPQIAJoBAJoBAJYBALoBAMIBAMIBAIQCANQBAG4AvgEAwAEAwgEAzgwAmAEAmgEAkgEAhAEAegDSAQCyAQDSAQB6ANIBALIBANIBANgBANIBAG4AugEAwAEA6AsAnAEAcgDCAQCaAQCmAQCYAQCaAQBsAHoA0AEAoAEArgEAkgEAeADYAQC0AQBuANABAKYFAHoA5gEAigEA
 
 
 test 'empty string eq template', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     '' == '${''}'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -875,9 +869,9 @@ test 'empty string eq template', fn:
 
 
 test 'str eq', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     'hello' == 'hello'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))

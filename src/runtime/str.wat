@@ -41,6 +41,8 @@
   (import "rt/types.wat"   "Inst"      (type $Inst (sub any)))
   (import "rt/types.wat"   "FnInst"    (type $FnInst (sub $Inst)))
   (import "rt/types.wat"   "Type"      (type $Type (sub any)))
+  (import "rt/types.wat"   "new_unit_type"
+    (func $new_unit_type (param (ref i31)) (result (ref $Type))))
   (import "rt/types.wat"   "inst_payload"
     (func $inst_payload (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"   "inst_type_name"
@@ -128,6 +130,43 @@
   (func $str_empty (@pub) (@impl "std/str.fnk:str_empty") (result (ref $Str))
     (global.get $_str_empty))
 
+  ;; ---- Intrinsic type singleton ----
+  ;;
+  ;; `$StrType` reifies the built-in `str` as a first-class `$Type`, so it can be
+  ;; used as a guard / match arm (`match x: str s: ...`), a union member, etc. --
+  ;; the same surface a user `type:` declaration gets. `str` keeps its native
+  ;; WASM representation ($Str); the singleton is a plain unit $Type, not an
+  ;; $Inst wrapper. The value->type bridge is is_instance's `ref.eq $StrType ->
+  ;; ref.test (ref $Str)` branch (rt/types.wat), keyed on this singleton's
+  ;; identity -- so the ARENA id (register_type) is order-independent.
+  ;;
+  ;; Registered once, before any user code, by $register_str_type from the module
+  ;; (start) (rt/start.wat).
+  ;;
+  ;; NAME: the singleton's `$name` is the reserved `str` symbol. The runtime is
+  ;; compiled to wasm through a path that never runs the IR `resolve_symbols`, so
+  ;; the word is baked here as a literal. It is kept in agreement with the user
+  ;; side by RESERVED_SYMBOLS (src/passes/wasm/link.rs), which pre-seeds
+  ;; resolve_symbols so `str` folds to this same word: id 0 -> (0 << 3) |
+  ;; TAG_SYMBOL(0b010) = 2. (The name is not yet reprs-visible -- bare-$Type repr
+  ;; is unbuilt -- but it is now CORRECT, not a first-seen accident.)
+  (global $_str_type (mut (ref null $Type)) (ref.null none))
+
+  ;; register_str_type() -- mint + register $StrType into the global. Idempotent:
+  ;; a second call is a no-op (the (start) runs once, but guard against re-entry).
+  (func $register_str_type (@pub)
+    (if (ref.is_null (global.get $_str_type))
+      (then
+        (global.set $_str_type
+          ;; `str` reserved symbol: id 0 -> word (0 << 3) | 0b010 = 2.
+          ;; MUST equal reserved_symbol_word("str") in src/passes/wasm/link.rs.
+          (call $new_unit_type (ref.i31 (i32.const 2)))))))
+
+  ;; StrType() -> the `str` intrinsic $Type singleton. Imported into std/str.fnk
+  ;; as `str`. Registered by (start) before this can be called from user code.
+  (func $StrType (@pub) (result (ref $Type))
+    (ref.as_non_null (global.get $_str_type)))
+
   ;; ---- Construction (compiler-emitted) ----
 
   ;; from_data : (i32, i32) -> (ref $StrDataImpl)
@@ -164,6 +203,16 @@
 
     (return_call $from_bytes
       (ref.cast (ref $ByteArray) (local.get $bytes))))
+
+  ;; _str_read_bytes : (ref null any) -> (ref any)
+  ;; Host-facing inverse of _str_wrap_bytes: a $Str in, its $ByteArray out.
+  ;; Used by the bless host service to read a snapshot's actual value.
+  (func $_str_read_bytes (@pub) (export "env:_str_read_bytes")
+    (param $str (ref null any))
+    (result (ref any))
+
+    (return_call $bytes
+      (ref.cast (ref $Str) (local.get $str))))
 
 
   ;; ---- Access ----

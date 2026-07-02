@@ -18,6 +18,9 @@
   (import "rt/str.wat"   "ByteArray" (type $ByteArray (array (mut i8))))
   (import "rt/str.wat"   "from_bytes" (func $str_from_bytes
     (param (ref $ByteArray)) (result (ref $Str))))
+  (import "rt/types.wat" "Type" (type $Type (sub any)))
+  (import "rt/types.wat" "new_unit_type"
+    (func $new_unit_type (param (ref i31)) (result (ref $Type))))
 
   ;; $Int — abstract, nominal-only supertype. No fields. Storage
   ;; (`$ival i64`) lives on the leaves $I64/$U64. They differ only in
@@ -27,6 +30,28 @@
   (type $Int (@pub) (sub $Num (struct)))
     (type $I64 (@pub) (sub final $Int (struct (field $ival i64))))
     (type $U64 (@pub) (sub final $Int (struct (field $ival i64))))
+
+
+  ;; ---- Intrinsic type singleton ----
+  ;;
+  ;; `$IntType` reifies the built-in `int` as a first-class `$Type`, so it works
+  ;; as a guard / match arm (`match x: int i: ...`). `int` matches ANY integer:
+  ;; the `is_instance` bridge (rt/types.wat) tests `ref.test (ref $Int)`, which
+  ;; succeeds for the concrete leaves $I64 / $U64 via WasmGC subtyping. Mirrors
+  ;; the `str` intrinsic (rt/str.wat). Registered in the module (start).
+  ;;
+  ;; NAME: the reserved `int` symbol -- id 3 -> word (3 << 3) | 0b010 = 26. MUST
+  ;; equal reserved_symbol_word("int") in src/passes/wasm/link.rs.
+  (global $_int_type (mut (ref null $Type)) (ref.null none))
+
+  (func $register_int_type (@pub)
+    (if (ref.is_null (global.get $_int_type))
+      (then
+        (global.set $_int_type
+          (call $new_unit_type (ref.i31 (i32.const 26)))))))
+
+  (func $IntType (@pub) (result (ref $Type))
+    (ref.as_non_null (global.get $_int_type)))
 
   ;; =========================================================================
   ;; Arithmetic on $Int — result widens to $I64 when sign info is lost.

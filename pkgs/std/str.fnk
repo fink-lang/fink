@@ -1,1 +1,5 @@
-# TODO re-export types from wat
+# The built-in `str` type, reified as a first-class value: usable as a
+# match/guard arm (`match x: str s: ...`), a union member, etc.
+{StrType: rt_str_type} = import 'rt/str.wat'
+
+str = rt_str_type

@@ -188,11 +188,58 @@ fn link_multi_with_modules(fragments: &[Fragment]) -> (Fragment, Vec<ModuleId>) 
   (merged, instr_to_module)
 }
 
+/// The i31 tag marking a symbol word: `word = (id << 3) | TAG_SYMBOL`. Sits past
+/// the two bool words (`false = 0b000`, `true = 0b001`) in the shared i31 space.
+/// The encoding MUST match the decode side in `rt/symbols.wat` (symbol_id /
+/// is_symbol).
+const TAG_SYMBOL: u32 = 0b010;
+
+/// Symbols whose id is FIXED, independent of first-seen order in user code.
+///
+/// The runtime (`rt/*.wat`) is compiled to a wasm binary through a path that
+/// never runs `resolve_symbols`, so any symbol it names (e.g. the `str`
+/// intrinsic type's `$name`) must bake a concrete word at wat-author time. That
+/// word can only agree with the user side if the id is reserved here: this list
+/// pre-seeds `resolve_symbols`, so a reserved name always resolves to its index
+/// below, and every user symbol starts above the reserved block. The runtime
+/// literal for a reserved name MUST equal `reserved_symbol_word(name)`.
+///
+/// Order is significant -- the id is the index. Append only; never reorder.
+/// The set is the built-in (intrinsic) type names, reserved ahead of their
+/// runtime `$Type` singletons so the id layout (and every snapshot that renders
+/// a symbol word) settles once. `str` is id 0 -- its word (2) is baked into
+/// rt/str.wat; keep it first.
+pub const RESERVED_SYMBOLS: &[&str] = &[
+  // Scalars
+  "str", "bool", "num", "int", "float", "decimal",
+  // Sized numerics (names reserved ahead of distinct reps)
+  "u8", "u16", "u32", "u64",
+  "i8", "i16", "i32", "i64",
+  "f32", "f64",
+  // Collections / structural
+  "list", "dict", "set", "range", "rec", "tuple",
+];
+
+/// The folded i31 word for a reserved symbol, or `None` if `name` is not
+/// reserved. The runtime bakes this exact word for a reserved symbol's name.
+pub fn reserved_symbol_word(name: &str) -> Option<i32> {
+  RESERVED_SYMBOLS
+    .iter()
+    .position(|r| *r == name)
+    .map(|id| (((id as u32) << 3) | TAG_SYMBOL) as i32)
+}
+
 /// Assign one canonical id per distinct symbol name across the whole merged
 /// fragment, then rewrite every `Operand::SymbolId(name)` to `Operand::I32(id)`.
 fn resolve_symbols(merged: &mut Fragment) {
-  // First pass: distinct names in first-seen order -> canonical id.
+  // Pre-seed the reserved symbols at their fixed ids (index in RESERVED_SYMBOLS),
+  // so they never depend on first-seen order and agree with the runtime's baked
+  // words. User names fill in above the reserved block.
   let mut ids: BTreeMap<Vec<u8>, u32> = BTreeMap::new();
+  for (id, name) in RESERVED_SYMBOLS.iter().enumerate() {
+    ids.insert(name.as_bytes().to_vec(), id as u32);
+  }
+  // First pass: distinct names in first-seen order -> canonical id.
   for instr in &merged.instrs {
     walk_operands(&instr.kind, &mut |op| {
       if let Operand::SymbolId(name) = op
@@ -204,11 +251,8 @@ fn resolve_symbols(merged: &mut Fragment) {
     });
   }
   // Second pass: rewrite SymbolId(name) -> I32(word), folding the tagged i31
-  // encoding `(id << 3) | TAG_SYMBOL` (TAG_SYMBOL = 0b010). A symbol is a
-  // compile-time constant: box_symbol / prepend_symbol_table wrap this word in
-  // `ref.i31`. The encoding MUST match the decode side in rt/symbols.wat
-  // (symbol_id / is_symbol).
-  const TAG_SYMBOL: u32 = 0b010;
+  // encoding `(id << 3) | TAG_SYMBOL`. A symbol is a compile-time constant:
+  // box_symbol / prepend_symbol_table wrap this word in `ref.i31`.
   for instr in &mut merged.instrs {
     walk_operands_mut(&mut instr.kind, &mut |op| {
       if let Operand::SymbolId(name) = op {
@@ -613,5 +657,28 @@ fn remap_operand(op: &Operand, off: &Offsets) -> Operand {
     },
     // Carried by name; resolved to I32 in resolve_symbols after merge.
     Operand::SymbolId(name) => Operand::SymbolId(name.clone()),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  // Each intrinsic runtime file bakes its type name's symbol word as a literal
+  // (it never runs resolve_symbols). These pin the values the wat literals must
+  // match; if the reserved order changes, they fail and flag the wat to update.
+  //   str   -> rt/str.wat
+  //   int   -> rt/int.wat
+  //   float -> rt/float.wat
+  #[test]
+  fn intrinsic_reserved_words_match_runtime_literals() {
+    assert_eq!(reserved_symbol_word("str"), Some(2));
+    assert_eq!(reserved_symbol_word("int"), Some(26));
+    assert_eq!(reserved_symbol_word("float"), Some(34));
+  }
+
+  #[test]
+  fn non_reserved_symbol_has_no_word() {
+    assert_eq!(reserved_symbol_word("definitely_not_reserved"), None);
   }
 }

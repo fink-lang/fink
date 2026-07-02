@@ -1,18 +1,12 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
-
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
+{wat, compile_wat} = import 'fink/compile.fnk'
 
 
 test 'rec literal', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a: 1, b: 2}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -25,7 +19,7 @@ test 'rec literal', fn:
         (local.set $:v_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:ret_21 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
-        (local.set $:sym_6 (ref.i31 (i32.const 2)))
+        (local.set $:sym_6 (ref.i31 (i32.const 178)))
         (local.set $:lit_7 (struct.new $rt/int.wat:I64 (i64.const 2)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:v_4) (local.get $:sym_6) (local.get $:lit_7) (local.get $:ret_21))
       )
@@ -40,10 +34,10 @@ test 'rec literal', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -51,7 +45,7 @@ test 'rec literal', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
         (local.set $:v_18 (struct.new $rt/apply.wat:Closure (ref.func $test::v_26) (local.get $:caps_arg)))
         (local.set $:lit_1 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_2 (ref.i31 (i32.const 10)))
+        (local.set $:sym_2 (ref.i31 (i32.const 186)))
         (local.set $:lit_3 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_1) (local.get $:sym_2) (local.get $:lit_3) (local.get $:v_18))
       )
@@ -68,14 +62,14 @@ test 'rec literal', fn:
       (data $d_1 "a")
       (data $d_2 "b")
     )
-    ;; sm:GbwHAJQBALoBAMQBAQ4BYAEGAYYBAQUEmAoAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBALQBANABAQ0MagECAWIBBgGGAQEFBPQFAHoA5gEAigEA
+    ;; sm:GbwHAJQBALoBAMQBAQ4BZAEGAYYBAQUEmAoAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBALQBANABAQ0MagECAWQBBgGGAQEFBPQFAHoA5gEAigEA
 
 
 test 'rec destructure', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a, b: c} = {a: 1, b: 2}
     a + c
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -131,7 +125,7 @@ test 'rec destructure', fn:
         (local.set $:fail_116 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:succ_115) (local.get $:v_15)))
         (local.set $:v_87 (struct.new $rt/apply.wat:Closure (ref.func $test::v_112) (local.get $:caps_arg)))
-        (local.set $:sym_25 (ref.i31 (i32.const 2)))
+        (local.set $:sym_25 (ref.i31 (i32.const 178)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_23) (local.get $:sym_25) (local.get $:fail_116) (local.get $:v_87))
       )
       (func $test::v_140 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -148,7 +142,7 @@ test 'rec destructure', fn:
         (local.set $:fail_134 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:succ_133) (local.get $:fail_134)))
         (local.set $:v_90 (struct.new $rt/apply.wat:Closure (ref.func $test::v_122) (local.get $:caps_arg)))
-        (local.set $:sym_29 (ref.i31 (i32.const 10)))
+        (local.set $:sym_29 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_22) (local.get $:sym_29) (local.get $:fail_134) (local.get $:v_90))
       )
       (func $test::v_130 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -224,7 +218,7 @@ test 'rec destructure', fn:
         (local.set $:ret_171 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_171)))
         (local.set $:v_99 (struct.new $rt/apply.wat:Closure (ref.func $test::v_168) (local.get $:caps_arg)))
-        (local.set $:sym_8 (ref.i31 (i32.const 2)))
+        (local.set $:sym_8 (ref.i31 (i32.const 178)))
         (local.set $:lit_9 (struct.new $rt/int.wat:I64 (i64.const 2)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:v_6) (local.get $:sym_8) (local.get $:lit_9) (local.get $:v_99))
       )
@@ -240,10 +234,10 @@ test 'rec destructure', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -253,7 +247,7 @@ test 'rec destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_2)))
         (local.set $:v_102 (struct.new $rt/apply.wat:Closure (ref.func $test::v_176) (local.get $:caps_arg)))
         (local.set $:lit_3 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_4 (ref.i31 (i32.const 10)))
+        (local.set $:sym_4 (ref.i31 (i32.const 186)))
         (local.set $:lit_5 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_3) (local.get $:sym_4) (local.get $:lit_5) (local.get $:v_102))
       )
@@ -271,13 +265,13 @@ test 'rec destructure', fn:
       (data $d_1 "a")
       (data $d_2 "b")
     )
-    ;; sm:YYoIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfgHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRhiAQAYmAkAlgEAugEAyAEAyAEA6AEA0gEBABhkAQAYxAYAugEAyAEAbgCWCQCcAQCaAQCcAQCaAQCWAQDkAQDSAQC4AQDSAQBmAQAY4gQAXgCmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAWABBgGGAQEFBIALAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmALQBANQBAQ0MagECAWIBBgGGAQEFBPYFAHoA5gEAigEA
+    ;; sm:YYoIAJYBAJoBAJYBALoBAMYBAKIBAQ4BUACuAQEkBfgHAJYBAJoBAJYBALoBAMgBAMIBAG4AvgEAwAEAjgkAlgEAmgEAlgEAugEAyAEAyAEA4AEA0gEBMRhmAQAYmAkAlgEAugEAyAEAyAEA6AEA0gEBABhmAQAYxAYAugEAyAEAbgCWCQCcAQCaAQCcAQCaAQCWAQDkAQDSAQC4AQDSAQBmAQAY4gQAXgCmCQCWAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC-AQC-AQC-AQC2CACUAQC6AQDGAQC4AQDSAQEmAWQBBgGGAQEFBIALAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCUAQBmALQBANQBAQ0MagECAWQBBgGGAQEFBPYFAHoA5gEAigEA
 
 test 'rec spread', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     r = {a: 1, b: 2}
     {..r, c: 3}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -290,7 +284,7 @@ test 'rec spread', fn:
         (local.set $:v_13 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $:ret_51 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
-        (local.set $:sym_15 (ref.i31 (i32.const 2)))
+        (local.set $:sym_15 (ref.i31 (i32.const 178)))
         (local.set $:lit_16 (struct.new $rt/int.wat:I64 (i64.const 3)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:v_13) (local.get $:sym_15) (local.get $:lit_16) (local.get $:ret_51))
       )
@@ -315,7 +309,7 @@ test 'rec spread', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_59) (local.get $:v_9))
         (local.set $:pub_r_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:r)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_r_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_r_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_r_0) (local.get $:pub_r_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_60)))
         (local.set $:v_42 (struct.new $rt/apply.wat:Closure (ref.func $test::v_56) (local.get $:caps_arg)))
@@ -340,7 +334,7 @@ test 'rec spread', fn:
         (local.set $:ret_70 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_69) (local.get $:ret_70)))
         (local.set $:v_45 (struct.new $rt/apply.wat:Closure (ref.func $test::v_66) (local.get $:caps_arg)))
-        (local.set $:sym_7 (ref.i31 (i32.const 18)))
+        (local.set $:sym_7 (ref.i31 (i32.const 194)))
         (local.set $:lit_8 (struct.new $rt/int.wat:I64 (i64.const 2)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:v_5) (local.get $:sym_7) (local.get $:lit_8) (local.get $:v_45))
       )
@@ -356,16 +350,16 @@ test 'rec spread', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 26)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 202)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_4 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -375,7 +369,7 @@ test 'rec spread', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:r) (local.get $:ret_1)))
         (local.set $:v_48 (struct.new $rt/apply.wat:Closure (ref.func $test::v_76) (local.get $:caps_arg)))
         (local.set $:lit_2 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_3 (ref.i31 (i32.const 26)))
+        (local.set $:sym_3 (ref.i31 (i32.const 202)))
         (local.set $:lit_4 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_2) (local.get $:sym_3) (local.get $:lit_4) (local.get $:v_48))
       )
@@ -397,12 +391,12 @@ test 'rec spread', fn:
       (data $d_3 "c")
       (data $d_4 "r")
     )
-    ;; sm:OsIHAJYBALoBAMQBAS4BYgEGAYgBAQUEuAwAlAEAugEAzgEAugEAxAEAnAEAogEAkgEAcADMAQC2AQDQAQELC2wArAEBAgOmCgCUAQC6AQDOAQC6AQDEAQDiAQDQAQENAWIBBgGGAQEFBP4KAJwBAHAAwgEAnAEAcADCAQCcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAYADeAQDQAQENDGoBAgFiAQYBhgEBBQT0BQB6AOYBAIoBAA
+    ;; sm:OsIHAJYBALoBAMQBAS4BZgEGAYgBAQUEuAwAlAEAugEAzgEAugEAxAEAnAEAogEAkgEAcgDMAQC2AQDQAQELC2wArAEBAgOmCgCUAQC6AQDOAQC6AQDEAQDiAQDQAQENAWQBBgGGAQEFBP4KAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJwBAHIAwgEAmgEApgEAmAEAlAEAYADeAQDQAQENDGoBAgFkAQYBhgEBBQT0BQB6AOYBAIoBAA
 
 test 'rec empty literal', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -433,9 +427,9 @@ test 'rec empty literal', fn:
     ;; sm:C-IGAJoBAKYBAJgBAQACagBuAMABAKYFAHoA5gEAigEA
 
 test 'rec single field', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a: 1}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -448,13 +442,13 @@ test 'rec single field', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
         (local.set $:ret_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:lit_1 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_2 (ref.i31 (i32.const 2)))
+        (local.set $:sym_2 (ref.i31 (i32.const 178)))
         (local.set $:lit_3 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_1) (local.get $:sym_2) (local.get $:lit_3) (local.get $:ret_0))
       )
@@ -470,14 +464,14 @@ test 'rec single field', fn:
       (data $d_0 "test")
       (data $d_1 "a")
     )
-    ;; sm:DtIIAJwBAG4AwgEAmgEApgEAmAEBAAZqAQIBYAEGAYYBAQUE9gUAegDmAQCKAQA
+    ;; sm:DtIIAJwBAHIAwgEAmgEApgEAmAEBAAZqAQIBZAEGAYYBAQUE9gUAegDmAQCKAQA
 
 test 'rec nested destructure', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {a} = {a: {b: 42}}
     {b} = a
     b
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -525,7 +519,7 @@ test 'rec nested destructure', fn:
         (local.set $:fail_160 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_159)))
         (local.set $:v_119 (struct.new $rt/apply.wat:Closure (ref.func $test::v_148) (local.get $:caps_arg)))
-        (local.set $:sym_44 (ref.i31 (i32.const 2)))
+        (local.set $:sym_44 (ref.i31 (i32.const 178)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_42) (local.get $:sym_44) (local.get $:fail_160) (local.get $:v_119))
       )
       (func $test::v_156 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -620,7 +614,7 @@ test 'rec nested destructure', fn:
         (local.set $:fail_206 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_205)))
         (local.set $:v_128 (struct.new $rt/apply.wat:Closure (ref.func $test::v_194) (local.get $:caps_arg)))
-        (local.set $:sym_22 (ref.i31 (i32.const 10)))
+        (local.set $:sym_22 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_20) (local.get $:sym_22) (local.get $:fail_206) (local.get $:v_128))
       )
       (func $test::v_202 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -697,7 +691,7 @@ test 'rec nested destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_243)))
         (local.set $:v_137 (struct.new $rt/apply.wat:Closure (ref.func $test::v_240) (local.get $:caps_arg)))
         (local.set $:lit_3 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_4 (ref.i31 (i32.const 10)))
+        (local.set $:sym_4 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_3) (local.get $:sym_4) (local.get $:v_8) (local.get $:v_137))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -713,10 +707,10 @@ test 'rec nested destructure', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -728,7 +722,7 @@ test 'rec nested destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_2)))
         (local.set $:v_140 (struct.new $rt/apply.wat:Closure (ref.func $test::v_248) (local.get $:caps_arg)))
         (local.set $:lit_5 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_6 (ref.i31 (i32.const 2)))
+        (local.set $:sym_6 (ref.i31 (i32.const 178)))
         (local.set $:lit_7 (struct.new $rt/int.wat:I64 (i64.const 42)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_5) (local.get $:sym_6) (local.get $:lit_7) (local.get $:v_140))
       )
@@ -747,14 +741,14 @@ test 'rec nested destructure', fn:
       (data $d_1 "a")
       (data $d_2 "b")
     )
-    ;; sm:hwHABwCWAQC6AQDGAQCiAQCuAQBuAMoBAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBJgdiAQAHxgYAugEAyAEAbgCaCQCcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQBmAQAH5gQAXgD2CQCWAQC6AQDGAQCiAQC4AQDSAQB6ANIBAHoA0gEArgEAbgDKAQC-AQC-AQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBASUSZAEAEsYGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAEuYEAF4ApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxqAQIBYgEACuwLAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdqAQIBYAEGAogBAQUF9gUAegDmAQCKAQA
+    ;; sm:hwHABwCWAQC6AQDGAQCiAQCuAQBuAMoBAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAzAgAlgEAugEAyAEAyAEAugEA1AEBJgdmAQAHxgYAugEAyAEAbgCaCQCcAQCaAQCcAQCaAQCWAQDkAQDUAQC4AQDUAQBmAQAH5gQAXgD2CQCWAQC6AQDGAQCiAQC4AQDSAQB6ANIBAHoA0gEArgEAbgDKAQC-AQC-AQD2BgCWAQCaAQCWAQC6AQDIAQBuAL4BAMwIAJYBALoBAMgBAMgBALoBANQBASUSZgEAEsYGALoBAMgBAG4AmgkAnAEAmgEAnAEAmgEAlgEA5AEA1AEAuAEA1AEAZgEAEuYEAF4ApgkAlgEAugEAxgEAuAEA0gEAegDSAQB6ANIBAG4AvgEAvgEAvgEAuAgAlAEAugEAxgEAuAEA1AEBDAxqAQIBZAEACuwLAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCUAQBmAJQBAGYAtAEA1AEBBgdqAQIBZAEGAogBAQUF9gUAegDmAQCKAQA
 
 test 'rec spread merge two', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     r1 = {a: 1}
     r2 = {b: 2}
     {..r1, ..r2}
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -798,7 +792,7 @@ test 'rec spread merge two', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_68) (local.get $:v_11))
         (local.set $:pub_r2_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:r2)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_r2_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_r2_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_r2_1) (local.get $:pub_r2_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $:slot_68) (local.get $:ret_69)))
         (local.set $:v_49 (struct.new $rt/apply.wat:Closure (ref.func $test::v_65) (local.get $:caps_arg)))
@@ -832,12 +826,12 @@ test 'rec spread merge two', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_80) (local.get $:v_6))
         (local.set $:pub_r1_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:r1)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_r1_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_r1_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_r1_0) (local.get $:pub_r1_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $:slot_81) (local.get $:ret_82) (local.get $:slot_80)))
         (local.set $:v_52 (struct.new $rt/apply.wat:Closure (ref.func $test::v_77) (local.get $:caps_arg)))
         (local.set $:lit_8 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_9 (ref.i31 (i32.const 18)))
+        (local.set $:sym_9 (ref.i31 (i32.const 194)))
         (local.set $:lit_10 (struct.new $rt/int.wat:I64 (i64.const 2)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_8) (local.get $:sym_9) (local.get $:lit_10) (local.get $:v_52))
       )
@@ -854,16 +848,16 @@ test 'rec spread merge two', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 26)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 202)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 18)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 194)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 2)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_4 2)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -875,7 +869,7 @@ test 'rec spread merge two', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (global.get $test:r1) (global.get $test:r2) (local.get $:ret_2)))
         (local.set $:v_55 (struct.new $rt/apply.wat:Closure (ref.func $test::v_89) (local.get $:caps_arg)))
         (local.set $:lit_3 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_4 (ref.i31 (i32.const 26)))
+        (local.set $:sym_4 (ref.i31 (i32.const 202)))
         (local.set $:lit_5 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_3) (local.get $:sym_4) (local.get $:lit_5) (local.get $:v_55))
       )
@@ -901,13 +895,13 @@ test 'rec spread merge two', fn:
       (data $d_3 "r1")
       (data $d_4 "r2")
     )
-    ;; sm:R8AIAJYBALoBAM4BALoBAMQBAK4BAT4E4A0AlgEAugEAzgEAugEAxAEAzgEAugEAngEApgEAkgEAcADQAQDiAQDQAQENDGwArgEBAgSWDgCUAQC6AQDOAQC6AQDOAQC6AQDEAQCcAQCmAQCSAQByANABAI4CANABAQ8GagECAWIBBgGIAQEFBPILAJwBAHAAwgEAnAEAcADCAQCcAQBwAMIBAJwBAG4AwgEAmgEApgEAmAEAlgEAZACWAQBkAIwCANABARkGagECAWIBBgGGAQEFBPQFAHoA5gEAigEA
+    ;; sm:R8AIAJYBALoBAM4BALoBAMQBAK4BAT4E4A0AlgEAugEAzgEAugEAxAEAzgEAugEAngEApgEAkgEAdADQAQDiAQDQAQENDGwArgEBAgSWDgCUAQC6AQDOAQC6AQDOAQC6AQDEAQCcAQCmAQCSAQB0ANABAI4CANABAQ8GagECAWQBBgGIAQEFBPILAJwBAHIAwgEAnAEAcgDCAQCcAQByAMIBAJwBAHIAwgEAmgEApgEAmAEAlgEAZACWAQBkAIwCANABARkGagECAWQBBgGGAQEFBPQFAHoA5gEAigEA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     'got: ${{a: 1}}'
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -935,7 +929,7 @@ test 'rec format template', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -943,7 +937,7 @@ test 'rec format template', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_0)))
         (local.set $:v_17 (struct.new $rt/apply.wat:Closure (ref.func $test::v_25) (local.get $:caps_arg)))
         (local.set $:lit_2 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_3 (ref.i31 (i32.const 2)))
+        (local.set $:sym_3 (ref.i31 (i32.const 178)))
         (local.set $:lit_4 (struct.new $rt/int.wat:I64 (i64.const 1)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_2) (local.get $:sym_3) (local.get $:lit_4) (local.get $:v_17))
       )
@@ -960,14 +954,14 @@ test 'rec format template', fn:
       (data $d_1 "test")
       (data $d_2 "a")
     )
-    ;; sm:FuQHAJQBALoBAMQBAQIFjgEA1AEBARDUCQCcAQBuAMIBAJoBAKYBAJgBALQBANABARAGagECAWABBgGGAQEFBPQFAHoA5gEAigEA
+    ;; sm:FuQHAJQBALoBAMQBAQIFjgEA1AEBARDUCQCcAQByAMIBAJoBAKYBAJgBALQBANABARAGagECAWQBBgGGAQEFBPQFAHoA5gEAigEA
 
 test 'dict dot dynamic key', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     r = {'a': 42}
     k = 'a'
     r.(k)
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -998,13 +992,13 @@ test 'dict dot dynamic key', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_37) (local.get $:v_6))
         (local.set $:pub_r_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:r)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_r_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_r_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_r_0) (local.get $:pub_r_0))
         (local.set $k_38 (call $rt/str.wat:from_data (data.ref $d_1 1)))
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_38) (local.get $k_38))
         (local.set $:pub_k_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:k)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_k_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_k_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_k_1) (local.get $:pub_k_1))
         (local.set $:unwrap_r_37 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_37)))
         (local.set $:unwrap_k_38 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_38)))
@@ -1023,10 +1017,10 @@ test 'dict dot dynamic key', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_3 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -1060,7 +1054,7 @@ test 'dict dot dynamic key', fn:
       (data $d_2 "k")
       (data $d_3 "r")
     )
-    ;; sm:LNoOAJQBALoBAM4BALoBAM4BALoBAMQBAJwBAKIBAJIBAG4AzAEBHAGKAQCcAQCiAQCSAQBwAMwBAKwBAKwBARAF6AsAnAEAcADCAQCcAQBuAMIBAJoBAKYBAJgBAJQBAGAAlAEAYACIAgDQAQEjCWoBAgOOAQEKAogBAQkH9AUAegDmAQCKAQA
+    ;; sm:LNoOAJQBALoBAM4BALoBAM4BALoBAMQBAJwBAKIBAJIBAHIAzAEBHAGKAQCcAQCiAQCSAQByAMwBAKwBAKwBARAF6AsAnAEAcgDCAQCcAQByAMIBAJoBAKYBAJgBAJQBAGAAlAEAYACIAgDQAQEjCWoBAgOOAQEKAogBAQkH9AUAegDmAQCKAQA
 
 
 

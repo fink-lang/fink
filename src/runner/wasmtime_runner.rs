@@ -87,6 +87,24 @@ pub fn run(
       .collect(),
   );
 
+  // Bless support: (mid, cid) -> the full source span of the marked call, plus
+  // mid -> (url, source). host_bless resolves each failing snapshot's [mid, cid]
+  // to the expectation's span and rewrites the file in place.
+  #[cfg(feature = "compile")]
+  let span_map: Arc<std::collections::HashMap<(u32, u32), crate::passes::ast::lexer::Loc>> =
+    Arc::new(
+      wasm.marks.iter()
+        .map(|m| ((m.module_id.0, m.cps_id.0), m.source))
+        .collect(),
+    );
+  #[cfg(feature = "compile")]
+  let mid_url: Arc<std::collections::HashMap<u32, String>> = Arc::new(
+    wasm.id_to_url.iter().map(|(id, u)| (id.0, u.clone())).collect(),
+  );
+  #[cfg(feature = "compile")]
+  let mod_sources: Arc<std::collections::BTreeMap<String, String>> =
+    Arc::new(wasm.module_sources.clone());
+
   let mut linker = Linker::new(&engine);
   for import in module.imports() {
     if import.module() == "env"
@@ -119,6 +137,22 @@ pub fn run(
             let cid = params[1].unwrap_i32() as u32;
             let line = lm.get(&(mid, cid)).copied().unwrap_or(0);
             results[0] = Val::I32(line as i32);
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        #[cfg(feature = "compile")]
+        "host_bless" => {
+          // blessables: a fink $List of `[[mid, cid], actual]`. Group by mid,
+          // resolve each [mid,cid] to the expectation span, splice `actual`
+          // into the source file. Returns the count applied.
+          let spans = span_map.clone();
+          let urls = mid_url.clone();
+          let sources = mod_sources.clone();
+          linker.func_new("env", &name, ft, move |mut caller, params, results| {
+            let list = params[0].unwrap_anyref().copied();
+            let items = read_bless_list(&mut caller, list)?;
+            let n = apply_bless_items(&spans, &urls, &sources, items);
+            results[0] = Val::I32(n as i32);
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
@@ -845,5 +879,130 @@ fn extract_i32(caller: &mut Caller<'_, ()>, val: &Val) -> Result<i32, Error> {
     }
   }
   Err(Error::msg("cannot extract i32 from value"))
+}
+
+// -- bless support ---------------------------------------------------------
+//
+// host_bless receives a fink $List of `[[mid, cid], actual]`. These helpers
+// walk that structure into plain data and apply the rewrites.
+
+/// One resolved blessing: which module + call site, and the actual value.
+#[cfg(feature = "compile")]
+struct BlessItem {
+  mid: u32,
+  cid: u32,
+  actual: String,
+}
+
+/// Read a fink $List (cons cells ending in $Nil) into a Vec of its head refs.
+/// A $Cons is a struct `(head, tail)`; $Nil has no fields (field read fails).
+#[cfg(feature = "compile")]
+fn read_cons_list(
+  caller: &mut Caller<'_, ()>,
+  list: Option<Rooted<AnyRef>>,
+) -> Vec<Val> {
+  let mut out = Vec::new();
+  let mut cur = list;
+  while let Some(r) = cur {
+    let Ok(Some(st)) = r.as_struct(&*caller) else { break };
+    // $Nil is an empty struct -> no field 0. $Cons has (head, tail).
+    let Ok(head) = st.field(&mut *caller, 0) else { break };
+    out.push(head);
+    cur = match st.field(&mut *caller, 1) {
+      Ok(Val::AnyRef(next)) => next,
+      _ => break,
+    };
+  }
+  out
+}
+
+/// Read a $Str value's bytes via the exported `bytes` function.
+#[cfg(feature = "compile")]
+fn read_str(caller: &mut Caller<'_, ()>, val: &Val) -> Result<String, Error> {
+  let bytes_fn = caller.get_export("_str_read_bytes")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| Error::msg("host_bless: no `_str_read_bytes` export"))?;
+  let mut out = [Val::AnyRef(None)];
+  bytes_fn.call(&mut *caller, std::slice::from_ref(val), &mut out)
+    .map_err(|e| Error::msg(format!("host_bless: bytes() failed: {e}")))?;
+  let arr = out[0].unwrap_anyref()
+    .and_then(|r| r.as_array(&*caller).ok().flatten())
+    .ok_or_else(|| Error::msg("host_bless: bytes() did not return an array"))?;
+  let len = arr.len(&*caller).unwrap_or(0);
+  let mut buf = Vec::with_capacity(len as usize);
+  for i in 0..len {
+    if let Ok(Val::I32(b)) = arr.get(&mut *caller, i) {
+      buf.push(b as u8);
+    }
+  }
+  String::from_utf8(buf).map_err(|e| Error::msg(format!("host_bless: actual not UTF-8: {e}")))
+}
+
+/// Walk the blessables list `[[[mid, cid], actual], ...]` into BlessItems.
+#[cfg(feature = "compile")]
+fn read_bless_list(
+  caller: &mut Caller<'_, ()>,
+  list: Option<Rooted<AnyRef>>,
+) -> Result<Vec<BlessItem>, Error> {
+  let mut items = Vec::new();
+  for entry in read_cons_list(caller, list) {
+    // entry = [[mid, cid], actual]
+    let Val::AnyRef(entry_ref) = entry else { continue };
+    let parts = read_cons_list(caller, entry_ref);
+    if parts.len() < 2 { continue; }
+    // parts[0] = [mid, cid]
+    let Val::AnyRef(loc_ref) = &parts[0] else { continue };
+    let loc = read_cons_list(caller, *loc_ref);
+    if loc.len() < 2 { continue; }
+    let mid = extract_i32(caller, &loc[0])? as u32;
+    let cid = extract_i32(caller, &loc[1])? as u32;
+    let actual = read_str(caller, &parts[1])?;
+    items.push(BlessItem { mid, cid, actual });
+  }
+  Ok(items)
+}
+
+/// Group blessings by module, resolve each to its expectation span, and rewrite
+/// the source files in place. Returns the count of expectations applied.
+#[cfg(feature = "compile")]
+fn apply_bless_items(
+  spans: &std::collections::HashMap<(u32, u32), crate::passes::ast::lexer::Loc>,
+  urls: &std::collections::HashMap<u32, String>,
+  sources: &std::collections::BTreeMap<String, String>,
+  items: Vec<BlessItem>,
+) -> u32 {
+  use std::collections::BTreeMap;
+  // Group by mid.
+  let mut by_mid: BTreeMap<u32, Vec<BlessItem>> = BTreeMap::new();
+  for it in items {
+    by_mid.entry(it.mid).or_default().push(it);
+  }
+
+  let mut applied = 0u32;
+  for (mid, group) in by_mid {
+    let Some(url) = urls.get(&mid) else { continue };
+    let Some(source) = sources.get(url) else { continue };
+    // Only real on-disk files are blessable (virtual stdlib urls are not).
+    if !std::path::Path::new(url).exists() { continue; }
+
+    let mut blesses = Vec::new();
+    for it in &group {
+      let Some(loc) = spans.get(&(mid, it.cid)) else { continue };
+      blesses.push(crate::runner::bless::Bless { call: *loc, actual: it.actual.clone() });
+    }
+    if blesses.is_empty() { continue; }
+
+    match crate::runner::bless::apply_blesses(source, url, &blesses) {
+      Ok(new_src) => {
+        if std::fs::write(url, new_src).is_ok() {
+          applied += blesses.len() as u32;
+        }
+      }
+      Err(e) => {
+        eprintln!("bless: {url}: {e}");
+      }
+    }
+  }
+  applied
 }
 

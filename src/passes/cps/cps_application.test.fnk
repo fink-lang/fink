@@ -192,23 +192,25 @@ test 'pipe with partial — ident head', fn:
     # sm:IgABAAwAAQAMJAEADBgBAAwSAAIABgEICAABAAgIABAAGAEACBYBAAgOAAQBAAgAAQADEgAUAAQBAAgSAAYBCAEAAQABBgEAAQQABAEGAQ4AEAENCA4ABAEDAQABBAgQABQABAEHDBIABAEAAQ
 
 
---- BUG: a `?` partial in a pipe RHS inside a NESTED fn body (tail
-position) is not eliminated by the partial-application desugar pass, so a
-`Partial` node survives to CPS and panics:
-  "Partial should be eliminated before CPS transform" (transform.rs:345)
-`equals ?, 10` is legal (== `fn $: equals $, 10`); `x | equals ?, 10`
-works at module/main top level but NOT when the same pipe is the tail
-expr of a thunk passed to a fn (`run fn: x | equals ?, 10`). Fix lives in
-PartialPass (src/passes/ast_desugar/mod.rs) -- the wrap-into-Fn boundary
-isn't recognized for a pipe-partial in a nested fn body tail. See
-.scratch/bug-partial-in-nested-fn-pipe.md. Skipped until fixed.
+--- A `?` partial in a pipe RHS inside a NESTED fn body (tail position). The
+partial binds to the pipe segment's synthetic fn at that scope -- not lifted to
+an outer fn, not left as a surviving `Partial`. (Regressed when the desugar
+partial pass didn't descend into nested fn / pipe-segment scopes; see the
+desugar `has_partial` / `transform_fn` fix.)
 ---
-skip test 'pipe with partial inside nested fn body', fn:
+test 'pipe with partial inside nested fn body', fn:
   cps_module ƒink:
     run fn:
       x | add 2, ?
   | equals ƒink:
-    TODO
+    ·ƒink_module fn ·ƒctx_26, ·ƒret_1:
+      ·fn
+        fn ·ƒctx_28, ·ƒret_4:
+          ·fn
+            fn ·ƒctx_29, ·ƒret_7, ·ƒv_0: ·∅add ·ƒctx_29, ·ƒret_7, (i8 2), ·ƒv_0
+            fn ·ƒv_6: ·ƒv_6 ·ƒctx_28, ·ƒret_4, ·∅x
+        fn ·ƒv_3: ·∅run ·ƒctx_26, ·ƒret_1, ·ƒv_3
+    # sm:MwABABYAAQAWJAEAFhgBABYSAAIABgEIEgABABIIABAAGAEMDBIAAgAOAQgIAAEACAgAGAAYAQAIFgEACA4ABAEACAABAAMSABQABAEACBIABgEIAQABAAEGAQABBAAEAQYBDgAYAQ0IDgAEAQMBAAEECBAAFAAEAQcMEgAEAQABDAAQAQsSDgAEAQcWAAEAAxIAFAAEAQAWEgAEAQgS
 
 
 

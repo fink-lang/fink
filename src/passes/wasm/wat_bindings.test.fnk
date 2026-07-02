@@ -1,20 +1,12 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
-
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
-
-
+{wat, compile_wat} = import 'fink/compile.fnk'
 
 
 test 'single binding export', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     foo = 1
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -30,7 +22,7 @@ test 'single binding export', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -41,7 +33,7 @@ test 'single binding export', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $foo_0))
         (local.set $:pub_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_foo_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_foo_0) (local.get $:pub_foo_0))
         (local.set $:unwrap_foo_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -61,15 +53,15 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:FrAKAJwBAG4AwgEAmgEApgEAmAEAmAEAaAEAA4QBAKABAKoBAJIBAHIA1AEAsAEAbgDOAQCmBQB6AOYBAIoBAA
+    ;; sm:FrAKAJwBAHIAwgEAmgEApgEAmAEAmAEAaAEAA4QBAKABAKoBAJIBAHYA1AEAsAEAbgDOAQCmBQB6AOYBAIoBAA
 
 
 
 test 'let binding', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     x = 42
     x
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -85,7 +77,7 @@ test 'let binding', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -96,7 +88,7 @@ test 'let binding', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:x) (local.get $x_0))
         (local.set $:pub_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_x_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_x_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_x_0) (local.get $:pub_x_0))
         (local.set $:unwrap_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -116,16 +108,16 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:FpwKAJwBAG4AwgEAmgEApgEAmAEAlAEAYAEAAYIBAJgBAKIBAJIBAG4AzAEAqAEAbgDKAQCmBQB6AOYBAIoBAA
+    ;; sm:FpwKAJwBAHIAwgEAmgEApgEAmAEAlAEAYAEAAYIBAJgBAKIBAJIBAHIAzAEAqAEAbgDKAQCmBQB6AOYBAIoBAA
 
 
 
 test 'multiple let bindings used', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     x = 2
     y = 3
     x + y
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -146,10 +138,10 @@ test 'multiple let bindings used', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -162,13 +154,13 @@ test 'multiple let bindings used', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:x) (local.get $x_0))
         (local.set $:pub_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_x_0 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_x_0 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_x_0) (local.get $:pub_x_0))
         (local.set $y_1 (struct.new $rt/int.wat:I64 (i64.const 3)))
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:y) (local.get $y_1))
         (local.set $:pub_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_y_1 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_y_1 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_y_1) (local.get $:pub_y_1))
         (local.set $:unwrap_x_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:unwrap_y_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:y)))
@@ -189,16 +181,16 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:IMQNAJwBAG4AwgEAnAEAcADCAQCaAQCmAQCYAQCUAQBgAJQBAGABAAGAAQCYAQCiAQCSAQBuAMwBAQwBgAEAmAEAogEAkgEAcADMAQCoAQCoAQEMBewFAHoA5gEAigEA
+    ;; sm:IMQNAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCUAQBgAJQBAGABAAGAAQCYAQCiAQCSAQByAMwBAQwBgAEAmAEAogEAkgEAcgDMAQCoAQCoAQEMBewFAHoA5gEAigEA
 
 
 
 
 test 'binding rhs is a call', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     add = fn a, b: a + b
     x = add 1, 2
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::v_61 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -232,7 +224,7 @@ test 'binding rhs is a call', fn:
         (struct.set $rt/apply.wat:Cell 0 (local.get $:slot_48) (local.get $:v_16))
         (local.set $:pub_x_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:x)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_x_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_x_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_x_1) (local.get $:pub_x_1))
         (local.set $:unwrap_x_48 (struct.get $rt/apply.wat:Cell 0 (local.get $:slot_48)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -258,10 +250,10 @@ test 'binding rhs is a call', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -275,7 +267,7 @@ test 'binding rhs is a call', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:add) (local.get $:v_5))
         (local.set $:pub_add_0 (struct.get $rt/apply.wat:Cell 0 (global.get $test:add)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_add_0 (ref.i31 (i32.const 10)))
+        (local.set $:pub_name_add_0 (ref.i31 (i32.const 186)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_add_0) (local.get $:pub_add_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (global.get $test:x) (local.get $:ret_4)))
         (local.set $:v_45 (struct.new $rt/apply.wat:Closure (ref.func $test::v_55) (local.get $:caps_arg)))
@@ -305,15 +297,15 @@ test 'binding rhs is a call', fn:
       (data $d_1 "add")
       (data $d_2 "x")
     )
-    ;; sm:OIIFAJgBAJoBAJIBAJoBAJIBAIIBAR4FyAoAlgEAugEAzgEAugEAxAEAngEAogEAkgEAbgDMAQCsAQBuAMwBAJQPAJwBAHAAwgEAnAEAbgDCAQCaAQCmAQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCSAQB0ANQBAN4BANABALABARwBiAEBBgGIAQBuAMIBAMIBAL4BAIIBALQFAHoA5gEAigEA
+    ;; sm:OIIFAJgBAJoBAJIBAJoBAJIBAIIBAR4FyAoAlgEAugEAzgEAugEAxAEAngEAogEAkgEAcgDMAQCsAQBuAMwBAJQPAJwBAHIAwgEAnAEAcgDCAQCaAQCmAQCYAQCYAQBoAJQBAGAAegDOAQCeAQCqAQCSAQB2ANQBAN4BANABALABARwBiAEBBgGIAQBuAMIBAMIBAL4BAIIBALQFAHoA5gEAigEA
 
 
 
 test 'top-level rec destructure then fn using binding', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {x} = {x: 42}
     foo = fn a: x + a
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -354,7 +346,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (struct.set $rt/apply.wat:Cell 0 (global.get $test:foo) (local.get $:v_30))
         (local.set $:pub_foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:pub_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
-        (local.set $:pub_name_foo_1 (ref.i31 (i32.const 2)))
+        (local.set $:pub_name_foo_1 (ref.i31 (i32.const 178)))
         (call $rt/modules.wat:pub (local.get $:pub_url) (local.get $:pub_name_foo_1) (local.get $:pub_foo_1))
         (local.set $:unwrap_foo_1 (struct.get $rt/apply.wat:Cell 0 (global.get $test:foo)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -390,7 +382,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:fail_121 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_120)))
         (local.set $:v_84 (struct.new $rt/apply.wat:Closure (ref.func $test::v_109) (local.get $:caps_arg)))
-        (local.set $:sym_19 (ref.i31 (i32.const 10)))
+        (local.set $:sym_19 (ref.i31 (i32.const 186)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_17) (local.get $:sym_19) (local.get $:fail_121) (local.get $:v_84))
       )
       (func $test::v_117 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -466,10 +458,10 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_1 3)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 1)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 10)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 186)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_0 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -481,7 +473,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:ret_3)))
         (local.set $:v_93 (struct.new $rt/apply.wat:Closure (ref.func $test::v_155) (local.get $:caps_arg)))
         (local.set $:lit_4 (call $rt/dict.wat:_rec_new))
-        (local.set $:sym_5 (ref.i31 (i32.const 10)))
+        (local.set $:sym_5 (ref.i31 (i32.const 186)))
         (local.set $:lit_6 (struct.new $rt/int.wat:I64 (i64.const 42)))
         (return_call $rt/dict.wat:rec_put (local.get $:ctx_param) (local.get $:lit_4) (local.get $:sym_5) (local.get $:lit_6) (local.get $:v_93))
       )
@@ -501,6 +493,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:XrwIAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF5goAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAkgEAcgDUAQCwAQBuAM4BAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAyggAlgEAugEAyAEAyAEAugEA0gEBMw1kAQANxAYAugEAyAEAbgCUCQCcAQCaAQCcAQCaAQCUAQDkAQDSAQC4AQDSAQBmAQAN4AQAXgCkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCgCwCcAQBuAMIBAJwBAHAAwgEAmgEApgEAmAEAlAEAZgCYAQBoALQBANIBAQwHagECAWIBBgKIAQEFBfQFAHoA5gEAigEA
+    ;; sm:XrwIAJoBAJoBAJIBAIQBALoBAM4BALoBAKwBATQF5goAlgEAugEAxgEAogEAvAEA0gEAoAEAqgEAkgEAdgDUAQCwAQBuAM4BAPwGAJYBAJoBAJYBALoBAMgBAG4AvgEAyggAlgEAugEAyAEAyAEAugEA0gEBMw1mAQANxAYAugEAyAEAbgCUCQCcAQCaAQCcAQCaAQCUAQDkAQDSAQC4AQDSAQBmAQAN4AQAXgCkCQCUAQC6AQDGAQC4AQDSAQB6ANIBAHoA0gEAbgC8AQC-AQC-AQCgCwCcAQByAMIBAJwBAHIAwgEAmgEApgEAmAEAlAEAZgCYAQBoALQBANIBAQwHagECAWQBBgKIAQEFBfQFAHoA5gEAigEA
 
 

@@ -472,9 +472,12 @@ fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
       has_partial(ast, *func) || args.items.iter().any(|&id| has_partial(ast, id))
     }
     NodeKind::Pipe(_) => false, // Pipe children are independent segments
-    NodeKind::Fn { params, body, .. } => {
-      has_partial(ast, *params) || body.items.iter().any(|&id| has_partial(ast, id))
-    }
+    // A Fn body is its own scope boundary: a `?` inside binds to THIS fn, not
+    // the enclosing expression (same as Pipe segments / source blocks). Only the
+    // params are in the enclosing scope. If we recursed into `body`, an outer
+    // expression (e.g. `foo fn: bar ?`) would try to lift the inner `?`, hoisting
+    // the synth param to the wrong fn and orphaning the Partial.
+    NodeKind::Fn { params, .. } => has_partial(ast, *params),
     NodeKind::Patterns(children) => children.items.iter().any(|&id| has_partial(ast, id)),
     NodeKind::Match { subjects, arms, .. } => {
       subjects.items.iter().any(|&id| has_partial(ast, id))
@@ -498,6 +501,55 @@ fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
       has_partial(ast, *params) || body.items.iter().any(|&id| has_partial(ast, id))
     }
     NodeKind::Try(inner) => has_partial(ast, *inner),
+  }
+}
+
+/// Returns true if the tree at `id` contains a Partial that still needs
+/// processing -- either one that binds at THIS scope (`has_partial`), or one
+/// inside a NESTED Fn body (which `has_partial` deliberately excludes, but the
+/// walk must still descend into to wrap the `?` at the inner fn's boundary).
+/// Drives the `_ =>` descent decision in transform_stmt: without the nested-fn
+/// case, `foo fn: bar ?` would short-circuit as partial-free and the inner `?`
+/// would never be desugared.
+fn needs_descent(ast: &Ast<'_>, id: AstId) -> bool {
+  match &ast.nodes.get(id).kind {
+    NodeKind::Partial => true,
+    NodeKind::Fn { params, body, .. } => {
+      needs_descent(ast, *params) || body.items.iter().any(|&i| needs_descent(ast, i))
+    }
+    NodeKind::Apply { func, args } => {
+      needs_descent(ast, *func) || args.items.iter().any(|&i| needs_descent(ast, i))
+    }
+    NodeKind::UnaryOp { operand, .. } => needs_descent(ast, *operand),
+    NodeKind::InfixOp { lhs, rhs, .. } => needs_descent(ast, *lhs) || needs_descent(ast, *rhs),
+    NodeKind::PostfixOp { lhs, .. } => needs_descent(ast, *lhs),
+    NodeKind::Member { lhs, rhs, .. } => needs_descent(ast, *lhs) || needs_descent(ast, *rhs),
+    NodeKind::Group { inner, .. } => needs_descent(ast, *inner),
+    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
+      items.items.iter().any(|&i| needs_descent(ast, i))
+    }
+    NodeKind::StrTempl { children, .. } | NodeKind::StrRawTempl { children, .. } => {
+      children.iter().any(|&i| needs_descent(ast, i))
+    }
+    NodeKind::Spread { inner, .. } => inner.is_some_and(|i| needs_descent(ast, i)),
+    NodeKind::ChainedCmp(parts) => parts.iter().any(|p| match p {
+      CmpPart::Operand(n) => needs_descent(ast, *n),
+      CmpPart::Op(_) => false,
+    }),
+    NodeKind::Match { subjects, arms, .. } => {
+      subjects.items.iter().any(|&i| needs_descent(ast, i))
+        || arms.items.iter().any(|&i| needs_descent(ast, i))
+    }
+    NodeKind::Arm { body, .. } => body.items.iter().any(|&i| needs_descent(ast, i)),
+    NodeKind::Try(inner) => needs_descent(ast, *inner),
+    // A Pipe segment binds its own `?` (independent scope), but the segment still
+    // has to be VISITED to wrap that `?`. So descent must reach it -- unlike
+    // has_partial, which only reports partials owned by the current scope.
+    NodeKind::Pipe(exprs) => exprs.items.iter().any(|&i| needs_descent(ast, i)),
+    NodeKind::Bind { rhs, .. } => needs_descent(ast, *rhs),
+    NodeKind::BindRight { lhs, .. } => needs_descent(ast, *lhs),
+    // Source blocks are opaque; everything else has no partials.
+    _ => false,
   }
 }
 
@@ -804,8 +856,8 @@ impl PartialPass {
       // Everything else: recurse into children (processing inner Group/Pipe boundaries),
       // then wrap in Fn if any Partial remains.
       _ => {
-        if !has_partial(src, id) {
-          // No partials — return unchanged.
+        if !needs_descent(src, id) {
+          // No partials here or in any nested fn — return unchanged.
           return Ok(id);
         }
         let rewritten = self.transform(builder, src, id)?;
@@ -1087,6 +1139,24 @@ impl<'src> Transform<'src> for PartialPass {
     _loc: Loc,
   ) -> TransformResult {
     self.transform_stmt(builder, src, inner)
+  }
+
+  // A Fn is a scope boundary: its body statements are independent scopes whose
+  // `?` binds to THIS fn. Route the body through transform_stmt (which wraps a
+  // surviving partial at the fn boundary) instead of the generic transform_exprs.
+  // Reached when a nested fn appears as an Apply arg / other child.
+  fn transform_fn(
+    &mut self,
+    builder: &mut AstBuilder<'src>,
+    src: &Ast<'src>,
+    params: AstId,
+    sep: Token<'src>,
+    body: Exprs<'src>,
+    loc: Loc,
+  ) -> TransformResult {
+    let params = self.transform(builder, src, params)?;
+    let body = self.transform_body(builder, src, &body)?;
+    Ok(builder.append(NodeKind::Fn { params, sep, body }, loc))
   }
 
   // Member rhs Group (computed key) is transparent — don't create a scope boundary for it.

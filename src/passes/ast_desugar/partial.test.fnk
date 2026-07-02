@@ -395,3 +395,21 @@ test 'partial in pipe with ident', fn:
               LitInt '3'
               SynthIdent '·$_0'
 
+
+test 'partial inside a fn-block argument', fn:
+  desugar ƒink:
+    foo fn:
+      bar ?, 5
+  | equals ƒink:
+    Apply
+      Ident 'foo'
+      Fn ':',
+        Patterns
+        Fn ':',
+          Patterns
+            SynthIdent '·$_0'
+          Apply
+            Ident 'bar'
+            SynthIdent '·$_0'
+            LitInt '5'
+

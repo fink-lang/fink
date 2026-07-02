@@ -1,12 +1,7 @@
-{test, equals: eq} = import 'std/testing.fnk'
+{test, equals, snapshot} = import 'std/testing.fnk'
 {ƒink} = import 'fink/blocks.fnk'
-{wat: cwat} = import 'fink/compile.fnk'
+{wat, compile_wat} = import 'fink/compile.fnk'
 
-
-wat = fn src: src
-
-equals = fn expected: fn actual:
-  eq actual, expected
 
 # TODO: investigate `Fn_rec_new` typing the `update_ctx` accessor
 # import (search for it below). Same pattern as set/list/math
@@ -16,11 +11,11 @@ equals = fn expected: fn actual:
 # `Fn_stdlib_accessor` so its use isn't tied to rec.
 
 test 'set_ctx import + call', fn:
-  cwat ƒink:
+  compile_wat ƒink:
     {set_ctx} = import 'rt/apply.wat'
     set_ctx 'new'
 
-  | equals wat":
+  | equals ?, snapshot wat":
     (module
       (type $rt/dict.wat:Fn_rec_new (func (result (ref null any))))
       (type $test::Fn_host_wrapper (func (param (ref null any))))
@@ -71,7 +66,7 @@ test 'set_ctx import + call', fn:
         (local.set $:fail_94 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $:succ_93)))
         (local.set $:v_65 (struct.new $rt/apply.wat:Closure (ref.func $test::v_82) (local.get $:caps_arg)))
-        (local.set $:sym_17 (ref.i31 (i32.const 2)))
+        (local.set $:sym_17 (ref.i31 (i32.const 178)))
         (return_call $rt/dict.wat:rec_pop (local.get $:ctx_param) (local.get $:v_15) (local.get $:sym_17) (local.get $:fail_94) (local.get $:v_65))
       )
       (func $test::v_90 (type $rt/apply.wat:Fn3) (param $:caps_param (ref null any)) (param $:ctx_param (ref null any)) (param $:params (ref null any))
@@ -147,7 +142,7 @@ test 'set_ctx import + call', fn:
         (local $:sym_reg_name (ref null any))
         (local $:sym_reg_word (ref i31))
         (local.set $:sym_reg_name (call $rt/str.wat:from_data (data.ref $d_2 7)))
-        (local.set $:sym_reg_word (ref.i31 (i32.const 2)))
+        (local.set $:sym_reg_word (ref.i31 (i32.const 178)))
         (call $rt/symbols.wat:register_symbol (local.get $:sym_reg_name) (local.get $:sym_reg_word))
         (local.set $:mod_reg_url (call $rt/str.wat:from_data (data.ref $d_1 4)))
         (call $rt/modules.wat:register_module (i32.const 0) (local.get $:mod_reg_url))
@@ -156,7 +151,7 @@ test 'set_ctx import + call', fn:
         (local.set $:v_74 (struct.new $rt/apply.wat:Closure (ref.func $test::v_128) (local.get $:caps_arg)))
         (local.set $:imp_rec (call $rt/dict.wat:_rec_new))
         (local.set $:imp_val_set_ctx (call $rt/apply.wat:set_ctx))
-        (local.set $:imp_key_set_ctx (ref.i31 (i32.const 2)))
+        (local.set $:imp_key_set_ctx (ref.i31 (i32.const 178)))
         (local.set $:imp_rec (call $rt/dict.wat:_set_field (local.get $:imp_rec) (local.get $:imp_key_set_ctx) (local.get $:imp_val_set_ctx)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $:imp_rec) (local.get $:args)))
@@ -175,4 +170,4 @@ test 'set_ctx import + call', fn:
       (data $d_1 "test")
       (data $d_2 "set_ctx")
     )
-    ;; sm:TIQIAJYBALoBAMYBAQIHXAFSBZABAG4AwgEAxAEAggEA-gYAlgEAmgEAlgEAugEAxgEAbgC-AQDECACWAQC6AQDGAQDGAQC4AQDQAQFTIWIBACG-BgC6AQDGAQBuAI4JAJoBAJoBAJoBAJoBAJQBAOABANIBALYBANABAGYBACHgBABeAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BAO4LAJwBAG4AwgEAmgEApgEAmAEAtAEA0gEAbgB-AHQAlgIAbgDEAQCkBQB6AOYBAIoBAA
+    ;; sm:TIQIAJYBALoBAMYBAQIHXAFSBZABAG4AwgEAxAEAggEA-gYAlgEAmgEAlgEAugEAxgEAbgC-AQDECACWAQC6AQDGAQDGAQC4AQDQAQFTIWYBACG-BgC6AQDGAQBuAI4JAJoBAJoBAJoBAJoBAJQBAOABANIBALYBANABAGYBACHgBABeAKQJAJQBALoBAMYBALgBANIBAHoA0gEAegDSAQBuALwBAL4BAL4BAO4LAJwBAHIAwgEAmgEApgEAmAEAtAEA0gEAbgB-AHgAlgIAbgDEAQCkBQB6AOYBAIoBAA
