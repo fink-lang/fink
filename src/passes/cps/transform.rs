@@ -3951,6 +3951,22 @@ fn lower_pat_lhs(
     //   - anything else — expression: lowered as a value, passed to the guard.
     NodeKind::Apply { func, args } => {
       let arg_ids: Vec<AstId> = args.items.to_vec();
+
+      // Typed positional destructure mirrors construction: `Foo a, b` guards the
+      // value as a Foo, then peels its positionals like `[a, b]`; `Foo a, ..rest`
+      // peels the head and binds the rest as a seq; `Foo ..whole` binds the whole
+      // (still-a-Foo) value. The trigger is a `..` spread arg OR a comma-list of
+      // >= 2 positional slots -- shapes a single-ident predicate/whole-bind
+      // (`is_even v`, `Ok b`) never has, so those keep their existing lowering.
+      let has_spread = arg_ids.iter().any(|&a| matches!(g.node(a).kind, NodeKind::Spread { .. }));
+      let positional_slots = arg_ids.iter().all(|&a| {
+        matches!(g.node(a).kind, NodeKind::Ident(_) | NodeKind::Wildcard | NodeKind::Spread { .. })
+      });
+      let typed_destructure = positional_slots && (has_spread || arg_ids.len() >= 2);
+      if typed_destructure {
+        return lower_typed_destructure(g, func, &arg_ids, val, origin, pending);
+      }
+
       let mut arg_vals: Vec<Val> = vec![];
       // The guard returns a refined value `v1` (the projected instance for a type
       // guard; the unchanged subject for a predicate). The binding slot and any
@@ -4074,6 +4090,50 @@ fn lower_pat_lhs(
 
     other => todo!("lower_pat_lhs: pattern not yet implemented: {:?}", other),
   }
+}
+
+/// Typed positional destructure: `Foo a, b`, `Foo a, ..rest`, `Foo ..whole`,
+/// `Foo ..`. Guards `val` against the type head, then peels the projected
+/// value `v1` positionally.
+///
+///   - lone `..whole` (bound spread)     -> bind `v1` whole (still a Foo).
+///   - otherwise (`Foo a, b`, `Foo ..`)  -> lower the args as a seq pattern
+///     against `v1`, reusing the tuple/seq_pop machinery. `Foo ..` is the bare
+///     spread `[..]` -- a guard plus a match-any-tuple check, binding nothing.
+fn lower_typed_destructure(
+  g: &mut Gen,
+  head: AstId,
+  args: &[AstId],
+  val: Val,
+  origin: Option<AstId>,
+  pending: &mut Vec<Pending>,
+) -> (Bind, CpsId) {
+  // Guard the subject against the type head; `v1` is the projected instance.
+  let v1 = g.fresh_result(origin);
+  let v1_val = ref_val(g, v1.kind, v1.id, origin);
+  let (func_val, func_pending) = lower(g, head);
+  pending.extend(func_pending);
+  pending.push(Pending::MatchGuard {
+    func: Callable::Val(func_val),
+    args: vec![val],
+    result: v1,
+    origin,
+  });
+
+  // Lone `..whole` binds the whole projected value; not a seq peel.
+  if let [only] = args
+    && let NodeKind::Spread { inner: Some(name), .. } = &g.node(*only).kind
+  {
+    let name = *name;
+    let bind = g.bind_name(name);
+    let r = (bind.kind, bind.id);
+    pending.push(Pending::MatchBind { name: bind, val: v1_val, origin });
+    return r;
+  }
+
+  // `Foo a, b` / `Foo a, ..rest` / `Foo ..`: peel positionals off `v1` like
+  // `[a, b]` / `[..]`.
+  emit_seq_pattern(g, v1_val, args, origin, pending)
 }
 
 

@@ -2,6 +2,7 @@
 
 
 {int} = import 'std/int.fnk'
+{float} = import 'std/float.fnk'
 
 
 
@@ -807,3 +808,57 @@ test 'type value reprs in a list', fn:
   equals
     '${lst}'
     '[Bit, Sig fn Bit: Bit]'
+
+
+---
+typed destructure: a type head leads a positional pattern that mirrors
+construction. `Foo a, b` guards then peels positionals; `Foo a, ..rest` peels
+the head and binds the rest as a seq; `Foo ..whole` binds the whole (still-a-Foo)
+value; `Foo ..` (match arm) guards only.
+---
+
+test 'typed destructure binds positionals', fn:
+  Foo = type:
+    int
+    float
+  foo = Foo 1, 2.0
+  Foo a, b = foo
+  equals
+    [a, b]
+    [1, 2.0]
+
+test 'typed destructure head and rest', fn:
+  Foo = type:
+    int
+    float
+  foo = Foo 1, 2.0
+  Foo a, ..rest = foo
+  equals
+    [a, rest]
+    [1, [2.0]]
+
+test 'typed whole-value bind stays a Foo', fn:
+  Foo = type:
+    int
+    float
+  foo = Foo 1, 2.0
+  Foo ..whole = foo
+  equals whole, foo
+
+test 'typed destructure in match arm', fn:
+  Foo = type:
+    int
+    float
+  foo = Foo 1, 2.0
+  r = match foo:
+    Foo _, b: b
+  equals r, 2.0
+
+test 'typed guard-only matches a Foo', fn:
+  Foo = type:
+    int
+    float
+  foo = Foo 1, 2.0
+  r = match foo:
+    Foo ..: 'yes'
+  equals r, 'yes'

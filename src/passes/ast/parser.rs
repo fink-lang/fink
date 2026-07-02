@@ -472,29 +472,45 @@ impl<'src> Parser<'src> {
       return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand }, loc));
     }
 
-    let head = self.parse_infix(0)?;
+    // Fast path for ident head: bump directly so a following `..` is collected
+    // as a spread ARG (`Foo ..w` -> Apply(Foo, [..w])), not consumed as the
+    // range/spread infix operator. Mirrors parse_apply's fast path, which keeps
+    // the binding form `Foo ..w = foo` and the arm form `Foo ..w:` in agreement.
+    // Skip when the ident starts a member chain (`Opt.Some s`) -- that head is a
+    // Member, handled by the infix path + Member-application branch below.
+    let next_is_member = self.peek_next().kind == TokenKind::Sep && self.peek_next().src == ".";
+    if self.at(TokenKind::Ident) && !Self::is_dispatch_keyword(self.peek().src) && !next_is_member {
+      let name_tok = self.bump();
+      let name = name_tok.src;
+      let loc = name_tok.loc;
 
-    if let NodeKind::Ident(name) = self.get(head).kind {
-      if name == "fn" { return self.parse_fn(self.loc_of(head)); }
-      if name == "match" { return self.parse_match_expr(self.loc_of(head)); }
-      if Self::is_type_keyword(name) { return self.parse_type_decl(self.loc_of(head), name); }
-      if self.block_names.contains_key(name) && name != "fn" && name != "match" {
-        return self.parse_block(self.loc_of(head), name);
-      }
-      let func = head;
+      if name == "fn" { return self.parse_fn(loc); }
+      if name == "match" { return self.parse_match_expr(loc); }
+      if Self::is_type_keyword(name) { return self.parse_type_decl(loc, name); }
+      if self.block_names.contains_key(name) { return self.parse_block(loc, name); }
+
+      let func = self.node(NodeKind::Ident(name), loc);
 
       // Tagged template string in argument position: ident immediately adjacent to StrStart
-      if self.at(TokenKind::StrStart) && self.peek().loc.start.idx == self.loc_of(func).end.idx {
+      if self.at(TokenKind::StrStart) && self.peek().loc.start.idx == loc.end.idx {
         let raw_str = self.parse_string(true)?;
         let end = self.loc_of(raw_str).end;
         return Ok(self.node(
           NodeKind::Apply { func, args: Exprs { items: Box::new([raw_str]), seps: vec![] } },
-          Loc { start: self.loc_of(head).start, end },
+          Loc { start: loc.start, end },
         ));
       }
 
-      return self.collect_apply_args_no_block(func, true); // no block detection, nested=true to not eat ":"
+      let result = self.collect_apply_args_no_block(func, true)?; // no block detection, nested=true to not eat ":"
+      // No args collected (bare ident): let infix operators (`a > 0`, `a..b`)
+      // continue -- guard patterns and ranges still parse.
+      if matches!(self.get(result).kind, NodeKind::Ident(_)) {
+        return self.parse_infix_from(result, 0);
+      }
+      return Ok(result);
     }
+
+    let head = self.parse_infix(0)?;
 
     // Member-access head followed by args: `Opt.Some {val: 1}` in argument
     // position is one argument (the case construction), not two. Mirrors the
