@@ -3952,18 +3952,30 @@ fn lower_pat_lhs(
     NodeKind::Apply { func, args } => {
       let arg_ids: Vec<AstId> = args.items.to_vec();
 
-      // Typed positional destructure mirrors construction: `Foo a, b` guards the
-      // value as a Foo, then peels its positionals like `[a, b]`; `Foo a, ..rest`
-      // peels the head and binds the rest as a seq; `Foo ..whole` binds the whole
-      // (still-a-Foo) value. The trigger is a `..` spread arg OR a comma-list of
-      // >= 2 positional slots -- shapes a single-ident predicate/whole-bind
-      // (`is_even v`, `Ok b`) never has, so those keep their existing lowering.
-      let has_spread = arg_ids.iter().any(|&a| matches!(g.node(a).kind, NodeKind::Spread { .. }));
-      let positional_slots = arg_ids.iter().all(|&a| {
-        matches!(g.node(a).kind, NodeKind::Ident(_) | NodeKind::Wildcard | NodeKind::Spread { .. })
-      });
-      let typed_destructure = positional_slots && (has_spread || arg_ids.len() >= 2);
-      if typed_destructure {
+      // Typed positional destructure: `Foo <positionals>` guards the value as a
+      // Foo (is_instance), then destructures the projected value with EXACTLY the
+      // seq-pattern lowering `[<positionals>]` would use -- `[..]` and `Foo ..`
+      // are the same operation, differing only in the guard. So whatever `[...]`
+      // accepts, `Foo ...` accepts: binds, wildcards, literals, nested patterns,
+      // spreads. `Foo a, b`, `Foo 1, ..rest`, `Foo ..` all route here.
+      //
+      // Positional args destructure the guard's success value as a seq. The guard
+      // (guard_apply) normalises success to a seq: a type guard yields the (already
+      // seq-like) instance; a fn guard yields `[val]`. So `Foo a`, `is_even v`,
+      // `Foo a, b`, `Foo 1, ..rest`, `Foo ..` all `seq_pop` uniformly -- single or
+      // multi arg, type or predicate. Only `..x` whole-bind and `{...}`/`[...]`
+      // sub-pattern args stay on the path below (they want the value as-is / a
+      // rec-or-seq matcher, not a positional peel).
+      let all_positional = arg_ids.iter().all(|&a| matches!(
+        g.node(a).kind,
+        NodeKind::Ident(_) | NodeKind::Wildcard | NodeKind::Spread { .. }
+          | NodeKind::LitInt(_) | NodeKind::LitFloat(_) | NodeKind::LitBool(_) | NodeKind::LitStr { .. }
+      ));
+      // A lone `_` (`Foo _`, `is_opt _`) is guard-only -- guard the value, bind
+      // nothing, no positional peel. Stays on the path below.
+      let lone_wildcard = arg_ids.len() == 1
+        && matches!(g.node(arg_ids[0]).kind, NodeKind::Wildcard);
+      if all_positional && !arg_ids.is_empty() && !lone_wildcard {
         return lower_typed_destructure(g, func, &arg_ids, val, origin, pending);
       }
 

@@ -366,9 +366,14 @@
     (local.set $ctx  (array.get $Captures (local.get $captures) (i32.const 3)))
     ;; The predicate's verdict is the single arg; fink bool = i31.
     (local.set $result (call $args_head (local.get $args)))
+    ;; On success, succ receives the guarded value wrapped as a 1-element seq
+    ;; `[val]`, so the caller's succ is uniformly a seq-matcher (`is_even v` ->
+    ;; seq_pop v), matching type guards (which pass a seq-like instance as-is).
     (if (i31.get_s (ref.cast (ref i31) (local.get $result)))
       (then (return_call $apply_1
-        (local.get $ctx) (local.get $val) (local.get $succ))))
+        (local.get $ctx)
+        (call $list_prepend (ref.as_non_null (local.get $val)) (call $list_empty))
+        (local.get $succ))))
     (return_call $apply_0 (local.get $ctx) (local.get $fail)))
 
   ;; Build the guard branch cont closure (see $_guard_branch_fn).

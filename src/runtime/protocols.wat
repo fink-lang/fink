@@ -47,6 +47,7 @@
   (import "rt/types.wat"     "Type"         (type $Type         (sub any)))
   (import "rt/types.wat"     "Union"        (type $Union        (sub $Type)))
   (import "rt/types.wat"     "Enum"         (type $Enum         (sub $Type)))
+  (import "rt/types.wat"     "FnType"       (type $FnType       (sub $Type)))
   (import "rt/types.wat"     "enum_cases"
     (func $enum_cases (param (ref null any)) (result (ref null any))))
   (import "rt/types.wat"     "union_eq"
@@ -82,6 +83,9 @@
   (import "rt/opaque.wat" "op_neq" (func $opaque_op_neq (param (ref $Opaque)) (param (ref $Opaque)) (result i32)))
   (import "rt/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
+  (import "rt/list.wat" "empty" (func $list_empty (result (ref $List))))
+  (import "rt/list.wat" "prepend"
+    (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
   (import "rt/list.wat" "seq_pop"
     (func $list_seq_pop (param $ctx (ref null any)) (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
   (import "rt/list.wat" "seq_pop_back"
@@ -1233,8 +1237,37 @@
     (if (ref.test (ref $Union) (local.get $guard))
       (then
         (if (call $is_union_member (local.get $val) (local.get $guard))
+          ;; A union classifies -- no fields to peel. Wrap success as `[val]` so a
+          ;; single-ident bind (`FooOrSpam x`) seq-pops the whole value. The value
+          ;; keeps its concrete member type inside the seq.
           (then (return_call $apply_1
-            (local.get $ctx) (local.get $val) (local.get $succ))))
+            (local.get $ctx)
+            (call $list_prepend (ref.as_non_null (local.get $val)) (call $list_empty))
+            (local.get $succ))))
+        (return_call $apply_0 (local.get $ctx) (local.get $fail))))
+    ;; Enum-level guard: like a union, an enum classifies its cases -- no fields
+    ;; of its own to peel. Wrap success as `[val]` so a single-ident bind
+    ;; (`Opt o`) seq-pops the whole case instance. MUST precede the $Type arm
+    ;; ($Enum <: $Type). is_instance walks the case's $base chain to the enum.
+    (if (ref.test (ref $Enum) (local.get $guard))
+      (then
+        (if (call $is_instance (local.get $val) (local.get $guard))
+          (then (return_call $apply_1
+            (local.get $ctx)
+            (call $list_prepend (ref.as_non_null (local.get $val)) (call $list_empty))
+            (local.get $succ))))
+        (return_call $apply_0 (local.get $ctx) (local.get $fail))))
+    ;; Fn-type guard: a fn-type instance ($FnInst) is a tagged callable, not a
+    ;; field-bearing value -- nothing to peel. Wrap success as `[val]` so a
+    ;; single-ident bind (`Foo f`) seq-pops the whole instance. MUST precede the
+    ;; $Type arm ($FnType <: $Type).
+    (if (ref.test (ref $FnType) (local.get $guard))
+      (then
+        (if (call $is_instance (local.get $val) (local.get $guard))
+          (then (return_call $apply_1
+            (local.get $ctx)
+            (call $list_prepend (ref.as_non_null (local.get $val)) (call $list_empty))
+            (local.get $succ))))
         (return_call $apply_0 (local.get $ctx) (local.get $fail))))
     ;; Nominal type guard: is_instance ($base-walk). On match, DOWNCAST val to
     ;; the guard type (project to its fields) and succ with the projection;
@@ -1242,10 +1275,23 @@
     (if (ref.test (ref $Type) (local.get $guard))
       (then
         (if (call $is_instance (local.get $val) (local.get $guard))
-          (then (return_call $apply_1
-            (local.get $ctx)
-            (call $project_inst (local.get $val) (local.get $guard))
-            (local.get $succ))))
+          (then
+            ;; A field-bearing / seq-like value is passed as-is: an $Inst (rec/tuple)
+            ;; is projected (tuple is seq-like -> positional peels; rec feeds its
+            ;; `{...}` matcher); a $Set is already seq-like. An INTRINSIC scalar
+            ;; (int/str/float: native, no fields) is wrapped `[val]` so a single-ident
+            ;; whole-bind seq-pops it.
+            (if (i32.or
+                  (ref.test (ref $Inst) (local.get $val))
+                  (ref.test (ref $Set) (local.get $val)))
+              (then (return_call $apply_1
+                (local.get $ctx)
+                (call $project_inst (local.get $val) (local.get $guard))
+                (local.get $succ)))
+              (else (return_call $apply_1
+                (local.get $ctx)
+                (call $list_prepend (ref.as_non_null (local.get $val)) (call $list_empty))
+                (local.get $succ))))))
         (return_call $apply_0 (local.get $ctx) (local.get $fail))))
     ;; Predicate guard: apply guard(val) with a branch cont (conts-first).
     (return_call $apply_2_vals
