@@ -3951,6 +3951,34 @@ fn lower_pat_lhs(
     //   - anything else — expression: lowered as a value, passed to the guard.
     NodeKind::Apply { func, args } => {
       let arg_ids: Vec<AstId> = args.items.to_vec();
+
+      // Typed positional destructure: `Foo <positionals>` guards the value as a
+      // Foo (is_instance), then destructures the projected value with EXACTLY the
+      // seq-pattern lowering `[<positionals>]` would use -- `[..]` and `Foo ..`
+      // are the same operation, differing only in the guard. So whatever `[...]`
+      // accepts, `Foo ...` accepts: binds, wildcards, literals, nested patterns,
+      // spreads. `Foo a, b`, `Foo 1, ..rest`, `Foo ..` all route here.
+      //
+      // Positional args destructure the guard's success value as a seq. The guard
+      // (guard_apply) normalises success to a seq: a type guard yields the (already
+      // seq-like) instance; a fn guard yields `[val]`. So `Foo a`, `is_even v`,
+      // `Foo a, b`, `Foo 1, ..rest`, `Foo ..` all `seq_pop` uniformly -- single or
+      // multi arg, type or predicate. Only `..x` whole-bind and `{...}`/`[...]`
+      // sub-pattern args stay on the path below (they want the value as-is / a
+      // rec-or-seq matcher, not a positional peel).
+      let all_positional = arg_ids.iter().all(|&a| matches!(
+        g.node(a).kind,
+        NodeKind::Ident(_) | NodeKind::Wildcard | NodeKind::Spread { .. }
+          | NodeKind::LitInt(_) | NodeKind::LitFloat(_) | NodeKind::LitBool(_) | NodeKind::LitStr { .. }
+      ));
+      // A lone `_` (`Foo _`, `is_opt _`) is guard-only -- guard the value, bind
+      // nothing, no positional peel. Stays on the path below.
+      let lone_wildcard = arg_ids.len() == 1
+        && matches!(g.node(arg_ids[0]).kind, NodeKind::Wildcard);
+      if all_positional && !arg_ids.is_empty() && !lone_wildcard {
+        return lower_typed_destructure(g, func, &arg_ids, val, origin, pending);
+      }
+
       let mut arg_vals: Vec<Val> = vec![];
       // The guard returns a refined value `v1` (the projected instance for a type
       // guard; the unchanged subject for a predicate). The binding slot and any
@@ -4074,6 +4102,50 @@ fn lower_pat_lhs(
 
     other => todo!("lower_pat_lhs: pattern not yet implemented: {:?}", other),
   }
+}
+
+/// Typed positional destructure: `Foo a, b`, `Foo a, ..rest`, `Foo ..whole`,
+/// `Foo ..`. Guards `val` against the type head, then peels the projected
+/// value `v1` positionally.
+///
+///   - lone `..whole` (bound spread)     -> bind `v1` whole (still a Foo).
+///   - otherwise (`Foo a, b`, `Foo ..`)  -> lower the args as a seq pattern
+///     against `v1`, reusing the tuple/seq_pop machinery. `Foo ..` is the bare
+///     spread `[..]` -- a guard plus a match-any-tuple check, binding nothing.
+fn lower_typed_destructure(
+  g: &mut Gen,
+  head: AstId,
+  args: &[AstId],
+  val: Val,
+  origin: Option<AstId>,
+  pending: &mut Vec<Pending>,
+) -> (Bind, CpsId) {
+  // Guard the subject against the type head; `v1` is the projected instance.
+  let v1 = g.fresh_result(origin);
+  let v1_val = ref_val(g, v1.kind, v1.id, origin);
+  let (func_val, func_pending) = lower(g, head);
+  pending.extend(func_pending);
+  pending.push(Pending::MatchGuard {
+    func: Callable::Val(func_val),
+    args: vec![val],
+    result: v1,
+    origin,
+  });
+
+  // Lone `..whole` binds the whole projected value; not a seq peel.
+  if let [only] = args
+    && let NodeKind::Spread { inner: Some(name), .. } = &g.node(*only).kind
+  {
+    let name = *name;
+    let bind = g.bind_name(name);
+    let r = (bind.kind, bind.id);
+    pending.push(Pending::MatchBind { name: bind, val: v1_val, origin });
+    return r;
+  }
+
+  // `Foo a, b` / `Foo a, ..rest` / `Foo ..`: peel positionals off `v1` like
+  // `[a, b]` / `[..]`.
+  emit_seq_pattern(g, v1_val, args, origin, pending)
 }
 
 

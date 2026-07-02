@@ -327,67 +327,50 @@ test 'seq — predicate guard', fn:
   cps_module ƒink:
     [x, is_even y] = foo
   | equals ƒink:
-    ·ƒink_module fn ·ƒctx_61, ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_98, ·ƒret_2:
       ·letrec fn ·x_0:
         ·fn
-          fn ·ƒctx_63, ·ƒv_7, ·ƒv_8:
+          fn ·ƒctx_100, ·ƒv_7, ·ƒv_8:
             ·let ·ƒv_7, fn ·x_0:
-              ·guard_apply ·ƒctx_63, ·∅is_even, ·ƒv_8,
-                fn ·ƒctx_65, ·ƒv_37:
-                  ·let ·ƒv_37, fn ·y_1:
-                    ·ƒret_2 ·ƒctx_65, ·y_1
-                fn ·ƒctx_66: ·panic ·ƒctx_66
-          fn ·ƒv_50:
+              ·guard_apply ·ƒctx_100, ·∅is_even, ·ƒv_8,
+                fn ·ƒctx_102, ·ƒv_37:
+                  ·fn
+                    fn ·ƒctx_103, ·ƒv_43:
+                      ·let ·ƒv_43, fn ·y_1:
+                        ·ƒret_2 ·ƒctx_103, ·y_1
+                    fn ·ƒv_71:
+                      ·fn
+                        fn ·ƒctx_104, ·ƒsucc_41, ·ƒfail_42, ·ƒv_40:
+                          ·guard_apply ·ƒctx_104, ·tuple_protocol, ·ƒv_40,
+                            fn ·ƒctx_106, ·ƒv_55:
+                              ·seq_pop ·ƒctx_106, ·ƒv_55, ·ƒfail_42, fn ·ƒctx_108, ·ƒv_43, ·ƒv_47:
+                                ·empty ·ƒctx_108, ·ƒv_47, fn ·ƒctx_110, ·ƒv_50:
+                                  ·if ·ƒv_50,
+                                    fn: ·ƒsucc_41 ·ƒctx_110, ·ƒv_43
+                                    fn: ·ƒfail_42 ·ƒctx_110
+                            fn ·ƒctx_113: ·ƒfail_42 ·ƒctx_113
+                        fn ·ƒv_64:
+                          ·fn
+                            fn ·ƒctx_115: ·panic ·ƒctx_115
+                            fn ·ƒv_74: ·ƒv_64 ·ƒctx_102, ·ƒv_71, ·ƒv_74, ·ƒv_37
+                fn ·ƒctx_118: ·panic ·ƒctx_118
+          fn ·ƒv_87:
             ·fn
-              fn ·ƒctx_68, ·ƒsucc_5, ·ƒfail_6, ·ƒv_4:
-                ·guard_apply ·ƒctx_68, ·tuple_protocol, ·ƒv_4,
-                  fn ·ƒctx_70, ·ƒv_21:
-                    ·seq_pop ·ƒctx_70, ·ƒv_21, ·ƒfail_6, fn ·ƒctx_72, ·ƒv_7, ·ƒv_22:
-                      ·seq_pop ·ƒctx_72, ·ƒv_22, ·ƒfail_6, fn ·ƒctx_74, ·ƒv_8, ·ƒv_13:
-                        ·empty ·ƒctx_74, ·ƒv_13, fn ·ƒctx_76, ·ƒv_16:
+              fn ·ƒctx_120, ·ƒsucc_5, ·ƒfail_6, ·ƒv_4:
+                ·guard_apply ·ƒctx_120, ·tuple_protocol, ·ƒv_4,
+                  fn ·ƒctx_122, ·ƒv_21:
+                    ·seq_pop ·ƒctx_122, ·ƒv_21, ·ƒfail_6, fn ·ƒctx_124, ·ƒv_7, ·ƒv_22:
+                      ·seq_pop ·ƒctx_124, ·ƒv_22, ·ƒfail_6, fn ·ƒctx_126, ·ƒv_8, ·ƒv_13:
+                        ·empty ·ƒctx_126, ·ƒv_13, fn ·ƒctx_128, ·ƒv_16:
                           ·if ·ƒv_16,
-                            fn: ·ƒsucc_5 ·ƒctx_76, ·ƒv_7, ·ƒv_8
-                            fn: ·ƒfail_6 ·ƒctx_76
-                  fn ·ƒctx_79: ·ƒfail_6 ·ƒctx_79
+                            fn: ·ƒsucc_5 ·ƒctx_128, ·ƒv_7, ·ƒv_8
+                            fn: ·ƒfail_6 ·ƒctx_128
+                  fn ·ƒctx_131: ·ƒfail_6 ·ƒctx_131
               fn ·ƒv_34:
                 ·fn
-                  fn ·ƒctx_81: ·panic ·ƒctx_81
-                  fn ·ƒv_53: ·ƒv_34 ·ƒctx_61, ·ƒv_50, ·ƒv_53, ·∅foo
-    # sm:pwEAAQAUAAEAFCQBABQYAQAUEgACAAYBABQAAQAUGAECAQoAAgAKAQEUAAEAFAgAFAAYAQAUEgEAFA4AAgASAQIBAAEAAQwBARQOAAoBAgEKAAIAFgEGCQABAAkcABQABAEABxgABAEHFA4AAgAgABgBCAkQAAIAHgEACQABAAkMAQAJEAAKARABCgACACIBFxQAAQAUFAEAFBQABAEYAQoAIAAUAAQBDwkAAQAJEAAUABQBBxQQAAIAEgEAFAABABQIABwAGAAYABgBABQOAAIAGgEAFAABABQcABQABAEAFCAABAEAFA4AAgAkABgBABQQAAIAIgEAFAABABQUABQABAEAFBAABAEAFBQACgAYAQAUEgEAFBAAAgAmAQAUAAEAFBQAFAAEAQAUEAAEAQAUFAAKABgBABQSAQAUEAACACoBABQAAQAUEAAUAAQBABQQAAoAGAEAFBAAAgAuAQAUAAEAFAoBABQQAAIANgAEAQAUAAEAFBYAFAAEAQAUDgAEAQAUDgA2AAQBABQAAQAUFgAUACQAFAAEAQAUAAEAFBYAFAAcAQAUEAACABoBABQAAQAUCAAkABQABAEAFAABABQQABQAJAEAFBAABAEAFAABABQSABQABAEAFBAABAEAFBAABAEiAw
-
-
-test 'seq — constructor guard with payload', fn:
-  cps_module ƒink:
-    [x, Ok b] = foo
-  | equals ƒink:
-    ·ƒink_module fn ·ƒctx_61, ·ƒret_2:
-      ·letrec fn ·x_0:
-        ·fn
-          fn ·ƒctx_63, ·ƒv_7, ·ƒv_8:
-            ·let ·ƒv_7, fn ·x_0:
-              ·guard_apply ·ƒctx_63, ·∅Ok, ·ƒv_8,
-                fn ·ƒctx_65, ·ƒv_37:
-                  ·let ·ƒv_37, fn ·b_1:
-                    ·ƒret_2 ·ƒctx_65, ·b_1
-                fn ·ƒctx_66: ·panic ·ƒctx_66
-          fn ·ƒv_50:
-            ·fn
-              fn ·ƒctx_68, ·ƒsucc_5, ·ƒfail_6, ·ƒv_4:
-                ·guard_apply ·ƒctx_68, ·tuple_protocol, ·ƒv_4,
-                  fn ·ƒctx_70, ·ƒv_21:
-                    ·seq_pop ·ƒctx_70, ·ƒv_21, ·ƒfail_6, fn ·ƒctx_72, ·ƒv_7, ·ƒv_22:
-                      ·seq_pop ·ƒctx_72, ·ƒv_22, ·ƒfail_6, fn ·ƒctx_74, ·ƒv_8, ·ƒv_13:
-                        ·empty ·ƒctx_74, ·ƒv_13, fn ·ƒctx_76, ·ƒv_16:
-                          ·if ·ƒv_16,
-                            fn: ·ƒsucc_5 ·ƒctx_76, ·ƒv_7, ·ƒv_8
-                            fn: ·ƒfail_6 ·ƒctx_76
-                  fn ·ƒctx_79: ·ƒfail_6 ·ƒctx_79
-              fn ·ƒv_34:
-                ·fn
-                  fn ·ƒctx_81: ·panic ·ƒctx_81
-                  fn ·ƒv_53: ·ƒv_34 ·ƒctx_61, ·ƒv_50, ·ƒv_53, ·∅foo
-    # sm:pwEAAQAPAAEADyQBAA8YAQAPEgACAAYBAA8AAQAPGAECAQoAAgAKAQEPAAEADwgAFAAYAQAPEgEADw4AAgASAQIBAAEAAQwBAQ8OAAoBAgEKAAIAFgEGBAABAAQcABQABAEAAg4ABAEHDw4AAgAgABgBCAQQAAIAHgEABAABAAQMAQAEEAAKAQYBCgACACIBDQ8AAQAPFAEADxQABAEOAQoAIAAUAAQBBQQAAQAEEAAUABQBBw8QAAIAEgEADwABAA8IABwAGAAYABgBAA8OAAIAGgEADwABAA8cABQABAEADyAABAEADw4AAgAkABgBAA8QAAIAIgEADwABAA8UABQABAEADxAABAEADxQACgAYAQAPEgEADxAAAgAmAQAPAAEADxQAFAAEAQAPEAAEAQAPFAAKABgBAA8SAQAPEAACACoBAA8AAQAPEAAUAAQBAA8QAAoAGAEADxAAAgAuAQAPAAEADwoBAA8QAAIANgAEAQAPAAEADxYAFAAEAQAPDgAEAQAPDgA2AAQBAA8AAQAPFgAUACQAFAAEAQAPAAEADxYAFAAcAQAPEAACABoBAA8AAQAPCAAkABQABAEADwABAA8QABQAJAEADxAABAEADwABAA8SABQABAEADxAABAEADxAABAEYAw
-
+                  fn ·ƒctx_133: ·panic ·ƒctx_133
+                  fn ·ƒv_90: ·ƒv_34 ·ƒctx_98, ·ƒv_87, ·ƒv_90, ·∅foo
+    # sm:jQIAAQAUAAEAFCQBABQYAQAUEgACAAYBABQAAQAUGAECAQoAAgAKAQEUAAEAFAgAFAAaAQAUEgEAFA4AAgASAQIBAAEAAQwBARQOAAoBAgEKAAIAFgEGCQABAAkcABYABAEABxgABAEHFA4AAgAgABoBCAkQAAIAHgEACQABAAkIACgAGgEACRAAAgAmARABAAEAAQwBDwkQAAoBEAEKAAIAKgEXFAABABQUAQAUFgAEARgBCgAoAQ8JEAACACYBAAkAAQAJCAAwABoAGgAaAQAJEAACAC4BAAkAAQAJHAAWAAQBAAkgAAQBAAkQAAIAOAAaAQAJEAACADYBAAkAAQAJFAAWAAQBAAkQAAQBAAkWAAoAGgEACRQBAAkQAAIAOgEACQABAAkQABYABAEACRAACgAaAQAJEAACAD4BAAkAAQAJCgEACRAAAgBGAAQBAAkAAQAJGAAWAAQBAAkQAEYABAEACQABAAkYABYAOAAWAAQBAAkAAQAJGAAWADABAAkQAAIALgEACQABAAkIADgAFgAEAQAJAAEACRAAFgA4AQAJEAAEAQAJAAEACRIAFgAEAQAJEAAEAQAJEAAEAQAJEAAgABYABAEACQABAAkQABYAFAEHFBAAAgASAQAUAAEAFAgAHAAaABgAGAEAFA4AAgAaAQAUAAEAFBwAFgAEAQAUIAAEAQAUDgACACQAGgEAFBAAAgAiAQAUAAEAFBQAFgAEAQAUEAAEAQAUFAAKABoBABQSAQAUEAACACYBABQAAQAUFAAWAAQBABQQAAQBABQUAAoAGgEAFBIBABQQAAIAKgEAFAABABQQABYABAEAFBAACgAaAQAUEAACAC4BABQAAQAUCgEAFBAAAgA2AAQBABQAAQAUFgAWAAQBABQOAAQBABQOADYABAEAFAABABQWABYAJAAWAAQBABQAAQAUFgAWABwBABQQAAIAGgEAFAABABQIACQAFgAEAQAUAAEAFBAAFgAkAQAUEAAEAQAUAAEAFBIAFAAEAQAUEAAEAQAUEAAEASID
 
 test 'seq — constructor predicate with wildcard', fn:
   cps_module ƒink:
@@ -418,64 +401,6 @@ test 'seq — constructor predicate with wildcard', fn:
                   fn ·ƒctx_81: ·panic ·ƒctx_81
                   fn ·ƒv_52: ·ƒv_33 ·ƒctx_60, ·ƒv_49, ·ƒv_52, ·∅foo
     # sm:nQEAAQAUAAEAFCQBABQYAQAUEgACAAYBABQAAQAUGAECAQoAAgAKAQEUAAEAFAgAFAAYAQAUEgEAFA4AAgASAQIBAAEAAQwBARQOAAoBAgEKAAIAFgEGCQABAAkcABQABAEABxgABAEHFA4AAgAgABgBCAkQAAQBAAkAAQAJFAAUACAAFAAEAQAJAAEACRAAFAAUAQcUEAACABIBABQAAQAUCAAcABgAGAAYAQAUDgACABoBABQAAQAUHAAUAAQBABQgAAQBABQOAAIAJAAYAQAUEAACACIBABQAAQAUFAAUAAQBABQQAAQBABQUAAoAGAEAFBIBABQQAAIAJgEAFAABABQUABQABAEAFBAABAEAFBQACgAYAQAUEgEAFBAAAgAqAQAUAAEAFBAAFAAEAQAUEAAKABgBABQQAAIALgEAFAABABQKAQAUEAACADYABAEAFAABABQWABQABAEAFA4ABAEAFA4ANgAEAQAUAAEAFBYAFAAkABQABAEAFAABABQWABQAHAEAFBAAAgAaAQAUAAEAFAgAJAAUAAQBABQAAQAUEAAUACQBABQQAAQBABQAAQAUEgAUAAQBABQQAAQBABQQAAQBIgM
-
-
-test 'seq — multi-arg guard with bound element', fn:
-  cps_module ƒink:
-    [1, foo 2, a, 3; 4] = bar
-  | equals ƒink:
-    ·ƒink_module fn ·ƒctx_121, ·ƒret_1:
-      ·fn
-        fn ·ƒctx_123, ·ƒv_6, ·ƒv_7, ·ƒv_8:
-          ·fn
-            fn ·ƒctx_124:
-              ·guard_apply ·ƒctx_124, ·∅foo, (i8 2), ·ƒv_7, (i8 3),
-                fn ·ƒctx_126, ·ƒv_57:
-                  ·let ·ƒv_57, fn ·a_0:
-                    ·fn
-                      fn ·ƒctx_127: ·ƒret_1 ·ƒctx_127, ·panic
-                      fn ·ƒv_81:
-                        ·fn
-                          fn ·ƒctx_129, ·ƒsucc_65, ·ƒfail_66, ·ƒv_64:
-                            ·op_eq ·ƒctx_129, ·ƒv_64, (i8 4), fn ·ƒctx_131, ·ƒv_69:
-                              ·if ·ƒv_69,
-                                fn: ·ƒsucc_65 ·ƒctx_131
-                                fn: ·ƒfail_66 ·ƒctx_131
-                          fn ·ƒv_77:
-                            ·fn
-                              fn ·ƒctx_134: ·panic ·ƒctx_134
-                              fn ·ƒv_84: ·ƒv_77 ·ƒctx_126, ·ƒv_81, ·ƒv_84, ·ƒv_8
-                fn ·ƒctx_137: ·panic ·ƒctx_137
-            fn ·ƒv_100:
-              ·fn
-                fn ·ƒctx_139, ·ƒsucc_42, ·ƒfail_43, ·ƒv_41:
-                  ·op_eq ·ƒctx_139, ·ƒv_41, (i8 1), fn ·ƒctx_141, ·ƒv_46:
-                    ·if ·ƒv_46,
-                      fn: ·ƒsucc_42 ·ƒctx_141
-                      fn: ·ƒfail_43 ·ƒctx_141
-                fn ·ƒv_54:
-                  ·fn
-                    fn ·ƒctx_144: ·panic ·ƒctx_144
-                    fn ·ƒv_103: ·ƒv_54 ·ƒctx_123, ·ƒv_100, ·ƒv_103, ·ƒv_6
-        fn ·ƒv_111:
-          ·fn
-            fn ·ƒctx_147, ·ƒsucc_4, ·ƒfail_5, ·ƒv_3:
-              ·guard_apply ·ƒctx_147, ·tuple_protocol, ·ƒv_3,
-                fn ·ƒctx_149, ·ƒv_22:
-                  ·seq_pop ·ƒctx_149, ·ƒv_22, ·ƒfail_5, fn ·ƒctx_151, ·ƒv_6, ·ƒv_27:
-                    ·seq_pop ·ƒctx_151, ·ƒv_27, ·ƒfail_5, fn ·ƒctx_153, ·ƒv_7, ·ƒv_23:
-                      ·seq_pop ·ƒctx_153, ·ƒv_23, ·ƒfail_5, fn ·ƒctx_155, ·ƒv_8, ·ƒv_14:
-                        ·empty ·ƒctx_155, ·ƒv_14, fn ·ƒctx_157, ·ƒv_17:
-                          ·if ·ƒv_17,
-                            fn: ·ƒsucc_4 ·ƒctx_157, ·ƒv_6, ·ƒv_7, ·ƒv_8
-                            fn: ·ƒfail_5 ·ƒctx_157
-                fn ·ƒctx_160: ·ƒfail_5 ·ƒctx_160
-            fn ·ƒv_39:
-              ·fn
-                fn ·ƒctx_162: ·panic ·ƒctx_162
-                fn ·ƒv_114: ·ƒv_39 ·ƒctx_121, ·ƒv_111, ·ƒv_114, ·∅bar
-    # sm:wAIAAQAZAAEAGSQBABkaAQAZEgACAAYBABkAAQAZCAAQABoBABkSAQAZEgEAGQ4AAgAOAQIBAAEAAQgAGAAWAAIAFgEGCwABAAscABYABAEAAxAABgEIAQABAAEGAQABBAAEAQ8ZDgAGARwBAAEAAQYBAAEEAAIAIAAaARMLEAACAB4BAAsAAQALDAEACxAACgEOAQoAAgAiAQwBAAEAAQgALAAWAAQBAAEAAQABFAAWAAQBAAEOACwBAAEQAAIAKgEAAQABAAEIADQAGgAaABoBAAEQAAIAMgEAAQABAAEQABYABAEAARAABgEAAQABAAEGAQABBAAKABoBAAEQAAIANgEAAQABAAEKAQABEAACAD4ABAEAAQABAAEYABYAPgAEAQABAAEAARgAFgA0AQABEAACADIBAAEAAQABCAA8ABYABAEAAQABAAEQABYAPAEAARAABAEAAQABAAESABYABAEAARAABAEAARAABAEhGQ4AIAAWAAQBCAsAAQALEAAWABgBBQESAAIAFgEAAQABAAEIACAAGgAaABoBAAEQAAIAHgEAAQABAAEQABYABAEAARAABgEAAQABAAEGAQABBAAKABoBAAEQAAIAIgEAAQABAAEKAQABEAACACoABAEAAQABAAEYABYAKgAEAQABAAEAARgAFgAgAQABEAACAB4BAAEAAQABCAAoABYABAEAAQABAAEQABYAKAEAARIABAEAAQABAAESABYABAEAARIABAEAARIABAEBGQ4AEAEAGRIAAgAOAQAZAAEAGQgAGAAaABgAGAEAGQ4AAgAWAQAZAAEAGRwAFgAEAQAZIAAEAQAZDgACACAAGgEAGRAAAgAeAQAZAAEAGRQAFgAEAQAZEAAEAQAZFAAKABoBABkSAQAZEAACACIBABkAAQAZFAAWAAQBABkQAAQBABkUAAoAGgEAGRIBABkQAAIAJgEAGQABABkUABYABAEAGRAABAEAGRQACgAaAQAZEgEAGRAAAgAqAQAZAAEAGRAAFgAEAQAZEAAKABoBABkQAAIALgEAGQABABkKAQAZEAACADYABAEAGQABABkWABYABAEAGQ4ABAEAGQ4ABAEAGQ4ANgAEAQAZAAEAGRYAFgAgABYABAEAGQABABkWABYAGAEAGRAAAgAWAQAZAAEAGQgAIAAWAAQBABkAAQAZEAAWACABABkSAAQBABkAAQAZEgAWAAQBABkSAAQBABkSAAQBLAM
-
 
 
 test 'seq — nested', fn:

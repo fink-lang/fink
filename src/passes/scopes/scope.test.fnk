@@ -562,3 +562,56 @@ test 'import resolves to prelude', fn:
       bind 0, 'foo'
       ref 'import', builtin 0
 
+
+
+---
+typed destructure patterns: the type head resolves as a reference; positional
+slots and `..whole` register binds. Guard-only `Foo ..` resolves the head and
+binds nothing.
+---
+
+test 'typed guard-only head resolves', fn:
+  scope ƒink:
+    Foo = type _
+    match foo:
+      Foo ..: 1
+  | equals ƒink:
+    scope 17, 'module',
+
+      scope 2, 'type'
+      bind 0, 'Foo'
+      unresolved 'foo'
+
+      scope 11, 'arm',
+        ref 'Foo', 0, depth 1
+
+test 'typed destructure binds positionals in arm', fn:
+  scope ƒink:
+    Foo = type _
+    match foo:
+      Foo a, b: a
+  | equals ƒink:
+    scope 18, 'module',
+
+      scope 2, 'type'
+      bind 0, 'Foo'
+      unresolved 'foo'
+
+      scope 12, 'arm',
+        bind 7, 'a'
+        bind 8, 'b'
+        ref 'Foo', 0, depth 1
+        ref 'a', 7
+
+test 'typed whole-value bind registers name', fn:
+  scope ƒink:
+    Foo = type _
+    Foo ..whole = foo
+  | equals ƒink:
+    scope 14, 'module',
+      bind 5, 'whole'
+
+      scope 2, 'type'
+      bind 0, 'Foo'
+      unresolved 'foo'
+      ref 'Foo', 0

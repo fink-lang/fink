@@ -2,6 +2,7 @@
 
 
 {int} = import 'std/int.fnk'
+{float} = import 'std/float.fnk'
 
 
 
@@ -225,7 +226,8 @@ test 'enum case guard named payload', fn:
     Some {val: int}
     None
 
-  Opt.Some s = Opt.Some {val: 12}
+  {Some} = Opt
+  Some ..s = Some {val: 12}
 
   equals s.val, 12
 
@@ -302,7 +304,7 @@ test 'typed rec guard', fn:
   Foo = type:
     bar: int
 
-  Foo foo = Foo {bar: 1}
+  Foo ..foo = Foo {bar: 1}
 
   equals
     foo
@@ -326,7 +328,7 @@ test 'typed rec guard destructured with projection to base type', fn:
     ..Foo
     spam: int
 
-  Foo foo = FooBar {bar: 1, spam: 2}
+  Foo ..foo = FooBar {bar: 1, spam: 2}
 
   equals
     foo
@@ -356,7 +358,7 @@ test 'typed rec match on type', fn:
     bar: int
 
   result = match Foo {bar: 1}:
-    Foo foo: foo
+    Foo ..foo: foo
     _: false
 
   equals
@@ -402,7 +404,7 @@ test 'typed rec match projects to base type', fn:
     spam: int
 
   result = match FooBar {bar: 1, spam: 2}:
-    Foo foo: foo
+    Foo ..foo: foo
     _: false
 
   equals
@@ -453,7 +455,7 @@ test 'generic type applied is recognized by its generic', fn:
 
   foo = FooU8 {bar: 1}
 
-  Foo f = foo
+  Foo ..f = foo
 
   equals
     f
@@ -468,7 +470,7 @@ test 'direct generic application binds a concrete type', fn:
 
   foo = FooU8 {bar: 1}
 
-  Foo f = foo
+  Foo ..f = foo
 
   equals
     f
@@ -499,7 +501,7 @@ test 'multi-param generic recognized by its generic', fn:
 
   c = Coord {fst: 1, snd: 2}
 
-  Pair p = c
+  Pair ..p = c
 
   equals
     p
@@ -570,7 +572,7 @@ test 'inferred field guards', fn:
   Foo = type:
     bar: _
 
-  Foo foo = Foo {bar: 7}
+  Foo ..foo = Foo {bar: 7}
 
   equals
     foo
@@ -724,13 +726,18 @@ test 'enum case match with destructure', fn:
     Some {val: int}
     None
 
+  {Some, None} = Opt
+
   describe = fn o:
     match o:
-      Opt.Some s: s.val
+      Some ..s: s.val
       _: 0
 
   equals
-    [describe Opt.Some {val: 7}; describe Opt.None {}]
+    [
+      describe Some {val: 7}
+      describe None {}
+    ]
     [7; 0]
 
 
@@ -807,3 +814,93 @@ test 'type value reprs in a list', fn:
   equals
     '${lst}'
     '[Bit, Sig fn Bit: Bit]'
+
+
+---
+typed destructure: a type head leads a positional pattern that mirrors
+construction. `Foo a, b` guards then peels positionals; `Foo a, ..rest` peels
+the head and binds the rest as a seq; `Foo ..whole` binds the whole (still-a-Foo)
+value; `Foo ..` (match arm) guards only.
+---
+
+
+test 'typed destructure single positional', fn:
+  Foo = type: int
+
+  Foo a = Foo 1
+
+  equals a, 1
+
+
+test 'typed destructure binds positionals', fn:
+  Foo = type:
+    int
+    float
+
+  foo = Foo 1, 2.0
+  Foo a, b = foo
+
+  equals
+    [a, b]
+    [1, 2.0]
+
+
+test 'typed destructure head and rest', fn:
+  Foo = type:
+    int
+    float
+
+  foo = Foo 1, 2.0
+  Foo a, ..rest = foo
+
+  equals
+    [a, rest]
+    [1, [2.0]]
+
+
+test 'typed whole-value bind stays a Foo', fn:
+  Foo = type:
+    int
+    float
+
+  foo = Foo 1, 2.0
+
+  Foo ..whole = foo
+
+  equals whole, foo
+
+
+
+test 'typed destructure in match arm', fn:
+  Foo = type:
+    int
+    float
+  foo = Foo 1, 2.0
+  r = match foo:
+    Foo _, b: b
+  equals r, 2.0
+
+
+test 'typed guard-only matches a Foo', fn:
+  Foo = type:
+    int
+    float
+
+  foo = Foo 1, 2.0
+  r = match foo:
+    Foo ..: 'yes'
+
+  equals r, 'yes'
+
+
+test 'typed rest', fn:
+  Foo = type:
+    int
+    float
+
+  Foo ..rest = Foo 1, 2.0
+
+  r = match rest:
+    Foo ..: 'yes'
+
+  equals r, 'yes'

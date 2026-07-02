@@ -214,3 +214,79 @@ test 'union block', fn:
         Patterns
         Ident 'SignedInt'
         Ident 'UnsignedInt'
+
+
+---
+typed destructure patterns: `Foo a, b` / `Foo a, ..rest` / `Foo ..whole` / `Foo ..`
+A type head leads a positional pattern that mirrors construction. `Foo a, b`
+and the spread forms parse as `Apply`; guard-only `Foo ..` parses as a
+`PostfixOp` (the `..` is postfix on the head, binding nothing).
+---
+
+test 'typed destructure positionals', fn:
+  ast ƒink:
+    Foo a, b = foo
+  | equals ƒink:
+    Module
+      Bind '=',
+        Apply
+          Ident 'Foo'
+          Ident 'a'
+          Ident 'b'
+        Ident 'foo'
+
+test 'typed destructure head and rest', fn:
+  ast ƒink:
+    Foo a, ..rest = foo
+  | equals ƒink:
+    Module
+      Bind '=',
+        Apply
+          Ident 'Foo'
+          Ident 'a'
+          Spread '..',
+            Ident 'rest'
+        Ident 'foo'
+
+test 'typed whole-value bind', fn:
+  ast ƒink:
+    Foo ..whole = foo
+  | equals ƒink:
+    Module
+      Bind '=',
+        Apply
+          Ident 'Foo'
+          Spread '..',
+            Ident 'whole'
+        Ident 'foo'
+
+test 'typed guard-only pattern in match', fn:
+  ast ƒink:
+    match foo:
+      Foo ..: 1
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'Foo'
+              Spread '..'
+          LitInt '1'
+
+test 'typed whole-value bind in match arm parses like binding', fn:
+  ast ƒink:
+    match foo:
+      Foo ..w: w
+  | equals ƒink:
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'Foo'
+              Spread '..',
+                Ident 'w'
+          Ident 'w'

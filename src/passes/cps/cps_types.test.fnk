@@ -285,3 +285,89 @@ test 'function type instance construction', fn:
                                 ·ƒret_4 ·ƒctx_67, ·add_1
                           ·ƒv_18
     # sm:egABAC4AAQAuJAEALhgBNBQSAAIABgEzLgABAC4YAQADEgE0Aw4AAgAKARsNAAEADRwAFAAEAQANDgAKABgBAA0OAAIADgEADQABAA0gABQABAEADQ4ABAEGAg4ACgAYAQUNDgACABIBAA0AAQANIAAUAAQBAA0OAAQBDgIOAAoAGAENDRAAAgAWAQANAAEADSIAFAAEAQANEAAEARYCDgAKABgBFQ0QAAIAGgEXGQABABkMAQADDgAEARgNEAAIAAIAHgEXAwABAAMQABQABAEAAw4ACgAUAAIAIgFICgABAAoIACwAGAESARgBCwEOAQYBCgAEAQYBAAEAARYAFAAEAQABCgAsAREKEAACACoBBw4AAQADPABIABgBAA4QAAIAMgELFAABABQMAQADDgAEAQwOEAAIAAIANgELAwABAAMQABQABAEAAw4ACgAUAAIAOgEAAwABAAMUABQABAEAAzwBFAo
+
+
+---
+typed destructure lowering: `Foo a, b` guards the value then peels positionals
+via the tuple/seq_pop machinery; `Foo ..whole` guards then binds the whole
+projected value; `Foo ..` (match arm) guards only.
+---
+
+test 'typed destructure positionals', fn:
+  cps_module ƒink:
+    Foo a, b = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_59, ·ƒret_2:
+      ·guard_apply ·ƒctx_59, ·∅Foo, ·∅foo,
+        fn ·ƒctx_62, ·ƒv_4:
+          ·fn
+            fn ·ƒctx_63, ·ƒv_10, ·ƒv_11:
+              ·let ·ƒv_10, fn ·a_0:
+                ·let ·ƒv_11, fn ·b_1:
+                  ·ƒret_2 ·ƒctx_63, ·b_1
+            fn ·ƒv_46:
+              ·fn
+                fn ·ƒctx_64, ·ƒsucc_8, ·ƒfail_9, ·ƒv_7:
+                  ·guard_apply ·ƒctx_64, ·tuple_protocol, ·ƒv_7,
+                    fn ·ƒctx_66, ·ƒv_24:
+                      ·seq_pop ·ƒctx_66, ·ƒv_24, ·ƒfail_9, fn ·ƒctx_68, ·ƒv_10, ·ƒv_25:
+                        ·seq_pop ·ƒctx_68, ·ƒv_25, ·ƒfail_9, fn ·ƒctx_70, ·ƒv_11, ·ƒv_16:
+                          ·empty ·ƒctx_70, ·ƒv_16, fn ·ƒctx_72, ·ƒv_19:
+                            ·if ·ƒv_19,
+                              fn: ·ƒsucc_8 ·ƒctx_72, ·ƒv_10, ·ƒv_11
+                              fn: ·ƒfail_9 ·ƒctx_72
+                    fn ·ƒctx_75: ·ƒfail_9 ·ƒctx_75
+                fn ·ƒv_37:
+                  ·fn
+                    fn ·ƒctx_77: ·panic ·ƒctx_77
+                    fn ·ƒv_49: ·ƒv_37 ·ƒctx_62, ·ƒv_46, ·ƒv_49, ·ƒv_4
+        fn ·ƒctx_80: ·panic ·ƒctx_80
+    # sm:ogEAAQAOAAEADiQBAA4YAQAOEgACAAYBAA4AAQAOHAAUAAQBAAMQAAQBFgMQAAIAEAAYARUODgACAA4BAA4AAQAOCAAYABgBAA4UAQAOEAACABYBCAEAAQABDAEHDhAACgEIAQoAAgAaAQYBAAEAAQwBDQ4QAAoBDgEKAAIAHgENDgABAA4UAQAOFAAEAQ4BCgAYAQ0OEAACABYBAA4AAQAOCAAgABgAGAAYAQAODgACAB4BAA4AAQAOHAAUAAQBAA4gAAQBAA4OAAIAKAAYAQAOEAACACYBAA4AAQAOFAAUAAQBAA4QAAQBAA4UAAoAGAEADhQBAA4QAAIAKgEADgABAA4UABQABAEADhAABAEADhQACgAYAQAOFAEADhAAAgAuAQAOAAEADhAAFAAEAQAOEAAKABgBAA4QAAIAMgEADgABAA4KAQAOEAACADoABAEADgABAA4WABQABAEADhAABAEADhAAOgAEAQAOAAEADhYAFAAoABQABAEADgABAA4WABQAIAEADhAAAgAeAQAOAAEADggAKAAUAAQBAA4AAQAOEAAUACgBAA4QAAQBAA4AAQAOEgAUAAQBAA4QAAQBAA4QAAQBAA4OABAAFAAEAQAOAAEADhAA
+
+test 'typed whole-value bind', fn:
+  cps_module ƒink:
+    Foo ..whole = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
+      ·guard_apply ·ƒctx_11, ·∅Foo, ·∅foo,
+        fn ·ƒctx_14, ·ƒv_3:
+          ·let ·ƒv_3, fn ·whole_0:
+            ·ƒret_1 ·ƒctx_14, ·whole_0
+        fn ·ƒctx_15: ·panic ·ƒctx_15
+    # sm:JQABABEAAQARJAEAERgBABESAAIABgEAEQABABEcABQABAEAAxAABAEcAxAAAgAQABgBGxEOAAIADgEYAQABAAEMARcRDgAKAQwFEgACABIBCxEAAQARFAEAERQABAEMBRIAEAAUAAQBCxEAAQAREAA
+
+test 'typed guard-only in match arm', fn:
+  cps_module ƒink:
+    match foo:
+      Foo ..: 1
+  | equals ƒink:
+    ·ƒink_module fn ·ƒctx_65, ·ƒret_0:
+      ·fn
+        fn ·ƒctx_67, ·ƒret_25: ·ƒret_25 ·ƒctx_67, (i8 1)
+        fn ·ƒv_29:
+          ·fn
+            fn ·ƒctx_69, ·ƒsucc_3, ·ƒfail_4, ·ƒv_2:
+              ·guard_apply ·ƒctx_69, ·∅Foo, ·ƒv_2,
+                fn ·ƒctx_71, ·ƒv_6:
+                  ·fn
+                    fn ·ƒctx_72: ·ƒv_29 ·ƒctx_72, ·ƒsucc_3
+                    fn ·ƒv_34:
+                      ·fn
+                        fn ·ƒctx_74, ·ƒsucc_10, ·ƒfail_11, ·ƒv_9:
+                          ·guard_apply ·ƒctx_74, ·tuple_protocol, ·ƒv_9,
+                            fn ·ƒctx_76, ·ƒv_15:
+                              ·let ·ƒv_15, fn ·ƒv_14:
+                                ·ƒsucc_10 ·ƒctx_76
+                            fn ·ƒctx_78: ·ƒfail_11 ·ƒctx_78
+                        fn ·ƒv_23: ·ƒv_23 ·ƒctx_71, ·ƒv_34, ·ƒfail_4, ·ƒv_6
+                fn ·ƒctx_81: ·ƒfail_4 ·ƒctx_81
+            fn ·ƒv_46:
+              ·fn
+                fn ·ƒctx_83, ·ƒret_48, ·ƒv_47:
+                  ·ƒv_46
+                    ·ƒctx_83
+                    ·ƒret_48
+                    fn ·ƒctx_85: ·panic ·ƒctx_85
+                    ·ƒv_47
+                fn ·ƒv_54: ·ƒv_54 ·ƒctx_65, ·ƒret_0, ·∅foo
+    # sm:kwEAAQAWAAEAFiQBABYYAQAWEgACAAYBGgkAAQAJCAAQABgAFAAEARABAAEAARYAFAAGAQABAAEAAQYBAAEEABABDwkQAAIADgEACQABAAkIABgAGAAYABgADgACABYBAAYAAQAGHAAUAAQBAAMQAAQBAAYOAAIAIAAYAQAGDgACAB4BAAYAAQAGCAAoABQABAEACQABAAkSABQABAEACRQAKAEABhAAAgAmAQAGAAEABggAMAAYABoAGgEABg4AAgAuAQAGAAEABhwAFAAEAQAGIAAEAQAGDgACADgAGAEABhAAAgA2AQAGAAEABgwBAAYQAAoBAAYQAAIAOgEABgABAAYYABQAOAAUAAQBAAYAAQAGGAAUADABAAYQAAQBAAYAAQAGEgAUAAQBAAYQAAQBAAYUAAQBAAYOACAAFAAEAQAGAAEABhYAFAAYAQAJEAACABYBGRYAAQAWCAAgABgAGAEAFhAAAgAeAQAWAAEAFjIANgEAFjwAFAAEAQAWAAEAFhAANgEAFhAAIAEAFhAABAEAFgABABYSABQABAEAFhIABAEMAw
